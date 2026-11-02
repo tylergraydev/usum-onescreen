@@ -3,7 +3,8 @@
 //
 // Renders the demo menu over a fake game scene into a 400x240 buffer laid out
 // like the real top screen (rotated, BGR8), checks some pixels, and writes a
-// PNG preview to the path given as the first argument.
+// PNG preview to the path given as the first argument. The system font is a
+// synthetic one built here in the CFNT sheet format (no font data in git).
 
 #include <algorithm>
 #include <cstdio>
@@ -13,7 +14,9 @@
 #include <vector>
 
 #include "UI/Demo.hpp"
+#include "UI/Font.hpp"
 #include "UI/Icons.hpp"
+#include "UI/Layer.hpp"
 #include "UI/Layout.hpp"
 #include "UI/Raster.hpp"
 #include "UI/Text.hpp"
@@ -97,24 +100,76 @@ static void DrawFakeScene(Canvas &canvas)
         canvas.FillRoundRect(Rect{ 20 + i * 64, 120 + (i % 2) * 14, 40, 50 }, 6, Rgb(150, 90, 50));
 }
 
-// Fake System font: the Small font at 2x, through the same mask path the 3DS
-// uses for CTRPF's system font.
-static s32 FakeMeasure(const std::string &text)
+// Synthetic system font with the geometry of the real one (docs/UI.md): A4
+// sheets of 128x32 holding five 24x30 cells, baseline at row 25. Glyphs are
+// the 5x7 Small font at 3x, inked from cell column 1 and sitting on the
+// baseline; g j p q y get a stem below it, so descenders can be checked. The
+// width table is deliberately wrong (as in Azahar's font), so spacing must
+// come from the ink.
+static constexpr s32 FakeCellW = 24, FakeCellH = 30, FakeBase = 25, FakeSheetW = 128, FakeSheetH = 32;
+static constexpr s32 FakeGlyphs = 95, FakePerSheet = 5;
+static constexpr u32 FakeSheetSize = FakeSheetW * FakeSheetH / 2;
+static std::vector<u8> s_fakeSheets;
+static FontSource s_fakeFont;
+
+static int FakeIndexOf(u32 cp)
 {
-    s32 n = 0;
-    for (unsigned char ch : text)
-        if ((ch & 0xC0) != 0x80)
-            n++;
-    return n * 12;
+    return cp >= 0x20 && cp < 0x7F ? (int)(cp - 0x20) : '?' - 0x20;
 }
 
-static bool FakeRasterize(const std::string &text, u8 *mask, s32 w, s32 h)
+static void FakeWidths(int index, s32 &left, s32 &glyphW, s32 &advance)
 {
-    RenderSmallMask(text, mask, w, h, 2);
-    return true;
+    left = 1;
+    glyphW = index == 0 ? 0 : 20;
+    advance = 9 + (index % 7);
 }
 
-static const FontBackend s_fakeFont = { 16, FakeMeasure, FakeRasterize };
+// Writes a 4-bit value at sheet pixel (x, y): tiles row-major, Morton order
+// inside a tile, low nibble first (the inverse of DecodeGlyphCell).
+static void PutNibble(u8 *sheet, s32 x, s32 y, u8 v)
+{
+    u32 i = 0;
+    for (u32 bit = 0; bit < 3; bit++)
+        i |= (((x >> bit) & 1) << (2 * bit)) | (((y >> bit) & 1) << (2 * bit + 1));
+    u8 &byte = sheet[((y / 8) * (FakeSheetW / 8) + x / 8) * 32 + i / 2];
+    byte = (i & 1) ? (u8)((byte & 0x0F) | (v << 4)) : (u8)((byte & 0xF0) | v);
+}
+
+static void BuildFakeFont(void)
+{
+    const s32 sheets = (FakeGlyphs + FakePerSheet - 1) / FakePerSheet;
+    s_fakeSheets.assign(sheets * FakeSheetSize, 0);
+    std::vector<u8> mask(15 * 21);
+    for (s32 g = 0; g < FakeGlyphs; g++)
+    {
+        u8 *sheet = s_fakeSheets.data() + (g / FakePerSheet) * FakeSheetSize;
+        const s32 cellX = 1 + (g % FakePerSheet) * (FakeCellW + 1), cellY = 1;
+        const char ch = (char)(0x20 + g);
+        RenderSmallMask(std::string(1, ch), mask.data(), 15, 21, 3);
+        for (s32 y = 0; y < 21; y++)
+            for (s32 x = 0; x < 15; x++)
+                if (mask[y * 15 + x])
+                    PutNibble(sheet, cellX + 1 + x, cellY + FakeBase - 21 + y, 15);
+        if (std::strchr("gjpqy", ch) != nullptr)
+            for (s32 y = FakeBase; y < FakeCellH; y++)
+                for (s32 x = 10; x < 13; x++)
+                    PutNibble(sheet, cellX + 1 + x, cellY + y, 15);
+    }
+    s_fakeFont.sheets = s_fakeSheets.data();
+    s_fakeFont.sheetSize = FakeSheetSize;
+    s_fakeFont.sheetCount = (u16)sheets;
+    s_fakeFont.sheetFormat = SheetFormatA4;
+    s_fakeFont.sheetW = FakeSheetW;
+    s_fakeFont.sheetH = FakeSheetH;
+    s_fakeFont.cellsPerRow = FakePerSheet;
+    s_fakeFont.cellRows = 1;
+    s_fakeFont.cellW = FakeCellW;
+    s_fakeFont.cellH = FakeCellH;
+    s_fakeFont.baseline = FakeBase;
+    s_fakeFont.lineFeed = 30;
+    s_fakeFont.indexOf = FakeIndexOf;
+    s_fakeFont.widths = FakeWidths;
+}
 
 static void TestPrimitives(void)
 {
@@ -185,6 +240,23 @@ static void TestPrimitives(void)
     CHECK(Same(At(canvas, 305, 15), Rgb(9, 9, 9)));
     CHECK(Same(At(canvas, 295, 15), Rgb(0, 0, 0)));
 
+    // A canvas with an origin draws in screen coordinates into a smaller
+    // surface, clipped to it.
+    {
+        Buffer small(PixelFormat::BGR8, true);
+        Surface part = small.surface;
+        part.width = 50;
+        part.height = 30;
+        Canvas offset(part, 100, 60);
+        offset.FillRect(Rect{ 90, 50, 30, 30 }, Rgb(1, 2, 3));
+        Canvas whole(small.surface);
+        CHECK(Same(At(whole, 0, 0), Rgb(1, 2, 3)));
+        CHECK(Same(At(whole, 19, 19), Rgb(1, 2, 3)));
+        CHECK(Same(At(whole, 20, 20), Rgb(0, 0, 0)));
+        CHECK(Same(At(offset, 100, 60), Rgb(1, 2, 3)));
+        CHECK(small.GuardsIntact());
+    }
+
     // Icons fill their middle stroke.
     canvas.FillRect(Rect{ 0, 100, 40, 40 }, Rgb(0, 0, 0));
     DrawIcon(canvas, Icon::Close, Rect{ 0, 100, 40, 40 }, Rgb(255, 255, 255));
@@ -252,18 +324,175 @@ static void TestText(void)
     litColumns(first, last);
     CHECK(std::abs((first - box.x) - (box.Right() - 1 - last)) <= 2);
 
-    // Scaled color text through the System font path (fake backend).
+    // Without a system font, System text is the Small font at 2x.
+    TextStyle sys;
+    sys.color = Rgb(10, 200, 30);
+    CHECK(LineHeight(sys) == 18);
+    CHECK(MeasureText("Hi", sys) == 24);
+    canvas.FillRect(Rect{ 0, 0, ScreenW, ScreenH }, Rgb(0, 0, 0));
+    DrawText(canvas, "H", Rect{ 0, 0, 100, 18 }, sys);
+    // Small 'H' column 0 is solid; at 2x it covers x 0..1.
+    CHECK(Same(At(canvas, 1, 2), Rgb(10, 200, 30)));
+    CHECK(Same(At(canvas, 4, 2), Rgb(0, 0, 0)));
+}
+
+static void TestFont(void)
+{
+    BuildFakeFont();
+
+    // UTF-8 decoding.
+    {
+        const std::string t = "A\xC3\xA9\xE2\x80\xA6\xFFz";
+        size_t i = 0;
+        CHECK(NextCodePoint(t.data(), t.size(), i) == 'A');
+        CHECK(NextCodePoint(t.data(), t.size(), i) == 0xE9);
+        CHECK(NextCodePoint(t.data(), t.size(), i) == 0x2026);
+        CHECK(NextCodePoint(t.data(), t.size(), i) == 0xFFFD);
+        CHECK(NextCodePoint(t.data(), t.size(), i) == 'z' && i == t.size());
+    }
+
+    // Sheet decoding: a cell comes back exactly as it was written, from its
+    // place in the grid; bad indexes are refused.
+    {
+        std::vector<u8> cell(FakeCellW * FakeCellH);
+        CHECK(DecodeGlyphCell(s_fakeFont, 'H' - 0x20, cell.data()));
+        std::vector<u8> mask(15 * 21);
+        RenderSmallMask("H", mask.data(), 15, 21, 3);
+        bool same = true;
+        for (s32 y = 0; y < FakeCellH; y++)
+            for (s32 x = 0; x < FakeCellW; x++)
+            {
+                const s32 mx = x - 1, my = y - (FakeBase - 21);
+                const bool ink = mx >= 0 && mx < 15 && my >= 0 && my < 21 && mask[my * 15 + mx];
+                same &= cell[y * FakeCellW + x] == (ink ? 255 : 0);
+            }
+        CHECK(same);
+        CHECK(DecodeGlyphCell(s_fakeFont, 4, cell.data()));    // '$', last cell of sheet 0
+        CHECK(!DecodeGlyphCell(s_fakeFont, 100000, cell.data()));
+    }
+
+    // Area filter: solid stays solid, a 1 px checkerboard halves.
+    {
+        std::vector<u8> solid(10 * 10, 255), checker(10 * 10), out(5 * 5);
+        for (s32 i = 0; i < 100; i++)
+            checker[i] = ((i % 10 + i / 10) & 1) ? 255 : 0;
+        ScaleMask(solid.data(), 10, 10, 0.5f, out.data(), 5, 5);
+        CHECK(out[0] == 255 && out[24] == 255);
+        ScaleMask(checker.data(), 10, 10, 0.5f, out.data(), 5, 5);
+        CHECK(out[12] >= 126 && out[12] <= 129);
+    }
+
+    // Glyph cache: ink-based spacing, hits on reuse, empty space glyph.
+    {
+        static GlyphCache cache(0.6f);
+        CHECK(cache.Get('H') == nullptr);
+        cache.SetSource(&s_fakeFont);
+        CHECK(cache.LineHeight() == 18 && cache.Ascent() == 15);
+        const Glyph *h = cache.Get('H');
+        // Ink 15 px + gap 3 = 18 font px -> 10.8 -> 11 screen px; the width
+        // table (glyphW 20) is ignored.
+        CHECK(h->advance == 11 && h->w == 9 && h->h == 18);
+        CHECK(cache.misses == 1 && cache.hits == 0);
+        cache.Get('H');
+        CHECK(cache.hits == 1);
+        const Glyph *space = cache.Get(' ');
+        CHECK(space->w == 0 && space->advance == 5);   // the table's 9 -> 5
+        CHECK(cache.Advance(0x263A) == cache.Advance('?'));   // missing -> replacement
+    }
+
+    // Drawing through the font: descenders below the baseline are drawn,
+    // spacing is even, and the lines are 18 and 24 px.
     SetSystemFont(&s_fakeFont);
     TextStyle sys;
     sys.color = Rgb(10, 200, 30);
-    sys.scale = 2;
-    CHECK(LineHeight(sys) == 32);
-    CHECK(MeasureText("Hi", sys) == 48);
+    CHECK(LineHeight(sys) == 18);
+    TextStyle large = sys;
+    large.font = Font::Large;
+    CHECK(LineHeight(large) == 24);
+    CHECK(MeasureText("HH", sys) == 22);
+
+    Buffer buf(PixelFormat::BGR8, true);
+    Canvas canvas(buf.surface);
+    DrawText(canvas, "gH", Rect{ 0, 0, 100, 18 }, sys);
+    // Baseline at row 15: the 'g' stem reaches rows 15..17, 'H' stops above.
+    bool gBelow = false, hBelow = false;
+    for (s32 x = 0; x < 30; x++)
+    {
+        if (x < 11)
+            gBelow |= At(canvas, x, 16).g > 100;
+        else
+            hBelow |= At(canvas, x, 16).g > 0;
+    }
+    CHECK(gBelow && !hBelow);
+
+    // Gaps between letters are the same wherever they are.
     canvas.FillRect(Rect{ 0, 0, ScreenW, ScreenH }, Rgb(0, 0, 0));
-    DrawText(canvas, "H", Rect{ 0, 0, 100, 32 }, sys);
-    // Small 'H' column 0 is solid; at 2x font and 2x scale it covers x 0..3.
-    CHECK(Same(At(canvas, 1, 10), Rgb(10, 200, 30)));
-    CHECK(Same(At(canvas, 8, 10), Rgb(0, 0, 0)));
+    DrawText(canvas, "IIII", Rect{ 0, 20, 200, 18 }, sys);
+    std::vector<s32> starts;
+    bool lit = false;
+    for (s32 x = 0; x < 100; x++)
+    {
+        bool col = false;
+        for (s32 y = 20; y < 38; y++)
+            col |= At(canvas, x, y).g > 60;
+        if (col && !lit)
+            starts.push_back(x);
+        lit = col;
+    }
+    CHECK(starts.size() == 4);
+    if (starts.size() == 4)
+        CHECK(starts[1] - starts[0] == starts[2] - starts[1] && starts[3] - starts[2] == starts[2] - starts[1]);
+    SetSystemFont(nullptr);
+}
+
+// The demo in a Layer, presented onto a screen, matches drawing it directly
+// inside the panel's rounded rect and leaves everything outside untouched.
+static void TestLayer(void)
+{
+    SetSystemFont(&s_fakeFont);
+    for (bool rotated : { true, false })
+    {
+        Buffer direct(PixelFormat::BGR8, rotated), screen(PixelFormat::BGR8, rotated), scene(PixelFormat::BGR8, rotated);
+        Canvas directCanvas(direct.surface), screenCanvas(screen.surface), sceneCanvas(scene.surface);
+        DrawDemoMenu(directCanvas, 1);
+        DrawFakeScene(screenCanvas);
+        DrawFakeScene(sceneCanvas);
+
+        Layer layer;
+        std::vector<u8> pixels(Layer::BytesFor(screen.surface, DemoPanel));
+        CHECK(!layer.Matches(screen.surface));
+        CHECK(!layer.Setup(screen.surface, Rect{ 300, 0, 200, 10 }, 0, pixels.data(), pixels.size()));
+        CHECK(layer.Setup(screen.surface, DemoPanel, DemoRadius, pixels.data(), pixels.size()));
+        CHECK(layer.Matches(screen.surface));
+        Canvas layerCanvas = layer.Begin();
+        DrawDemoMenu(layerCanvas, 1);
+        layer.Present(screen.surface);
+        CHECK(screen.GuardsIntact());
+
+        s32 same = 0, outsideChanged = 0, mismatched = 0;
+        for (s32 y = 0; y < ScreenH; y++)
+            for (s32 x = 0; x < ScreenW; x++)
+            {
+                const Color got = At(screenCanvas, x, y);
+                if (x < DemoPanel.x || x >= DemoPanel.Right() || y < DemoPanel.y || y >= DemoPanel.Bottom())
+                {
+                    outsideChanged += !Same(got, At(sceneCanvas, x, y));
+                    continue;
+                }
+                // Corners are either not copied or antialiased against black.
+                const s32 cx = std::min(x - DemoPanel.x, DemoPanel.Right() - 1 - x);
+                const s32 cy = std::min(y - DemoPanel.y, DemoPanel.Bottom() - 1 - y);
+                if (Same(got, At(directCanvas, x, y)))
+                    same++;
+                else if (cx >= DemoRadius || cy >= DemoRadius)
+                    mismatched++;
+            }
+        CHECK(outsideChanged == 0 && mismatched == 0);
+        CHECK(same > DemoPanel.w * DemoPanel.h - 4 * DemoRadius * DemoRadius);
+        // The very corner pixel is the game, the left edge is the border.
+        CHECK(Same(At(screenCanvas, DemoPanel.x, DemoPanel.y), At(sceneCanvas, DemoPanel.x, DemoPanel.y)));
+        CHECK(Same(At(screenCanvas, DemoPanel.x, 120), Rgb(120, 150, 220), 1));
+    }
     SetSystemFont(nullptr);
 }
 
@@ -340,14 +569,23 @@ int main(int argc, char **argv)
     TestPrimitives();
     TestLayout();
     TestText();
+    TestFont();
+    TestLayer();
 
-    // The preview: demo menu over a fake scene on a 3DS-layout BGR8 buffer.
+    // The preview, as `uidemo shade` draws it: a fake scene on a 3DS-layout
+    // BGR8 buffer, the shade drawn on it, the menu copied in from a Layer.
     Buffer buf(PixelFormat::BGR8, true);
     Canvas canvas(buf.surface);
     DrawFakeScene(canvas);
     const Color before = At(canvas, 10, 10);
     SetSystemFont(&s_fakeFont);
-    DrawDemoMenu(canvas, 2);
+    DrawDemoShade(canvas);
+    Layer layer;
+    std::vector<u8> pixels(Layer::BytesFor(buf.surface, DemoPanel));
+    layer.Setup(buf.surface, DemoPanel, DemoRadius, pixels.data(), pixels.size());
+    Canvas layerCanvas = layer.Begin();
+    DrawDemoMenu(layerCanvas, 2);
+    layer.Present(buf.surface);
     SetSystemFont(nullptr);
 
     CHECK(buf.GuardsIntact());
@@ -359,7 +597,7 @@ int main(int argc, char **argv)
     // Border on the panel's left edge, mid height.
     CHECK(Same(At(canvas, 40, 120), Rgb(120, 150, 220), 1));
     // Panel corner is rounded: the very corner pixel shows the shaded game.
-    CHECK(Same(At(canvas, 40, 16), At(canvas, 38, 16), 3));
+    CHECK(Same(At(canvas, DemoPanel.x, DemoPanel.y), At(canvas, DemoPanel.x - 2, DemoPanel.y), 3));
 
     if (argc > 1)
     {
