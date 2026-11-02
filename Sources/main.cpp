@@ -101,6 +101,7 @@ namespace CTRPluginFramework
     //   vtscan NAME   (global -> object -> vtable scan to /usum-vt-NAME.bin)
     //   scene   (log the current scene's module name)
     //   auto on | auto off   (panel follows the scene, or stays as set)
+    //   perf on | perf off | perf   (panel timing; perf logs and restarts the window)
     //   capture on|off [KEY|stick|touch ...]   (hide input from the game as a plugin
     //     menu would; on adds, off removes; no list = everything)
     static const char *CommandPath = "/usum-cmd.txt";
@@ -222,6 +223,10 @@ namespace CTRPluginFramework
             OneScreen::UiDemoSetEnabled(line == "uidemo on");
         else if (line == "auto on" || line == "auto off")
             OneScreen::AutoPanelSetEnabled(line == "auto on");
+        else if (line == "perf on" || line == "perf off")
+            OneScreen::PanelPerfSetEnabled(line == "perf on");
+        else if (line == "perf")
+            WriteLog(OneScreen::PanelPerfReport(), false);
         else if (line.compare(0, 11, "capture on ") == 0 || line == "capture on"
                  || line.compare(0, 12, "capture off ") == 0 || line == "capture off")
         {
