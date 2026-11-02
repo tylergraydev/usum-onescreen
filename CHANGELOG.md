@@ -10,7 +10,7 @@ Supports Pokémon Ultra Sun (USA) v1.2 (`00040000001B5000`, title version `0x080
 
 #### Added
 
-- Bottom screen drawn on the top screen, as a half-size corner panel or a full view.
+- Bottom screen drawn on the top screen, as a corner panel (1/2 or 2/3 size, `size` in the settings file) or a full view. The copy runs on the emulated GPU, so the half panel and the full view cost Azahar a few percent of speed at most (was ~40%); 2/3 costs ~8% (docs/PERF.md).
 - Automatic view per scene: off on the title screen and overworld; corner panel for the X menu (also Quick Link, the save dialog and Festival Plaza), battle, Pokédex, Bag, Pokémon summary, Trainer Passport, Battle Video and unmapped scenes; full view for Party, PC boxes, Town Map, Options and Pokémon Refresh.
 - The X menu is detected from the game's field state, so closing it by touch turns the panel off too.
 - **ZR** cycles off / panel / full by hand until the next scene change.
