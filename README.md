@@ -104,6 +104,7 @@ CTRPF opens its menu with **Select** (its default menu hotkey; `Preferences::Men
 - `battle` logs the battle state (active Pokémon on both sides, moves/PP, which bottom-screen menu is up and its cursor); in battle the same is logged on every change. See `docs/RE1-battle.md`.
 - `party` logs the party (species, nickname, level, HP, status, held item, moves/PP, and the Party screen's order while it is open); `bag` logs every pocket's items and counts in the game's order, with names. See `docs/RE3-party-bag.md`.
 - `perf on` / `perf off` / `perf`: panel timing (off by default). `perf` logs emulated time, frames, and the mean/max time spent copying the bottom screen and drawing the panel since the last `perf`. `py -3 -I tools/perf.py --instance NAME` runs the measurement in `docs/PERF.md`.
+- `action NAME` runs a bottom-screen action (`open-pokedex`, `open-party`, `open-bag`, `battle-run`, `close`) with the player's input captured meanwhile; `action status`, `action cancel`, `action list`. Results are logged as `action: NAME ok …` / `FAILED …`. See `docs/ACTIONS.md`.
 - `uidemo on` / `uidemo off` shows or hides a sample plugin-drawn menu on the top screen (off by default), for checking the UI drawing layer.
 - `py -3 -I tools/shot.py [name]` asks the running plugin for a screenshot and saves `analysis/private/shots/<name>-top.png` and `-bottom.png`. The top shot includes anything the plugin draws.
 
@@ -187,6 +188,7 @@ Log guard: after every step it reads what was newly logged to the instance's `us
 
 - `boot-to-field`: title → Continue → `FieldRo`, mode off. The shared boot steps are in `scenarios/common/boot.txt`.
 - `open-each-app`: Pokédex via Rotom (answering Rotom's chat if it pops up) and back; X menu → Party and back; X menu → Bag and back. Entries are tapped, so the X menu's remembered cursor doesn't matter. Checks off (field), panel (X menu, Pokédex, Bag), full (Party).
+- `actions`: each action (`docs/ACTIONS.md`) from its start point, checking the scene and panel mode it ends in, B held through `open-bag` (captured, so the Bag stays open), then a wild battle and `battle-run`.
 - `xmenu-touch-close`: Town Map from Rotom's screen and back (full, then off with no panel flash); X menu opened with X and closed by tapping its back button (panel, then off); again after visiting Party. Checks that auto panel follows the field state, not X/B presses.
 - `wild-battle-run`: out of the Pokémon Center, south into the tall grass, back and forth until `Battle` (panel), Run by tap, back to `FieldRo` (off). One long circle-pad push stops partway down the path, so it walks in short steps.
 
@@ -217,4 +219,5 @@ py -3 -I tools/regress.py --instance a --run 41489129071 boot-to-field
 - `docs/PORTING.md`: moving the plugin to another build (the Ultra Moon checklist). `tools/sigscan.py` finds every offset-table address in a new `code.bin` from the byte signatures in `signatures/usum.json` and prints a ready-to-paste `Game.cpp` entry.
 - `Sources/Party.cpp`, `Sources/PartyData.cpp`: the `party` and `bag` readers; `PartyData` (Gen 7 Pokémon decryption, bag slots, message lines) is pure and tested by `tests/party_data_test.cpp`. See `docs/RE3-party-bag.md`.
 - `docs/RE2-text.md`: how the game stores and looks up text (species/move/item names), with `tools/romfs_text.py` to extract and decode it from your own dump into `analysis/private/`.
-- `docs/LAYOUTS.md`, `layouts/usum-v1.2.json`: verified tap points and button bounds on the game's bottom screens (field, X menu, Party, Bag, Pokédex, battle), for driving the hidden bottom screen from plugin menus. `tools/layout_measure.py` measures button bounds on a screenshot.
+- `docs/LAYOUTS.md`, `layouts/usum-v1.2.json`: verified tap points and button bounds on the game's bottom screens (field, X menu, Party, Bag, Pokédex, battle), for driving the hidden bottom screen from plugin menus. `tools/layout_measure.py` measures button bounds on a screenshot. `tools/gen_layouts.py` turns the JSON into `Includes/Layouts.hpp` (generated, committed; the host tests check it is current).
+- `Sources/ActionQueue.cpp`, `Includes/ActionQueue.hpp`: the action layer's pure sequencing (steps, runner, built-in actions; tested by `tests/`); `Sources/Actions.cpp` is its CTRPF glue (`docs/ACTIONS.md`).

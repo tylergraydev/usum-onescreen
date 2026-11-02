@@ -10,7 +10,7 @@ OUT      := build
 PYTHON   ?= python3
 CODE_BIN ?=
 
-TESTS    := $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/ui_host_test $(OUT)/party_data_test
+TESTS    := $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/ui_host_test $(OUT)/party_data_test             $(OUT)/action_queue_test
 
 all: run
 
@@ -21,6 +21,10 @@ $(OUT)/input_capture_test: input_capture_test.cpp ../Sources/InputCapture.cpp ..
 $(OUT)/settings_test: settings_test.cpp ../Sources/Settings.cpp ../Includes/Settings.hpp
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) settings_test.cpp ../Sources/Settings.cpp -o $@
+
+$(OUT)/action_queue_test: action_queue_test.cpp ../Sources/ActionQueue.cpp ../Includes/ActionQueue.hpp ../Includes/Layouts.hpp
+	@mkdir -p $(OUT)
+	$(CXX) $(CXXFLAGS) action_queue_test.cpp ../Sources/ActionQueue.cpp -o $@
 
 $(OUT)/party_data_test: party_data_test.cpp ../Sources/PartyData.cpp ../Includes/PartyData.hpp
 	@mkdir -p $(OUT)
@@ -38,6 +42,8 @@ run: $(TESTS)
 	./$(OUT)/input_capture_test
 	./$(OUT)/settings_test
 	./$(OUT)/party_data_test
+	./$(OUT)/action_queue_test
+	$(PYTHON) -I ../tools/gen_layouts.py --check
 	@mkdir -p $(dir $(PREVIEW))
 	./$(OUT)/ui_host_test $(PREVIEW)
 	$(PYTHON) -I sigscan_test.py $(CODE_BIN)
