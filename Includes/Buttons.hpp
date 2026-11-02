@@ -53,4 +53,8 @@ namespace OneScreen
     u32 CaptureRealHeld(void);
     u32 CaptureRealPressed(void);
     void CaptureRealStick(s32 &x, s32 &y);
+
+    // Keys held by the action layer (Actions.hpp), 0 = none. Applied after
+    // capture, so an action can press keys while the player's are captured.
+    void ButtonsActionSet(u32 keys);
 }

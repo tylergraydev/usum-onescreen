@@ -1,0 +1,80 @@
+# The action layer (Includes/Actions.hpp): runs each action from its start
+# point and checks the scene it ends in. Actions tap the bottom screen
+# themselves; nothing here taps or presses A in a menu.
+include common/boot
+
+# Field -> Pokédex (Rotom's face, or the X menu while Rotom chats) -> field.
+mark
+send action open-pokedex
+expect-log ^action: open-pokedex ok 20
+wait-scene Zukan 5
+expect-mode panel
+shot pokedex
+mark
+send action close
+expect-log ^action: close ok 25
+wait-scene FieldRo 5
+expect-mode off
+
+# X menu -> Party, then close (Party -> X menu -> field).
+mark
+send action open-party
+expect-log ^action: open-party ok 15
+wait-scene main:00647FCC 5
+expect-mode full
+shot party
+mark
+send action close
+expect-log ^action: close ok 25
+wait-scene FieldRo 5
+expect-mode off
+
+# The X menu remembers its cursor (now on Pokémon): Bag is tapped anyway.
+# The player's input is captured while an action runs: B held from the
+# start would close the Bag if the game saw it, and stays hidden until
+# released after the action.
+mark
+send action open-bag; hold b
+expect-log ^action: open-bag ok 15
+sleep 1
+send release b
+sleep 2
+wait-scene main:006488C8 5
+expect-mode panel
+shot bag
+mark
+send action close
+expect-log ^action: close ok 25
+wait-scene FieldRo 5
+
+# Actions refuse to start from the wrong place.
+mark
+send action battle-run
+expect-log ^action: battle-run refused 5
+
+# Into the tall grass (as in wild-battle-run), then Run by action.
+mark
+send stick 0 -150 120
+expect-log ^scene: \(none\) 15
+wait-scene FieldRo 30
+sleep 6
+repeat 8 until-scene Battle
+  send stick 0 -150 60
+  sleep 1.5
+end
+repeat 40 until-scene Battle
+  send stick -150 0 20
+  sleep 0.5
+  send stick 150 0 20
+  sleep 0.5
+end
+mark
+send action battle-run
+shot battle
+expect-log ^action: battle-run ok 60
+wait-scene FieldRo 5
+expect-mode off
+sleep 3                   # the fade in from the battle
+shot field
+reject-log ^action: .* FAILED
+stop
