@@ -119,6 +119,43 @@ Azahar 2126.2 has no command-line flag or environment variable for its user fold
 
 `stop` ends only the process `start` recorded, after checking its exe path is that instance's `azahar.exe` and its start time matches. Instance names are per checkout (each worktree has its own `analysis/private/`). Limits: each instance uses ~170 MB of disk and its own emulator window; game controllers are seen by every instance, so don't touch a pad during tests; after Azahar updates, re-`create --force` to pick up the new build. Without `--instance`, `cmd.py` and `shot.py` work on `%APPDATA%\Azahar` as before.
 
+### Scenarios (scripted tests)
+
+`tools/scenario.py` runs scripted tests from `scenarios/` against an instance, unattended:
+
+```bash
+py -3 -I tools/scenario.py --instance a boot-to-field open-each-app wild-battle-run
+```
+
+It prints each step, then `PASS name` or `FAIL name at file:line 'step': reason` with the last screenshot paths (plus a `<name>-FAIL` shot if the plugin still answers), and exits 0 only if every scenario passed. On failure it stops the instance it started, unless `--keep`; `-v` also prints the plugin's replies. `--check` only parses the files (no emulator; CI runs it). At the start and end of each scenario it records the real save's (`%APPDATA%\Azahar\...\00000001\main`) mtime and SHA-256 and fails if they changed.
+
+A scenario is a text file, one step per line; `#` starts a comment (except in `expect-log`/`reject-log`, where it is part of the regex):
+
+| Step | Does |
+|---|---|
+| `start [WAIT]` / `stop` | `tools/instance.py start NAME --wait WAIT` (default 90; fails without `hooks: all ok`) / `stop NAME` |
+| `send CMD [; CMD ...]` | plugin commands as `tools/cmd.py` takes them; fails on `cmd: unknown` |
+| `sleep S` | waits S seconds |
+| `shot LABEL` | screenshot to `analysis/private/shots/<scenario>-LABEL-top/bottom.png` |
+| `wait-scene SCENE [T]` | waits until the scene is SCENE (default 60 s) |
+| `expect-scene SCENE` | the scene is SCENE now |
+| `expect-mode off\|panel\|full [T]` | the panel mode is that within T s (default 5) |
+| `mark` | later `expect-log`/`reject-log` only see log lines after this point (`start` resets it) |
+| `expect-log REGEX [T]` | a log line since the mark matches, within T s (default 10; a trailing number is the timeout) |
+| `reject-log REGEX` | no log line since the mark matches |
+| `check-save` | the real save is unchanged so far |
+| `if-scene SCENE STEP` | runs STEP only if the scene is SCENE now |
+| `include FILE` | inlines FILE's steps (looked up next to the scenario, then in `scenarios/`; `.txt` optional) |
+| `repeat N [until-scene SCENE]` … `end` | runs the block N times; with `until-scene`, stops once that is the scene (checked before each step) and fails if it never is |
+
+"The scene" is the last `scene:` line in the log (an empty one counts as `(none)`, the loading gap between scenes); "the mode" is the last `panel: mode` line. Included scenarios:
+
+- `boot-to-field`: title → Continue → `FieldRo`, mode off. The shared boot steps are in `scenarios/common/boot.txt`.
+- `open-each-app`: Pokédex via Rotom (answering Rotom's chat if it pops up) and back; X menu → Party and back; X menu → Bag and back. Entries are tapped, so the X menu's remembered cursor doesn't matter. Checks off (field), panel (X menu, Pokédex, Bag), full (Party).
+- `wild-battle-run`: out of the Pokémon Center, south into the tall grass, back and forth until `Battle` (panel), Run by tap, back to `FieldRo` (off). One long circle-pad push stops partway down the path, so it walks in short steps.
+
+Screenshots come before every A press in a menu (only the Continue menu here).
+
 ## Layout
 
 - `Sources/main.cpp`: plugin entry points (`PatchProcess`, `main`, menu).
@@ -127,5 +164,6 @@ Azahar 2126.2 has no command-line flag or environment variable for its user fold
 - `Sources/InputCapture.cpp`, `Includes/InputCapture.hpp`: pure masking logic for input capture, used by the pad and touch hooks (`Buttons.cpp`, `Cursor.cpp`). Plugin menus read the real input with `CaptureRealHeld/Pressed/Stick` and `CaptureRealTouch`: the game's latest read before masking. That view (not CTRPF's `Controller`, which reads HID directly) includes injected test input, so `press`/`stick`/`tap` drive plugin menus too, and it has the same timing as what the game sees. It goes stale if the game stops reading input; `Controller` is the fallback then.
 - `tests/`: host tests for the pure logic (`make -C tests` with any g++, e.g. `wsl make -C tests` on Windows; CI runs them). The UI test also writes a preview of the `uidemo` menu to `analysis/private/ui-demo.png`.
 - `Sources/UI`, `Includes/UI`: drawing layer for plugin-drawn top-screen menus. `Raster` (rects, rounded rects, lines, triangles, alpha blending, clipping), `Text` (system font via CTRPF, built-in 5x7 font, measuring, alignment, ellipsis), `Icons`, `Layout` and the `uidemo` menu are free of CTRPF; `Device.cpp` is the CTRPF glue.
+- `tools/scenario.py`, `scenarios/`: scripted emulator tests; `tools/emu.py` is the shared command/screenshot code behind `cmd.py`, `shot.py` and `scenario.py`.
 - `Makefile`, `3gx.ld`, `usum-onescreen.plgInfo`: build setup, adapted from [Gen6CTRPFrameworkOverhauled](https://github.com/samaBR85/Gen6CTRPFrameworkOverhauled).
 - `docs/RE2-text.md`: how the game stores and looks up text (species/move/item names), with `tools/romfs_text.py` to extract and decode it from your own dump into `analysis/private/`.

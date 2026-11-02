@@ -1,0 +1,5 @@
+# Title -> Continue -> overworld (FieldRo), panel off throughout.
+include common/boot
+shot field
+expect-scene FieldRo
+stop

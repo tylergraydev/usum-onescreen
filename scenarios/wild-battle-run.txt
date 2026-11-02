@@ -1,0 +1,33 @@
+# Walk from the Pokémon Center to the tall grass south of it, wait for a
+# wild battle, Run, and get back to the overworld.
+include common/boot
+
+# Out of the door: the map change logs scene (none), then FieldRo again.
+mark
+send stick 0 -150 120
+expect-log ^scene: \(none\) 15
+wait-scene FieldRo 30
+sleep 6                   # the walk-out animation ignores the circle pad
+# South down the path into the tall grass, in short steps: one long push
+# stops partway (the walk halts and needs the pad back at neutral).
+repeat 8 until-scene Battle
+  send stick 0 -150 60
+  sleep 1.5
+end
+shot grass
+repeat 40 until-scene Battle  # back and forth in the grass
+  send stick -150 0 20
+  sleep 0.5
+  send stick 150 0 20
+  sleep 0.5
+end
+expect-mode panel         # Battle = panel
+sleep 12                  # battle intro, until the command menu shows
+shot battle
+repeat 3 until-scene FieldRo
+  send move 160 225; tap 6  # RUN (no A needed: it escapes at once)
+  sleep 20                  # "Got away safely!" and the fade back to the field
+end
+expect-mode off           # FieldRo = off
+shot field
+stop
