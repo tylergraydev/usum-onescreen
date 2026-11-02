@@ -74,6 +74,11 @@ namespace OneScreen
     // The definitions live as long as the program.
     const ActionDef &XMenuAction(int index);
 
+    // The native screen that takes over once entry `index` has opened the
+    // game's own ("pokedex": Screens/Pokedex.hpp), or nullptr. The X menu
+    // still opens the game's screen; it keeps the panel off until then.
+    const char *XMenuNativeScreen(int index);
+
     // What the native menu shows.
     struct XMenuView
     {

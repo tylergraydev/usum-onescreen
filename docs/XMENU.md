@@ -82,6 +82,15 @@ and tapping an entry moves its cursor there. The native menu follows that:
   closed with B is still there next time, as in the game.
 - Opening an entry counts as the game's cursor moving there (it does).
 
+## Native screens behind entries
+
+The Pokédex entry opens the game's Pokédex as usual, and the native Pokédex
+(`docs/POKEDEX.md`) takes over once the game's top level is up
+(`XMenuNativeScreen`). While that entry's action runs (the X menu has gone,
+the field and loading frames remain), the X menu keeps holding the panel off,
+so it doesn't show for the second the Pokédex takes to load; in the Pokédex
+the native screen holds it. `pokedex off` turns this off with it.
+
 ## The panel
 
 AutoPanel's default for `FieldRo.xmenu` is the panel, and the field state it
@@ -104,7 +113,8 @@ Festival Plaza's menu. So `XMenu.cpp` decides, without changing AutoPanel:
 cursor; for tests), `xmenu open NAME` (as A on NAME). NAME: `pokemon pokedex
 bag quick_link festival_plaza trainer_passport pokemon_refresh qr_scanner
 battle_video options map save`. Log lines: `xmenu: shown (game page P)`,
-`xmenu: hidden`, `xmenu: cursor NAME`, `xmenu: open NAME`, then the action's
+`xmenu: hidden`, `xmenu: cursor NAME`, `xmenu: open NAME` (`... (native)` for
+an entry with a native screen), then the action's
 own `action: xmenu-NAME ok ...` / `FAILED ...`.
 
 ## Drawing
