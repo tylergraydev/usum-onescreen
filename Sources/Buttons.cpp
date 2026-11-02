@@ -2,19 +2,14 @@
 
 #include <CTRPluginFramework.hpp>
 
+#include "InputCapture.hpp"
+
 namespace OneScreen
 {
     using namespace CTRPluginFramework;
 
-    // One pad sample as the game's reader writes it.
-    struct PadSample
-    {
-        u32 held;
-        u32 pressed;
-        u32 released;
-        s16 stickX;
-        s16 stickY;
-    };
+    static_assert(CaptureStickBits == (u32)Key::CPad, "stick capture bits");
+    static_assert(CaptureTouchBit == (u32)Key::Touchpad, "touch capture bit");
 
     static Hook s_padHook;
 
@@ -27,6 +22,15 @@ namespace OneScreen
     // Injected circle pad position (about -156..156 each way) and countdown.
     static volatile s16 s_stickX = 0, s_stickY = 0;
     static volatile u32 s_stickFrames = 0;
+
+    // Capture request, written by the plugin thread with one store. Only the
+    // hook touches s_capture, so ending capture can't race with its update.
+    static volatile u32 s_captureRequest = 0;
+    static PadCaptureState s_capture;
+
+    // The latest read before masking (real input plus injected), for plugin menus.
+    static volatile u32 s_realHeld = 0, s_realPrevHeld = 0, s_realPressed = 0;
+    static volatile s16 s_realStickX = 0, s_realStickY = 0;
 
     // Circle pad direction bits the HID module sets alongside the raw position.
     static u32 StickBits(s32 x, s32 y)
@@ -77,7 +81,19 @@ namespace OneScreen
                 s_injected++;
         }
 
-        if (out != nullptr && count != nullptr && *count > 0)
+        const s32 n = (out != nullptr && count != nullptr) ? (*count < max ? *count : max) : 0;
+        if (n > 0)
+        {
+            u32 held = 0;
+            for (s32 i = 0; i < n; i++)
+                held |= out[i].held;
+            s_realHeld = held;
+            s_realStickX = out[0].stickX;
+            s_realStickY = out[0].stickY;
+        }
+        MaskPadSamples(s_capture, s_captureRequest, out, n);
+
+        if (n > 0)
             s_gameSaw = out[0].held;
         return result;
     }
@@ -102,6 +118,10 @@ namespace OneScreen
         if (s_stickFrames > 0)
             s_stickFrames--;
         s_newFrame = true;
+
+        const u32 real = s_realHeld;
+        s_realPressed = real & ~s_realPrevHeld;
+        s_realPrevHeld = real;
     }
 
     void ButtonsStick(s32 x, s32 y, u32 frames)
@@ -145,9 +165,44 @@ namespace OneScreen
         return s_gameSaw;
     }
 
+    void InputCaptureBegin(u32 keys, bool captureStick, bool captureTouch)
+    {
+        s_captureRequest = (keys & ~(CaptureStickBits | CaptureTouchBit))
+                           | (captureStick ? CaptureStickBits : 0)
+                           | (captureTouch ? CaptureTouchBit : 0);
+    }
+
+    void InputCaptureEnd(void)
+    {
+        s_captureRequest = 0;
+    }
+
+    u32 InputCaptureRequest(void)
+    {
+        return s_captureRequest;
+    }
+
+    u32 CaptureRealHeld(void)
+    {
+        return s_realHeld;
+    }
+
+    u32 CaptureRealPressed(void)
+    {
+        return s_realPressed;
+    }
+
+    void CaptureRealStick(s32 &x, s32 &y)
+    {
+        x = s_realStickX;
+        y = s_realStickY;
+    }
+
     std::string ButtonsStatus(void)
     {
-        return Utils::Format("buttons: injecting %08lX | game reads %lu, injected %lu, last held seen %08lX",
-                             s_held, s_reads, s_injected, s_gameSaw);
+        return Utils::Format("buttons: injecting %08lX | game reads %lu, injected %lu, last held seen %08lX"
+                             " | capture %08lX, suppressing %08lX, real held %08lX",
+                             s_held, s_reads, s_injected, s_gameSaw,
+                             s_captureRequest, s_capture.suppressed, s_realHeld);
     }
 }

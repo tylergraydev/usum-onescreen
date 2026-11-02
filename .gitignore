@@ -13,3 +13,6 @@ Build/
 *.rar
 aes_keys.txt
 analysis/private/
+
+# Host test binaries
+tests/build/

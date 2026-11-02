@@ -37,3 +37,11 @@ jobs:
         with:
           name: usum-onescreen
           path: usum-onescreen.3gx
+
+  # Pure logic (input capture masking) built and run on the PC side.
+  host-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Host tests
+        run: make -C tests
