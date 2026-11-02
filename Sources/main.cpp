@@ -14,6 +14,7 @@
 #include "Panel.hpp"
 #include "Party.hpp"
 #include "Scene.hpp"
+#include "Screens/XMenu.hpp"
 #include "Settings.hpp"
 #include "Shot.hpp"
 #include "UI/Device.hpp"
@@ -115,6 +116,8 @@ namespace CTRPluginFramework
     //     menu would; on adds, off removes; no list = everything)
     //   action NAME | action status | action cancel | action list   (drive the bottom
     //     screen: open-pokedex, open-party, open-bag, battle-run, close; Actions.hpp)
+    //   xmenu on|off|status | xmenu select NAME | xmenu open NAME   (native X menu,
+    //     Screens/XMenu.hpp; NAME as in XMenuGrid.cpp: pokemon, pokedex, ..., map, save)
     static const char *CommandPath = "/usum-cmd.txt";
 
     // Global data + bss of USUM v1.2 (from the exheader): 0x669000 .. 0x6D5F44.
@@ -289,6 +292,18 @@ namespace CTRPluginFramework
                 return;
             }
         }
+        else if (line.compare(0, 6, "xmenu ") == 0)
+        {
+            std::vector<std::string> log;
+            const bool known = OneScreen::XMenuCommand(line.substr(6), s_game->offsets.sceneManager, log);
+            for (const std::string &l : log)
+                WriteLog(l, false);
+            if (!known)
+            {
+                WriteLog("cmd: unknown xmenu command in '" + line + "'", false);
+                return;
+            }
+        }
         else if ((fields = std::sscanf(line.c_str(), "peek %x %u", &a, &b)) >= 1)
         {
             // Logs COUNT words (default 4) at ADDR, if readable.
@@ -424,6 +439,11 @@ namespace CTRPluginFramework
         if (OneScreen::AutoPanelUpdate(scene, OneScreen::ButtonsGameHeld(), fieldState))
             WriteLog(OneScreen::AutoPanelStatus() + " -> " + OneScreen::PanelStatus(), false);
 
+        std::vector<std::string> xmenuLog;
+        OneScreen::XMenuUpdate(s_game->offsets.sceneManager, scene, fieldState, xmenuLog);
+        for (const std::string &line : xmenuLog)
+            WriteLog(line, false);
+
         OneScreen::ShotPoll();
         PollCommands();
     }
@@ -517,6 +537,9 @@ namespace CTRPluginFramework
 
         LoadSettings();
 
+        // Before the panel: its callback takes the screenshots, so it must
+        // run after the native menus have drawn.
+        OneScreen::StartXMenu();
         OneScreen::StartPanel(OneScreen::PanelMode::Off);
         OneScreen::StartActions();
 
