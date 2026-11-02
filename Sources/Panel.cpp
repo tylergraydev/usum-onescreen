@@ -6,6 +6,7 @@
 #include "Framebuffer.hpp"
 #include "Settings.hpp"
 #include "Shot.hpp"
+#include "UI/Device.hpp"
 
 namespace OneScreen
 {
@@ -108,7 +109,10 @@ namespace OneScreen
 
     static bool PanelCallback(const Screen &screen)
     {
-        const bool drew = DrawPanel(screen);
+        bool drew = DrawPanel(screen);
+        // Drawn after the panel so test menus sit on top, and before the
+        // screenshot hook so shots include them.
+        drew |= UiDemoOnScreen(screen);
         ShotOnScreen(screen);
         return drew;
     }
