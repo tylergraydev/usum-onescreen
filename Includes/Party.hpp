@@ -57,6 +57,11 @@ namespace OneScreen
     std::string SpeciesName(u16 species);
     std::string ItemName(u16 item);
 
+    // Line `line` of the full-load MsgData object at `msg` whose dat ID field
+    // (+0xC) is `dat` (0 for files an app loaded from its own buffer), UTF-8.
+    // Empty if the object or the line does not check out.
+    std::string MsgLine(u32 msg, u32 dat, u32 line);
+
     // Log lines for the `party` and `bag` commands.
     std::string DescribeParty(const PartyState &party);
     std::string DescribeBag(const BagState &bag);
