@@ -35,6 +35,14 @@ namespace OneScreen
         // scene object; that object's vtable lives in the CRO module of the
         // scene (FieldRo, Zukan, Bag, ...), which names the scene.
         u32 sceneManager;
+        // gx library calls that push one command onto the game's GX command
+        // queue (lock-free; the push triggers the queue when it was empty).
+        // DisplayTransfer: (in, in width, in height, out, out width, out
+        // height, flags). TextureCopy: (in, out, size, in width, in gap,
+        // out width, out gap, flags), widths and gaps in 16-byte units.
+        // Called, not hooked; the panel copies the bottom screen with them.
+        HookTarget gxDisplayTransfer;
+        HookTarget gxTextureCopy;
     };
 
     struct GameInfo

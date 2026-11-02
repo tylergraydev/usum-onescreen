@@ -134,20 +134,11 @@ namespace OneScreen
         s_tapFrames = frames;
     }
 
-    void CursorDraw(const Screen &screen, u32 left, u32 top, u32 divisor)
+    bool CursorGet(u32 &x, u32 &y)
     {
-        const u32 cx = left + (u32)s_x / divisor;
-        const u32 cy = top + (u32)s_y / divisor;
-        const Color &fill = IsTouching() ? Color::Red : Color::White;
-
-        // Crosshair with a black outline so it shows on any background.
-        const u32 arm = 5;
-        const u32 x0 = cx >= arm + 1 ? cx - arm : 1, x1 = cx + arm < TopWidth - 1 ? cx + arm : TopWidth - 2;
-        const u32 y0 = cy >= arm + 1 ? cy - arm : 1, y1 = cy + arm < ScreenHeight - 1 ? cy + arm : ScreenHeight - 2;
-        screen.DrawRect(x0 - 1, cy - 1, x1 - x0 + 3, 3, Color::Black);
-        screen.DrawRect(cx - 1, y0 - 1, 3, y1 - y0 + 3, Color::Black);
-        screen.DrawRect(x0, cy, x1 - x0 + 1, 1, fill);
-        screen.DrawRect(cx, y0, 1, y1 - y0 + 1, fill);
+        x = (u32)s_x;
+        y = (u32)s_y;
+        return IsTouching();
     }
 
     bool CaptureRealTouch(u32 &x, u32 &y)
