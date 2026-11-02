@@ -99,7 +99,7 @@
       "reach": "Party: tap a slot",
       "buttons": {
         "summary": {"rect": [215, 123, 315, 145], "tap": [266, 134], "does": "Summary (scene Status); back (15,223) returns to Party", "verified": "tap", "evidence": "re5-party-summary, re5-summary-back"},
-        "restore": {"rect": [215, 151, 315, 173], "tap": [266, 162], "does": "Restore (label on the button; not tried)", "verified": "measured", "why": "not needed; avoided game-state actions"},
+        "restore": {"rect": [215, 151, 315, 173], "tap": [266, 162], "does": "Restore: the Bag (scene main:006488C8) for this Pokemon, on the pocket it showed last; back (15,224) returns to Party", "verified": "tap", "evidence": "p23-restore (Zorua, Medicine), p23-r1 (Pichu)"},
         "held_item": {"rect": [215, 179, 315, 201], "tap": [266, 190], "does": "Held Item submenu", "verified": "measured", "why": "avoided item changes"},
         "back": {"rect": [215, 207, 315, 229], "tap": [266, 218], "does": "closes the slot menu", "verified": "tap", "evidence": "re5-party-sub-back"}
       },
@@ -111,10 +111,10 @@
       "buttons": {
         "item_row1": {"rect": [157, 4, 315, 29], "tap": [235, 16], "does": "opens the item menu for the 1st visible row", "verified": "tap", "evidence": "re5-bag-row-y16 (Awakening, list scrolled)"},
         "item_row2": {"rect": [157, 32, 315, 57], "tap": [235, 44], "does": "item menu, row 2", "verified": "tap", "evidence": "re5-bag-row2 (Paralyze Heal)"},
-        "item_row3": {"rect": [157, 60, 315, 85], "tap": [235, 72], "does": "item menu, row 3", "verified": "measured", "why": "same 28 px pitch as the tapped rows 1, 2, 4, 7"},
+        "item_row3": {"rect": [157, 60, 315, 85], "tap": [235, 72], "does": "item menu, row 3", "verified": "tap", "evidence": "p23-row72 (Awakening, Restore bag)"},
         "item_row4": {"rect": [157, 88, 315, 113], "tap": [235, 100], "does": "item menu, row 4", "verified": "tap", "evidence": "re5-bag-row-y100 (Ice Heal)"},
-        "item_row5": {"rect": [157, 116, 315, 141], "tap": [235, 128], "does": "item menu, row 5", "verified": "measured", "why": "same pitch"},
-        "item_row6": {"rect": [157, 144, 315, 169], "tap": [235, 156], "does": "item menu, row 6", "verified": "measured", "why": "same pitch"},
+        "item_row5": {"rect": [157, 116, 315, 141], "tap": [235, 128], "does": "item menu, row 5", "verified": "tap", "evidence": "p23-row128 (Burn Heal, Restore bag)"},
+        "item_row6": {"rect": [157, 144, 315, 169], "tap": [235, 156], "does": "item menu, row 6", "verified": "tap", "evidence": "p23-row156 (Ice Heal, Restore bag)"},
         "item_row7": {"rect": [157, 172, 315, 197], "tap": [235, 184], "does": "item menu, row 7", "verified": "tap", "evidence": "re5-bag-row-y184 (Fresh Water)"},
         "item_row8_partial": {"rect": [157, 200, 315, 212], "tap": [235, 210], "does": "nothing (half-visible row)", "verified": "none", "evidence": "re5-bag-partial"},
         "pocket_rotom_powers": {"rect": [122, 216, 145, 239], "tap": [134, 230], "does": "Rotom Powers pocket", "verified": "tap", "evidence": "re5-bag-tab0 (top: Rotom Powers)"},
@@ -144,6 +144,16 @@
         "cancel": {"rect": [161, 209, 316, 236], "tap": [236, 222], "does": "closes the item menu", "verified": "tap", "evidence": "re5-bag-cancel"}
       },
       "notes": ["entries depend on the item (this is the Medicine list); 28 px pitch"]
+    },
+    "restore_item_menu": {
+      "scene": "main:006488C8",
+      "reach": "Party: slot -> Restore -> tap an item row (\"What would you like to do with the Potion and Pichu?\")",
+      "buttons": {
+        "use": {"rect": [177, 155, 313, 178], "tap": [245, 166], "does": "uses the item on that Pokemon; a message (\"Pichu's HP was restored by 9 points.\" / \"It won't have any effect.\") stays until A or B, then the item list", "verified": "tap", "evidence": "p23-use (no effect), p23-r31 (Potion 18 -> 27 HP)"},
+        "give": {"rect": [178, 183, 313, 206], "tap": [245, 194], "does": "Give to Pokemon", "verified": "measured", "why": "changes held items"},
+        "cancel": {"rect": [178, 211, 313, 236], "tap": [245, 222], "does": "closes the item menu", "verified": "measured", "why": "B was used instead"}
+      },
+      "notes": ["3 entries (the field Bag's item menu has 4); 28 px pitch; B closes it"]
     },
     "battle_command": {
       "scene": "Battle",

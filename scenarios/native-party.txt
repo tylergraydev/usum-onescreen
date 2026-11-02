@@ -1,0 +1,194 @@
+# The native Party screen and summary (Screens/PartyScreen.hpp,
+# docs/PARTY-UI.md), buttons only, the panel off:
+#   1. X -> native X menu -> Pokémon -> the native party list (species,
+#      level, HP, status, held item).
+#   2. Summary of Zorua (move, ability, nature names), Down to the next
+#      Pokémon in the game's summary, Y shows the game's page and back, B.
+#   3. Swap Torracat (1) and Buneary (6); the order holds after closing.
+#   4. A wild battle with Buneary in front (Defense Curl, then Run) for some
+#      damage.
+#   5. Use a Potion on Buneary from the native screen: HP goes up, Potion
+#      x9 -> x8.
+# A screenshot is taken before every A. Nothing is saved.
+include common/boot
+# Checks the automatic view per scene (Party would be full), off by default.
+send auto on
+
+# --- 1. Open from the native X menu ---
+mark
+send press x
+expect-log ^xmenu: shown 10
+expect-log ^xmenu: game cursor page 10
+send xmenu select pokemon
+expect-log ^xmenu: cursor pokemon 5
+shot pre-pokemon
+send press a
+expect-log ^action: xmenu-pokemon ok 15
+expect-log ^party-ui: party 6: Torracat L17 51/51 - -, Zorua L14 35/35 - -, Pikipek L13 35/35 - -, Pichu L12 27/27 - -, Ledyba L13 37/37 - -, Buneary L12 37/37 - - 10
+expect-log ^party-ui: shown \(main:00647FCC, cursor 1\) 5
+expect-mode off           # [scenes] Party = full; the native screen holds it off
+sleep 2
+shot party
+
+# --- Moving ---
+mark
+send press right
+expect-log ^party-ui: cursor 2 \(Zorua\) 5
+send press down
+expect-log ^party-ui: cursor 4 \(Pichu\) 5
+send press left
+expect-log ^party-ui: cursor 3 \(Pikipek\) 5
+send press up
+expect-log ^party-ui: cursor 1 \(Torracat\) 5
+send press right
+expect-log ^party-ui: cursor 2 \(Zorua\) 5
+reject-log ^action:
+
+# --- 2. Summary of Zorua ---
+mark
+shot pre-menu
+send press a
+expect-log ^party-ui: page menu, Summary 5
+sleep 1
+shot menu
+send press a
+expect-log ^party-ui: summary 2 \(Zorua\) 5
+expect-log ^action: party-summary ok 15
+wait-scene Status 10
+expect-log ^party-ui: summary 2 of 6: Zorua L14 35/35 - -, ability Illusion, nature \w+, moves Fury Swipes 15, Leer 30, Pursuit 20, Fake Tears 20 10
+expect-mode off           # [scenes] Status = panel
+sleep 2
+shot summary
+# The game keeps Up/Down: the next Pokémon; the native page follows its ring.
+mark
+send press down
+expect-log ^party-ui: summary 3 of 6: Pikipek L13 35/35 - -, ability Skill Link, nature Timid, moves Peck 35, Growl 40, Echoed Voice 15, Rock Smash 15 10
+reject-log ^party-ui: summary 2 of 6
+sleep 1
+shot summary-next
+send press y
+expect-log ^party-ui: summary hidden \(game page\) 5
+sleep 1
+shot summary-game-page
+send press y
+expect-log ^party-ui: summary shown 5
+mark
+send press b
+wait-scene main:00647FCC 15
+sleep 2
+expect-mode off
+shot back-from-summary
+
+# --- 3. Swap Torracat (1) and Buneary (6) ---
+mark
+send press up
+expect-log ^party-ui: cursor 1 \(Torracat\) 5
+send press y
+expect-log ^party-ui: page swap 5
+send press right
+send press down
+send press down
+expect-log ^party-ui: cursor 6 \(Buneary\) 5
+sleep 1
+shot pre-swap
+send press a
+expect-log ^party-ui: swap 1 \(Torracat\) and 6 \(Buneary\) 5
+expect-log ^action: party-swap ok 15
+expect-log ^party-ui: swap ok, screen order 6 2 3 4 5 1 5
+sleep 2
+shot swapped
+# B is the game's: it closes its Party screen (the party takes the new order).
+mark
+send press b
+wait-scene FieldRo 20
+expect-log ^party-ui: hidden 5
+expect-log ^xmenu: shown 15
+send press b
+expect-log ^xmenu: hidden 10
+sleep 3
+send party
+expect-log ^  1 \w+ Buneary\(427\) 5
+expect-log ^  6 \w+ Torracat\(726\) 5
+check-save
+
+# --- 4. A wild battle: Buneary takes some damage ---
+mark
+send stick 0 -150 120
+expect-log ^scene: \(none\) 15
+wait-scene FieldRo 30
+sleep 6
+repeat 8 until-scene Battle
+  send stick 0 -150 60
+  sleep 1.5
+end
+repeat 40 until-scene Battle
+  send stick -150 0 20
+  sleep 0.5
+  send stick 150 0 20
+  sleep 0.5
+end
+sleep 14                  # battle intro, until the command menu shows
+shot battle
+repeat 3
+  send move 285 120; tap 6  # Fight
+  sleep 2
+  send move 235 41; tap 6   # Defense Curl (no damage to the foe)
+  sleep 16
+end
+repeat 3 until-scene FieldRo
+  send move 160 225; tap 6  # Run
+  sleep 20
+end
+sleep 3
+mark
+send party
+# Fails here if the foe never hit Buneary (rerun: its moves are random).
+expect-log ^  1 \w+ Buneary\(427\) "Buneary" L12 hp ([1-9]|[12]\d|3[0-6])/37 5
+
+# --- 5. Potion on Buneary from the native screen ---
+mark
+send press x
+expect-log ^xmenu: shown 10
+expect-log ^xmenu: game cursor page 10
+send xmenu select pokemon
+expect-log ^xmenu: cursor pokemon 5
+send press a
+expect-log ^action: xmenu-pokemon ok 15
+expect-log ^party-ui: shown \(main:00647FCC, cursor \d\) 10
+# (A foe may also have left a status: Ekans poisoned Pichu once, shown as PSN.)
+expect-log ^party-ui: party 6: Buneary L12 ([1-9]|[12]\d|3[0-6])/37 \S+ - 5
+# The game may reopen with its cursor elsewhere: up and left to Buneary (1).
+send press up
+send press up
+send press left
+sleep 2
+shot party-hurt
+send press a
+expect-log ^party-ui: page menu, Summary 5
+send press down
+expect-log ^party-ui: page menu, Use item 5
+send press a
+expect-log ^party-ui: page items, Medicine 1 of 9: Potion x9 5
+sleep 1
+shot items
+send press a
+expect-log ^party-ui: use Potion \(Medicine 1 of 9\) on 1 \(Buneary\) 5
+expect-log ^action: party-restore ok 15
+expect-log ^action: party-use ok 20
+expect-log ^party-ui: used Potion on Buneary: hp \d+/37 -> \d+/37, status \w+ -> \w+, Potion x9 -> x8 5
+expect-mode off
+reject-log ^action: .* FAILED
+sleep 2
+shot potion-used
+
+# --- Close: B to the X menu, B to the field ---
+mark
+send press b
+wait-scene FieldRo 20
+expect-log ^party-ui: hidden 5
+expect-log ^xmenu: shown 15
+send press b
+expect-log ^xmenu: hidden 10
+expect-mode off
+check-save
+stop

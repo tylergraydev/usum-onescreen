@@ -81,7 +81,7 @@ Slot menu (right side, 28 px pitch; inner highlight measured at x 223-308, outer
 | Button | Rect | Tap | Does | Verified |
 |---|---|---|---|---|
 | Summary | 215,123-315,145 | 266,134 | summary (`Status`); back 15,223 returns to Party | tap |
-| Restore | 215,151-315,173 | 266,162 | label on the button; not tried | measured |
+| Restore | 215,151-315,173 | 266,162 | the Bag (`main:006488C8`) for this Pokémon, on the pocket it showed last; back 15,224 returns to Party | tap (P2-3) |
 | Held Item | 215,179-315,201 | 266,190 | held-item submenu | measured: avoided item changes |
 | Back | 215,207-315,229 | 266,218 | closes the slot menu | tap |
 
@@ -89,7 +89,7 @@ Slot menu (right side, 28 px pitch; inner highlight measured at x 223-308, outer
 
 | Button | Rect | Tap | Does | Verified |
 |---|---|---|---|---|
-| Item row 1-7 | x 157-315, y 4+28k to 29+28k (k = 0-6) | 235, 16+28k (16, 44, 72, 100, 128, 156, 184) | item menu for that row | tap: rows 1, 2, 4, 7 (names match); rows 3, 5, 6 measured (same pitch) |
+| Item row 1-7 | x 157-315, y 4+28k to 29+28k (k = 0-6) | 235, 16+28k (16, 44, 72, 100, 128, 156, 184) | item menu for that row | tap: all seven (rows 3, 5, 6 by P2-3 in the Restore bag: Awakening, Burn Heal, Ice Heal) |
 | Half-visible row 8 | 157,200-315,212 | 235,210 | nothing | none |
 | Pocket tabs | 24 px wide from x 122, y 216-239 | x 134+24k, y 230 | k = 0 Rotom Powers, 1 Medicine, 2 Items, 3 TMs, 4 Berries, 5 Key Items, 6 Free Space | tap, all 7 (pocket name read on the top screen) |
 | Scroll bar | 316,10-318,210 | 317,190 | display only: tap and drag did nothing | none |
@@ -106,6 +106,19 @@ Item menu (Medicine shown; entries depend on the item; 28 px pitch):
 | Give to Pokémon | 161,153-316,178 | 236,166 | give | measured: changes held items |
 | Move to Free Space | 161,181-316,206 | 236,194 | move | measured: changes the bag |
 | Cancel | 161,209-316,236 | 236,222 | closes the menu | tap |
+
+Restore item menu (Party → slot → Restore → tap a row: "What would you like to do with the Potion and Pichu?"; 3 entries, 28 px pitch; B closes it):
+
+| Button | Rect | Tap | Does | Verified |
+|---|---|---|---|---|
+| Use this item | 177,155-313,178 | 245,166 | uses it on that Pokémon; a message ("Pichu's HP was restored by 9 points." / "It won't have any effect.") stays until A or B, then the item list | tap (P2-3) |
+| Give to Pokémon | 178,183-313,206 | 245,194 | give | measured: changes held items |
+| Cancel | 178,211-313,236 | 245,222 | closes the menu | measured (B used instead) |
+
+- The Restore bag keeps the field Bag's tabs, rows and back button. It remembers cursor and scroll per pocket, also across tab taps; read them from memory (`docs/OFFSETS.md`, Bag item list).
+- Party move mode (the Y button): a tap on a slot only moves the game's cursor; A picks that Pokémon ("Where do you want to move it to?"); a tap on another slot swaps them at once and returns to "Which Pokémon do you want to move?"; B leaves move mode (B with a Pokémon picked un-picks it first).
+- Party screen, plain list: the bottom bar's Y and X buttons are blue at 120,226 and 310,226 with white at 205,226; a slot menu dims them, move mode and messages cover them (`WorldPartyList`, `Sources/Actions.cpp`).
+- Summary (`Status`): the party balls run down the left edge; the one shown has a green ring (x 5, centre y 16 + 32·position). Up/Down change Pokémon (wrapping), Left/Right change page, A checks moves, B returns to Party with its cursor on the Pokémon shown last.
 
 ## Battle command (`Battle`)
 
@@ -149,7 +162,7 @@ No Z-move or Mega button: this save has no Z-Crystal pocket and the move list ha
 - Z-move button, Mega Evolution: not in this save.
 - Target selection: not shown in single battles; no double battle available.
 - Save confirmation: Save is never tapped.
-- Not tapped by choice (listed above as measured): item Use/Give/Move, Party Restore/Held Item, battle Switch/Restore, the Y Poké Ball, X menu page 2 entries other than Options.
+- Not tapped by choice (listed above as measured): field Bag item Use/Give/Move, Party Held Item, Restore Give, battle Switch/Restore, the Y Poké Ball, X menu page 2 entries other than Options.
 
 ## Side observations
 
