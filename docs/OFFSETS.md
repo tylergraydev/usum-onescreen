@@ -103,3 +103,13 @@ Full write-up: [RE4-map.md](RE4-map.md). Read by the `where` command (`Sources/W
 - Zone: `*(*(gm+0x2C)+0x88)+0x1C` (u32; 0 in battle). Zone data: `field+0x54` loader (vtable `0x64BDD0`) → `+0x14` table of 0x54-byte entries (`+0x18` size): `+0x1C` place-name line in message file 72, `+0x44/+0x48` fixed map point (interiors only).
 - Rotom map view (vtable `0x64786C`): FieldMenu frame (FieldMenu+`0x183A0`) on the scene stack → `+0xD0`; `+0x170` map index, `+0x174/+0x178` centre (world x/z), scales `0x2CF230`/`0x2CF234` (0.0270139, 0.0270536 map px per unit).
 - Verified walking the Route 2 Pokémon Center (zone 79), Route 2 (7) and Hau'oli City (13) against screenshots and the Rotom map.
+
+## Native map (runtime, 2026-11-02)
+
+Full write-up: [MAP.md](MAP.md). Used by `Sources/Screens/Map.cpp`.
+
+- `0x671A10` (u8): current text language, 0-9 (RE2, static). Read 2 in the field (instance p25); the map then read `a/0/3/2` from the game's RomFS and its file 72 line 12 / 20 / 21 decoded to "Route 2" / "Hau’oli City" / "Shopping District", the in-game banners (RE4). Picks the place-name GARC `a/0/3/<lang>`.
+- Not an address but relied on: `ARCHIVE_ROMFS` (`FSUSER_OpenFileDirectly`, binary path {0, 0, 0}) opens the running title's RomFS at IVFC level 3 from the plugin in Azahar 2126.2 (`map: place names: 234 lines from a/0/3/2 file 72 (17 ms)`).
+- Field work zone (`*(*(gm+0x2C)+0x88)+0x1C`) right after a door: reads 0 for ~3 readings (4 frames apart) with the old position while the entry zone (`location+0x0A`) already has the new zone (79 → 0 → 7, logged); settled readings had zone == entry zone.
+- Zone data `+0x4E` (u8): the zone's map, Rotom map index + 1 (1-4 the islands, 5 Aether Paradise, 6-21 small maps). From a runtime dump of all 380 entries read against the place names; zones 7, 13, 79 = 1 with Rotom map index 0. Only the 56 outdoor island zones have no fixed map point (`+0x44/+0x48`). docs/RE4-map.md.
+- Bottom screen in the field: Rotom's eyes reach y 97 at the sides of the map window (29,84 – 290,231); the map copies (30,104) 260 × 128.

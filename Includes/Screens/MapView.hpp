@@ -19,8 +19,8 @@ namespace OneScreen
         bool known = false;     // a field reading has come in
         bool picture = false;   // the game's Rotom map is up: its window is copied in
         bool indoor = false;
-        bool hasIsland = false; // the Rotom map view was found (its map index is the island)
-        u32  island = 0;
+        bool hasIsland = false; // the zone's map area (or the Rotom map's index) is known
+        u32  island = 0;        // map index: 0-3 the islands, 4 Aether Paradise, 5-20 small maps
         u16  zone = 0;
         int  x = 0, z = 0;      // world position, rounded
         int  yaw = 0;           // facing, 0 south, 90 east
@@ -32,8 +32,8 @@ namespace OneScreen
     bool operator==(const MapView &a, const MapView &b);
     inline bool operator!=(const MapView &a, const MapView &b) { return !(a == b); }
 
-    // The island for a Rotom map index. Only index 0 (Melemele) has been seen
-    // in the game; 1-3 follow the islands' order (docs/MAP.md).
+    // The island for a map index: 0 Melemele ... 3 Poni; "" for other maps.
+    // Only 0 was seen at runtime; 1-3 follow the zone table (docs/MAP.md).
     const char *MapIslandName(u32 index);
     // 8 compass points from a facing in degrees (0 south, 90 east).
     const char *MapCompass(int yaw);

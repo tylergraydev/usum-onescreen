@@ -289,6 +289,7 @@ static WhereState Where(u16 zone, u16 nameLine, bool indoor, float x, float z, i
     w.yaw = yaw;
     w.mapView = mapView ? 0x30000000 : 0;
     w.mapIndex = 0;
+    w.mapArea = 1;
     return w;
 }
 
@@ -319,10 +320,22 @@ static void TestView(void)
     CHECK(std::string(v.place) == "Route 2" && v.sub[0] == 0 && v.indoor);
     CHECK(DescribeMapView(v) == "zone 79 \"Route 2\", indoors, Melemele Island, x 2176 z 2523 facing SW, picture");
 
-    // No names loaded, no Rotom map, a name line past the end.
+    // No names loaded, no Rotom map: the island still comes from the zone.
     v = MakeMapView(Where(7, 12, false, 1, 2, 90, false), {}, "");
-    CHECK(v.known && !v.picture && !v.hasIsland && v.place[0] == 0);
-    CHECK(DescribeMapView(v) == "zone 7 \"\", outdoors, no island, x 1 z 2 facing E, no picture");
+    CHECK(v.known && !v.picture && v.hasIsland && v.island == 0 && v.place[0] == 0);
+    CHECK(DescribeMapView(v) == "zone 7 \"\", outdoors, Melemele Island, x 1 z 2 facing E, no picture");
+    // Neither the zone's map area nor the Rotom map: no island.
+    WhereState bare = Where(7, 12, false, 1, 2, 90, false);
+    bare.mapArea = 0;
+    v = MakeMapView(bare, {}, "");
+    CHECK(!v.hasIsland && DescribeMapView(v) == "zone 7 \"\", outdoors, no island, x 1 z 2 facing E, no picture");
+    // Zone data wins over the Rotom map's index; other maps have no island name.
+    WhereState akala = Where(89, 68, false, 1, 2, 0, true);
+    akala.mapArea = 2;
+    CHECK(MakeMapView(akala, {}, "").island == 1);
+    akala.mapArea = 5;      // Aether Paradise
+    v = MakeMapView(akala, {}, "");
+    CHECK(v.island == 4 && std::string(MapIslandName(v.island)).empty());
     v = MakeMapView(Where(7, 21, false, 1, 2, 90, true), names, "");
     CHECK(std::string(v.place) == "Shopping District" && v.sub[0] == 0);
     v = MakeMapView(Where(7, 400, false, 1, 2, 90, true), names, "");
