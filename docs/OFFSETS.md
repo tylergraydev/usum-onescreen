@@ -2,7 +2,7 @@
 
 Title `00040000001B5000`, update title version `0x0800` (2048). Code layout from the update's exheader: text `0x100000` (size `0x4BB818`), rodata `0x5BC000`, data `0x669000`, bss `0x301BC`. The code is not compressed.
 
-Found by static analysis of the local `code.bin` (`tools/extract_code.py`, `tools/find_refs.py`, `tools/find_calls.py`, `tools/ghidra/decompile.sh`). The plugin checks the first four instruction words of each hook target at boot and writes the result to `usum-onescreen.log`.
+Found by static analysis of the local `code.bin` (`tools/extract_code.py`, `tools/find_refs.py`, `tools/find_calls.py`, `tools/ghidra/decompile.sh`). The plugin checks the first four instruction words of each hook target at boot and writes the result to `usum-onescreen.log`. `tools/sigscan.py` with `signatures/usum.json` finds the hook targets, `sceneManager` and the Party/Bag vtables again in another build (see `docs/PORTING.md`).
 
 ## Hook targets (verified in Azahar 2026-11-02)
 
