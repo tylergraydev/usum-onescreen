@@ -10,7 +10,7 @@ namespace OneScreen
     enum class PanelMode : u8
     {
         Off,    // top screen untouched
-        Panel,  // bottom screen at half size in the top screen's lower-right corner
+        Panel,  // bottom screen at half size in a corner of the top screen (settings: corner)
         Full,   // bottom screen at full size, centered over the top screen
     };
 
