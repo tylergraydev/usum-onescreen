@@ -74,6 +74,13 @@ static void TestPages(void)
     CHECK(menu.Page() == BattlePage::Game);
     snap.menu = GameMenu::Pokemon;
     CHECK(!menu.Update(snap, 0).capture && menu.Page() == BattlePage::Game);
+    snap.gameCursor = 9;    // not set yet as the game's list opens
+    snap.listCount = 6;
+    CHECK(menu.Status(snap).find("no slot yet") != std::string::npos);
+    snap.gameCursor = 1;
+    CHECK(menu.Status(snap).find("slot 2 of 6") != std::string::npos);
+    snap.gameCursor = 0;
+    snap.listCount = 0;
     snap.menu = GameMenu::Other;
     CHECK(!menu.Update(snap, 0).capture && menu.Page() == BattlePage::Game);
 
