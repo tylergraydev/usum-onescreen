@@ -15,6 +15,7 @@
 #include "Settings.hpp"
 #include "Shot.hpp"
 #include "UI/Device.hpp"
+#include "Where.hpp"
 
 namespace CTRPluginFramework
 {
@@ -102,6 +103,7 @@ namespace CTRPluginFramework
     //   vtscan NAME   (global -> object -> vtable scan to /usum-vt-NAME.bin)
     //   scene   (log the current scene's module name)
     //   battle   (log the battle state, docs/RE1-battle.md; also logged on change)
+    //   where   (log the zone, position and facing, docs/RE4-map.md)
     //   memmap | dump ADDR SIZE NAME   (readable blocks; raw memory to /usum-dump-NAME.bin)
     //   auto on | auto off   (panel follows the scene, or stays as set)
     //   perf on | perf off | perf   (panel timing; perf logs and restarts the window)
@@ -222,6 +224,8 @@ namespace CTRPluginFramework
             WriteVtableScan(word);
         else if (line == "battle")
             WriteLog(OneScreen::DescribeBattle(OneScreen::ReadBattle(s_game->offsets.sceneManager)), false);
+        else if (line == "where")
+            WriteLog(OneScreen::DescribeWhere(OneScreen::ReadWhere()), false);
         else if (line == "memmap")
             WriteLog(OneScreen::MemoryMap(), false);
         else if (std::sscanf(line.c_str(), "dump %x %x %15s", &a, &b, word) == 3)
