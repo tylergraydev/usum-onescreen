@@ -51,6 +51,7 @@ namespace OneScreen
     static u32  s_seenSeq = 0;
     static u32  s_frames = 0;
     static u32  s_repeatKey = 0, s_repeatAt = 0;
+    static u32  s_pendingKey = 0;       // pressed while an action ran: handled after it
 
     // --- Memory (docs/OFFSETS.md) ---
 
@@ -357,6 +358,7 @@ namespace OneScreen
         s_drawing = -1;
         s_sampling = -1;
         s_running = false;
+        s_pendingKey = 0;
         s_yield = false;
         s_active = -1;
     }
@@ -456,9 +458,18 @@ namespace OneScreen
 
         // Input: the screen's keys while it shows and no action runs. The
         // action layer captures everything while it runs and restores this
-        // capture afterwards.
+        // capture afterwards; a key pressed meanwhile (the player's real
+        // keys are still read) waits for it, the last one only.
         if (ActionRunning())
+        {
+            if (shown && s_running)
+            {
+                const u32 key = NextKey();
+                if (key != 0)
+                    s_pendingKey = key;
+            }
             return;
+        }
         const u32 keys = shown ? ns->CaptureKeys() : 0;
         if (keys == 0)
         {
@@ -471,7 +482,12 @@ namespace OneScreen
             s_capturing = true;
             s_captureKeys = keys;
         }
-        const u32 key = NextKey();
+        u32 key = NextKey();
+        if (key == 0)
+        {
+            key = s_pendingKey;
+            s_pendingKey = 0;
+        }
         if (key == 0)
             return;
         s_lock.Lock();

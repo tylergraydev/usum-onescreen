@@ -73,8 +73,8 @@ static FakeScreen OptionsQuestion(int choice)
     const int values[OptionRows] = { 0, 0, 0, 0, 0 };
     FakeScreen s = OptionsList(4, values);
     s.Paint(0, 319, 20, 20, DarkBox);
-    s.Paint(240, 260, 107, 107, Pill);
-    s.Paint(240, 260, 135, 135, Pill);
+    s.Paint(275, 295, 107, 107, Pill);
+    s.Paint(275, 295, 135, 135, Pill);
     s.Paint(200, 220, choice == 0 ? 108 : 136, choice == 0 ? 108 : 136, Red);
     return s;
 }

@@ -69,10 +69,10 @@ namespace OneScreen
     static const s16 RightX[2] = { 306, 308 };
     static const int PerRow = 8;
     // The question: a dark box at the top (37,30,23 at y 20), the Yes and No
-    // pills (light at x 250, y 107 / 135) and the red cursor left of the
+    // pills (light at x 285, y 107 / 135, right of their labels) and the red cursor left of the
     // chosen one (x 206-213, y 108 / 136).
     static const SamplePoint DialogBox[2] = { { 40, 20 }, { 280, 20 } };
-    static const SamplePoint DialogPill[2] = { { 250, 107 }, { 250, 135 } };
+    static const SamplePoint DialogPill[2] = { { 285, 107 }, { 285, 135 } };
     static const s16 DialogCursorY[2] = { 108, 136 };
     static const s16 DialogCursorX[5] = { 205, 207, 209, 211, 213 };
 
