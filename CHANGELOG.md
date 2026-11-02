@@ -13,6 +13,7 @@ Supports Pokémon Ultra Sun (USA) v1.2 (`00040000001B5000`, title version `0x080
 - Bottom screen drawn on the top screen, as a half-size corner panel or a full view.
 - Automatic view per scene: off on the title screen and overworld; corner panel for the X menu (also Quick Link, the save dialog and Festival Plaza), battle, Pokédex, Bag, Pokémon summary, Trainer Passport, Battle Video and unmapped scenes; full view for Party, PC boxes, Town Map, Options and Pokémon Refresh.
 - The X menu is detected from the game's field state, so closing it by touch turns the panel off too.
+- Native X menu on the top screen: **X** in the field shows Pokémon, Pokédex, Bag, Quick Link, Festival Plaza, Trainer Passport, Pokémon Refresh, Battle Video, Options, the map and Save as a grid (D-pad and L/R move, **A** opens, **B** closes) with the panel off. It starts on the entry the game's own X menu remembers. QR Scanner is shown but not available yet.
 - **ZR** cycles off / panel / full by hand until the next scene change.
 - Touch cursor: **C-stick** moves it, **ZL** touches the bottom screen at the cursor.
 - Startup check of the game, its version and every patched function; the plugin does nothing on an unsupported game or if the check fails, and shows an on-screen notice either way.
