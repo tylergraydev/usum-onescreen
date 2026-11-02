@@ -33,11 +33,13 @@ namespace OneScreen
     extern const char *const SceneBag;       // "main:006488C8"
     extern const char *const SceneTownMap;   // "TownMap"
     extern const char *const SceneBattle;    // "Battle"
+    extern const char *const SceneStatus;    // "Status" (Pokémon summary)
 
     // What the action layer sees of the game, once per frame.
     const u32 WorldXMenu         = 1u << 0;  // the X menu is on the bottom screen (pixel probe)
     const u32 WorldBattleCommand = 1u << 1;  // battle: Fight / Pokémon / Bag / Run is up
     const u32 WorldXMenuPage2    = 1u << 2;  // with WorldXMenu: its second page is showing
+    const u32 WorldPartyList     = 1u << 8;  // Party screen: the plain list (no menu, message or move mode; pixel probe)
 
     struct ActionWorld
     {

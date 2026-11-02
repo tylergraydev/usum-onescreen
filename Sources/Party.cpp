@@ -1,7 +1,11 @@
 #include "Party.hpp"
 
+#include <cstring>
+
 #include <3ds.h>
 #include <CTRPluginFramework.hpp>
+
+#include "Scene.hpp"
 
 namespace OneScreen
 {
@@ -23,6 +27,18 @@ namespace OneScreen
     // at +0x53.
     static const u32 VtPartyScene = 0x647FCC, VtStaticWork = 0x647F9C;
     static const u32 SceneStaticWork = 0xA8, StaticWorkPartyRef = 0x08, StaticWorkOrder = 0x53;
+    static const u32 StaticWorkCursor = 0x52;   // u8 screen position (docs/OFFSETS.md)
+
+    // Bag scene (vtable 0x6488C8, field Bag and the Party screen's Restore):
+    // +0x88 -> its item list. Found by diffing heap dumps at three cursor
+    // positions (docs/OFFSETS.md).
+    static const u32 VtBagScene = 0x6488C8, BagSceneList = 0x88;
+    static const u32 ListCount = 0x0C, ListRows = 0x14, ListRow = 0x18, ListScroll = 0x1C;
+
+    // Summary (Status scene, a CRO): +0x58 -> WordSet loader, +0x10 -> entries
+    // {buffer, size, u32 dat, MsgData*} (as the battle's, docs/OFFSETS.md).
+    static const u32 StatusLoader = 0x58, LoaderEntries = 0x10, LoaderStride = 0x10;
+    static const u32 EntryDat = 0x08, EntryMsg = 0x0C;
 
     // pml::PokeParty: 6 PokemonParam pointers, u8 count at +0x18.
     static const u32 PartyCount = 0x18;
@@ -110,6 +126,8 @@ namespace OneScreen
         for (u32 i = 0; i < state.count; i++)
             state.order[i] = order[i];
         state.partyScreen = true;
+        const u8 cursor = Read8(work + StaticWorkCursor);
+        state.screenCursor = cursor < state.count ? (s8)cursor : -1;
     }
 
     PartyState ReadParty(u32 sceneManager)
@@ -185,12 +203,14 @@ namespace OneScreen
     }
 
     // One line of a full-load MsgData, checked as docs/RE2-text.md proposes.
-    static std::string MsgLine(u32 msg, u32 dat, u32 line)
+    // `lines` (if not 0) is the line count the file must have.
+    static std::string MsgLine(u32 msg, u32 dat, u32 line, u32 lines = 0)
     {
         if (!Readable(msg, 0x30) || Read32(msg) != VtMsgData || Read8(msg + 0x08) != 1 || Read32(msg + 0x0C) != dat)
             return "";
         const u32 header = Read32(msg + 0x14), section = Read32(msg + 0x18);
-        if (!Readable(header, 4) || !Readable(section, 4) || line >= Read16(header + 2))
+        if (!Readable(header, 4) || !Readable(section, 4) || line >= Read16(header + 2)
+            || (lines != 0 && Read16(header + 2) != lines))
             return "";
         const u32 size = Read32(section);
         const u32 entry = section + 4 + line * 8;
@@ -223,6 +243,55 @@ namespace OneScreen
             const u32 slot = MsgCacheTable + i * 0x10;
             if (Read16(slot + 0x08) == ItemDat)
                 return MsgLine(Read32(slot + 0x0C), ItemDat, item);
+        }
+        return "";
+    }
+
+    BagListState ReadBagList(u32 sceneManager)
+    {
+        BagListState state;
+        const u32 manager = Read32(sceneManager);
+        const u32 scene = manager ? Read32(manager) : 0;
+        if (!Readable(scene, BagSceneList + 4) || Read32(scene) != VtBagScene)
+            return state;
+        const u32 list = Read32(scene + BagSceneList);
+        if (!Readable(list, ListScroll + 4))
+            return state;
+        state.count = Read32(list + ListCount);
+        state.rows = Read32(list + ListRows);
+        state.row = Read32(list + ListRow);
+        const u32 bits = Read32(list + ListScroll);
+        std::memcpy(&state.scroll, &bits, 4);
+        state.valid = state.count <= 427 && state.rows >= 1 && state.rows <= 10 && state.row < state.rows
+                      && state.scroll >= 0 && state.scroll <= 427;
+        return state;
+    }
+
+    u32 SummaryWordLoader(u32 sceneManager)
+    {
+        const u32 manager = Read32(sceneManager);
+        const u32 scene = manager ? Read32(manager) : 0;
+        if (!Readable(scene, StatusLoader + 4) || SceneModule(sceneManager) != "Status")
+            return 0;
+        const u32 loader = Read32(scene + StatusLoader);
+        return Readable(loader, LoaderEntries + 4) && Readable(Read32(loader + LoaderEntries), 4) ? loader : 0;
+    }
+
+    std::string LoaderText(u32 loader, u32 dat, u32 line)
+    {
+        // Line counts of the English files (docs/RE2-text.md); a file with
+        // another count is not used.
+        const u32 lines = dat == MoveNameDat ? 729 : dat == AbilityNameDat ? 234 : dat == NatureNameDat ? 26 : 0;
+        if (loader == 0 || lines == 0 || line >= lines)
+            return "";
+        const u32 entries = Read32(loader + LoaderEntries);
+        for (u32 i = 0; i < 4; i++)
+        {
+            const u32 entry = entries + i * LoaderStride;
+            if (!Readable(entry, LoaderStride) || Read32(entry + EntryDat) != dat)
+                continue;
+            // Loaded from the loader's buffer, so the MsgData's own dat field is 0.
+            return MsgLine(Read32(entry + EntryMsg), 0, line, lines);
         }
         return "";
     }
@@ -268,6 +337,7 @@ namespace OneScreen
             out += "\n  party screen order (slot per position):";
             for (u32 i = 0; i < state.count; i++)
                 out += Utils::Format(" %u", state.order[i] + 1);
+            out += Utils::Format(", cursor %d", state.screenCursor + 1);
         }
         return out;
     }

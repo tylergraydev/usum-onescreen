@@ -12,6 +12,7 @@ namespace OneScreen
     const char *const SceneBag     = "main:006488C8";
     const char *const SceneTownMap = "TownMap";
     const char *const SceneBattle  = "Battle";
+    const char *const SceneStatus  = "Status";
 
     static std::string Format(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
     static std::string Format(const char *fmt, ...)
@@ -47,6 +48,10 @@ namespace OneScreen
             if (clear & (1u << i))
                 out += std::string(" -") + flagNames[i];
         }
+        if (set & WorldPartyList)
+            out += " +party-list";
+        if (clear & WorldPartyList)
+            out += " -party-list";
         return out;
     }
 
