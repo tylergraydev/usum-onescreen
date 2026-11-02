@@ -81,6 +81,8 @@ Bag: `child = *(top + 0x40) - 4` (vtable Bag+`0x16EB0`; `+0x40` is a list link i
 
 ## Unknown, and how to find it
 
+Found since (P2-1, see `docs/OFFSETS.md` "Battle state"): move names (the battle WordSet's move-name file, via the busy object `+0x94`), the Bag's item page flag (frame `+0x6E`), and the player's whole battle party (`party[0].record[0..count-1]`).
+
 - **Move power / accuracy / category**: not in the battle record or the move list. They come from the move data table (romfs `a/0/1/1`, one file per move). Find the resident copy the same way as RE2's message files, or read it from romfs at boot. Type and effectiveness are already in the move list.
 - **Double / multi / SOS battles**: `party[c]` for c = 2, 3 and positions 0/1 within a client are unverified. Check with an SOS battle (wild ally appears in client 1? or 3?) and a double battle; in a double, records 0 and 1 of the party should be the two active battlers.
 - **Targets** (double battles): a target-select screen will be another stack object; find its cursor the same way (dump with the cursor on two targets and diff).
