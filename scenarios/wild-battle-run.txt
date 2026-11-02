@@ -3,6 +3,8 @@
 include common/boot
 # Checks the automatic view per scene, which is off by default.
 send auto on
+# This checks the panel path for the X menu: turn the native menu off.
+send xmenu off
 
 # Out of the door: the map change logs scene (none), then FieldRo again.
 mark
