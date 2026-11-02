@@ -16,3 +16,4 @@ analysis/private/
 
 # Host test binaries
 tests/build/
+__pycache__/
