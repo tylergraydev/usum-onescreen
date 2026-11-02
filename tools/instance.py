@@ -4,9 +4,11 @@ Usage: py -3 -I tools/instance.py COMMAND NAME [options]
 
   create NAME [--force]     make analysis/private/instances/NAME/
   install NAME [3GX]        copy a built plugin in (default: ./usum-onescreen.3gx)
-  start NAME [--rom PATH] [--wait SECONDS]
+  start NAME [--rom PATH] [--wait SECONDS] [--movie CTM] [--no-plugin]
                             launch Ultra Sun; with --wait, wait for the plugin's
-                            boot log and print it
+                            boot log and print it; --movie plays an input movie
+                            (tools/movie.py); --no-plugin turns the 3GX plugin
+                            loader off for this run (each start sets it)
   stop NAME                 stop that instance's own Azahar process
   status [NAME]             show instances and whether they are running
   sdmc NAME                 print the instance's emulated SD path
@@ -203,8 +205,14 @@ def cmd_start(args):
         sys.exit(f"instance '{args.name}' is already running")
     log = sdmc_dir(args.name) / "usum-onescreen.log"
     log.unlink(missing_ok=True)
+    ini = user_dir(args.name) / "config" / "qt-config.ini"
+    ini.write_text(set_ini(ini.read_text(encoding="utf-8"), "System", "plugin_loader",
+                           "false" if args.no_plugin else "true"), encoding="utf-8")
+    command = [str(exe_path(args.name))]
+    if args.movie:
+        command += ["-p", str(Path(args.movie).resolve())]
     flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
-    proc = subprocess.Popen([str(exe_path(args.name)), str(args.rom)], cwd=instance_dir(args.name),
+    proc = subprocess.Popen(command + [str(args.rom)], cwd=instance_dir(args.name),
                             creationflags=flags, close_fds=True,
                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     info = process_info(proc.pid)
@@ -273,6 +281,8 @@ def main():
     p.add_argument("name")
     p.add_argument("--rom", default=ROM)
     p.add_argument("--wait", type=float, default=0)
+    p.add_argument("--movie")
+    p.add_argument("--no-plugin", action="store_true")
     p.set_defaults(func=cmd_start)
     for cmd, func in (("stop", cmd_stop), ("sdmc", cmd_sdmc)):
         p = sub.add_parser(cmd)

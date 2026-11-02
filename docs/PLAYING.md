@@ -48,9 +48,10 @@ The plugin watches which scene the game is in and picks a view:
 |---|---|
 | Title screen | off |
 | Overworld | off |
-| X menu (opened with X in the overworld) | corner panel |
-| Battle, Pokédex, Bag | corner panel |
-| Party | full view |
+| X menu (opened with X in the overworld), Quick Link, the save dialog, Festival Plaza | corner panel |
+| Battle, Pokédex, Bag, Pokémon summary, Trainer Passport, Battle Video | corner panel |
+| Party, PC boxes, Town Map, Options, Pokémon Refresh | full view |
+| Talking to people, Poké Mart lists (top screen only) | off |
 | Anything not listed yet | corner panel |
 
 The corner panel is a half-size copy of the bottom screen in the lower-right corner of the top screen. Full view replaces the top screen with the bottom screen.
@@ -58,7 +59,6 @@ The corner panel is a half-size copy of the bottom screen in the lower-right cor
 ## Known gaps
 
 - Ultra Moon isn't supported yet (see Requirements).
-- The X menu is detected from X and B presses. If you close it by touch, the plugin doesn't notice and keeps the panel up; press ZR to hide it, or open and close the menu with X.
 - The panel covers part of the top screen while it's shown.
 - Only some scenes are mapped; anything else gets the corner panel.
 - Only tested in Azahar 2126.2 on Windows. Real 3DS hardware has not been tried.

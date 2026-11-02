@@ -38,7 +38,7 @@ No game code, assets, or keys go in this repo (`.gitignore` blocks the common fi
    `libctrpf` is the documented package name. `3gxtool` is assumed; if pacman can't find it, list what the repo has with `pacman -Sl thepixellizeross-win` and install the matching package, or point the Makefile at an existing binary with `make TOOL=/path/to/3gxtool`.
 4. From this folder (no spaces in the path), run `make`. Output: `usum-onescreen.3gx`.
 
-CI (`.github/workflows/build.yml`) does the same in the `devkitpro/devkitarm` container and uploads the `.3gx` as a build artifact.
+CI (`.github/workflows/build.yml`) does the same in the `devkitpro/devkitarm` container and uploads the `.3gx` as a build artifact. `tools/ci/install-deps.sh` syncs only the ThePixellizerOSS repos (pkg.devkitpro.org's `-Sy` sometimes answered 403, and the image already has everything else), retries with backoff, and falls back to the two package files kept in the Actions cache by an earlier run; the `deps_offline` input of a manual run tests that fallback.
 
 ## Run in Azahar
 
@@ -70,6 +70,13 @@ Zukan = panel           ; Pokédex
 Battle = panel
 main:00647FCC = full    ; Party
 main:006488C8 = panel   ; Bag
+Status = panel          ; Pokémon summary
+Box = full              ; PC boxes
+TownMap = full
+TrainerPass = panel
+Config = full           ; Options
+Kawaigari = full        ; Pokémon Refresh
+BattleVideoPlayer = panel
 default = panel         ; any scene not listed
 ```
 
@@ -96,6 +103,7 @@ CTRPF opens its menu with **Select** (its default menu hotkey; `Preferences::Men
 - The log records every scene change (`scene: FieldRo`, `Zukan`, `Battle`, …); `scene` logs the current one. Memory tools: `snap NAME`, `vtscan NAME`, `peek ADDR [N]` (see `docs/OFFSETS.md`), `memmap` (readable blocks), `dump ADDR SIZE NAME` (hex; raw memory to `/usum-dump-NAME.bin`).
 - `battle` logs the battle state (active Pokémon on both sides, moves/PP, which bottom-screen menu is up and its cursor); in battle the same is logged on every change. See `docs/RE1-battle.md`.
 - `where` logs the zone (ID, place-name line, indoor), the player's position and facing, and the Rotom map's centre. See `docs/RE4-map.md`.
+- `party` logs the party (species, nickname, level, HP, status, held item, moves/PP, and the Party screen's order while it is open); `bag` logs every pocket's items and counts in the game's order, with names. See `docs/RE3-party-bag.md`.
 - `perf on` / `perf off` / `perf`: panel timing (off by default). `perf` logs emulated time, frames, and the mean/max time spent copying the bottom screen and drawing the panel since the last `perf`. `py -3 -I tools/perf.py --instance NAME` runs the measurement in `docs/PERF.md`.
 - `uidemo on` / `uidemo off` shows or hides a sample plugin-drawn menu on the top screen (off by default), for checking the UI drawing layer.
 - `py -3 -I tools/shot.py [name]` asks the running plugin for a screenshot and saves `analysis/private/shots/<name>-top.png` and `-bottom.png`. The top shot includes anything the plugin draws.
@@ -113,6 +121,8 @@ py -3 -I tools/shot.py --instance a a-title
 py -3 -I tools/instance.py stop a
 py -3 -I tools/instance.py status
 ```
+
+`start --no-plugin` turns the 3GX plugin loader off for that run. `start --movie FILE` plays an Azahar input movie, for input without the plugin: `tools/movie.py FILE SECONDS:KEYS ...` writes one (e.g. `25:- 5:l+r+start 300:-`). `docs/SOFT-RESET.md` uses both.
 
 Azahar 2126.2 has no command-line flag or environment variable for its user folder; on Windows it uses a folder named `user` next to `azahar.exe` if there is one (`SetUserPath` in `src/common/file_util.cpp`), else `%APPDATA%\Azahar`. So an instance is `analysis/private/instances/<name>/azahar/`: a copy of `C:\Program Files\Azahar` (~100 MB) plus its own `user\` folder holding:
 
@@ -167,17 +177,33 @@ A scenario is a text file, one step per line; `#` starts a comment (except in `e
 | `expect-log REGEX [T]` | a log line since the mark matches, within T s (default 10; a trailing number is the timeout) |
 | `reject-log REGEX` | no log line since the mark matches |
 | `check-save` | the real save is unchanged so far |
+| `guard-ignore REGEX` | the log guard skips lines matching REGEX from here on |
 | `if-scene SCENE STEP` | runs STEP only if the scene is SCENE now |
 | `include FILE` | inlines FILE's steps (looked up next to the scenario, then in `scenarios/`; `.txt` optional) |
 | `repeat N [until-scene SCENE]` … `end` | runs the block N times; with `until-scene`, stops once that is the scene (checked before each step) and fails if it never is |
+
+Log guard: after every step it reads what was newly logged to the instance's `user/log/azahar_log.txt` and `usum-onescreen.log`, and fails that step on an Azahar `<Critical>`, `Assertion Failed`, `Unreachable code` or `unmapped read/write` line, or on a plugin `hooks: FAILED`, `MISMATCH at`, `unreadable at`, a `cursor:`/`buttons:` hook that returned non-zero, or `unsupported game`. Azahar's `<Error>` lines (unimplemented services) are normal and ignored. `--no-guard` turns it off.
 
 "The scene" is the last `scene:` line in the log (an empty one counts as `(none)`, the loading gap between scenes); "the mode" is the last `panel: mode` line. Included scenarios:
 
 - `boot-to-field`: title → Continue → `FieldRo`, mode off. The shared boot steps are in `scenarios/common/boot.txt`.
 - `open-each-app`: Pokédex via Rotom (answering Rotom's chat if it pops up) and back; X menu → Party and back; X menu → Bag and back. Entries are tapped, so the X menu's remembered cursor doesn't matter. Checks off (field), panel (X menu, Pokédex, Bag), full (Party).
+- `xmenu-touch-close`: Town Map from Rotom's screen and back (full, then off with no panel flash); X menu opened with X and closed by tapping its back button (panel, then off); again after visiting Party. Checks that auto panel follows the field state, not X/B presses.
 - `wild-battle-run`: out of the Pokémon Center, south into the tall grass, back and forth until `Battle` (panel), Run by tap, back to `FieldRo` (off). One long circle-pad push stops partway down the path, so it walks in short steps.
 
 Screenshots come before every A press in a menu (only the Continue menu here).
+
+### Regression run
+
+`tools/regress.py` installs a build into an instance (default `regress`; created if missing, `--fresh` rebuilds it) and runs every scenario, restoring a start point's save (default `pokecenter`, from `analysis/private/startpoints/`) before each one, then prints a summary and exits 0 only if all passed:
+
+```bash
+py -3 -I tools/regress.py --instance a                   # ./usum-onescreen.3gx
+py -3 -I tools/regress.py --instance a --main            # newest green CI build on main (gh run download)
+py -3 -I tools/regress.py --instance a --run 41489129071 boot-to-field
+```
+
+`--keep` stops at the first failing scenario and leaves the instance running. Downloaded artifacts go to `analysis/private/regress/run-<id>/`.
 
 ## Layout
 
@@ -190,5 +216,6 @@ Screenshots come before every A press in a menu (only the Continue menu here).
 - `tools/scenario.py`, `scenarios/`: scripted emulator tests; `tools/emu.py` is the shared command/screenshot code behind `cmd.py`, `shot.py` and `scenario.py`.
 - `Makefile`, `3gx.ld`, `usum-onescreen.plgInfo`: build setup, adapted from [Gen6CTRPFrameworkOverhauled](https://github.com/samaBR85/Gen6CTRPFrameworkOverhauled).
 - `docs/PORTING.md`: moving the plugin to another build (the Ultra Moon checklist). `tools/sigscan.py` finds every offset-table address in a new `code.bin` from the byte signatures in `signatures/usum.json` and prints a ready-to-paste `Game.cpp` entry.
+- `Sources/Party.cpp`, `Sources/PartyData.cpp`: the `party` and `bag` readers; `PartyData` (Gen 7 Pokémon decryption, bag slots, message lines) is pure and tested by `tests/party_data_test.cpp`. See `docs/RE3-party-bag.md`.
 - `docs/RE2-text.md`: how the game stores and looks up text (species/move/item names), with `tools/romfs_text.py` to extract and decode it from your own dump into `analysis/private/`.
 - `docs/LAYOUTS.md`, `layouts/usum-v1.2.json`: verified tap points and button bounds on the game's bottom screens (field, X menu, Party, Bag, Pokédex, battle), for driving the hidden bottom screen from plugin menus. `tools/layout_measure.py` measures button bounds on a screenshot.
