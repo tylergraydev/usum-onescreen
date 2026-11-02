@@ -130,13 +130,14 @@ repeat 40 until-scene Battle
 end
 expect-mode off
 repeat 8 until-scene FieldRo
-  expect-log ^battle-ui: page command 40
-  mark
+  # Since the last turn's mark: the bar as shown, not yet "sent".
+  expect-log ^battle-ui: page command, cursor 0 of 4 \(Fight\)$ 40
   send press a            # Fight
   expect-log ^battle-ui: page moves, cursor 0 of 4 \(Scratch 10
   sleep 1
   send press a            # Scratch
   expect-log ^action: battle-move1 ok 10
+  mark
   sleep 20                # the turn; EXP / level-up messages advance with B
   if-scene Battle send press b
   sleep 5
