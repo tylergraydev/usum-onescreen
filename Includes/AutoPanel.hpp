@@ -22,6 +22,10 @@ namespace OneScreen
     // The player picked a mode by hand; keep it until the next scene change.
     void AutoPanelManualOverride(void);
 
+    // While the native battle menu (Screens/BattleScreen.hpp) is on, Battle
+    // gets no panel whatever [scenes] says.
+    void AutoPanelSetNativeBattle(bool on);
+
     void AutoPanelSetEnabled(bool enabled);
     bool AutoPanelEnabled(void);
 

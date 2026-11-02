@@ -14,6 +14,7 @@
 #include "Panel.hpp"
 #include "Party.hpp"
 #include "Scene.hpp"
+#include "Screens/BattleScreen.hpp"
 #include "Settings.hpp"
 #include "Shot.hpp"
 #include "UI/Device.hpp"
@@ -115,6 +116,8 @@ namespace CTRPluginFramework
     //     menu would; on adds, off removes; no list = everything)
     //   action NAME | action status | action cancel | action list   (drive the bottom
     //     screen: open-pokedex, open-party, open-bag, battle-run, close; Actions.hpp)
+    //   battleui on | battleui off | battleui   (native battle menu on the top screen,
+    //     Screens/BattleScreen.hpp; on by default)
     static const char *CommandPath = "/usum-cmd.txt";
 
     // Global data + bss of USUM v1.2 (from the exheader): 0x669000 .. 0x6D5F44.
@@ -258,6 +261,10 @@ namespace CTRPluginFramework
         }
         else if (line == "uifont")
             WriteLog(OneScreen::UiFontInfo(), false);
+        else if (line == "battleui on" || line == "battleui off")
+            OneScreen::BattleScreenSetEnabled(line == "battleui on");
+        else if (line == "battleui")
+            WriteLog(OneScreen::BattleScreenStatus(), false);
         else if (line == "auto on" || line == "auto off")
             OneScreen::AutoPanelSetEnabled(line == "auto on");
         else if (line == "perf on" || line == "perf off")
@@ -420,6 +427,11 @@ namespace CTRPluginFramework
             }
         }
 
+        std::vector<std::string> battleLog;
+        OneScreen::BattleScreenUpdate(s_game->offsets.sceneManager, scene, battleLog);
+        for (const std::string &line : battleLog)
+            WriteLog(line, false);
+
         const int fieldState = scene == "FieldRo" ? OneScreen::FieldState(s_game->offsets.sceneManager) : -1;
         if (OneScreen::AutoPanelUpdate(scene, OneScreen::ButtonsGameHeld(), fieldState))
             WriteLog(OneScreen::AutoPanelStatus() + " -> " + OneScreen::PanelStatus(), false);
@@ -517,6 +529,7 @@ namespace CTRPluginFramework
 
         LoadSettings();
 
+        OneScreen::BattleScreenSetEnabled(true);
         OneScreen::StartPanel(OneScreen::PanelMode::Off);
         OneScreen::StartActions();
 

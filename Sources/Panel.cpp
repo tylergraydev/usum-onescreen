@@ -4,6 +4,7 @@
 
 #include "Cursor.hpp"
 #include "Framebuffer.hpp"
+#include "Screens/BattleScreen.hpp"
 #include "Settings.hpp"
 #include "Shot.hpp"
 #include "UI/Device.hpp"
@@ -145,6 +146,7 @@ namespace OneScreen
         // Drawn after the panel so test menus sit on top, and before the
         // screenshot hook so shots include them.
         drew |= UiDemoOnScreen(screen);
+        drew |= BattleScreenOnScreen(screen);
         ShotOnScreen(screen);
         return drew;
     }

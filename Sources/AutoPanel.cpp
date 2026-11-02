@@ -14,8 +14,10 @@ namespace OneScreen
     // scene comes from the [scenes] settings; these two drive the X menu flag.
     static const char *SceneTitle = "TitleMenu";
     static const char *SceneField = "FieldRo";
+    static const char *SceneBattle = "Battle";
 
     static bool s_enabled = true;
+    static bool s_nativeBattle = false;
     static bool s_override = false;
     static bool s_menuOpen = false;     // X menu, an overlay inside FieldRo
     static int s_fieldState = -1;       // last FieldState() that worked, -1 if none yet
@@ -71,7 +73,8 @@ namespace OneScreen
         if (!s_enabled || s_override || s_scene.empty() || waiting)
             return false;
 
-        const PanelMode want = (PanelMode)ModeForScene(GetSettings(), s_scene, s_menuOpen);
+        const PanelMode want = s_nativeBattle && s_scene == SceneBattle
+                               ? PanelMode::Off : (PanelMode)ModeForScene(GetSettings(), s_scene, s_menuOpen);
         if (want == GetPanelMode())
             return false;
         SetPanelMode(want);
@@ -81,6 +84,11 @@ namespace OneScreen
     void AutoPanelManualOverride(void)
     {
         s_override = true;
+    }
+
+    void AutoPanelSetNativeBattle(bool on)
+    {
+        s_nativeBattle = on;
     }
 
     void AutoPanelSetEnabled(bool enabled)
@@ -97,8 +105,9 @@ namespace OneScreen
     std::string AutoPanelStatus(void)
     {
         const std::string source = s_fieldState >= 0 ? Utils::Format("field state %d", s_fieldState) : "keys";
-        return Utils::Format("auto: %s, scene %s, x menu %s (%s)%s",
+        return Utils::Format("auto: %s, scene %s, x menu %s (%s)%s%s",
                              s_enabled ? "on" : "off", s_scene.empty() ? "(none)" : s_scene.c_str(),
-                             s_menuOpen ? "open" : "closed", source.c_str(), s_override ? ", manual override" : "");
+                             s_menuOpen ? "open" : "closed", source.c_str(), s_override ? ", manual override" : "",
+                             s_nativeBattle ? ", native battle" : "");
     }
 }
