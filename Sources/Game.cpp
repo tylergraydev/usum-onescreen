@@ -22,6 +22,8 @@ namespace OneScreen
               { 0x002826F0, { 0xE92D4FFF, 0xE24DD004, 0xE3A0C000, 0xE3520000 } },
               { 0x00282548, { 0xE92D4FFF, 0xE24DD014, 0xE3A0C000, 0xE3520000 } },
               0x006A599C,
+              { 0x0027A5BC, { 0xE92D43F0, 0xE24DD024, 0xE28D4040, 0xE1811802 } },
+              { 0x00279E28, { 0xE92D43F0, 0xE24DD024, 0xE28D4040, 0xE89401E0 } },
           } },
         { "Pokemon Ultra Moon", 0x00040000001B5100ULL, 0x0800, false,
           { { 0, {} }, { 0, {} }, { 0, {} }, 0 } },
@@ -99,6 +101,8 @@ namespace OneScreen
         bool ok = VerifyTarget("gspSetFramebuffer", game.offsets.gspSetFramebuffer, report);
         ok = VerifyTarget("hidTouchRead", game.offsets.hidTouchRead, report) && ok;
         ok = VerifyTarget("hidPadRead", game.offsets.hidPadRead, report) && ok;
+        ok = VerifyTarget("gxDisplayTransfer", game.offsets.gxDisplayTransfer, report) && ok;
+        ok = VerifyTarget("gxTextureCopy", game.offsets.gxTextureCopy, report) && ok;
         return ok;
     }
 }

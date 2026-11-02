@@ -22,9 +22,9 @@ namespace OneScreen
     void CursorSetTouching(bool touching);
     void CursorTap(u32 frames);
 
-    // Draws the cursor on the top screen where the bottom screen is shown:
-    // inside the panel (left, top, scaled 1/divisor).
-    void CursorDraw(const CTRPluginFramework::Screen &screen, u32 left, u32 top, u32 divisor);
+    // The cursor's position in bottom-screen coordinates; true while it is
+    // touching. The panel draws it.
+    bool CursorGet(u32 &x, u32 &y);
 
     // The game's latest touch read before capture masking (real or injected
     // touch); false if not touching. See InputCaptureBegin.
