@@ -9,7 +9,7 @@ namespace OneScreen
 namespace UI
 {
     static constexpr Color Shade    = Rgb(0, 0, 0, 110);
-    static constexpr Color PanelBg  = Rgb(22, 30, 52, 235);
+    static constexpr Color PanelBg  = Rgb(22, 30, 52);
     static constexpr Color Border   = Rgb(120, 150, 220);
     static constexpr Color Divider  = Rgb(120, 150, 220, 90);
     static constexpr Color Highlight = Rgb(70, 110, 200, 210);
@@ -30,28 +30,33 @@ namespace UI
         { "Party",                                         "6/6",  false },
         { "Bag",                                           "",     false },
         { "Auto-save before battles",                      "On",   true  },
-        { "Options",                                       "",     false },
+        { "Display and typography (gjpqy)",                "",     false },
         { "A very long entry that will not fit on one row", "",    false },
     };
 
+    void DrawDemoShade(Canvas &canvas)
+    {
+        // Dims the game underneath so the panel reads as a modal menu. Blending
+        // reads the framebuffer, which costs host speed in Azahar (docs/PERF.md).
+        canvas.FillRect(Rect{ 0, 0, ScreenW, ScreenH }, Shade);
+    }
+
     void DrawDemoMenu(Canvas &canvas, s32 selected)
     {
-        // Dim the game underneath so the panel reads as a modal menu.
-        canvas.FillRect(Rect{ 0, 0, ScreenW, ScreenH }, Shade);
+        const Rect panel = DemoPanel;
+        canvas.FillRoundRect(panel, DemoRadius, PanelBg);
+        canvas.StrokeRoundRect(panel, DemoRadius, Border, 2);
 
-        const Rect panel{ 40, 16, 320, 208 };
-        canvas.FillRoundRect(panel, 10, PanelBg);
-        canvas.StrokeRoundRect(panel, 10, Border, 2);
-
-        Stack body(Inset(panel, 12, 8, 12, 8), Stack::Column, 4);
+        Stack body(Inset(panel, 12, 6, 12, 8), Stack::Column, 4);
 
         // Title row: centered title, close icon on the right.
-        Rect title = body.Next(20);
+        Rect title = body.Next(26);
         TextStyle titleStyle;
+        titleStyle.font = Font::Large;
         titleStyle.color = TextMain;
         titleStyle.align = Align::Center;
-        DrawText(canvas, "UI demo", title, titleStyle);
-        DrawIcon(canvas, Icon::Close, Rect{ title.Right() - 16, title.y + 2, 16, 16 }, Danger);
+        DrawText(canvas, "Typography & layout", title, titleStyle);
+        DrawIcon(canvas, Icon::Close, Rect{ title.Right() - 16, title.y + 5, 16, 16 }, Danger);
         const Rect rule = body.Next(1);
         canvas.HLine(rule.x, rule.y, rule.w, Divider);
 
