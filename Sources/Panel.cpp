@@ -25,6 +25,30 @@ namespace OneScreen
     static int s_bottomFormat = -1;
     static int s_topFormat = -1;
 
+    // Timing for the `perf` command (off by default): emulated CPU ticks spent
+    // copying the bottom screen and drawing the panel, per report window.
+    struct PerfStat
+    {
+        u32 count;
+        u64 sum;
+        u64 max;
+
+        void Add(u64 ticks)
+        {
+            count++;
+            sum += ticks;
+            if (ticks > max)
+                max = ticks;
+        }
+    };
+
+    static volatile bool s_perf = false;
+    static PerfStat s_captureStat;
+    static PerfStat s_drawStat;
+    static u64 s_perfStart = 0;
+    static u32 s_perfTopFrames = 0;
+    static u32 s_perfBottomFrames = 0;
+
     static void CaptureBottom(const Screen &screen)
     {
         ReadScreen(screen, BottomWidth, s_capture);
@@ -72,7 +96,12 @@ namespace OneScreen
             s_bottomFrames++;
             s_bottomFormat = screen.Format;
             if (s_mode != PanelMode::Off)
+            {
+                const u64 start = s_perf ? svcGetSystemTick() : 0;
                 CaptureBottom(screen);
+                if (s_perf)
+                    s_captureStat.Add(svcGetSystemTick() - start);
+            }
             return false;
         }
 
@@ -82,6 +111,7 @@ namespace OneScreen
         if (s_mode == PanelMode::Off || !s_haveCapture)
             return false;
 
+        const u64 start = s_perf ? svcGetSystemTick() : 0;
         if (s_mode == PanelMode::Full)
         {
             const u32 left = (TopWidth - BottomWidth) / 2;
@@ -103,6 +133,8 @@ namespace OneScreen
             CheckReadback(screen, left, top, 2);
             CursorDraw(screen, left, top, 2);
         }
+        if (s_perf)
+            s_drawStat.Add(svcGetSystemTick() - start);
         s_drawnFrames++;
         return true;
     }
@@ -152,5 +184,40 @@ namespace OneScreen
                              "drawn %lu, readback ok %lu",
                              names[(int)s_mode], s_topFrames, s_topFormat, s_bottomFrames, s_bottomFormat,
                              s_drawnFrames, s_readbackOk);
+    }
+
+    // Starts a new timing window. Not synchronized with the OSD callback, so a
+    // frame at the window edge may land in either window.
+    static void PerfResetWindow(void)
+    {
+        s_captureStat = PerfStat();
+        s_drawStat = PerfStat();
+        s_perfTopFrames = s_topFrames;
+        s_perfBottomFrames = s_bottomFrames;
+        s_perfStart = svcGetSystemTick();
+    }
+
+    void PanelPerfSetEnabled(bool enabled)
+    {
+        PerfResetWindow();
+        s_perf = enabled;
+    }
+
+    std::string PanelPerfReport(void)
+    {
+        static const char *names[] = { "off", "panel", "full" };
+        const auto us = [](u64 ticks) { return (unsigned long)(ticks * 1000000 / SYSCLOCK_ARM11); };
+        const auto mean = [](const PerfStat &s) { return s.count ? s.sum / s.count : 0; };
+
+        const u64 window = svcGetSystemTick() - s_perfStart;
+        const std::string line = Utils::Format(
+            "perf: %s, mode %s, window %lu us, top frames %lu, bottom frames %lu, "
+            "capture n %lu mean %lu us max %lu us, draw n %lu mean %lu us max %lu us",
+            s_perf ? "on" : "off", names[(int)s_mode], us(window),
+            s_topFrames - s_perfTopFrames, s_bottomFrames - s_perfBottomFrames,
+            s_captureStat.count, us(mean(s_captureStat)), us(s_captureStat.max),
+            s_drawStat.count, us(mean(s_drawStat)), us(s_drawStat.max));
+        PerfResetWindow();
+        return line;
     }
 }

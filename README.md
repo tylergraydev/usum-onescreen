@@ -95,6 +95,7 @@ CTRPF opens its menu with **Select** (its default menu hotkey; `Preferences::Men
 - Input capture (for plugin-drawn menus): `capture on [KEY|stick|touch ...]` hides those from the game (no list = everything), `capture off [...]` gives them back (no list = all). A key still held when it is given back stays hidden until released, so the game never sees a fresh press. The status lines show `capture`/`suppressing` (pad) and `touch captured`/`suppressed`.
 - The log records every scene change (`scene: FieldRo`, `Zukan`, `Battle`, …); `scene` logs the current one. Memory tools: `snap NAME`, `vtscan NAME`, `peek ADDR [N]` (see `docs/OFFSETS.md`), `memmap` (readable blocks), `dump ADDR SIZE NAME` (hex; raw memory to `/usum-dump-NAME.bin`).
 - `battle` logs the battle state (active Pokémon on both sides, moves/PP, which bottom-screen menu is up and its cursor); in battle the same is logged on every change. See `docs/RE1-battle.md`.
+- `perf on` / `perf off` / `perf`: panel timing (off by default). `perf` logs emulated time, frames, and the mean/max time spent copying the bottom screen and drawing the panel since the last `perf`. `py -3 -I tools/perf.py --instance NAME` runs the measurement in `docs/PERF.md`.
 - `uidemo on` / `uidemo off` shows or hides a sample plugin-drawn menu on the top screen (off by default), for checking the UI drawing layer.
 - `py -3 -I tools/shot.py [name]` asks the running plugin for a screenshot and saves `analysis/private/shots/<name>-top.png` and `-bottom.png`. The top shot includes anything the plugin draws.
 
