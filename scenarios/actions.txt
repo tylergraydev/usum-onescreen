@@ -4,6 +4,8 @@
 include common/boot
 # Checks the automatic view per scene, which is off by default.
 send auto on
+# The panel path for Party: the native Party screen would hold the panel off.
+send partyui off
 
 # Field -> Pokédex (Rotom's face, or the X menu while Rotom chats) -> field.
 mark

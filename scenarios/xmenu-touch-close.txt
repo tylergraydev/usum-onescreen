@@ -7,6 +7,8 @@ include common/boot
 send auto on
 # This checks the panel path for the X menu: turn the native menu off.
 send xmenu off
+# ... and for Party (the native Party screen would hold the panel off).
+send partyui off
 
 # Coming back from the Town Map the field state says "menu" for a moment;
 # the panel must not flash on (TownMap = full, then FieldRo = off).

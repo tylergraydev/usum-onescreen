@@ -7,6 +7,8 @@ include common/boot
 send auto on
 # This checks the panel path for the X menu: turn the native menu off.
 send xmenu off
+# ... and for Party (the native Party screen would hold the panel off).
+send partyui off
 
 # Pokédex: tap Rotom's face; back is the B button at the bottom left.
 # Rotom sometimes starts a chat on the bottom screen (two answers to tap)
