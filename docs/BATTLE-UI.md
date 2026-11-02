@@ -11,9 +11,9 @@ In battle the top screen shows the game's choices itself, so a battle is played 
 | move list | move list: name, PP, type, effectiveness against the target (*Super effective*, *Not very effective*, *No effect*) | Up/Down, A, B back |
 | Bag | helper: tab, highlighted ball's name and count (Poké Balls tab), *Use X?* on an item's page | go to the game: Left/Right tab, Up/Down item, A, B |
 | Pokémon list (and its Switch / Summary screen) | helper: highlighted Pokémon, level, HP | go to the game |
-| nickname question after a catch (scene `Zukan`) | helper: *Give it a nickname?* | go to the game: B no, A yes (the keyboard is on the bottom screen) |
+| nickname question after a catch (scene `Zukan`) | helper at the top right (the question is along the bottom): *Give it a nickname?* | go to the game: B no, A yes (the keyboard is on the bottom screen) |
 
-Where it draws: right of x 166 and below y 36, so the opponent's HP box (top right), the player's HP box (bottom left) and the battle messages (bottom, only shown while no menu is up) stay readable. Pages are drawn into a `UI::Layer` when what they show changes and copied every frame (`docs/UI.md`); the plugin never reads the top framebuffer for them.
+Where it draws: right of x 166 and below y 36 (the after-catch helper above y 86), so the opponent's HP box (top right), the player's HP box (bottom left) and the battle messages (bottom, only shown while no menu is up) stay readable. Pages are drawn into a `UI::Layer` when what they show changes and copied every frame (`docs/UI.md`); the plugin never reads the top framebuffer for them.
 
 ## How a choice is carried out
 

@@ -20,6 +20,8 @@ namespace Screens
     static constexpr Rect CommandArea = { 206, 68, 190, 168 };
     static constexpr Rect MovesArea   = { 166, 36, 230, 200 };
     static constexpr Rect GameArea    = { 166, 158, 230, 78 };
+    // After a catch the Pokédex scene asks its question along the bottom.
+    static constexpr Rect CatchArea   = { 166, 8, 230, 78 };
     static constexpr s32  Radius      = 10;
 
     static constexpr Color PanelBg   = Rgb(22, 30, 52);
@@ -163,6 +165,7 @@ namespace Screens
     {
         m_page = page;
         m_menu = snap.menu;
+        m_afterCatch = snap.afterCatch;
         m_stable = 0;
         m_pending = false;
         m_pendingFrames = 0;
@@ -177,7 +180,7 @@ namespace Screens
     {
         BattleMenuOutput out;
         const BattlePage page = PageFor(snap, m_page);
-        if (page != m_page || snap.menu != m_menu)
+        if (page != m_page || snap.menu != m_menu || snap.afterCatch != m_afterCatch)
             Enter(page, snap);
         if (m_stable < 0xFFFF)
             m_stable++;
@@ -255,7 +258,7 @@ namespace Screens
         {
         case BattlePage::Command: return CommandArea;
         case BattlePage::Moves:   return MovesArea;
-        case BattlePage::Game:    return GameArea;
+        case BattlePage::Game:    return m_afterCatch ? CatchArea : GameArea;
         default:                  return Rect{ 0, 0, 0, 0 };
         }
     }
@@ -384,8 +387,9 @@ namespace Screens
 
     static void DrawGame(Canvas &canvas, const BattleSnapshot &snap)
     {
-        DrawPanel(canvas, GameArea);
-        Stack body(Inset(GameArea, 10, 5, 10, 6), Stack::Column, 3);
+        const Rect area = snap.afterCatch ? CatchArea : GameArea;
+        DrawPanel(canvas, area);
+        Stack body(Inset(area, 10, 5, 10, 6), Stack::Column, 3);
         const Rect title = body.Next(20);
         const Rect line = body.Next(20);
         const Rect hints1 = body.Next(10);
@@ -396,7 +400,7 @@ namespace Screens
         {
             DrawText(canvas, "Caught!", title, main);
             DrawText(canvas, "Give it a nickname?", line, Style(Font::System, Good));
-            DrawHints(canvas, hints1, "B: no", "A: yes (bottom-screen keyboard)");
+            DrawHints(canvas, hints1, "B: no", "A: yes (keyboard below)");
             DrawHints(canvas, hints2, "A or B: next message", "");
         }
         else if (snap.menu == GameMenu::Bag)
