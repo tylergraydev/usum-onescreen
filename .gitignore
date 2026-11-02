@@ -1,0 +1,15 @@
+Build/
+*.elf
+*.3gx
+
+# Never commit game files or keys
+*.3ds
+*.cia
+*.cxi
+*.cci
+*.bin
+*.zip
+*.7z
+*.rar
+aes_keys.txt
+analysis/private/

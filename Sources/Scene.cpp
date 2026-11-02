@@ -1,0 +1,53 @@
+#include "Scene.hpp"
+
+#include <CTRPluginFramework.hpp>
+
+namespace OneScreen
+{
+    using namespace CTRPluginFramework;
+
+    // A loaded CRO has "FIXD" at +0x80 (the loader replaces "CRO0") and an
+    // absolute pointer to its name at +0x84.
+    static const u32 CroMagicFixed = 0x44584946;   // "FIXD"
+    static const u32 CroArea       = 0x006D6000;   // modules load above the main image's bss
+
+    std::string SceneModule(u32 sceneManager)
+    {
+        u32 manager = 0, scene = 0, vtable = 0;
+        if (!Process::Read32(sceneManager, manager) || manager == 0
+            || !Process::Read32(manager, scene) || scene == 0
+            || !Process::Read32(scene, vtable))
+            return "";
+
+        // Some scenes (Party, Bag) are classes in the main image, not a CRO;
+        // name those by their vtable address.
+        if (vtable < CroArea)
+            return Utils::Format("main:%08lX", vtable);
+
+        // Modules are page aligned; walk back to the header of the one that
+        // contains the vtable (no module seen so far is larger than 1 MB).
+        for (u32 page = vtable & ~0xFFFu; page >= CroArea && vtable - page < 0x200000; page -= 0x1000)
+        {
+            u32 magic = 0;
+            if (!Process::Read32(page + 0x80, magic) || magic != CroMagicFixed)
+                continue;
+
+            u32 namePtr = 0;
+            if (!Process::Read32(page + 0x84, namePtr))
+                return "";
+            std::string name;
+            for (u32 i = 0; i < 32; i++)
+            {
+                u32 word = 0;
+                if (!Process::Read32((namePtr + i) & ~3u, word))
+                    break;
+                const char c = (char)(word >> (((namePtr + i) & 3) * 8));
+                if (c == '\0')
+                    break;
+                name += c;
+            }
+            return name;
+        }
+        return "";
+    }
+}
