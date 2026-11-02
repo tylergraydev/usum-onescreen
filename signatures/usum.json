@@ -1,0 +1,120 @@
+{
+  "comment": "Byte signatures for tools/sigscan.py. Targets are in Offsets struct order (Includes/Game.hpp). Wildcards (?) cover branch offsets, PC-relative literal offsets and conditional-branch targets. See docs/PORTING.md.",
+  "base": "0x100000",
+  "targets": [
+    {
+      "name": "gspSetFramebuffer",
+      "kind": "function",
+      "known": {
+        "usun-1.2": "0x279BB4"
+      },
+      "signatures": [
+        {
+          "comment": "push {r4-r11,r12,lr}; mov r6,r0; add r0,sp,#40; mov r8,#0; ... bl gspGetManager; cmp r6,#2; add r1,r0,#0x5C; bcs; ldr r2,[r1,r6,lsl#2]; mov r3,#4",
+          "pattern": "E92D5FF0 E1A06000 E28D0028 E3A08000 E1A07001 E8900E00 E1A04002 E1A05003 EB?????? E3560002 E280105C 2A?????? E7912106 E3A03004",
+          "at": 0
+        },
+        {
+          "comment": "Only caller (0x54A610 in US 1.2), a stack-argument thunk, after a 5-word thunk that sets one stack argument to 1: bl gspSetFramebuffer",
+          "pattern": "E92D4008 E3A0C001 E58DC000 EB?????? E8BD8008 E92D4030 E24DD00C E28DE018 E89E1030 E88D1030 EB?????? E28DD00C E8BD8030",
+          "bl": 40
+        }
+      ]
+    },
+    {
+      "name": "hidTouchRead",
+      "kind": "function",
+      "known": {
+        "usun-1.2": "0x2826F0"
+      },
+      "signatures": [
+        {
+          "comment": "push {r0-r11,lr}; sub sp,sp,#4; ... ldrd r2,[r0]; subs r4,r9,#0; mov r5,r2; add r2,r0,#8; mov lr,r3; ldrd r2,[r2]. A sibling reader (0x2829D8 in US 1.2) is identical up to 'add r2,r0,#8', which it folds into ldrd r2,[r0,#8]",
+          "pattern": "E92D4FFF E24DD004 E3A0C000 E3520000 E59D3010 E583C000 DA?????? E3520007 C3A02007 E58D2000 E5909010 E1C020D0 E2594000 E1A05002 E2802008 E1A0E003 E1C220D0",
+          "at": 0
+        },
+        {
+          "comment": "TouchPanelReader::ReadLatest (0x17902C in US 1.2): bl hidTouchRead with count 1",
+          "pattern": "E92D4010 E24DD018 E1A04001 E3E01000 E28D3010 E1A02001 E8830006 E28D200C E58D100C E5900000 E28D1010 E88D0006 E28D3008 E5900004 E3A02001 E1A01004 EB?????? EB?????? E3500000 0A?????? EB??????",
+          "bl": 64
+        },
+        {
+          "comment": "TouchPanelReader::Read (0x1790B0 in US 1.2): bl hidTouchRead",
+          "pattern": "E92D40F0 E1A05002 E1A07001 E1A02003 E24DD00C E2803004 E2801008 E5900000 E88D000A E1A03005 E1A01007 E5900004 EB?????? E5950000",
+          "bl": 48
+        }
+      ]
+    },
+    {
+      "name": "hidPadRead",
+      "kind": "function",
+      "known": {
+        "usun-1.2": "0x282548"
+      },
+      "signatures": [
+        {
+          "comment": "push {r0-r11,lr}; sub sp,sp,#20; mov r12,#0; cmp r2,#0; ldr r3,[sp,#32]; str r12,[r3]; ble; cmp r2,#7; movgt r2,#7; str r2,[sp,#4]; ldr r4,[r0,#16]; str r4,[sp,#12]",
+          "pattern": "E92D4FFF E24DD014 E3A0C000 E3520000 E59D3020 E583C000 DA?????? E3520007 C3A02007 E58D2004 E5904010 E58D400C",
+          "at": 0
+        },
+        {
+          "comment": "PadReader::ReadLatest (0x179FD8 in US 1.2): bl hidPadRead with count 1",
+          "pattern": "E92D4070 E1A05000 E24DD018 E3E00000 E1A04001 E1A01000 E1CD01F0 E58D000C EB?????? E3500000 1A?????? E285000C EB?????? E5950000 E28D200C E28D1010 E88D0006 E5900004 E28D3008 E3A02001 E1A01004 EB??????",
+          "bl": 84
+        },
+        {
+          "comment": "PadReader::Read (0x17A108 in US 1.2): bl hidPadRead",
+          "pattern": "E92D47F0 E24DD008 E1A07000 E1A09001 E1A06002 E1A04003 E280000C EB?????? E5970000 E2872004 E2871038 E88D0006 E5900004 E1A03006 E1A02004 E1A01009 EB?????? EB??????",
+          "bl": 64
+        }
+      ]
+    },
+    {
+      "name": "sceneManager",
+      "kind": "pointer",
+      "known": {
+        "usun-1.2": "0x6A599C"
+      },
+      "signatures": [
+        {
+          "comment": "Scene manager constructor (0x2EE3C0 in US 1.2): ldr r5,=sceneManager; asserts it is null, stores this, clears 32 slots and +0x84",
+          "pattern": "E92D4070 E1A04000 E59F5??? E5950000 E3500000 0A?????? E3A02000 E1A01002 E1A00002 EB?????? E3A00000 E5854000 E1A02000 E1A01000 E5C40084",
+          "ldr": 8
+        },
+        {
+          "comment": "Scene manager getter (0x360BD8 in US 1.2) after three empty virtuals and a return-0: ldr r0,=sceneManager; ldr r0,[r0]; bx lr",
+          "pattern": "E12FFF1E E12FFF1E E12FFF1E E3A00000 E12FFF1E E59F0??? E5900000 E12FFF1E",
+          "ldr": 20
+        }
+      ]
+    },
+    {
+      "name": "Party",
+      "kind": "scene",
+      "known": {
+        "usun-1.2": "0x647FCC"
+      },
+      "signatures": [
+        {
+          "comment": "Party scene constructor (0x2E56D8 in US 1.2): bl base ctor; ldr r3,=vtable; str r3,[r0]; secondary vtable at +0x88 stored to +0x80",
+          "pattern": "E92D4010 E1A04003 EB?????? E59F3??? E3A01000 E58010F8 E283C088 E5803000 E580C080 E58010FC E5801100 E3A02001 E5C01110 E5C02111 E5804104 E8BD8010",
+          "ldr": 12
+        }
+      ]
+    },
+    {
+      "name": "Bag",
+      "kind": "scene",
+      "known": {
+        "usun-1.2": "0x6488C8"
+      },
+      "signatures": [
+        {
+          "comment": "Bag scene constructor (0x2F3094 in US 1.2): bl base ctor; ldr r2,=vtable; str r2,[r0]; secondary vtable at +0x78 stored to +0x80",
+          "pattern": "E92D4070 E1A05002 E5912014 E1A04001 E1A03002 EB?????? E59F2??? E3A01000 E5801088 E5802000 E2823078 E2802080 E580108C E5801090 E8820018 E5C05094 E8BD8070",
+          "ldr": 24
+        }
+      ]
+    }
+  ]
+}
