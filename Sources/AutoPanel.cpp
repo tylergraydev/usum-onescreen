@@ -18,6 +18,7 @@ namespace OneScreen
 
     static bool s_enabled = true;
     static bool s_nativeBattle = false;
+    static bool s_afterBattle = false;  // in the Pokédex straight after a battle (a catch)
     static bool s_override = false;
     static bool s_menuOpen = false;     // X menu, an overlay inside FieldRo
     static int s_fieldState = -1;       // last FieldState() that worked, -1 if none yet
@@ -36,6 +37,8 @@ namespace OneScreen
 
         if (!scene.empty() && scene != s_scene)
         {
+            // A catch goes Battle -> Pokédex (nickname question).
+            s_afterBattle = scene == "Zukan" && s_scene == SceneBattle;
             s_scene = scene;
             s_override = false;
             if (scene == SceneTitle)
@@ -73,7 +76,7 @@ namespace OneScreen
         if (!s_enabled || s_override || s_scene.empty() || waiting)
             return false;
 
-        const PanelMode want = s_nativeBattle && s_scene == SceneBattle
+        const PanelMode want = s_nativeBattle && (s_scene == SceneBattle || s_afterBattle)
                                ? PanelMode::Off : (PanelMode)ModeForScene(GetSettings(), s_scene, s_menuOpen);
         if (want == GetPanelMode())
             return false;
