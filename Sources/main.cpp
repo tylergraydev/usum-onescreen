@@ -8,6 +8,7 @@
 #include "AutoPanel.hpp"
 #include "Buttons.hpp"
 #include "Cursor.hpp"
+#include "InputCapture.hpp"
 #include "Panel.hpp"
 #include "Scene.hpp"
 #include "Shot.hpp"
@@ -53,6 +54,8 @@ namespace CTRPluginFramework
     //   vtscan NAME   (global -> object -> vtable scan to /usum-vt-NAME.bin)
     //   scene   (log the current scene's module name)
     //   auto on | auto off   (panel follows the scene, or stays as set)
+    //   capture on|off [KEY|stick|touch ...]   (hide input from the game as a plugin
+    //     menu would; on adds, off removes; no list = everything)
     static const char *CommandPath = "/usum-cmd.txt";
 
     // Global data + bss of USUM v1.2 (from the exheader): 0x669000 .. 0x6D5F44.
@@ -117,6 +120,38 @@ namespace CTRPluginFramework
         WriteLog(Utils::Format("vtscan %s: %u records", name.c_str(), records.size() / 3), false);
     }
 
+    // "capture on|off [KEY|stick|touch ...]": parses the list into a request
+    // word (InputCapture.hpp); false on an unknown name.
+    static bool RunCapture(const std::string &args, bool on)
+    {
+        u32 mask = 0;
+        size_t start = 0;
+        while (start < args.size())
+        {
+            size_t end = args.find(' ', start);
+            if (end == std::string::npos)
+                end = args.size();
+            const std::string name = args.substr(start, end - start);
+            start = end + 1;
+            if (name.empty())
+                continue;
+            const u32 key = name == "stick" ? OneScreen::CaptureStickBits
+                          : name == "touch" ? OneScreen::CaptureTouchBit
+                          : OneScreen::ButtonFromName(name);
+            if (key == 0)
+                return false;
+            mask |= key;
+        }
+        if (mask == 0)
+            mask = ~0u;
+
+        const u32 current = OneScreen::InputCaptureRequest();
+        const u32 next = on ? (current | mask) : (current & ~mask);
+        OneScreen::InputCaptureBegin(next, (next & OneScreen::CaptureStickBits) != 0,
+                                     (next & OneScreen::CaptureTouchBit) != 0);
+        return true;
+    }
+
     static void RunCommand(const std::string &line)
     {
         unsigned a = 0, b = 0;
@@ -138,6 +173,16 @@ namespace CTRPluginFramework
             WriteLog("scene: " + OneScreen::SceneModule(s_game->offsets.sceneManager), false);
         else if (line == "auto on" || line == "auto off")
             OneScreen::AutoPanelSetEnabled(line == "auto on");
+        else if (line.compare(0, 11, "capture on ") == 0 || line == "capture on"
+                 || line.compare(0, 12, "capture off ") == 0 || line == "capture off")
+        {
+            const bool on = line.compare(0, 10, "capture on") == 0;
+            if (!RunCapture(line.substr(on ? 10 : 11), on))
+            {
+                WriteLog("cmd: unknown key in '" + line + "'", false);
+                return;
+            }
+        }
         else if ((fields = std::sscanf(line.c_str(), "peek %x %u", &a, &b)) >= 1)
         {
             // Logs COUNT words (default 4) at ADDR, if readable.

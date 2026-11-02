@@ -26,6 +26,10 @@ namespace OneScreen
     // inside the panel (left, top, scaled 1/divisor).
     void CursorDraw(const CTRPluginFramework::Screen &screen, u32 left, u32 top, u32 divisor);
 
+    // The game's latest touch read before capture masking (real or injected
+    // touch); false if not touching. See InputCaptureBegin.
+    bool CaptureRealTouch(u32 &x, u32 &y);
+
     // One line for the log: cursor position, touch state, and what the game's
     // touch reader last returned.
     std::string CursorStatus(void);

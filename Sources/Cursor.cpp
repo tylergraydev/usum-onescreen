@@ -1,21 +1,15 @@
 #include "Cursor.hpp"
 
+#include "Buttons.hpp"
 #include "Framebuffer.hpp"
+#include "InputCapture.hpp"
 
 namespace OneScreen
 {
     using namespace CTRPluginFramework;
 
-    // One touch sample as the game's reader writes it.
-    struct TouchSample
-    {
-        u16 x;
-        u16 y;
-        u8  touching;
-        u8  pad[3];
-    };
-
     static Hook s_touchHook;
+    static TouchCaptureState s_capture;   // only the hook touches it
 
     static volatile s32 s_x = BottomWidth / 2;
     static volatile s32 s_y = ScreenHeight / 2;
@@ -27,6 +21,10 @@ namespace OneScreen
     static volatile u16 s_seenX = 0, s_seenY = 0;
     static volatile u8 s_seenTouching = 0;
     static volatile u32 s_reads = 0, s_injected = 0;
+
+    // The latest read before capture masking, for plugin menus.
+    static volatile u16 s_realX = 0, s_realY = 0;
+    static volatile u8 s_realTouching = 0;
 
     static bool IsTouching(void)
     {
@@ -54,7 +52,16 @@ namespace OneScreen
             s_injected++;
         }
 
-        if (out != nullptr && count != nullptr && *count > 0)
+        const s32 n = (out != nullptr && count != nullptr) ? (*count < max ? *count : max) : 0;
+        if (n > 0)
+        {
+            s_realX = out[0].x;
+            s_realY = out[0].y;
+            s_realTouching = out[0].touching;
+        }
+        MaskTouchSamples(s_capture, InputCaptureRequest(), out, n);
+
+        if (n > 0)
         {
             s_seenX = out[0].x;
             s_seenY = out[0].y;
@@ -136,10 +143,19 @@ namespace OneScreen
         screen.DrawRect(cx, y0, 1, y1 - y0 + 1, fill);
     }
 
+    bool CaptureRealTouch(u32 &x, u32 &y)
+    {
+        x = s_realX;
+        y = s_realY;
+        return s_realTouching != 0;
+    }
+
     std::string CursorStatus(void)
     {
-        return Utils::Format("cursor: at %ld,%ld touching %d | game reads %lu, injected %lu, last seen %u,%u touching %u",
+        return Utils::Format("cursor: at %ld,%ld touching %d | game reads %lu, injected %lu, last seen %u,%u touching %u"
+                             " | touch captured %d, suppressed %d",
                              s_x, s_y, IsTouching() ? 1 : 0, s_reads, s_injected,
-                             s_seenX, s_seenY, s_seenTouching);
+                             s_seenX, s_seenY, s_seenTouching,
+                             s_capture.applied ? 1 : 0, s_capture.suppressed ? 1 : 0);
     }
 }
