@@ -4,6 +4,8 @@ A 3GX plugin (CTRPluginFramework) that makes Pokémon Ultra Sun / Ultra Moon pla
 
 **Status:** Phase 1 started. The plugin draws the bottom screen onto the top screen (CTRPF OSD callback, `Sources/Panel.cpp`): a half-size panel in the lower-right corner by default, and **ZR** cycles off / panel / full view. The panel follows the scene automatically (`Sources/AutoPanel.cpp`): title and overworld off, X menu / battle / Pokédex / Bag / unknown scenes as a panel, Party as full view; a ZR choice holds until the next scene change. The X menu is tracked from the game's X/B presses, so closing it by touch isn't noticed. A touch cursor (`Sources/Cursor.cpp`) is drawn inside the panel/full view: **C-stick** moves it, **ZL** touches. It hooks the game's touch reader (`0x2826F0`) and returns the cursor's point while touching.  Nothing here has been compiled yet.
 
+**Players:** see [docs/PLAYING.md](docs/PLAYING.md) for install, controls and bug reports, and [CHANGELOG.md](CHANGELOG.md) for what's new.
+
 ## Targets
 
 | Game | Title ID | Version | Confirmed |
