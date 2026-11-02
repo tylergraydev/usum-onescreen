@@ -42,7 +42,7 @@ Every other button works as normal.
 
 ## The bottom-screen view
 
-The goal is native menus on the top screen (the X menu has one already), so the bottom screen is hidden by default and **L+R** brings it up when a screen has no native menu yet. The corner panel is a half-size copy of the bottom screen in the lower-right corner of the top screen. Full view replaces the top screen with the bottom screen.
+The goal is native menus on the top screen (the X menu and the Pokédex have one already), so the bottom screen is hidden by default and **L+R** brings it up when a screen has no native menu yet. The corner panel is a half-size copy of the bottom screen in the lower-right corner of the top screen. Full view replaces the top screen with the bottom screen.
 
 ### Automatic view (optional)
 
@@ -57,6 +57,8 @@ Set `auto = on` in `usum-onescreen.ini` (or **Auto panel** in the plugin menu) a
 | Party, PC boxes, Town Map, Options, Pokémon Refresh | full view |
 | Talking to people, Poké Mart lists (top screen only) | off |
 | Anything not listed yet | corner panel |
+
+The native X menu and Pokédex keep the panel off while they show; in the Pokédex the panel comes back for its screens that have no native view yet (Habitat, Appearance, search, Evaluation once chosen).
 
 ## Known gaps
 
