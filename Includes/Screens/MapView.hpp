@@ -43,6 +43,28 @@ namespace OneScreen
     // the line after it. `key` names the map key.
     MapView MakeMapView(const WhereState &where, const std::vector<std::string> &names, const std::string &key);
 
+    // Decides when a new zone counts. Right after a door the field reads a
+    // wrong zone for a few frames (79 -> 0 -> 7, with the old position) while
+    // the entry zone already says 7; settled readings always had zone ==
+    // entry zone (docs/MAP.md). A new zone counts after `stable` readings in
+    // a row that agree with the entry zone, or after `patient` readings of it
+    // whatever the entry zone says.
+    class MapZoneFilter
+    {
+    public:
+        MapZoneFilter(u32 stable = 3, u32 patient = 30) : m_stable(stable), m_patient(patient) {}
+        void Reset(void) { m_current = m_pending = -1; m_count = m_agree = 0; }
+        // One reading. True if `zone` is now the zone to show (the first
+        // reading always is). `ignored` is set to a zone given up on, else -1.
+        bool Feed(u16 zone, u16 entryZone, int &ignored);
+        int  Current(void) const { return m_current; }
+
+    private:
+        u32 m_stable, m_patient;
+        int m_current = -1, m_pending = -1;
+        u32 m_count = 0, m_agree = 0;
+    };
+
     // One log line: zone, names, inside/outside, island, position, picture.
     std::string DescribeMapView(const MapView &view);
 
