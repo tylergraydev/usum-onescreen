@@ -398,7 +398,8 @@ namespace CTRPluginFramework
             }
         }
 
-        if (OneScreen::AutoPanelUpdate(scene, OneScreen::ButtonsGameHeld()))
+        const int fieldState = scene == "FieldRo" ? OneScreen::FieldState(s_game->offsets.sceneManager) : -1;
+        if (OneScreen::AutoPanelUpdate(scene, OneScreen::ButtonsGameHeld(), fieldState))
             WriteLog(OneScreen::AutoPanelStatus() + " -> " + OneScreen::PanelStatus(), false);
 
         OneScreen::ShotPoll();
