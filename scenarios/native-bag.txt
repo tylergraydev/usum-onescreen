@@ -9,8 +9,11 @@ include common/boot
 # must hold it off.
 send auto on
 
-# --- Get Pichu hurt: wild battle, switch Pichu in (a free hit), one Thunder Shock, Run ---
-# (Switching Pichu out again is no good: a Yungoos's Pursuit knocked it out.)
+# --- Get Pichu hurt: wild battles until it is (switch Pichu in for a free hit, Run) ---
+# Wild Pokémon differ: a Smeargle only knows Sketch, a Yungoos's Pursuit
+# knocked Pichu out when it was switched out again, an Ekans's Wrap kept
+# Pichu from running. So: one switch-in, Run until away, look at the party
+# (hurt, but by at most 20 HP so a Potion fills it up).
 mark
 send stick 0 -150 120
 expect-log ^scene: \(none\) 15
@@ -20,33 +23,31 @@ repeat 8 until-scene Battle
   send stick 0 -150 60
   sleep 1.5
 end
-repeat 40 until-scene Battle  # back and forth in the grass
-  send stick -150 0 20
-  sleep 0.5
-  send stick 150 0 20
-  sleep 0.5
+mark
+repeat 4 until-log ^\s+4\s\S+\sPichu\(172\)\s"Pichu"\sL12\shp\s([7-9]|1[0-9]|2[0-6])/27
+  repeat 40 until-scene Battle  # back and forth in the grass
+    send stick -150 0 20
+    sleep 0.5
+    send stick 150 0 20
+    sleep 0.5
+  end
+  sleep 12                  # battle intro, until the command menu shows
+  shot battle
+  # Pokémon -> slot 4 (Pichu) -> Switch: the wild Pokémon attacks Pichu.
+  send move 35 75; tap 6
+  sleep 2
+  send move 247 112; tap 6
+  sleep 2
+  send move 182 194; tap 6
+  sleep 16
+  shot switched-in
+  repeat 6 until-scene FieldRo
+    send move 160 225; tap 6  # RUN
+    sleep 20
+  end
+  sleep 3
+  send party
 end
-sleep 12                  # battle intro, until the command menu shows
-shot battle
-# Pokémon -> slot 4 (Pichu) -> Switch: the wild Pokémon attacks Pichu.
-send move 35 75; tap 6
-sleep 2
-send move 247 112; tap 6
-sleep 2
-send move 182 194; tap 6
-sleep 16
-# Fight -> move 1 (Thunder Shock): the wild Pokémon attacks again.
-send move 285 120; tap 6
-sleep 2
-send move 235 41; tap 6
-sleep 18
-shot hurt
-repeat 3 until-scene FieldRo
-  send move 160 225; tap 6  # RUN
-  sleep 20
-end
-sleep 3
-send party
 shot field
 
 # --- X menu -> Bag: the native Bag shows, the panel stays off ---
@@ -196,9 +197,9 @@ shot switched
 # --- Same with a Poké Ball, No keeps the Escape Rope ---
 mark
 send bagui select 1
-expect-log ^bag: cursor 1 Poké Ball 5
+expect-log ^bag: cursor 1 Pok.{1,2} Ball 5
 send press a
-expect-log ^bag: menu Poké Ball: Give, Move to Free Space, Cancel 10
+expect-log ^bag: menu Pok.{1,2} Ball: Give, Move to Free Space, Cancel 10
 send press a
 expect-log ^bag: game pick 10
 send press down
@@ -206,13 +207,13 @@ send press down
 send press down
 expect-log ^bag: pick cursor 4 Pichu 5
 send press a
-expect-log ^bag: question Poké Ball: Yes, No 20
+expect-log ^bag: question Pok.{1,2} Ball: Yes, No 20
 send press down
 expect-log ^bag: menu cursor No 5
 shot pre-no
 send press a
 expect-log ^bag: answer no 5
-expect-log ^bag: result give Poké Ball\(4\) on slot 4 Pichu: count 37 -> 37, hp 27/27 -> 27/27, held Escape Rope -> Escape Rope 30
+expect-log ^bag: result give Pok.{1,2} Ball\(4\) on slot 4 Pichu: count 37 -> 37, hp 27/27 -> 27/27, held Escape Rope -> Escape Rope 30
 expect-log ^bag: game list 10
 
 # --- Cancel a menu with B, then close the Bag with B ---
