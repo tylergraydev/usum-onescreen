@@ -2,7 +2,7 @@
 
 Title `00040000001B5000`, update title version `0x0800` (2048). Code layout from the update's exheader: text `0x100000` (size `0x4BB818`), rodata `0x5BC000`, data `0x669000`, bss `0x301BC`. The code is not compressed.
 
-Found by static analysis of the local `code.bin` (`tools/extract_code.py`, `tools/find_refs.py`, `tools/find_calls.py`, `tools/ghidra/decompile.sh`). The plugin checks the first four instruction words of each hook target at boot and writes the result to `usum-onescreen.log`.
+Found by static analysis of the local `code.bin` (`tools/extract_code.py`, `tools/find_refs.py`, `tools/find_calls.py`, `tools/ghidra/decompile.sh`). The plugin checks the first four instruction words of each hook target at boot and writes the result to `usum-onescreen.log`. `tools/sigscan.py` with `signatures/usum.json` finds the hook targets, `sceneManager` and the Party/Bag vtables again in another build (see `docs/PORTING.md`).
 
 ## Hook targets (verified in Azahar 2026-11-02)
 
@@ -57,3 +57,12 @@ HID (input):
 - `0x6BB2E8`: touch device `{event handle, touch shm}`; getter `0x177894`.
 - `0x34FDD4`: the game's input device constructor; `0x34FB44`: its per-frame update (reads pad, then touch into object `+0x110`/`+0x118`).
 - `0x4B6790`: game accessor that copies the latest `{x, y, touching}`.
+
+## Battle state (runtime, 2026-11-02)
+
+Full write-up: [RE1-battle.md](RE1-battle.md). Read by the `battle` command (`Sources/Battle.cpp`). Battle CRO offsets are relative to the module header found from the scene's vtable.
+
+- Path: scene `*(*(0x6A599C)+0)` → `+0x94` view (vtable Battle+`0x10A528`) → `+0xD0` poke container → `+0x04 + client*0x1C`: 6 battler record pointers + u8 count at `+0x18`; record 0 is the active battler (client 0 player, 1 opponent in wild battles).
+- Record: species u16 `+0x0C`, max HP `+0x0E`, HP `+0x10`, ability `+0x16`, level u8 `+0x18`, 4 moves at `+0x1FC` (stride `0xE`: u16 move, u8 PP, u8 max PP).
+- Menu: top of the scene manager's stack (`mgr+0..+0x1C`). Command Battle+`0x10B598` (cursor u8 `+0x278`), moves Battle+`0x10B724` (cursor `+0x114`, entries `+0xB0` stride `0x18`), Pokémon list main `0x648394`, Bag Bag+`0x16E24`, none Battle+`0x10B43C`.
+- Verified against screenshots in 6 wild battles (Drowzee, Smeargle, 2× Yungoos, Makuhita), a PP drop for both sides, a faint and a switch.
