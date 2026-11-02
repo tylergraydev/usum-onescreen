@@ -92,3 +92,12 @@ Full write-up: [RE3-party-bag.md](RE3-party-bag.md). Read by the `party` and `ba
 - PokemonParam (vtable `0x649374`): `+4` core (`0xE8`, PK7 format, encrypted + shuffled in RAM), `+8` party stats (`0x1C`, encrypted with the same EC). Game crypt `0x320BBC`; accessor decrypt `0x322CB0`, re-encrypt `0x322BE0`.
 - Bag: MyItem = SaveData `+8` (vtable `0x64F3C4`); pocket pointer table at MyItem `+0xE2C`: Medicine `+0xB78` (60), Items `+0x4` (427), TMs `+0x9C8` (108), Berries `+0xC68` (67), Key Items `+0x6B0` (198), Z-Crystals `+0xD74` (35), Rotom Powers `+0xE00` (11). Slot u32: item bits 0-9, count 10-19, Free Space 20-29, NEW bit 30.
 - Party screen order while it is open: scene (vtable `0x647FCC`) `+0xA8` StaticWork (vtable `0x647F9C`) `+0x53` u8[6]; the party itself is reordered when the screen closes.
+
+## Player location (runtime, 2026-11-02)
+
+Full write-up: [RE4-map.md](RE4-map.md). Read by the `where` command (`Sources/Where.cpp`).
+
+- `0x6A59C4`: global → game manager (`+0x1C` = the scene manager, checked). `gm+0x24` field object → `+0xCC` move model manager (vtable `0x64C628`) → `+0x0C` player model (vtable `0x64C538`): position floats `+0x3B0` (x east, y up, z south), yaw quaternion `+0x424`.
+- Zone: `*(*(gm+0x2C)+0x88)+0x1C` (u32; 0 in battle). Zone data: `field+0x54` loader (vtable `0x64BDD0`) → `+0x14` table of 0x54-byte entries (`+0x18` size): `+0x1C` place-name line in message file 72, `+0x44/+0x48` fixed map point (interiors only).
+- Rotom map view (vtable `0x64786C`): FieldMenu frame (FieldMenu+`0x183A0`) on the scene stack → `+0xD0`; `+0x170` map index, `+0x174/+0x178` centre (world x/z), scales `0x2CF230`/`0x2CF234` (0.0270139, 0.0270536 map px per unit).
+- Verified walking the Route 2 Pokémon Center (zone 79), Route 2 (7) and Hau'oli City (13) against screenshots and the Rotom map.
