@@ -89,8 +89,6 @@ namespace CTRPluginFramework
         const OneScreen::Settings settings = OneScreen::ParseSettings(text, warnings);
         for (const std::string &w : warnings)
             WriteLog(Utils::Format("settings: %s %s", SettingsPath + 1, w.c_str()), false);
-        if (settings.panelSize == OneScreen::PanelSize::TwoThirds)
-            WriteLog("settings: size 2/3 is not drawn yet, using 1/2", false);
         OneScreen::SetSettings(settings);
         OneScreen::AutoPanelSetEnabled(settings.autoPanel);
         WriteLog("settings: " + OneScreen::DescribeSettings(settings), false);
@@ -553,7 +551,8 @@ namespace CTRPluginFramework
         // Before the panel: its callback takes the screenshots, so it must
         // run after the native menus have drawn.
         OneScreen::StartXMenu();
-        OneScreen::StartPanel(OneScreen::PanelMode::Off);
+        OneScreen::StartPanel(OneScreen::PanelMode::Off, s_game->offsets.gxDisplayTransfer.address,
+                              s_game->offsets.gxTextureCopy.address);
         OneScreen::StartActions();
 
         std::string cursorReport;

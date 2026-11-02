@@ -58,7 +58,7 @@ cursor_move = cstick    ; cstick, dpad or circlepad (dpad / circlepad still reac
 cursor_speed = 6        ; top speed in px/frame, 1-20; starts at 1, then 3 (or less), then this
 
 [panel]
-size = 1/2              ; 1/2; 2/3 is accepted but drawn as 1/2 for now
+size = 1/2              ; 1/2 or 2/3 (easier to read, costs more speed: docs/PERF.md)
 corner = bottom-right   ; bottom-right, bottom-left, top-right, top-left
 auto = on               ; on: the view follows [scenes]; off: it stays as panel_key sets it
 

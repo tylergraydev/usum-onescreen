@@ -10,12 +10,14 @@ namespace OneScreen
     enum class PanelMode : u8
     {
         Off,    // top screen untouched
-        Panel,  // bottom screen at half size in a corner of the top screen (settings: corner)
+        Panel,  // bottom screen at 1/2 or 2/3 size in a corner of the top screen (settings: size, corner)
         Full,   // bottom screen at full size, centered over the top screen
     };
 
     // Registers the OSD callback that copies the bottom screen onto the top.
-    void StartPanel(PanelMode initial);
+    // `displayTransfer` and `textureCopy` are the game's gx library calls
+    // (Offsets::gxDisplayTransfer / gxTextureCopy) used for the copy.
+    void StartPanel(PanelMode initial, u32 displayTransfer, u32 textureCopy);
 
     PanelMode GetPanelMode(void);
     void      SetPanelMode(PanelMode mode);
