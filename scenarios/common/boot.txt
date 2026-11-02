@@ -1,0 +1,17 @@
+# Shared steps: boot Ultra Sun, Continue the save, stand in the Pokémon Center on Route 2.
+# Leaves the instance running; the including scenario stops it.
+start 90
+reject-log hooks: FAILED
+sleep 10
+# Start skips the opening movie; the title (TitleMenu) then shows the Continue menu.
+repeat 10 until-scene TitleMenu
+  send press start
+  sleep 3
+end
+expect-mode off           # [scenes] TitleMenu = off
+sleep 8                   # the Continue menu fades in, cursor on Continue
+shot continue-menu
+send press a
+wait-scene FieldRo 60
+expect-mode off           # FieldRo = off
+sleep 5
