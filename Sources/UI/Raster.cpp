@@ -14,9 +14,17 @@ namespace UI
         return (u8)(c * 255.f + 0.5f);
     }
 
+    // x / 255 rounded, for x <= 255 * 255 + 255, without a divide (the ARM11
+    // has none, so `/ 255` is a library call per channel).
+    static inline u32 Div255(u32 x)
+    {
+        x += 128;
+        return (x + (x >> 8)) >> 8;
+    }
+
     static inline u8 Mul255(u32 a, u32 b)
     {
-        return (u8)((a * b + 127) / 255);
+        return (u8)Div255(a * b);
     }
 
     Rect Intersect(const Rect &a, const Rect &b)
@@ -150,9 +158,9 @@ namespace UI
         ReadPixel(p, m_surface.format, r, g, b);
         const u32 inv = 255 - alpha;
         WritePixel(p, m_surface.format,
-                   (u8)((c.r * alpha + r * inv + 127) / 255),
-                   (u8)((c.g * alpha + g * inv + 127) / 255),
-                   (u8)((c.b * alpha + b * inv + 127) / 255));
+                   (u8)Div255(c.r * alpha + r * inv),
+                   (u8)Div255(c.g * alpha + g * inv),
+                   (u8)Div255(c.b * alpha + b * inv));
     }
 
     // Fills [x0, x1) on row y. Opaque spans encode the color once and copy it,
@@ -166,17 +174,37 @@ namespace UI
         if (x1 <= x0 || c.a == 0)
             return;
 
+        u8 *p = m_surface.origin + x0 * m_surface.stepX + y * m_surface.stepY;
         if (c.a != 255)
         {
-            for (s32 x = x0; x < x1; x++)
-                BlendPixel(x, y, c);
+            // Same result as BlendPixel per pixel, with the clip check, the
+            // format switch and the colour product hoisted out of the loop:
+            // full-screen shades and panel backgrounds are drawn this way.
+            const u32 inv = 255 - c.a;
+            const u32 pr = c.r * c.a, pg = c.g * c.a, pb = c.b * c.a;
+            if (m_surface.format == PixelFormat::BGR8)
+            {
+                for (s32 x = x0; x < x1; x++, p += m_surface.stepX)
+                {
+                    p[0] = (u8)Div255(pb + p[0] * inv);
+                    p[1] = (u8)Div255(pg + p[1] * inv);
+                    p[2] = (u8)Div255(pr + p[2] * inv);
+                }
+                return;
+            }
+            for (s32 x = x0; x < x1; x++, p += m_surface.stepX)
+            {
+                u8 r, g, b;
+                ReadPixel(p, m_surface.format, r, g, b);
+                WritePixel(p, m_surface.format, (u8)Div255(pr + r * inv), (u8)Div255(pg + g * inv),
+                           (u8)Div255(pb + b * inv));
+            }
             return;
         }
 
         u8 encoded[4];
         WritePixel(encoded, m_surface.format, c.r, c.g, c.b);
         const u32 bpp = BytesPerPixel(m_surface.format);
-        u8 *p = m_surface.origin + x0 * m_surface.stepX + y * m_surface.stepY;
         for (s32 x = x0; x < x1; x++, p += m_surface.stepX)
             for (u32 i = 0; i < bpp; i++)
                 p[i] = encoded[i];
