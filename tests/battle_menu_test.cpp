@@ -77,6 +77,13 @@ static void TestPages(void)
     snap.menu = GameMenu::Other;
     CHECK(!menu.Update(snap, 0).capture && menu.Page() == BattlePage::Game);
 
+    // After a catch (Pokédex scene, nickname question): helper, no capture.
+    BattleSnapshot caught;
+    caught.afterCatch = true;
+    BattleMenu after;
+    CHECK(!after.Update(caught, BattleKeys::B).capture && after.Page() == BattlePage::Game && after.Visible());
+    CHECK(after.Status(caught).find("after catch") != std::string::npos);
+
     // Other screens get the helper only after the game's Bag / Pokémon list.
     BattleMenu intro;
     CHECK(!intro.Update(snap, 0).capture && intro.Page() == BattlePage::Hidden);

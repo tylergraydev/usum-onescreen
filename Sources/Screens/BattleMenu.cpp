@@ -144,6 +144,8 @@ namespace Screens
     // get the helper only when reached from the game's Bag or Pokémon list.
     static BattlePage PageFor(const BattleSnapshot &snap, BattlePage current)
     {
+        if (snap.afterCatch)
+            return BattlePage::Game;
         if (!snap.inBattle)
             return BattlePage::Hidden;
         switch (snap.menu)
@@ -390,7 +392,14 @@ namespace Screens
         const Rect hints2 = body.Next(10);
         const TextStyle main = Style(Font::System, TextMain);
 
-        if (snap.menu == GameMenu::Bag)
+        if (snap.afterCatch)
+        {
+            DrawText(canvas, "Caught!", title, main);
+            DrawText(canvas, "Give it a nickname?", line, Style(Font::System, Good));
+            DrawHints(canvas, hints1, "B: no", "A: yes (bottom-screen keyboard)");
+            DrawHints(canvas, hints2, "A or B: next message", "");
+        }
+        else if (snap.menu == GameMenu::Bag)
         {
             DrawText(canvas, std::string("Bag: ") + BattlePocketName(snap.bagPocket), title, main);
             std::string item = snap.bagItem.empty()
@@ -458,7 +467,7 @@ namespace Screens
             }
             break;
         case BattlePage::Game:
-            key += Number("|%u %u", (unsigned)snap.menu, snap.gameCursor) + Number(" %u %u", snap.listCount, snap.bagPocket)
+            key += (snap.afterCatch ? "c" : "") + Number("|%u %u", (unsigned)snap.menu, snap.gameCursor) + Number(" %u %u", snap.listCount, snap.bagPocket)
                    + (snap.bagItemPage ? "i" : "") + snap.bagItem + Number(" %u", snap.bagItemCount, 0) + "|"
                    + snap.partyName + Number(" %u %u", snap.partyLevel, snap.partyHp) + Number(" %u", snap.partyMaxHp, 0);
             break;
@@ -485,7 +494,7 @@ namespace Screens
         else if (m_page == BattlePage::Game)
         {
             static const char *const menus[] = { "none", "command", "moves", "pokemon", "bag", "other" };
-            out += std::string(", game ") + menus[(int)snap.menu];
+            out += snap.afterCatch ? std::string(", after catch") : std::string(", game ") + menus[(int)snap.menu];
             if (snap.menu == GameMenu::Bag)
                 out += std::string(", ") + BattlePocketName(snap.bagPocket) + (snap.bagItemPage ? ", item page" : "")
                        + ", " + (snap.bagItem.empty() ? Number("item %u of %u", snap.gameCursor + 1u, snap.listCount) : snap.bagItem);
