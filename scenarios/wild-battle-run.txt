@@ -33,4 +33,13 @@ repeat 3 until-scene FieldRo
 end
 expect-mode off           # FieldRo = off
 shot field
+# Outdoors the field state object sits elsewhere in the scene object than
+# in the Pokémon Center: the X menu must still be seen, and its touch close.
+sleep 3
+send press x
+expect-mode panel         # FieldRo.xmenu = panel
+sleep 2
+shot xmenu
+send move 16 224; tap 6   # the X menu's back button
+expect-mode off
 stop
