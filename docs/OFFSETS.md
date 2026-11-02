@@ -66,3 +66,12 @@ Full write-up: [RE1-battle.md](RE1-battle.md). Read by the `battle` command (`So
 - Record: species u16 `+0x0C`, max HP `+0x0E`, HP `+0x10`, ability `+0x16`, level u8 `+0x18`, 4 moves at `+0x1FC` (stride `0xE`: u16 move, u8 PP, u8 max PP).
 - Menu: top of the scene manager's stack (`mgr+0..+0x1C`). Command Battle+`0x10B598` (cursor u8 `+0x278`), moves Battle+`0x10B724` (cursor `+0x114`, entries `+0xB0` stride `0x18`), Pokémon list main `0x648394`, Bag Bag+`0x16E24`, none Battle+`0x10B43C`.
 - Verified against screenshots in 6 wild battles (Drowzee, Smeargle, 2× Yungoos, Makuhita), a PP drop for both sides, a faint and a switch.
+
+## Party and bag (runtime, 2026-11-02)
+
+Full write-up: [RE3-party-bag.md](RE3-party-bag.md). Read by the `party` and `bag` commands (`Sources/Party.cpp`). Verified against the Party and Bag screens before and after battle damage, a Potion, two party reorders and giving a held item.
+
+- Path: GameManager `*(0x6A59C4)` → `+0x24` GameData → `+0x04` Savedata::SaveData (vtable `0x64F4A0`) and `+0x0C` pml::PokeParty (6 PokemonParam pointers, u8 count `+0x18`).
+- PokemonParam (vtable `0x649374`): `+4` core (`0xE8`, PK7 format, encrypted + shuffled in RAM), `+8` party stats (`0x1C`, encrypted with the same EC). Game crypt `0x320BBC`; accessor decrypt `0x322CB0`, re-encrypt `0x322BE0`.
+- Bag: MyItem = SaveData `+8` (vtable `0x64F3C4`); pocket pointer table at MyItem `+0xE2C`: Medicine `+0xB78` (60), Items `+0x4` (427), TMs `+0x9C8` (108), Berries `+0xC68` (67), Key Items `+0x6B0` (198), Z-Crystals `+0xD74` (35), Rotom Powers `+0xE00` (11). Slot u32: item bits 0-9, count 10-19, Free Space 20-29, NEW bit 30.
+- Party screen order while it is open: scene (vtable `0x647FCC`) `+0xA8` StaticWork (vtable `0x647F9C`) `+0x53` u8[6]; the party itself is reordered when the screen closes.
