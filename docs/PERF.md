@@ -1,13 +1,95 @@
-# Panel performance (H5)
+# Panel performance
 
-What the bottom-screen panel costs in frame rate, measured 2026-11-02 on Azahar.
-Short answer: with the panel shown (either size) Azahar's speed drops by about
-40%, and the cost is **reading** the bottom framebuffer, not drawing on the top
-one. On the test PC that takes the game from above full speed to slightly below
-it (~27-31 fps instead of 30). P1-6 is needed, and it should remove the
-per-frame CPU read rather than only skip unchanged frames.
+What the bottom-screen panel costs Azahar, measured 2026-11-02 with
+`tools/perf.py`. **Now (P1-6):** the panel is copied by GPU transfers and costs
+Azahar 0-4% of its speed (1/2 and full), 8% for 2/3; it was ~40% (H5, below).
+The sections after "P1-6" are H5's original measurements of the old CPU copy.
 
-## Method
+## P1-6: GPU copy
+
+### Why the old panel was slow
+
+From Azahar's source (master, `video_core/rasterizer_cache/rasterizer_cache.h`,
+`core/memory.cpp`; read, not profiled): framebuffers live on the host GPU.
+
+- A CPU **read** of GPU-written memory makes Azahar download that surface from
+  the host GPU first (`FlushRegion`).
+- A CPU **write** of 8 bytes or less to GPU-written memory also downloads and
+  drops the whole surface (`InvalidateRegion`: "If the CPU is invalidating this
+  region we want to remove it"). So drawing even a cursor or a 1-px border on
+  the game's frame costs a download per frame.
+
+### What the panel does now
+
+`Sources/Panel.cpp` queues transfers with the game's own gx library
+(DisplayTransfer `0x27A5BC`, TextureCopy `0x279E28`, see `docs/OFFSETS.md`);
+Azahar runs them on the host GPU before the queue trigger returns.
+
+- **Full:** bottom framebuffer → RGBA8 scratch, cursor sprites copied in
+  (TextureCopy), → top framebuffer as BGR8 (DisplayTransfer). No CPU access.
+- **1/2:** bottom → RGBA8 → into a 256-px-line buffer pre-filled with the
+  border color → 2x2 scaled → TextureCopy into the top screen's lines. The
+  extra 8 px per line are needed because TextureCopy writes runs of 16-byte
+  units: 120 BGR8 pixels (360 bytes) is not one, 128 is. The **cursor** is
+  still drawn by the CPU on the top screen (one download per frame): copying
+  the sprites into this chain made Azahar fail an assertion (`GetFormatType`,
+  invalid pixel format) every time the field reloaded after the Pokédex or a
+  battle (5 of 5 runs, several orderings tried; full size with the same
+  sprites never did). Cause not found.
+- **2/3:** transfers only scale by 1/2, so the CPU scales. The bottom screen is
+  copied to plain memory with a TextureCopy that Azahar can't accelerate (16-byte
+  gaps between BGR8 lines), so it runs in software: **one** bulk download per
+  copy instead of piecemeal ones. The CPU scales it (3x3 → 2x2, weighted) into
+  a CPU-only buffer with border and cursor, which transfers copy to the top
+  screen. Redrawn every 2nd frame (15 fps); the cursor moves every frame.
+- Sprites and the 2/3 picture are CPU-written (1x) while the game's surfaces
+  are at the internal resolution (5x here). A TextureCopy between surfaces of
+  different scales falls back to software (a download), so each CPU buffer's
+  GPU twin is first made from a corner of a GPU buffer (`ToGpu`).
+- The readback self-check now runs every 128 frames (~4 s) instead of every
+  frame (it reads both framebuffers). The screenshot tool is unchanged (reads
+  on request only).
+- Needs linear memory (`svcControlMemory` LINEAR, 1.5 MB, allocated without
+  trouble) and BGR8 framebuffers; otherwise it falls back to the old CPU copy.
+
+### Results (field, Pokémon Center, 5x, frame limit 250%)
+
+Mean ± sd of 10 s windows, modes interleaved per round. Speed 1.00 = real time.
+The game's own rate stayed 29.9 fps (emulated) in every row below.
+
+Final build (merged with main 82137a8), 4 rounds × 3 windows, 2-3 Azahar running:
+
+| mode | n | speed | emu µs/frame (copy) |
+|---|--:|---|--:|
+| off | 12 | 1.82 ± 0.12 | – |
+| panel 1/2 | 12 | 1.74 ± 0.14 | 358 |
+| full | 12 | 1.83 ± 0.13 | 521 |
+
+2/3 (same code), 4 rounds × 3 windows, 1-2 Azahar running:
+
+| mode | n | speed | emu µs/frame |
+|---|--:|---|--:|
+| off | 12 | 1.95 ± 0.11 | – |
+| panel 2/3 | 12 | 1.80 ± 0.13 | 3690 |
+
+How it got there (each a separate run, so compare within a row group only):
+
+| variant | speed | off in the same run |
+|---|---|---|
+| transfers only, 1/2 / full (no CPU drawing at all) | 1.46 / 1.55 | 1.50 |
+| transfers + CPU border, cursor, readback on top (first GPU version) | 1.31 / 1.37 | 1.50 |
+| transfers + CPU border only / CPU cursor only | 1.59 / 1.59 | 1.74 |
+| all on GPU incl. cursor sprites (before the 1/2 assertion was found) | 2.01 / 2.05 | 2.03 |
+| 2/3, CPU reading the framebuffer directly | 1.00 | 1.50 |
+| 2/3, one software bulk copy, scaled every frame (after the scaler went from 42 to 7 ms emulated) | 1.95 | 2.24 |
+
+Not measured: 1x internal resolution, other scenes, real hardware (the
+transfers are hardware features, but the flags used, e.g. scaling linear input,
+were only checked against Azahar).
+
+## H5: the old CPU copy
+
+### Method
 
 - **Plugin side** (`perf on`, `perf`; see `Sources/Panel.cpp`). Off by default.
   When on, the OSD callback reads `svcGetSystemTick` around the bottom-screen
@@ -41,11 +123,11 @@ spare host time the game runs faster than real time; that headroom is what the
 "off" rows show). Internal resolution 5x unless noted. Instance `h5`, plugin
 built from this branch. Panel size 1/2, bottom-right.
 
-## Results
+### Results
 
 Mean ± standard deviation over windows. Speed 1.00 = real time.
 
-### Field: Pokémon Center on Route 2 (`FieldRo`), standing still, 5x resolution
+#### Field: Pokémon Center on Route 2 (`FieldRo`), standing still, 5x resolution
 
 3 rounds × 5 windows of 10 s per mode; 4-6 Azahar processes running (mostly 6).
 
@@ -55,7 +137,7 @@ Mean ± standard deviation over windows. Speed 1.00 = real time.
 | panel | 15 | 0.90 ± 0.03 | 27.0 ± 0.9   | 29.91   | 6722 (max 7117)     | 2270 (max 2615)     | 26.9%                  |
 | full  | 15 | 0.93 ± 0.07 | 27.7 ± 2.1   | 29.89   | 6688 (max 7004)     | 8783 (max 9135)     | 46.2%                  |
 
-### Pokédex (`Zukan`, a full-screen app; list page on the bottom), 5x resolution
+#### Pokédex (`Zukan`, a full-screen app; list page on the bottom), 5x resolution
 
 2 rounds × 5 windows; 5-6 Azahar processes (mostly 5).
 
@@ -65,7 +147,7 @@ Mean ± standard deviation over windows. Speed 1.00 = real time.
 | panel | 10 | 1.01 ± 0.05 | 30.1 ± 1.4   | 29.92   | 6684    | 2271    | 26.8%       |
 | full  | 10 | 1.04 ± 0.03 | 31.0 ± 1.0   | 29.90   | 6686    | 8746    | 46.1%       |
 
-### Field at 1x internal resolution
+#### Field at 1x internal resolution
 
 Same spot, 2 rounds × 4 windows; 4-5 Azahar processes (mostly 5).
 
@@ -75,7 +157,7 @@ Same spot, 2 rounds × 4 windows; 4-5 Azahar processes (mostly 5).
 | panel | 8 | 1.06 ± 0.04 | 31.8 ± 1.1 |
 | full  | 8 | 0.97 ± 0.07 | 29.0 ± 2.1 |
 
-### Which half costs: copy only vs draw only (temporary build, not committed)
+#### Which half costs: copy only vs draw only (temporary build, not committed)
 
 A throwaway build changed the modes so that `panel` drew the half-size panel
 from a capture taken once (draw only, no reads of the bottom screen) and
@@ -88,7 +170,7 @@ Field, 1x resolution, 2 rounds × 4 windows; 2-3 Azahar processes.
 | draw only (1/2)   | 8 | 1.92 ± 0.05 | 57.5 ± 1.6 | –       | 2271    |
 | copy only         | 8 | 1.24 ± 0.10 | 37.1 ± 3.1 | 6723    | –       |
 
-## What the numbers say
+### What the numbers say
 
 1. **The game itself never slows down in emulated time.** fps emu stays at
    29.9 in every mode: the game runs at 30 fps and the panel's 9.0 ms (panel)
@@ -114,7 +196,7 @@ host GPU, and a CPU read of that memory makes Azahar's rasterizer cache flush
 (download) the surface and wait for the GPU, every frame. Finding 5 suggests
 the wait, not the copy size, dominates.
 
-## Recommendation: P1-6 is needed
+### Recommendation: P1-6 is needed
 
 - **GPU DisplayTransfer (game's `0x27A5BC`, see `docs/OFFSETS.md`) is the
   promising route**: a GX transfer from the bottom framebuffer straight into
@@ -133,7 +215,7 @@ the wait, not the copy size, dominates.
 - Lower priority: the draw loop (2.3 ms / 8.8 ms emulated) only matters on
   real hardware or with emulated CPU clock limits; not a problem here.
 
-## Reproducing
+### Reproducing
 
 ```bash
 py -3 -I tools/instance.py start NAME --wait 90
