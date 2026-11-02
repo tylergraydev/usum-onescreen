@@ -8,6 +8,8 @@ line; # starts a comment (at the start of a line, or after a space; not in
 expect-log / reject-log lines, where # is part of the regex). Steps:
 
   start [WAIT]                 tools/instance.py start NAME --wait WAIT (default 90)
+  restore POINT                stop the instance (if running) and put start point POINT's save in
+                               (tools/startpoint.py restore NAME POINT); `start` then boots into it
   stop                         tools/instance.py stop NAME
   send CMD [; CMD ...]         plugin test commands, as tools/cmd.py takes them
   sleep SECONDS
@@ -58,6 +60,7 @@ import emu  # noqa: E402
 
 SCENARIOS = emu.REPO / "scenarios"
 INSTANCE_PY = Path(__file__).resolve().parent / "instance.py"
+STARTPOINT_PY = Path(__file__).resolve().parent / "startpoint.py"
 # Log guard: Azahar log lines that mean the emulator or the game broke. Plain
 # <Error> lines are not here: unimplemented services log them on every boot.
 AZAHAR_BAD = re.compile(r"<Critical>|Assertion Failed|Unreachable code|unmapped (?:read|write)", re.I)
@@ -81,7 +84,7 @@ class Step:
 ARITY = {"start": (0, 1), "stop": (0, 0), "send": None, "sleep": (1, 1), "shot": (1, 1),
          "wait-scene": (1, 2), "expect-scene": (1, 1), "expect-mode": (1, 2), "mark": (0, 0),
          "expect-log": None, "reject-log": None, "guard-ignore": None, "check-save": (0, 0), "repeat": (1, 3),
-         "include": (1, 1), "if-scene": None}
+         "include": (1, 1), "if-scene": None, "restore": (1, 1)}
 
 
 def include_path(name, base):
@@ -272,6 +275,16 @@ class Runner:
             elif op == "stop":
                 self.instance_py("stop", self.instance)
                 self.started = False
+            elif op == "restore":
+                self.instance_py("stop", self.instance)
+                self.started = False
+                proc = subprocess.run([sys.executable, "-I", str(STARTPOINT_PY), "restore", self.instance, args[0]],
+                                      capture_output=True, text=True)
+                out = (proc.stdout + proc.stderr).strip()
+                if self.verbose and out:
+                    print("      " + out.replace("\n", "\n      "))
+                if proc.returncode != 0:
+                    raise StepFailed(out.splitlines()[-1] if out else "startpoint.py restore failed")
             elif op == "send":
                 out = emu.send([c.strip() for c in args[0].split(";") if c.strip()], self.sdmc)
                 if self.verbose:

@@ -26,6 +26,8 @@ Only buttons verified by a tap (`verified: tap` in the JSON) can be tapped: `Che
 
 The X menu remembers its cursor, so entries are always tapped, never chosen with the D-pad.
 
+Screens add their own actions with `ActionStart` (the native X menu's `xmenu-*`, the PC boxes' `box-pick-N`, `box-drop-N`, `box-prev`, `box-next`, `docs/BOXES.md`). In the `Box` scene the world also carries the Box screen's mode, read from memory every frame (`BoxWorldFlags`, `docs/RE6-boxes.md`): `WorldBoxIdle`, `WorldBoxModal` (its slot menu or a message), `WorldBoxCarrying` (a Pokémon held).
+
 ## What the runs showed (2026-11-02, instance `ui3`)
 
 - **X menu probe.** The X menu is an overlay in `FieldRo`; three bottom-screen pixels tell it apart from the field: (10,120) yellow background, (300,225) the Save bar, (260,230) its blue Y corner (±40 per channel). In the field they are Rotom's red frame. After Party or Bag's back, `FieldRo` returns about 20 frames before the X menu shows, so `close` waits until the field has looked the same for 60 frames before it calls it done.

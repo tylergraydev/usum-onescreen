@@ -33,11 +33,16 @@ namespace OneScreen
     extern const char *const SceneBag;       // "main:006488C8"
     extern const char *const SceneTownMap;   // "TownMap"
     extern const char *const SceneBattle;    // "Battle"
+    extern const char *const SceneBox;       // "Box": the PC boxes
 
     // What the action layer sees of the game, once per frame.
     const u32 WorldXMenu         = 1u << 0;  // the X menu is on the bottom screen (pixel probe)
     const u32 WorldBattleCommand = 1u << 1;  // battle: Fight / Pokémon / Bag / Run is up
     const u32 WorldXMenuPage2    = 1u << 2;  // with WorldXMenu: its second page is showing
+    // The PC Box screen's mode (Box.hpp, docs/RE6-boxes.md); at most one is set.
+    const u32 WorldBoxIdle       = 1u << 8;  // browsing
+    const u32 WorldBoxModal      = 1u << 9;  // the slot menu or a message is up
+    const u32 WorldBoxCarrying   = 1u << 10; // a Pokémon is held
 
     struct ActionWorld
     {

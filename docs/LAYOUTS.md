@@ -144,6 +144,23 @@ No Z-move or Mega button: this save has no Z-Crystal pocket and the move list ha
 - **Bag**: same item-row layout as the field Bag (row 1 at 235,16 verified: opens the item page). Five pockets, 42 px wide from x 106, y 216-239, tap x 127+42k, y 228: Rotom Powers, HP/PP Restore, status restore, Poké Balls, battle items (all verified). Back 15,224 (verified).
 - **Item page**: Use 182,222 (~65,208-300,236; measured only: item use is forbidden); ◀ 18,81 and ▶ 301,81 switch between items in the pocket (verified; 306,95 misses); back 15,224 (verified).
 
+## PC boxes (`Box`)
+
+Added by P2-6 (docs/RE6-boxes.md), instance `p26`, start point `pc`. Every slot tap was checked by reading the game's cursor back (`BoxLowBgDraw +0xDC`) after it: all 36 landed on their own index.
+
+| Button | Rect | Tap | Does | Verified |
+|---|---|---|---|---|
+| `box.slot_0` … `slot_29` | 8+32·col,58+29·row (32x29 cells) | 24+32·col, 72+29·row | cursor there; a Pokémon: opens the slot menu; holding one: drops it there (swaps with a Pokémon already there) | tap (all 30) |
+| `box.party_0` … `party_5` | 45x40 around the tap | 238,76 288,96 238,121 288,141 238,166 288,186 | the same for the party (cursor 30-35); the game compacts the party, empty slots are at the end | tap (all 6) |
+| ◀ `box.prev_box` | 6,33-20,49 | 13,41 | previous box (Box 1 → the last unlocked box) | tap |
+| ▶ `box.next_box` | 184,33-198,49 | 191,41 | next box; also while holding a Pokémon | tap |
+| `box.box_list` | 56,206-140,239 | 95,222 | all-boxes view (cursor 38) | measured |
+| `box.back` | 0,214-31,239 | 16,226 | leaves the PC (B does the same) | measured |
+
+Slot menu (`box_menu`, after a tap on a Pokémon; row pitch 28, entries 212-310 wide): Move 265,44 (tap: picks it up), Summary 265,72, Held Item 265,100, Marking 265,128, Release 265,156 (all measured, not tapped; Release never), Cancel 265,184 (tap: closes the menu).
+
+L and R do not turn the box. The cursor is a red arrow above the slot it points at.
+
 ## Not reached
 
 - Z-move button, Mega Evolution: not in this save.
