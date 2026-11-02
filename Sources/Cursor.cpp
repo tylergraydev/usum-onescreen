@@ -3,6 +3,7 @@
 #include "Buttons.hpp"
 #include "Framebuffer.hpp"
 #include "InputCapture.hpp"
+#include "Settings.hpp"
 
 namespace OneScreen
 {
@@ -87,25 +88,31 @@ namespace OneScreen
     {
         static u32 held = 0;
 
+        // Keys and top speed come from settings (cursor_move, touch_key, cursor_speed).
+        const Settings &settings = GetSettings();
+        uint32_t up, down, left, right;
+        CursorKeys(settings.cursorSource, up, down, left, right);
+        const s32 top = (s32)settings.cursorSpeed;
+
         const u32 keys = Controller::GetKeysDown();
         s32 dx = 0, dy = 0;
-        if (keys & Key::CStickLeft)  dx--;
-        if (keys & Key::CStickRight) dx++;
-        if (keys & Key::CStickUp)    dy--;
-        if (keys & Key::CStickDown)  dy++;
+        if (keys & left)  dx--;
+        if (keys & right) dx++;
+        if (keys & up)    dy--;
+        if (keys & down)  dy++;
 
         // Start slow for precise taps, speed up while the stick stays held.
         if (dx || dy)
         {
             held++;
-            const s32 speed = held < 10 ? 1 : (held < 30 ? 3 : 6);
+            const s32 speed = held < 10 ? 1 : (held < 30 ? (top < 3 ? top : 3) : top);
             s_x = Clamp(s_x + dx * speed, 0, BottomWidth - 1);
             s_y = Clamp(s_y + dy * speed, 0, ScreenHeight - 1);
         }
         else
             held = 0;
 
-        s_zlTouch = (keys & Key::ZL) != 0;
+        s_zlTouch = settings.touchKey != 0 && (keys & settings.touchKey) == settings.touchKey;
 
         if (s_tapFrames > 0)
             s_tapFrames--;

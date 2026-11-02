@@ -38,7 +38,7 @@ jobs:
           name: usum-onescreen
           path: usum-onescreen.3gx
 
-  # Pure logic (input capture masking) built and run on the PC side.
+  # Pure logic (input capture masking, settings parser) built and run on the PC side.
   host-tests:
     runs-on: ubuntu-latest
     steps:

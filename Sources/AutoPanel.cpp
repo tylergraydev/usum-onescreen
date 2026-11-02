@@ -3,34 +3,22 @@
 #include <CTRPluginFramework.hpp>
 
 #include "Panel.hpp"
+#include "Settings.hpp"
 
 namespace OneScreen
 {
     using namespace CTRPluginFramework;
 
-    // Scene IDs from SceneModule() (see docs/OFFSETS.md).
+    // Scene IDs from SceneModule() (see docs/OFFSETS.md). The mode for each
+    // scene comes from the [scenes] settings; these two drive the X menu flag.
     static const char *SceneTitle = "TitleMenu";
     static const char *SceneField = "FieldRo";
-    static const char *SceneParty = "main:00647FCC";
 
     static bool s_enabled = true;
     static bool s_override = false;
     static bool s_menuOpen = false;     // X menu, an overlay inside FieldRo
     static std::string s_scene;
     static u32 s_prevHeld = 0;
-
-    static PanelMode ModeFor(const std::string &scene)
-    {
-        if (scene == SceneTitle)
-            return PanelMode::Off;
-        if (scene == SceneField)
-            return s_menuOpen ? PanelMode::Panel : PanelMode::Off;
-        if (scene == SceneParty)
-            return PanelMode::Full;
-        // Battle, Zukan, Bag, and anything not mapped yet: the bottom screen
-        // probably matters, so show it.
-        return PanelMode::Panel;
-    }
 
     bool AutoPanelUpdate(const std::string &scene, u32 gameHeld)
     {
@@ -59,7 +47,7 @@ namespace OneScreen
         if (!s_enabled || s_override || s_scene.empty())
             return false;
 
-        const PanelMode want = ModeFor(s_scene);
+        const PanelMode want = (PanelMode)ModeForScene(GetSettings(), s_scene, s_menuOpen);
         if (want == GetPanelMode())
             return false;
         SetPanelMode(want);
@@ -75,6 +63,11 @@ namespace OneScreen
     {
         s_enabled = enabled;
         s_override = false;
+    }
+
+    bool AutoPanelEnabled(void)
+    {
+        return s_enabled;
     }
 
     std::string AutoPanelStatus(void)
