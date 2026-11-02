@@ -20,7 +20,9 @@ namespace Screens
     static constexpr Rect CommandArea = { 206, 68, 190, 168 };
     static constexpr Rect MovesArea   = { 166, 36, 230, 200 };
     static constexpr Rect GameArea    = { 166, 158, 230, 78 };
-    // After a catch the Pokédex scene asks its question along the bottom.
+    // After a catch the Pokédex scene asks its question along the bottom,
+    // and so do the battle's own questions (learning a move): their helper
+    // goes at the top right.
     static constexpr Rect CatchArea   = { 166, 8, 230, 78 };
     static constexpr s32  Radius      = 10;
 
@@ -142,9 +144,11 @@ namespace Screens
     static const char *const CommandActions[] = { "battle-fight", "battle-bag", "battle-pokemon", "battle-flee" };
     static const char *const MoveActions[] = { "battle-move1", "battle-move2", "battle-move3", "battle-move4" };
 
-    // Other screens (the Pokémon action screen, and objects of the intro)
-    // get the helper only when reached from the game's Bag or Pokémon list.
-    static BattlePage PageFor(const BattleSnapshot &snap, BattlePage current)
+    // Other screens: the Pokémon action screen (from the game's Pokémon
+    // list), the battle's questions (learning a move after a level-up) and
+    // objects of the intro. All get the helper; one not reached from the
+    // Bag or Pokémon list shows only once it has stayed (Visible).
+    static BattlePage PageFor(const BattleSnapshot &snap)
     {
         if (snap.afterCatch)
             return BattlePage::Game;
@@ -156,13 +160,14 @@ namespace Screens
         case GameMenu::Moves:   return BattlePage::Moves;
         case GameMenu::Pokemon:
         case GameMenu::Bag:     return BattlePage::Game;
-        case GameMenu::Other:   return current == BattlePage::Game ? BattlePage::Game : BattlePage::Hidden;
+        case GameMenu::Other:   return BattlePage::Game;
         default:                return BattlePage::Hidden;
         }
     }
 
     void BattleMenu::Enter(BattlePage page, const BattleSnapshot &snap)
     {
+        m_fromGame = m_page == BattlePage::Game && m_menu != GameMenu::Other;
         m_page = page;
         m_menu = snap.menu;
         m_afterCatch = snap.afterCatch;
@@ -179,7 +184,7 @@ namespace Screens
     BattleMenuOutput BattleMenu::Update(const BattleSnapshot &snap, u32 pressed)
     {
         BattleMenuOutput out;
-        const BattlePage page = PageFor(snap, m_page);
+        const BattlePage page = PageFor(snap);
         if (page != m_page || snap.menu != m_menu || snap.afterCatch != m_afterCatch)
             Enter(page, snap);
         if (m_stable < 0xFFFF)
@@ -249,7 +254,14 @@ namespace Screens
 
     bool BattleMenu::Visible(void) const
     {
+        if (Prompt())
+            return m_stable >= PromptShowFrames;
         return m_page != BattlePage::Hidden && (m_page != BattlePage::Command || m_stable >= ShowFrames);
+    }
+
+    bool BattleMenu::Prompt(void) const
+    {
+        return m_page == BattlePage::Game && m_menu == GameMenu::Other && !m_fromGame && !m_afterCatch;
     }
 
     Rect BattleMenu::Area(void) const
@@ -258,7 +270,7 @@ namespace Screens
         {
         case BattlePage::Command: return CommandArea;
         case BattlePage::Moves:   return MovesArea;
-        case BattlePage::Game:    return m_afterCatch ? CatchArea : GameArea;
+        case BattlePage::Game:    return m_afterCatch || Prompt() ? CatchArea : GameArea;
         default:                  return Rect{ 0, 0, 0, 0 };
         }
     }
@@ -385,9 +397,9 @@ namespace Screens
         }
     }
 
-    static void DrawGame(Canvas &canvas, const BattleSnapshot &snap)
+    static void DrawGame(Canvas &canvas, const BattleMenu &menu, const BattleSnapshot &snap)
     {
-        const Rect area = snap.afterCatch ? CatchArea : GameArea;
+        const Rect area = menu.Area();
         DrawPanel(canvas, area);
         Stack body(Inset(area, 10, 5, 10, 6), Stack::Column, 3);
         const Rect title = body.Next(20);
@@ -399,9 +411,11 @@ namespace Screens
         if (snap.afterCatch)
         {
             DrawText(canvas, "Caught!", title, main);
-            DrawText(canvas, "Give it a nickname?", line, Style(Font::System, Good));
-            DrawHints(canvas, hints1, "B: no", "A: yes (keyboard below)");
-            DrawHints(canvas, hints2, "A or B: next message", "");
+            // A new species gets its Pokédex page first; then the nickname
+            // question, where A opens a keyboard on the bottom screen.
+            DrawText(canvas, "B: next, no nickname", line, Style(Font::System, Good));
+            DrawHints(canvas, hints1, "Nickname? A: yes (keyboard below)", "");
+            DrawHints(canvas, hints2, "ZR: show the bottom screen", "");
         }
         else if (snap.menu == GameMenu::Bag)
         {
@@ -436,6 +450,13 @@ namespace Screens
             DrawHints(canvas, hints1, "D-pad: move", "A: choose");
             DrawHints(canvas, hints2, "", "B: back");
         }
+        else if (menu.Prompt())
+        {
+            DrawText(canvas, "The game asks", title, main);
+            DrawText(canvas, "Choices are on the bottom screen", line, Style(Font::System, TextDim));
+            DrawHints(canvas, hints1, "Up/Down + A: choose", "B: back");
+            DrawHints(canvas, hints2, "ZR: show the bottom screen", "");
+        }
         else
         {
             DrawText(canvas, "Game screen", title, main);
@@ -451,7 +472,7 @@ namespace Screens
         {
         case BattlePage::Command: DrawCommand(canvas, *this, snap); break;
         case BattlePage::Moves:   DrawMoves(canvas, *this, snap); break;
-        case BattlePage::Game:    DrawGame(canvas, snap); break;
+        case BattlePage::Game:    DrawGame(canvas, *this, snap); break;
         default: break;
         }
     }
@@ -501,6 +522,8 @@ namespace Screens
         {
             static const char *const menus[] = { "none", "command", "moves", "pokemon", "bag", "other" };
             out += snap.afterCatch ? std::string(", after catch") : std::string(", game ") + menus[(int)snap.menu];
+            if (Prompt())
+                out += Number(", prompt, vt %08X", snap.otherVtable, 0);
             if (snap.menu == GameMenu::Bag)
                 out += std::string(", ") + BattlePocketName(snap.bagPocket) + (snap.bagItemPage ? ", item page" : "")
                        + ", " + (snap.bagItem.empty() ? Number("item %u of %u", snap.gameCursor + 1u, snap.listCount) : snap.bagItem);

@@ -2,8 +2,8 @@
 # with buttons only, the panel off the whole time.
 #   1. Fight -> move list -> B back; Pokémon -> the game's list (helper) -> B;
 #      Run.
-#   2. Bag -> Poké Balls tab -> Poké Ball -> Use, until it is caught; the
-#      nickname question (B: no) and back to the field.
+#   2. Bag -> Poké Balls tab -> Poké Ball -> Use, until it is caught; B
+#      through the Pokédex page / nickname question (No) to the field.
 #   3. Fight with the first move (the list starts on it) until the battle
 #      is won.
 # Every choice is a press; the menu taps the hidden bottom screen itself.
@@ -108,14 +108,17 @@ repeat 12 until-scene Zukan
   sleep 30
 end
 wait-scene Zukan 30
-expect-mode off           # the nickname question, straight after the battle
+expect-mode off           # the Pokédex scene straight after the battle
 expect-log ^battle-ui: page game, after catch 10
 sleep 2
-shot nickname
-send press b              # No
-sleep 3
-shot sent-to-box
-send press b
+shot caught
+# A new species: its Pokédex page, then (any species) the nickname
+# question, where B is No, then "sent to a Box". B through all of it.
+repeat 10 until-scene FieldRo
+  shot after-catch
+  send press b
+  sleep 3
+end
 wait-scene FieldRo 30
 expect-mode off
 sleep 3
@@ -138,9 +141,13 @@ repeat 8 until-scene FieldRo
   send press a            # Scratch
   expect-log ^action: battle-move1 ok 10
   mark
-  sleep 20                # the turn; EXP / level-up messages advance with B
-  if-scene Battle send press b
-  sleep 5
+  # The turn, then EXP and level-up windows (Exp. Share): B advances them.
+  # A move-learning question ("Forget an old move?") isn't answered here;
+  # if one comes, the next expect fails with the prompt helper in the log.
+  repeat 7
+    sleep 4
+    if-scene Battle send press b
+  end
 end
 expect-mode off
 shot field

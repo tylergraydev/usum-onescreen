@@ -67,6 +67,9 @@ namespace Screens
         // After a catch, out of the battle: the Pokédex scene asks whether
         // to nickname the new Pokémon (Yes/No on the bottom screen).
         bool afterCatch = false;
+        // menu == Other: the game's screen object's vtable (module-relative
+        // in a CRO), for the log.
+        u32 otherVtable = 0;
     };
 
     enum class BattlePage : u8
@@ -124,6 +127,11 @@ namespace Screens
 
         // Whether the page should be on screen now.
         bool Visible(void) const;
+        // A game screen in battle not reached from the Bag or Pokémon list
+        // (a question such as learning a move): shown after PromptShowFrames
+        // so intro objects don't flash it.
+        bool Prompt(void) const;
+        static const u32 PromptShowFrames = 90;
         // Where Draw draws for the current page (empty when hidden).
         UI::Rect Area(void) const;
         // Draws the current page inside Area(), in screen coordinates.
@@ -140,6 +148,7 @@ namespace Screens
         BattlePage m_page = BattlePage::Hidden;
         GameMenu m_menu = GameMenu::None;
         bool m_afterCatch = false;
+        bool m_fromGame = false;    // this page came from the game's Bag / Pokémon list
         u8 m_cursor = 0;
         u32 m_stable = 0;           // frames the game's menu has been up
         bool m_pending = false;     // a choice was sent, the game hasn't moved yet
