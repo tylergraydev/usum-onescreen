@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <vector>
 
 #include "UI/Raster.hpp"
 
@@ -60,7 +61,6 @@ namespace UI
     {
     public:
         static constexpr s32 Slots = 256;
-        static constexpr s32 MaxGlyphW = 24, MaxGlyphH = 30;
 
         GlyphCache(float scale) : m_scale(scale) {}
 
@@ -86,7 +86,6 @@ namespace UI
             u32   codePoint;
             bool  used;
             Glyph glyph;
-            u8    mask[MaxGlyphW * MaxGlyphH];
         };
 
         s32 Scaled(s32 v) const;
@@ -94,6 +93,10 @@ namespace UI
         const FontSource *m_font = nullptr;
         float             m_scale;
         Slot              m_slots[Slots] = {};
+        // Glyph masks, one scaled cell (m_maskW x m_maskH) per slot, allocated
+        // when a font is set: ~69 KB at 3/5, ~123 KB at 4/5 for 24x30 cells.
+        std::vector<u8>   m_masks;
+        s32               m_maskW = 0, m_maskH = 0;
     };
 
     // Decodes the next UTF-8 character at text[i] and advances i. Invalid
