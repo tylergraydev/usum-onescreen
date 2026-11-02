@@ -1,6 +1,6 @@
 """Take a screenshot of the running game through the plugin, no screen access needed.
 
-Usage: py -3 -I tools/shot.py [name]
+Usage: py -3 -I tools/shot.py [--instance NAME] [name]
 
 Creates the request file on Azahar's emulated SD card, waits for the plugin to
 write both screens, and saves them as PNGs under analysis/private/shots/.
@@ -13,9 +13,23 @@ import time
 import zlib
 from pathlib import Path
 
-SDMC = Path(os.environ["APPDATA"]) / "Azahar" / "sdmc"
-REQUEST = SDMC / "usum-shot.req"
-OUTPUTS = {"top": SDMC / "usum-shot-top.ppm", "bottom": SDMC / "usum-shot-bottom.ppm"}
+
+def sdmc_for(argv):
+    """Pop --instance NAME from argv; return that instance's emulated SD (see tools/instance.py)."""
+    if "--instance" not in argv:
+        return Path(os.environ["APPDATA"]) / "Azahar" / "sdmc"
+    i = argv.index("--instance")
+    if i + 1 >= len(argv):
+        sys.exit("--instance needs a name")
+    name = argv.pop(i + 1)
+    argv.pop(i)
+    sdmc = (Path(__file__).resolve().parent.parent / "analysis" / "private" / "instances"
+            / name / "azahar" / "user" / "sdmc")
+    if not sdmc.is_dir():
+        sys.exit(f"no instance '{name}' (see tools/instance.py)")
+    return sdmc
+
+
 SHOTS = Path(__file__).resolve().parent.parent / "analysis" / "private" / "shots"
 
 
@@ -41,20 +55,22 @@ def write_png(path, width, height, rgb):
     path.write_bytes(png)
 
 
-def main(name):
-    for p in OUTPUTS.values():
+def main(name, sdmc):
+    request = sdmc / "usum-shot.req"
+    outputs = {"top": sdmc / "usum-shot-top.ppm", "bottom": sdmc / "usum-shot-bottom.ppm"}
+    for p in outputs.values():
         p.unlink(missing_ok=True)
-    REQUEST.write_bytes(b"")
+    request.write_bytes(b"")
 
     deadline = time.time() + 15
-    while REQUEST.exists() and time.time() < deadline:
+    while request.exists() and time.time() < deadline:
         time.sleep(0.2)
-    if REQUEST.exists():
-        REQUEST.unlink(missing_ok=True)
+    if request.exists():
+        request.unlink(missing_ok=True)
         sys.exit("no answer from the plugin within 15 s (is the game running with the plugin?)")
 
     SHOTS.mkdir(parents=True, exist_ok=True)
-    for screen, ppm in OUTPUTS.items():
+    for screen, ppm in outputs.items():
         width, height, rgb = read_ppm(ppm)
         out = SHOTS / f"{name}-{screen}.png"
         write_png(out, width, height, rgb)
@@ -62,4 +78,6 @@ def main(name):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else time.strftime("%Y%m%d-%H%M%S"))
+    argv = sys.argv[1:]
+    sdmc = sdmc_for(argv)
+    main(argv[0] if argv else time.strftime("%Y%m%d-%H%M%S"), sdmc)
