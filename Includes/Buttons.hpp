@@ -29,6 +29,28 @@ namespace OneScreen
     std::string ButtonsStatus(void);
 
     // Keys held in the game's latest pad read: real input plus anything
-    // injected. Used to follow what the game itself reacts to.
+    // injected, after capture. Used to follow what the game itself reacts to.
     u32 ButtonsGameHeld(void);
+
+    // Input capture for plugin menus: while begun, the game's pad and touch
+    // readers no longer see `keys`, the circle pad (zeroed, direction bits
+    // cleared) and/or touch. Injected test input is captured the same way.
+    // Calling Begin again replaces the set. A key still held when it leaves
+    // the set stays hidden until it is released, so the game never sees a
+    // fresh press of it; touch likewise until lifted.
+    void InputCaptureBegin(u32 keys, bool captureStick, bool captureTouch);
+    void InputCaptureEnd(void);
+
+    // The current request as one word: keys, plus CaptureStickBits and
+    // CaptureTouchBit (InputCapture.hpp). Read by the touch hook.
+    u32 InputCaptureRequest(void);
+
+    // Real input for plugin menus while captured: the game's latest pad read
+    // before masking, so injected `press`/`stick` commands drive menus too.
+    // Pressed is the edge since the previous ButtonsUpdate. These follow the
+    // game's own reads; if the game stops reading the pad they go stale, and
+    // Controller (CTRPF, reads HID directly) is the fallback.
+    u32 CaptureRealHeld(void);
+    u32 CaptureRealPressed(void);
+    void CaptureRealStick(s32 &x, s32 &y);
 }
