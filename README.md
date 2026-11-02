@@ -2,7 +2,7 @@
 
 A 3GX plugin (CTRPluginFramework) that makes Pokémon Ultra Sun / Ultra Moon playable on the top screen only, in Azahar with the 3GX plugin loader enabled. Plan: https://claude.ai/artifact/LxD6pmGFR8x91NrRRF8P7R
 
-**Status:** Phase 2 under way. The goal is native menus on the top screen; the X menu has one (`Sources/Screens/XMenu.cpp`). Until every screen has one, **L+R** shows the bottom screen on the top screen as a half-size panel or a full view (`Sources/Panel.cpp`, copied on the emulated GPU), and a touch cursor (`Sources/Cursor.cpp`) on it: **C-stick** moves it, **ZL** touches. The panel can also follow the scene automatically (`auto = on`, `Sources/AutoPanel.cpp`). See [docs/PLAYING.md](docs/PLAYING.md).
+**Status:** Phase 2 under way. The goal is native menus on the top screen; the X menu (`Sources/Screens/XMenu.cpp`) and the nickname keyboard (`Sources/Screens/Keyboard.cpp`) have one. Until every screen has one, **L+R** shows the bottom screen on the top screen as a half-size panel or a full view (`Sources/Panel.cpp`, copied on the emulated GPU), and a touch cursor (`Sources/Cursor.cpp`) on it: **C-stick** moves it, **ZL** touches. The panel can also follow the scene automatically (`auto = on`, `Sources/AutoPanel.cpp`). See [docs/PLAYING.md](docs/PLAYING.md).
 
 **Players:** see [docs/PLAYING.md](docs/PLAYING.md) for install, controls and bug reports, and [CHANGELOG.md](CHANGELOG.md) for what's new.
 
@@ -107,6 +107,7 @@ CTRPF opens its menu with **Select** (its default menu hotkey; `Preferences::Men
 - `perf on` / `perf off` / `perf`: panel timing (off by default). `perf` logs emulated time, frames, and the mean/max time spent copying the bottom screen and drawing the panel since the last `perf`. `py -3 -I tools/perf.py --instance NAME` runs the measurement in `docs/PERF.md`.
 - `action NAME` runs a bottom-screen action (`open-pokedex`, `open-party`, `open-bag`, `battle-run`, `close`) with the player's input captured meanwhile; `action status`, `action cancel`, `action list`. Results are logged as `action: NAME ok …` / `FAILED …`. See `docs/ACTIONS.md`.
 - `xmenu on|off|status`, `xmenu select NAME`, `xmenu open NAME`: the native X menu (X in the field shows it on the top screen with the panel off; D-pad/L/R move, A opens through the action layer, B closes). Logs `xmenu: shown`, `cursor NAME`, `open NAME`, `hidden`. See `docs/XMENU.md`.
+- `keyboard on|off|status|read`: the native keyboard (the game's keyboard, e.g. a nickname after a catch, shows on the top screen with the panel off; D-pad moves, A types, B deletes, Y Shift, X space, START to OK). `read` looks for the game's keyboard now and logs its text. Logs `keyboard: shown`, `key NAME`, `text "…" (n of max)`, `hidden`. See `docs/KEYBOARD.md`.
 - `uidemo on|off|shade|direct` shows or hides a sample plugin-drawn menu on the top screen (off by default), for checking the UI drawing layer: `on` draws it into an off-screen layer when it changes and copies it every frame, `shade` adds a translucent full-screen shade (reads the framebuffer), `direct` redraws everything on the framebuffer every frame (the old way). `perf` also logs the demo's time per frame; `py -3 -I tools/perf.py --instance NAME --modes off,ui:on,ui:shade` compares them (`docs/UI.md`). `uifont` logs the system font's metrics and the glyph cache counters.
 - `py -3 -I tools/shot.py [name]` asks the running plugin for a screenshot and saves `analysis/private/shots/<name>-top.png` and `-bottom.png`. The top shot includes anything the plugin draws.
 
@@ -183,6 +184,7 @@ A scenario is a text file, one step per line; `#` starts a comment (except in `e
 | `if-scene SCENE STEP` | runs STEP only if the scene is SCENE now |
 | `include FILE` | inlines FILE's steps (looked up next to the scenario, then in `scenarios/`; `.txt` optional) |
 | `repeat N [until-scene SCENE]` … `end` | runs the block N times; with `until-scene`, stops once that is the scene (checked before each step) and fails if it never is |
+| `repeat N until-log REGEX` … `end` | the same, until a log line since the mark matches REGEX |
 
 Log guard: after every step it reads what was newly logged to the instance's `user/log/azahar_log.txt` and `usum-onescreen.log`, and fails that step on an Azahar `<Critical>`, `Assertion Failed`, `Unreachable code` or `unmapped read/write` line, or on a plugin `hooks: FAILED`, `MISMATCH at`, `unreadable at`, a `cursor:`/`buttons:` hook that returned non-zero, or `unsupported game`. Azahar's `<Error>` lines (unimplemented services) are normal and ignored. `--no-guard` turns it off.
 
@@ -193,6 +195,7 @@ Log guard: after every step it reads what was newly logged to the instance's `us
 - `actions`: each action (`docs/ACTIONS.md`) from its start point, checking the scene and panel mode it ends in, B held through `open-bag` (captured, so the Bag stays open), then a wild battle and `battle-run`.
 - `xmenu-touch-close`: Town Map from Rotom's screen and back (full, then off with no panel flash); X menu opened with X and closed by tapping its back button (panel, then off); again after visiting Party. Checks that auto panel follows the field state, not X/B presses.
 - `native-xmenu`: X shows the native X menu with the panel off; D-pad/L/R moves; every entry opened with A and backed out of (Save stops at the game's confirm dialog and backs out with B); cursor memory after B; Festival Plaza in and out; B closes to the field with input given back. See `docs/XMENU.md`.
+- `native-nickname`: into the tall grass, catches a wild Pokémon with Poké Balls (taps), Yes to the nickname question, then types "Bobo" on the native keyboard with the D-pad and A only (panel off), X/Y/B, the 12-character limit, START → OK → A; the game says "Bobo has been sent to a Box!" (shot) and input is given back. See `docs/KEYBOARD.md`.
 - `wild-battle-run`: out of the Pokémon Center, south into the tall grass, back and forth until `Battle` (panel), Run by tap, back to `FieldRo` (off). One long circle-pad push stops partway down the path, so it walks in short steps.
 
 Screenshots come before every A press in a menu (only the Continue menu here).
@@ -222,5 +225,5 @@ py -3 -I tools/regress.py --instance a --run 41489129071 boot-to-field
 - `docs/PORTING.md`: moving the plugin to another build (the Ultra Moon checklist). `tools/sigscan.py` finds every offset-table address in a new `code.bin` from the byte signatures in `signatures/usum.json` and prints a ready-to-paste `Game.cpp` entry.
 - `Sources/Party.cpp`, `Sources/PartyData.cpp`: the `party` and `bag` readers; `PartyData` (Gen 7 Pokémon decryption, bag slots, message lines) is pure and tested by `tests/party_data_test.cpp`. See `docs/RE3-party-bag.md`.
 - `docs/RE2-text.md`: how the game stores and looks up text (species/move/item names), with `tools/romfs_text.py` to extract and decode it from your own dump into `analysis/private/`.
-- `docs/LAYOUTS.md`, `layouts/usum-v1.2.json`: verified tap points and button bounds on the game's bottom screens (field, X menu, Party, Bag, Pokédex, battle), for driving the hidden bottom screen from plugin menus. `tools/layout_measure.py` measures button bounds on a screenshot. `tools/gen_layouts.py` turns the JSON into `Includes/Layouts.hpp` (generated, committed; the host tests check it is current).
+- `docs/LAYOUTS.md`, `layouts/usum-v1.2.json`: verified tap points and button bounds on the game's bottom screens (field, X menu, Party, Bag, Pokédex, battle, keyboard), for driving the hidden bottom screen from plugin menus. `tools/layout_measure.py` measures button bounds on a screenshot. `tools/gen_layouts.py` turns the JSON into `Includes/Layouts.hpp` (generated, committed; the host tests check it is current).
 - `Sources/ActionQueue.cpp`, `Includes/ActionQueue.hpp`: the action layer's pure sequencing (steps, runner, built-in actions; tested by `tests/`); `Sources/Actions.cpp` is its CTRPF glue (`docs/ACTIONS.md`).

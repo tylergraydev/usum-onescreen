@@ -1,0 +1,162 @@
+# Native keyboard (W5-1, Screens/Keyboard.hpp): catch a wild Pokémon, say
+# Yes to "Would you like to give X a nickname?", and name it with buttons
+# only on the top-screen keyboard, the panel off the whole time:
+#   - D-pad + A type "Bobo" (the game starts with shift on: B is a capital)
+#   - X types a space, Y turns shift on, B deletes (and the game turns shift off)
+#   - A past the 12-character limit is refused; B deletes back to "Bobo"
+#   - START moves to OK, A confirms: "Bobo has been sent to a Box!" (shot)
+# The keyboard's log lines are read back from the game's text object.
+include common/boot
+
+# Out of the door and into the tall grass (as wild-battle-run.txt).
+mark
+send stick 0 -150 120
+expect-log ^scene: \(none\) 15
+wait-scene FieldRo 30
+sleep 6
+repeat 8 until-scene Battle
+  send stick 0 -150 60
+  sleep 1.5
+end
+
+# Catch: Bag -> Poké Balls tab -> the first ball -> Use, until the Pokédex
+# scene comes up (taps on the hidden bottom screen, docs/LAYOUTS.md). If the
+# wild Pokémon runs, find another one.
+repeat 3 until-scene Zukan
+  repeat 40 until-scene Battle  # back and forth in the grass
+    send stick -150 0 20
+    sleep 0.5
+    send stick 150 0 20
+    sleep 0.5
+  end
+  expect-mode off
+  sleep 12                      # battle intro, until the command menu shows
+  shot battle
+  mark
+  repeat 12 until-log ^scene: (Zukan|FieldRo)$
+    if-scene Battle send move 35 165; tap 6   # Bag
+    sleep 2
+    if-scene Battle send move 253 228; tap 6  # Poké Balls tab
+    sleep 2
+    if-scene Battle send move 235 16; tap 6   # the first ball (Poké Ball)
+    sleep 2
+    if-scene Battle send move 182 222; tap 6  # Use
+    sleep 30                    # the throw, the shakes, the opponent's turn
+  end
+  sleep 4
+end
+expect-mode off
+
+# A new species shows its Pokédex page first; A goes on to the nickname
+# question, where the game's cursor is on Yes.
+mark
+repeat 6 until-log ^keyboard: shown$
+  sleep 5
+  shot before-a
+  send press a
+end
+expect-log ^keyboard: game keyboard found \(stack \d \+[0-9A-F]+ \+[0-9A-F]+\), 0 of 12: ""$
+expect-mode off
+reject-log ^keyboard: .*NO MEMORY
+sleep 1
+shot keyboard
+
+# B: the cursor starts on "!" like the game's.
+mark
+send press down
+send press down
+send press down
+send press right
+send press right
+send press right
+send press right
+expect-log ^keyboard: cursor b$
+send press a
+expect-log ^keyboard: text "B" \(1 of 12\)$
+expect-log ^keyboard: shift off$
+# o
+mark
+send press up
+send press up
+send press right
+send press right
+send press right
+send press right
+expect-log ^keyboard: cursor o$
+send press a
+expect-log ^keyboard: text "Bo" \(2 of 12\)$
+# b
+mark
+send press down
+send press down
+send press left
+send press left
+send press left
+send press left
+expect-log ^keyboard: cursor b$
+send press a
+expect-log ^keyboard: text "Bob" \(3 of 12\)$
+# o
+mark
+send press up
+send press up
+send press right
+send press right
+send press right
+send press right
+expect-log ^keyboard: cursor o$
+send press a
+expect-log ^keyboard: text "Bobo" \(4 of 12\)$
+sleep 1
+shot bobo
+
+# X, Y, B.
+mark
+send press x
+expect-log ^keyboard: text "Bobo " \(5 of 12\)$
+send press y
+expect-log ^keyboard: shift on$
+mark
+send press b
+expect-log ^keyboard: text "Bobo" \(4 of 12\)$
+expect-log ^keyboard: shift off$
+
+# The limit: 8 more o's fill it, the 9th is refused.
+mark
+repeat 9
+  send press a
+end
+expect-log ^keyboard: text "Bobooooooooo" \(12 of 12\)$
+expect-log ^keyboard: o refused, full \(12 of 12\)$
+shot full
+mark
+repeat 8
+  send press b
+end
+expect-log ^keyboard: text "Bobo" \(4 of 12\)$
+
+# START -> OK, A confirms.
+mark
+send press start
+expect-log ^keyboard: cursor ok$
+sleep 1
+shot ok
+send press a
+expect-log ^action: keyboard-ok ok
+expect-log ^keyboard: game keyboard gone, last text "Bobo"$ 10
+expect-log ^keyboard: hidden$
+sleep 2
+shot sent                       # "Bobo has been sent to a Box!"
+send keyboard status
+expect-log ^keyboard: on, hidden, .*text "Bobo" \(4 of 12\), 0 queued$
+expect-log ^buttons: .*capture 00000000
+reject-log ^action: .* FAILED
+
+# Through the messages back to the field.
+repeat 10 until-scene FieldRo
+  send press b
+  sleep 3
+end
+expect-mode off
+shot field
+stop
