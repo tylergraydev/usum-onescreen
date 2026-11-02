@@ -64,6 +64,9 @@ namespace Screens
         u8 partyLevel = 0;
         u16 partyHp = 0, partyMaxHp = 0;
         bool actionRunning = false; // an action is driving the bottom screen
+        // After a catch, out of the battle: the Pokédex scene asks whether
+        // to nickname the new Pokémon (Yes/No on the bottom screen).
+        bool afterCatch = false;
     };
 
     enum class BattlePage : u8

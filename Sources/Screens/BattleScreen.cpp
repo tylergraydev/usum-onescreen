@@ -165,11 +165,23 @@ namespace OneScreen
     void BattleScreenUpdate(u32 sceneManager, const std::string &scene, std::vector<std::string> &log)
     {
         s_frames++;
+        // A catch ends in the Pokédex scene (Zukan) with the nickname
+        // question; the helper stays up there until the next scene.
+        static std::string lastScene;
+        static bool afterCatch = false;
+        if (!scene.empty() && scene != lastScene)
+        {
+            afterCatch = scene == SceneDex && lastScene == SceneBattle;
+            lastScene = scene;
+        }
         const bool inBattle = s_enabled && scene == SceneBattle;
         if (inBattle && s_frames % 2 == 0)
             ReadSnapshot(sceneManager);
         else if (!inBattle)
+        {
             s_snap = Screens::BattleSnapshot();
+            s_snap.afterCatch = s_enabled && afterCatch && scene == SceneDex;
+        }
         s_snap.actionRunning = ActionRunning();
 
         const Screens::BattlePage before = s_menu.Page();
