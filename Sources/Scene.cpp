@@ -11,6 +11,40 @@ namespace OneScreen
     static const u32 CroMagicFixed = 0x44584946;   // "FIXD"
     static const u32 CroArea       = 0x006D6000;   // modules load above the main image's bss
 
+    u32 CroModuleOf(u32 address)
+    {
+        if (address < CroArea)
+            return 0;
+        // Modules are page aligned; walk back to the header of the one that
+        // contains the address (no module seen so far is larger than 2 MB).
+        for (u32 page = address & ~0xFFFu; page >= CroArea && address - page < 0x200000; page -= 0x1000)
+        {
+            u32 magic = 0;
+            if (Process::Read32(page + 0x80, magic) && magic == CroMagicFixed)
+                return page;
+        }
+        return 0;
+    }
+
+    std::string CroModuleName(u32 module)
+    {
+        u32 namePtr = 0;
+        if (module == 0 || !Process::Read32(module + 0x84, namePtr))
+            return "";
+        std::string name;
+        for (u32 i = 0; i < 32; i++)
+        {
+            u32 word = 0;
+            if (!Process::Read32((namePtr + i) & ~3u, word))
+                break;
+            const char c = (char)(word >> (((namePtr + i) & 3) * 8));
+            if (c == '\0')
+                break;
+            name += c;
+        }
+        return name;
+    }
+
     std::string SceneModule(u32 sceneManager)
     {
         u32 manager = 0, scene = 0, vtable = 0;
@@ -24,30 +58,6 @@ namespace OneScreen
         if (vtable < CroArea)
             return Utils::Format("main:%08lX", vtable);
 
-        // Modules are page aligned; walk back to the header of the one that
-        // contains the vtable (no module seen so far is larger than 1 MB).
-        for (u32 page = vtable & ~0xFFFu; page >= CroArea && vtable - page < 0x200000; page -= 0x1000)
-        {
-            u32 magic = 0;
-            if (!Process::Read32(page + 0x80, magic) || magic != CroMagicFixed)
-                continue;
-
-            u32 namePtr = 0;
-            if (!Process::Read32(page + 0x84, namePtr))
-                return "";
-            std::string name;
-            for (u32 i = 0; i < 32; i++)
-            {
-                u32 word = 0;
-                if (!Process::Read32((namePtr + i) & ~3u, word))
-                    break;
-                const char c = (char)(word >> (((namePtr + i) & 3) * 8));
-                if (c == '\0')
-                    break;
-                name += c;
-            }
-            return name;
-        }
-        return "";
+        return CroModuleName(CroModuleOf(vtable));
     }
 }
