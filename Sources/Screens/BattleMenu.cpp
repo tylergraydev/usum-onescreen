@@ -198,7 +198,11 @@ namespace Screens
         {
             // The action gave up (it logs why); let the player choose again.
             m_pending = false;
-            m_note = "No answer from the game, try again";
+            // Still on the move list: the game refused the move (seen with
+            // Disable; a Taunt or Encore would do the same). Elsewhere the
+            // taps were lost.
+            m_note = m_page == BattlePage::Moves ? "The game refused that move, pick another"
+                                                 : "No answer from the game, try again";
         }
         if (snap.actionRunning || m_pending)
             return out;

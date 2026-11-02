@@ -183,7 +183,7 @@ static void TestCommand(void)
     Idle(lost, snap, BattleMenu::CommandSettleFrames);
     CHECK(lost.Update(snap, BattleKeys::A).action != nullptr);
     Idle(lost, snap, BattleMenu::PendingFrames + 1);
-    CHECK(!lost.Pending() && !lost.Note().empty());
+    CHECK(!lost.Pending() && lost.Note() == "No answer from the game, try again");
     CHECK(lost.Update(snap, BattleKeys::A).action != nullptr);
 }
 
@@ -196,6 +196,14 @@ static void TestMoves(void)
     menu.Update(snap, BattleKeys::DDown);
     const BattleMenuOutput out = menu.Update(snap, BattleKeys::A);
     CHECK(out.action != nullptr && std::strcmp(out.action, "battle-move2") == 0);
+
+    // A refused move (Disable): the list stays, the note says so.
+    BattleMenu refused;
+    refused.Update(snap, 0);
+    Idle(refused, snap, BattleMenu::MovesSettleFrames);
+    CHECK(refused.Update(snap, BattleKeys::A).action != nullptr);
+    Idle(refused, snap, BattleMenu::PendingFrames + 1);
+    CHECK(!refused.Pending() && refused.Note() == "The game refused that move, pick another");
 
     // B goes back to the commands.
     BattleMenu back;

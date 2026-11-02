@@ -110,7 +110,7 @@ namespace Screens
         // long a choice may stay unanswered before the menu takes input again.
         static const u32 CommandSettleFrames = 30;
         static const u32 MovesSettleFrames = 10;
-        static const u32 PendingFrames = 400;
+        static const u32 PendingFrames = 310;   // just past the action's 3 taps (~297 frames)
         // After a move or an item the game's command menu shows for a few
         // frames before the turn starts; the command bar waits this long
         // before it shows.
