@@ -47,8 +47,10 @@ namespace OneScreen
         view.zone = where.zone;
         view.indoor = where.zoneData && where.indoor;
         view.picture = where.mapView != 0;
-        view.hasIsland = where.mapView != 0;
-        view.island = where.mapIndex;
+        // The zone's own map (zone data +0x4E, map index + 1), else the
+        // Rotom map view's index.
+        view.hasIsland = (where.zoneData && where.mapArea != 0) || where.mapView != 0;
+        view.island = where.zoneData && where.mapArea != 0 ? where.mapArea - 1u : where.mapIndex;
         view.x = (int)std::lround(where.x);
         view.z = (int)std::lround(where.z);
         view.yaw = where.yaw;
