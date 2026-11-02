@@ -11,6 +11,7 @@
 #include "InputCapture.hpp"
 #include "Panel.hpp"
 #include "Scene.hpp"
+#include "Settings.hpp"
 #include "Shot.hpp"
 
 namespace CTRPluginFramework
@@ -18,6 +19,7 @@ namespace CTRPluginFramework
     static const OneScreen::GameInfo *s_game = nullptr;
 
     static const char *LogPath = "/usum-onescreen.log";
+    static const char *SettingsPath = "/usum-onescreen.ini";
 
     // Runs before the game starts. Keep it short: nothing else is set up yet.
     void PatchProcess(FwkSettings &settings)
@@ -41,6 +43,50 @@ namespace CTRPluginFramework
             file.WriteLine(line);
             file.Close();
         }
+    }
+
+    // Reads /usum-onescreen.ini (writing the commented default if it is
+    // missing) and makes it the settings in use. Problems go to the log; a
+    // file that can't be read leaves the defaults.
+    static void LoadSettings(void)
+    {
+        std::string text;
+        if (File::Exists(SettingsPath) != 1)
+        {
+            text = OneScreen::DefaultSettingsText();
+            File file;
+            if (File::Open(file, SettingsPath, File::WRITE | File::CREATE | File::TRUNCATE | File::SYNC) == File::SUCCESS)
+            {
+                file.Write(text.data(), text.size());
+                file.Close();
+                WriteLog(Utils::Format("settings: wrote defaults to %s", SettingsPath), false);
+            }
+            else
+                WriteLog(Utils::Format("settings: can't write %s, using defaults", SettingsPath), false);
+        }
+        else
+        {
+            File file;
+            if (File::Open(file, SettingsPath, File::READ) == File::SUCCESS)
+            {
+                text.resize(file.GetSize());
+                if (!text.empty())
+                    file.Read(&text[0], text.size());
+                file.Close();
+            }
+            else
+                WriteLog(Utils::Format("settings: can't open %s, using defaults", SettingsPath), false);
+        }
+
+        std::vector<std::string> warnings;
+        const OneScreen::Settings settings = OneScreen::ParseSettings(text, warnings);
+        for (const std::string &w : warnings)
+            WriteLog(Utils::Format("settings: %s %s", SettingsPath + 1, w.c_str()), false);
+        if (settings.panelSize == OneScreen::PanelSize::TwoThirds)
+            WriteLog("settings: size 2/3 is not drawn yet, using 1/2", false);
+        OneScreen::SetSettings(settings);
+        OneScreen::AutoPanelSetEnabled(settings.autoPanel);
+        WriteLog("settings: " + OneScreen::DescribeSettings(settings), false);
     }
 
     // Test commands, one per line, in /usum-cmd.txt on the SD card. The file is
@@ -263,15 +309,16 @@ namespace CTRPluginFramework
     }
 
     // Runs every frame while the menu is closed. The panel follows the scene
-    // (AutoPanel); ZR cycles it by hand (off -> panel -> full) until the next
-    // scene change. C-stick moves the touch cursor and ZL touches. Scene and
-    // panel changes go to the log.
+    // (AutoPanel); panel_key (ZR) cycles it by hand (off -> panel -> full)
+    // until the next scene change. C-stick moves the touch cursor and ZL
+    // touches (cursor_move, touch_key). Scene and panel changes go to the log.
     static void PanelEntry(MenuEntry *entry)
     {
         static u32 frames = 0;
         static std::string scene;
 
-        if (Controller::IsKeyPressed(Key::ZR))
+        const u32 panelKey = OneScreen::GetSettings().panelKey;
+        if (panelKey != 0 && Controller::IsKeysPressed(panelKey))
         {
             OneScreen::CyclePanelMode();
             OneScreen::AutoPanelManualOverride();
@@ -305,13 +352,66 @@ namespace CTRPluginFramework
         PollCommands();
     }
 
+    // Menu entries below are actions: A in the plugin menu (opened with
+    // Select, CTRPF's default menu hotkey) runs them. Their names show the
+    // current state and are refreshed each time the menu opens.
+    static MenuEntry *s_autoEntry = nullptr;
+
+    static void RefreshMenuNames(void)
+    {
+        if (s_autoEntry != nullptr)
+            s_autoEntry->Name() = std::string("Auto panel: ") + (OneScreen::AutoPanelEnabled() ? "on" : "off");
+    }
+
+    static bool OnMenuOpening(void)
+    {
+        RefreshMenuNames();
+        return true;
+    }
+
+    // Until the next boot or reload; the file's `auto` is not rewritten.
+    static void ToggleAutoPanel(MenuEntry *entry)
+    {
+        OneScreen::AutoPanelSetEnabled(!OneScreen::AutoPanelEnabled());
+        RefreshMenuNames();
+        WriteLog(OneScreen::AutoPanelStatus() + " (menu)", false);
+    }
+
+    static void ShowSettings(MenuEntry *entry)
+    {
+        const std::string text = OneScreen::DescribeSettings(OneScreen::GetSettings())
+                                 + "\nauto panel now: " + (OneScreen::AutoPanelEnabled() ? "on" : "off");
+        MessageBox box("Settings (/usum-onescreen.ini)", text);
+        box();
+    }
+
+    static void ReloadSettings(MenuEntry *entry)
+    {
+        LoadSettings();
+        RefreshMenuNames();
+        const std::string text = OneScreen::DescribeSettings(OneScreen::GetSettings())
+                                 + "\nProblems, if any, are in usum-onescreen.log.";
+        MessageBox box("Settings reloaded", text);
+        box();
+    }
+
     static void InitMenu(PluginMenu &menu)
     {
         MenuEntry *panel = new MenuEntry("Bottom screen on top (auto, ZR to override)", PanelEntry,
                                          "Shows the bottom screen on the top screen. ZR cycles: off, small panel, full view. "
-                                         "C-stick moves the touch cursor, ZL touches.");
+                                         "C-stick moves the touch cursor, ZL touches. Keys are set in usum-onescreen.ini.");
         menu += panel;
         panel->Enable();
+
+        s_autoEntry = new MenuEntry("Auto panel", nullptr, ToggleAutoPanel,
+                                    "A: switch between following the scene and staying as set. "
+                                    "Lasts until the next boot; set auto in usum-onescreen.ini to keep it.");
+        menu += s_autoEntry;
+        menu += new MenuEntry("View settings", nullptr, ShowSettings,
+                              "A: show the settings in use, read from /usum-onescreen.ini at boot.");
+        menu += new MenuEntry("Reload settings file", nullptr, ReloadSettings,
+                              "A: read /usum-onescreen.ini again. Problems go to usum-onescreen.log.");
+        RefreshMenuNames();
     }
 
     int main(void)
@@ -339,6 +439,8 @@ namespace CTRPluginFramework
             return 0;
         }
 
+        LoadSettings();
+
         OneScreen::StartPanel(OneScreen::PanelMode::Off);
 
         std::string cursorReport;
@@ -353,6 +455,7 @@ namespace CTRPluginFramework
                                           "Top-screen-only play for Ultra Sun / Ultra Moon.");
 
         menu->SynchronizeWithFrame(true);
+        menu->OnOpening = OnMenuOpening;
 
         InitMenu(*menu);
 
