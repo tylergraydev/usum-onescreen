@@ -89,23 +89,28 @@ Slot menu (right side, 28 px pitch; inner highlight measured at x 223-308, outer
 
 | Button | Rect | Tap | Does | Verified |
 |---|---|---|---|---|
-| Item row 1-7 | x 157-315, y 4+28k to 29+28k (k = 0-6) | 235, 16+28k (16, 44, 72, 100, 128, 156, 184) | item menu for that row | tap: rows 1, 2, 4, 7 (names match); rows 3, 5, 6 measured (same pitch) |
+| Item row 1-7 | x 157-315, y 4+28k to 29+28k (k = 0-6) | 235, 16+28k (16, 44, 72, 100, 128, 156, 184) | item menu for that row | tap: all 7 (rows 3, 5, 6 in P2-4: Poké Ball, Burn Heal, Ice Heal menus) |
 | Half-visible row 8 | 157,200-315,212 | 235,210 | nothing | none |
 | Pocket tabs | 24 px wide from x 122, y 216-239 | x 134+24k, y 230 | k = 0 Rotom Powers, 1 Medicine, 2 Items, 3 TMs, 4 Berries, 5 Key Items, 6 Free Space | tap, all 7 (pocket name read on the top screen) |
 | Scroll bar | 316,10-318,210 | 317,190 | display only: tap and drag did nothing | none |
 | Back | 0,214-31,234 | 15,224 | back to the X menu | tap |
 
 - **Scrolling**: no touch scrolling found (scroll bar tap/drag and the half-visible row do nothing; dragging a row reorders items). D-pad Up/Down scrolls once the cursor passes row 7, and wraps (Up on row 1 jumps to the last item).
-- The party column on the left (x 0-150) was not tapped.
+- The party column on the left (x 0-150) only takes taps while the Bag asks "Which Pokémon...?" (below).
 
-Item menu (Medicine shown; entries depend on the item; 28 px pitch):
+Item menu (`bag_item_menu`): it grows upwards from Cancel, so its buttons are named by position from the bottom; which entries it has depends on the item (they are in the Bag param, docs/BAG.md). 28 px pitch:
 
 | Button | Rect | Tap | Does | Verified |
 |---|---|---|---|---|
-| Use this item | 161,125-316,150 | 236,138 | use | measured: rules forbid item use |
-| Give to Pokémon | 161,153-316,178 | 236,166 | give | measured: changes held items |
-| Move to Free Space | 161,181-316,206 | 236,194 | move | measured: changes the bag |
-| Cancel | 161,209-316,236 | 236,222 | closes the menu | tap |
+| from_bottom5 | 161,97-316,122 | 236,110 | no 5-entry menu seen | measured |
+| from_bottom4 | 161,125-316,150 | 236,138 | Use in 4-entry menus (Medicine, Escape Rope, Oran Berry) | tap (Potion: Use) |
+| from_bottom3 | 161,153-316,178 | 236,166 | Give in 3- and 4-entry menus; Use for TMs | tap (Quick Claw, Escape Rope: Give) |
+| from_bottom2 | 161,181-316,206 | 236,194 | Move to Free Space in every menu seen | measured: changes the bag |
+| from_bottom1 | 161,209-316,236 | 236,222 | Cancel | tap |
+
+Party pick (`bag_party`, after Use or Give: "Which Pokémon do you want to use this item on?"): slots in party order, 32 px pitch, x 0-150; tap x 70, y 18+32k. A tap on a slot moves the cursor there; a tap on the slot under the cursor chooses it. All six tapped (cursor moves; slots 2 and 4 also chosen).
+
+Yes / No (`bag_yes_no`, Give to a Pokémon that holds an item: "Would you like to switch the two items?"): Yes 206,94-310,120 tap 258,107 (tap: switched); No 206,122-310,148 tap 258,135 (tap: back to the list, nothing switched).
 
 ## Battle command (`Battle`)
 

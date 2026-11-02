@@ -111,10 +111,10 @@
       "buttons": {
         "item_row1": {"rect": [157, 4, 315, 29], "tap": [235, 16], "does": "opens the item menu for the 1st visible row", "verified": "tap", "evidence": "re5-bag-row-y16 (Awakening, list scrolled)"},
         "item_row2": {"rect": [157, 32, 315, 57], "tap": [235, 44], "does": "item menu, row 2", "verified": "tap", "evidence": "re5-bag-row2 (Paralyze Heal)"},
-        "item_row3": {"rect": [157, 60, 315, 85], "tap": [235, 72], "does": "item menu, row 3", "verified": "measured", "why": "same 28 px pitch as the tapped rows 1, 2, 4, 7"},
+        "item_row3": {"rect": [157, 60, 315, 85], "tap": [235, 72], "does": "item menu, row 3", "verified": "tap", "evidence": "p24 pball (Items: Poke Ball menu)"},
         "item_row4": {"rect": [157, 88, 315, 113], "tap": [235, 100], "does": "item menu, row 4", "verified": "tap", "evidence": "re5-bag-row-y100 (Ice Heal)"},
-        "item_row5": {"rect": [157, 116, 315, 141], "tap": [235, 128], "does": "item menu, row 5", "verified": "measured", "why": "same pitch"},
-        "item_row6": {"rect": [157, 144, 315, 169], "tap": [235, 156], "does": "item menu, row 6", "verified": "measured", "why": "same pitch"},
+        "item_row5": {"rect": [157, 116, 315, 141], "tap": [235, 128], "does": "item menu, row 5", "verified": "tap", "evidence": "p24 row5 (Medicine: Burn Heal menu, item 19)"},
+        "item_row6": {"rect": [157, 144, 315, 169], "tap": [235, 156], "does": "item menu, row 6", "verified": "tap", "evidence": "p24 row6 (Medicine: Ice Heal menu, item 20)"},
         "item_row7": {"rect": [157, 172, 315, 197], "tap": [235, 184], "does": "item menu, row 7", "verified": "tap", "evidence": "re5-bag-row-y184 (Fresh Water)"},
         "item_row8_partial": {"rect": [157, 200, 315, 212], "tap": [235, 210], "does": "nothing (half-visible row)", "verified": "none", "evidence": "re5-bag-partial"},
         "pocket_rotom_powers": {"rect": [122, 216, 145, 239], "tap": [134, 230], "does": "Rotom Powers pocket", "verified": "tap", "evidence": "re5-bag-tab0 (top: Rotom Powers)"},
@@ -138,12 +138,38 @@
       "scene": "main:006488C8",
       "reach": "Bag: tap an item row",
       "buttons": {
-        "use": {"rect": [161, 125, 316, 150], "tap": [236, 138], "does": "Use this item", "verified": "measured", "why": "rules: never confirm item use"},
-        "give": {"rect": [161, 153, 316, 178], "tap": [236, 166], "does": "Give to Pokemon", "verified": "measured", "why": "changes held items"},
-        "move_to_free_space": {"rect": [161, 181, 316, 206], "tap": [236, 194], "does": "Move to Free Space", "verified": "measured", "why": "changes the bag"},
-        "cancel": {"rect": [161, 209, 316, 236], "tap": [236, 222], "does": "closes the item menu", "verified": "tap", "evidence": "re5-bag-cancel"}
+        "from_bottom1": {"rect": [161, 209, 316, 236], "tap": [236, 222], "does": "last entry: Cancel (closes the item menu)", "verified": "tap", "evidence": "re5-bag-cancel; p24 menu1 -> list (frame +0x54 back to 0)"},
+        "from_bottom2": {"rect": [161, 181, 316, 206], "tap": [236, 194], "does": "2nd from the bottom: Move to Free Space in every menu seen", "verified": "measured", "why": "changes the bag (Free Space); not needed by the native Bag"},
+        "from_bottom3": {"rect": [161, 153, 316, 178], "tap": [236, 166], "does": "3rd from the bottom: Give (Potion, Escape Rope, Quick Claw, Oran Berry), Use (TMs)", "verified": "tap", "evidence": "p24 g1 (Quick Claw, 3 entries: Give -> Which Pokemon), p24 Escape Rope (4 entries: Give)"},
+        "from_bottom4": {"rect": [161, 125, 316, 150], "tap": [236, 138], "does": "4th from the bottom: Use in 4-entry menus (Medicine, Escape Rope, Oran Berry)", "verified": "tap", "evidence": "p24 use1 (Potion: Use -> 'Which Pokemon do you want to use this item on?')"},
+        "from_bottom5": {"rect": [161, 97, 316, 122], "tap": [236, 110], "does": "5th from the bottom: no 5-entry menu seen", "verified": "measured", "why": "same 28 px pitch; never seen"}
       },
-      "notes": ["entries depend on the item (this is the Medicine list); 28 px pitch"]
+      "notes": [
+        "The menu grows upwards from Cancel, so entries are named by position from the bottom. Its entries are in the Bag param (docs/BAG.md): Use 0x00, Give 0x03, Move to Free Space 0x04, Cancel 0x11.",
+        "Seen: Medicine/Escape Rope/Oran Berry Use, Give, Free Space, Cancel; Poke Ball/Quick Claw/Roto Boost Give, Free Space, Cancel; TM Use, Free Space, Cancel; Z-Power Ring Free Space, Cancel."
+      ]
+    },
+    "bag_yes_no": {
+      "scene": "main:006488C8",
+      "reach": "Bag: Give to a Pokemon that holds an item, A on 'X is already holding Y.'",
+      "buttons": {
+        "yes": {"rect": [206, 94, 310, 120], "tap": [258, 107], "does": "Yes: switches the items ('You took the Pokemon's Quick Claw and gave it the Escape Rope.')", "verified": "tap", "evidence": "p24 g5 -> g6"},
+        "no": {"rect": [206, 122, 310, 148], "tap": [258, 135], "does": "No: back to the list, the held item stays (no message)", "verified": "tap", "evidence": "p24 q1 -> q2 (Poke Ball to Pichu holding Quick Claw)"}
+      },
+      "notes": ["'Would you like to switch the two items?' Same menu object as the item menu, entries 0x12 Yes, 0x13 No."]
+    },
+    "bag_party": {
+      "scene": "main:006488C8",
+      "reach": "Bag: Use or Give ('Which Pokemon do you want to use this item on?')",
+      "buttons": {
+        "slot1": {"rect": [0, 4, 150, 33], "tap": [70, 18], "does": "party slot 1: the first tap moves the cursor there, a tap on the slot under the cursor chooses it", "verified": "tap", "evidence": "p24 s6 run (party cursor 3 -> 0)"},
+        "slot2": {"rect": [0, 36, 150, 65], "tap": [70, 50], "does": "party slot 2 (cursor, then choose)", "verified": "tap", "evidence": "p24 use2 (cursor to Zorua), use3 (Potion on Zorua: 'It won't have any effect.')"},
+        "slot3": {"rect": [0, 68, 150, 97], "tap": [70, 82], "does": "party slot 3", "verified": "tap", "evidence": "p24 k2 (cursor to Pikipek, party cursor 2)"},
+        "slot4": {"rect": [0, 100, 150, 129], "tap": [70, 114], "does": "party slot 4", "verified": "tap", "evidence": "p24 pk3, g2 (Quick Claw given to Pichu)"},
+        "slot5": {"rect": [0, 132, 150, 161], "tap": [70, 146], "does": "party slot 5", "verified": "tap", "evidence": "p24 s6 run (party cursor 0 -> 4)"},
+        "slot6": {"rect": [0, 164, 150, 193], "tap": [70, 178], "does": "party slot 6", "verified": "tap", "evidence": "p24 s6 (Buneary under the cursor, party cursor 5)"}
+      },
+      "notes": ["The party column is in party order. The cursor starts on slot 1 each time; the slot under it is drawn larger."]
     },
     "battle_command": {
       "scene": "Battle",

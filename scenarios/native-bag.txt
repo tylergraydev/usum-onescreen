@@ -1,0 +1,238 @@
+# The native Bag (Screens/Bag.cpp, docs/BAG.md): opened from the native X
+# menu with the panel off, every pocket browsed, a Potion used on a Pokémon
+# hurt in a wild battle, items given to hold (also over a held item: Yes and
+# No), and back out to the field. Every choice is made with buttons; the
+# native Bag carries it out on the bottom screen. A screenshot is taken
+# before every A that changes the game. Nothing is ever saved.
+include common/boot
+# The automatic view would put the panel up in the Bag; the native Bag
+# must hold it off.
+send auto on
+
+# --- Get Pichu hurt: wild battle, switch Pichu in (a free hit), one Thunder Shock, Run ---
+# (Switching Pichu out again is no good: a Yungoos's Pursuit knocked it out.)
+mark
+send stick 0 -150 120
+expect-log ^scene: \(none\) 15
+wait-scene FieldRo 30
+sleep 6                   # the walk-out animation ignores the circle pad
+repeat 8 until-scene Battle
+  send stick 0 -150 60
+  sleep 1.5
+end
+repeat 40 until-scene Battle  # back and forth in the grass
+  send stick -150 0 20
+  sleep 0.5
+  send stick 150 0 20
+  sleep 0.5
+end
+sleep 12                  # battle intro, until the command menu shows
+shot battle
+# Pokémon -> slot 4 (Pichu) -> Switch: the wild Pokémon attacks Pichu.
+send move 35 75; tap 6
+sleep 2
+send move 247 112; tap 6
+sleep 2
+send move 182 194; tap 6
+sleep 16
+# Fight -> move 1 (Thunder Shock): the wild Pokémon attacks again.
+send move 285 120; tap 6
+sleep 2
+send move 235 41; tap 6
+sleep 18
+shot hurt
+repeat 3 until-scene FieldRo
+  send move 160 225; tap 6  # RUN
+  sleep 20
+end
+sleep 3
+send party
+shot field
+
+# --- X menu -> Bag: the native Bag shows, the panel stays off ---
+mark
+send press x
+expect-log ^xmenu: shown 10
+send xmenu select bag
+expect-log ^xmenu: cursor bag 5
+shot pre-bag
+send press a
+expect-log ^action: xmenu-bag ok 15
+wait-scene main:006488C8 10
+expect-log ^bag: shown \(pocket medicine, 9 items\) 10
+expect-log ^bag: pocket medicine, 9 items 10
+expect-mode off           # Bag = panel with auto on; the native Bag holds it off
+reject-log ^panel: mode panel
+sleep 1
+shot medicine
+
+# --- Browse every pocket: R goes right, wraps around ---
+mark
+send press r
+expect-log ^bag: pocket items, 10 items 10
+sleep 1
+shot items
+send press r
+expect-log ^bag: pocket tms, 2 items 10
+sleep 1
+shot tms
+send press r
+expect-log ^bag: pocket berries, 1 items 10
+sleep 1
+shot berries
+send press r
+expect-log ^bag: pocket key_items, 3 items 10
+sleep 1
+shot key-items
+send press r
+expect-log ^bag: pocket free_space, 0 items 10
+sleep 1
+shot free-space
+send press r
+expect-log ^bag: pocket rotom_powers, 1 items 10
+sleep 1
+shot rotom-powers
+send press l
+expect-log ^bag: pocket free_space 10
+send press right
+expect-log ^bag: pocket rotom_powers 10
+send press right
+expect-log ^bag: pocket medicine, 9 items 10
+# Down / up move the native cursor only; the list scrolls past row 8.
+mark
+send bagui select 0
+expect-log ^bag: cursor 0 Potion 5
+send press down
+expect-log ^bag: cursor 1 Paralyze Heal 5
+send press up
+expect-log ^bag: cursor 0 Potion 5
+send press up
+expect-log ^bag: cursor 8 Fresh Water 5
+sleep 1
+shot scrolled
+reject-log ^action:
+send press down
+expect-log ^bag: cursor 0 Potion 5
+
+# --- Use: Potion on Pichu (party slot 4) ---
+mark
+shot pre-open-potion
+send press a
+expect-log ^bag: menu Potion: Use, Give, Move to Free Space, Cancel 10
+sleep 1
+shot potion-menu
+shot pre-use
+send press a
+expect-log ^bag: game pick 10
+send press down
+send press down
+send press down
+expect-log ^bag: pick cursor 4 Pichu 5
+sleep 1
+shot pick-pichu
+send press a
+expect-log ^bag: result use Potion\(17\) on slot 4 Pichu: count 9 -> 8, hp \d+/27 -> 27/27 30
+sleep 1
+shot used
+# The game stays on the pick after a use: slot 1 (full HP) has no effect.
+mark
+send press up
+send press up
+send press up
+expect-log ^bag: pick cursor 1 Torracat 5
+send press a
+expect-log ^bag: result use Potion\(17\) on slot 1 Torracat: count 8 -> 8, hp 51/51 -> 51/51 30
+send press b
+expect-log ^bag: game list 10
+
+# --- Give: Quick Claw (Items) to Pichu ---
+mark
+send press r
+expect-log ^bag: pocket items, 10 items 10
+send bagui select 0
+expect-log ^bag: cursor 0 Quick Claw 5
+shot pre-open-claw
+send press a
+expect-log ^bag: menu Quick Claw: Give, Move to Free Space, Cancel 10
+shot pre-give
+send press a
+expect-log ^bag: game pick 10
+send press down
+send press down
+send press down
+expect-log ^bag: pick cursor 4 Pichu 5
+shot pre-give-pichu
+send press a
+expect-log ^bag: result give Quick Claw\(217\) on slot 4 Pichu: count 1 -> 0, hp 27/27 -> 27/27, held - -> Quick Claw 30
+expect-log ^bag: game list 10
+sleep 1
+shot given
+
+# --- Give over a held item: Escape Rope to Pichu, Yes switches ---
+mark
+send bagui select 0
+expect-log ^bag: cursor 0 Escape Rope 5
+send press a
+expect-log ^bag: menu Escape Rope: Use, Give, Move to Free Space, Cancel 10
+send press down
+expect-log ^bag: menu cursor Give 5
+shot pre-give-rope
+send press a
+expect-log ^bag: game pick 10
+send press down
+send press down
+send press down
+expect-log ^bag: pick cursor 4 Pichu 5
+send press a
+expect-log ^bag: question Escape Rope: Yes, No 20
+sleep 1
+shot question
+send press a
+expect-log ^bag: result give Escape Rope\(78\) on slot 4 Pichu: count 3 -> 2, hp 27/27 -> 27/27, held Quick Claw -> Escape Rope 30
+expect-log ^bag: game list 10
+sleep 1
+shot switched
+
+# --- Same with a Poké Ball, No keeps the Escape Rope ---
+mark
+send bagui select 1
+expect-log ^bag: cursor 1 Poké Ball 5
+send press a
+expect-log ^bag: menu Poké Ball: Give, Move to Free Space, Cancel 10
+send press a
+expect-log ^bag: game pick 10
+send press down
+send press down
+send press down
+expect-log ^bag: pick cursor 4 Pichu 5
+send press a
+expect-log ^bag: question Poké Ball: Yes, No 20
+send press down
+expect-log ^bag: menu cursor No 5
+shot pre-no
+send press a
+expect-log ^bag: answer no 5
+expect-log ^bag: result give Poké Ball\(4\) on slot 4 Pichu: count 37 -> 37, hp 27/27 -> 27/27, held Escape Rope -> Escape Rope 30
+expect-log ^bag: game list 10
+
+# --- Cancel a menu with B, then close the Bag with B ---
+mark
+send press a
+expect-log ^bag: menu 10
+send press b
+expect-log ^bag: back to the list 5
+expect-log ^bag: cancel done 10
+reject-log ^bag: result
+shot pre-close
+send press b
+expect-log ^bag: close 5
+wait-scene FieldRo 15
+expect-log ^bag: hidden 10
+expect-log ^xmenu: shown 15
+expect-mode off
+send press b
+sleep 3
+expect-scene FieldRo
+send party
+check-save
+stop
