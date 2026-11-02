@@ -9,6 +9,7 @@
 # separate pacman.conf, retrying with backoff. If that still fails it installs
 # the copies in PKGDIR (restored by actions/cache from an earlier run). On
 # success PKGDIR holds just the installed package files, for the cache to save.
+# DEPS_OFFLINE=1 skips the repo and installs from PKGDIR (to test that path).
 set -eu
 
 PKGDIR=$1
@@ -30,9 +31,9 @@ from_repo() {
 
 delay=5
 attempt=1
-while ! from_repo; do
-    if [ $attempt -ge 4 ]; then
-        echo "::warning::ThePixellizerOSS repo failed $attempt times; installing the cached packages"
+while [ "${DEPS_OFFLINE:-0}" = 1 ] || ! from_repo; do
+    if [ "${DEPS_OFFLINE:-0}" = 1 ] || [ $attempt -ge 4 ]; then
+        [ "${DEPS_OFFLINE:-0}" = 1 ] || echo "::warning::ThePixellizerOSS repo failed $attempt times; installing the cached packages"
         ls "$PKGDIR"/*.pkg.tar.* > /dev/null 2>&1 || { echo "::error::no cached packages in $PKGDIR"; exit 1; }
         ls -l "$PKGDIR"
         dkp-pacman -U --noconfirm --needed "$PKGDIR"/*.pkg.tar.*
