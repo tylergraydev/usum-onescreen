@@ -3,6 +3,8 @@
 # Entries are tapped, not picked with the cursor, so the X menu's
 # remembered cursor position doesn't matter.
 include common/boot
+# This checks the panel path for the X menu: turn the native menu off.
+send xmenu off
 
 # Pokédex: tap Rotom's face; back is the B button at the bottom left.
 # Rotom sometimes starts a chat on the bottom screen (two answers to tap)
