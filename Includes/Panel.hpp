@@ -24,4 +24,12 @@ namespace OneScreen
     // One-line summary of what the panel has seen so far (frame counts and
     // framebuffer formats), for the boot log.
     std::string PanelStatus(void);
+
+    // Frame timing for the `perf` command (off by default). Enabling starts a
+    // new window; each report covers the window since the last report or
+    // enable: emulated time (svcGetSystemTick), top and bottom frames seen,
+    // and the mean and max time spent copying the bottom screen and drawing
+    // the panel.
+    void        PanelPerfSetEnabled(bool enabled);
+    std::string PanelPerfReport(void);
 }
