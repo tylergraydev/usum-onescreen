@@ -60,4 +60,34 @@ namespace OneScreen
 
         return CroModuleName(CroModuleOf(vtable));
     }
+
+    // The FieldRo scene object holds a state object at +0x618 (vtable FieldRo
+    // +0xD735C) whose word at +4 is the field state.
+    static const u32 FieldStateObject = 0x618;
+    static const u32 FieldStateVtable = 0xD735C;
+
+    int FieldState(u32 sceneManager)
+    {
+        // Finding the module walks pages, so remember it per scene vtable.
+        static u32 s_vtable = 0, s_module = 0;
+
+        u32 manager = 0, scene = 0, vtable = 0;
+        if (!Process::Read32(sceneManager, manager) || manager == 0
+            || !Process::Read32(manager, scene) || scene == 0
+            || !Process::Read32(scene, vtable) || vtable < CroArea)
+            return -1;
+        if (vtable != s_vtable)
+        {
+            const u32 module = CroModuleOf(vtable);
+            s_vtable = vtable;
+            s_module = CroModuleName(module) == "FieldRo" ? module : 0;
+        }
+
+        u32 object = 0, state = 0;
+        if (s_module == 0
+            || !Process::Read32(scene + FieldStateObject, object) || object != s_module + FieldStateVtable
+            || !Process::Read32(scene + FieldStateObject + 4, state))
+            return -1;
+        return (int)state;
+    }
 }

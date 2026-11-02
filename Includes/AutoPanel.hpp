@@ -9,14 +9,15 @@ namespace OneScreen
     // Picks the panel mode from the current scene, using the [scenes]
     // settings (ModeForScene). Defaults:
     //   TitleMenu: off. FieldRo: off, or panel while the X menu is open.
-    //   Battle, Zukan (Pokédex), Bag: panel. Party: full view.
-    //   Any other scene: panel. Transitions ("" scene): unchanged.
+    //   Party, Box, TownMap, Config, Kawaigari: full view. Others: panel.
+    //   Transitions ("" scene): unchanged.
     // A manual change (ZR) overrides this until the scene changes.
 
-    // Call every frame. `scene` is the latest SceneModule() result and
-    // `gameHeld` the keys the game last read. Returns true if it changed the
-    // panel mode.
-    bool AutoPanelUpdate(const std::string &scene, u32 gameHeld);
+    // Call every frame. `scene` is the latest SceneModule() result,
+    // `gameHeld` the keys the game last read and `fieldState` FieldState()
+    // (-1 if unknown; the X menu is then tracked from X/B presses). Returns
+    // true if it changed the panel mode.
+    bool AutoPanelUpdate(const std::string &scene, u32 gameHeld, int fieldState);
 
     // The player picked a mode by hand; keep it until the next scene change.
     void AutoPanelManualOverride(void);
