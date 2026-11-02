@@ -1,0 +1,56 @@
+# Pokédex via Rotom, then Party and Bag via the X menu, each and back,
+# checking the mode auto panel sets for each (settings defaults).
+# Entries are tapped, not picked with the cursor, so the X menu's
+# remembered cursor position doesn't matter.
+include common/boot
+
+# Pokédex: tap Rotom's face; back is the B button at the bottom left.
+# Rotom sometimes starts a chat on the bottom screen (two answers to tap)
+# and then ignores the face tap: answer it and try again. If there was no
+# chat after all, that answer tap opens the Town Map: back out of it.
+repeat 4 until-scene Zukan
+  send move 160 35; tap 6
+  sleep 6
+  shot rotom
+  if-scene FieldRo send move 210 135; tap 6   # "I'm having fun!"
+  sleep 6
+  if-scene TownMap send move 16 222; tap 6
+  if-scene TownMap sleep 6
+end
+expect-mode panel         # Zukan = panel
+sleep 3
+shot pokedex
+send move 16 222; tap 6
+wait-scene FieldRo 30
+expect-mode off
+
+# X menu (an overlay in FieldRo): grid of POKÉMON / POKÉDEX, BAG / QUICK LINK, ...
+sleep 2
+send press x
+expect-mode panel         # FieldRo.xmenu = panel
+sleep 2
+shot xmenu
+send move 80 75; tap 6    # POKÉMON
+wait-scene main:00647FCC 30
+expect-mode full          # Party = full
+sleep 3
+shot party
+send press b
+wait-scene FieldRo 30
+expect-mode panel         # back in the open X menu
+sleep 2
+shot xmenu-again
+send move 80 120; tap 6   # BAG
+wait-scene main:006488C8 30
+expect-mode panel         # Bag = panel
+sleep 3
+shot bag
+send press b
+wait-scene FieldRo 30
+expect-mode panel
+sleep 2
+send press b              # close the X menu
+expect-mode off
+sleep 1
+shot field
+stop
