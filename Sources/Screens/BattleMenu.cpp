@@ -453,7 +453,7 @@ namespace Screens
         else if (menu.Prompt())
         {
             DrawText(canvas, "The game asks", title, main);
-            DrawText(canvas, "Choices are on the bottom screen", line, Style(Font::System, TextDim));
+            DrawText(canvas, "The choices are below", line, Style(Font::System, TextDim));
             DrawHints(canvas, hints1, "Up/Down + A: choose", "B: back");
             DrawHints(canvas, hints2, "ZR: show the bottom screen", "");
         }
