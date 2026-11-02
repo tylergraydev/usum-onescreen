@@ -46,18 +46,41 @@ namespace UI
 
     static constexpr s32 SmallAdvance = 6;   // 5 px glyph + 1 px gap
     static constexpr s32 SmallLine    = 8;
-    static constexpr s32 SysfontLine  = 16;  // DrawSysfont's line feed
 
-    // Scratch mask for one line of text at native size. Only the OSD thread
-    // draws, so one static buffer is enough.
+    // Scratch mask for one line of Small text. Only the OSD thread draws, so
+    // one static buffer is enough.
     static constexpr s32 MaskW = ScreenW, MaskH = 32;
     static u8 s_mask[MaskW * MaskH];
 
-    static const FontBackend *s_system = nullptr;
+    // System: 18 px line (font baseline 25 -> 15, so the baseline lands on a
+    // whole pixel); Large: 24 px line (baseline 20).
+    static GlyphCache s_system(0.6f);
+    static GlyphCache s_large(0.8f);
 
-    void SetSystemFont(const FontBackend *backend)
+    void SetSystemFont(const FontSource *font)
     {
-        s_system = backend;
+        s_system.SetSource(font);
+        s_large.SetSource(font);
+    }
+
+    void TextCacheStats(u32 &hits, u32 &misses)
+    {
+        hits = s_system.hits + s_large.hits;
+        misses = s_system.misses + s_large.misses;
+    }
+
+    // The glyph cache for a system-font style, or nullptr if it draws with
+    // the Small font (Small itself, or no system font set).
+    static GlyphCache *CacheFor(Font font)
+    {
+        GlyphCache *cache = font == Font::System ? &s_system : font == Font::Large ? &s_large : nullptr;
+        return cache != nullptr && cache->Source() != nullptr ? cache : nullptr;
+    }
+
+    // Scale the Small font is drawn at for a font without a system font.
+    static s32 SmallScale(Font font)
+    {
+        return font == Font::System ? 2 : font == Font::Large ? 3 : 1;
     }
 
     // Number of characters (UTF-8 lead bytes), which is what the Small font draws.
@@ -73,17 +96,21 @@ namespace UI
     // Width of text at scale 1 in its font's own pixels.
     static s32 NativeWidth(const std::string &text, Font font)
     {
-        if (font == Font::System && s_system != nullptr)
-            return s_system->measure(text);
-        const s32 w = CountChars(text) * SmallAdvance;
-        return font == Font::System ? w * 2 : w;
+        if (GlyphCache *cache = CacheFor(font))
+        {
+            s32 w = 0;
+            for (size_t i = 0; i < text.size();)
+                w += cache->Advance(NextCodePoint(text.data(), text.size(), i));
+            return w;
+        }
+        return CountChars(text) * SmallAdvance * SmallScale(font);
     }
 
     static s32 NativeHeight(Font font)
     {
-        if (font == Font::System)
-            return s_system != nullptr ? s_system->lineHeight : SysfontLine;
-        return SmallLine;
+        if (const GlyphCache *cache = CacheFor(font))
+            return cache->LineHeight();
+        return font == Font::System ? 18 : font == Font::Large ? 24 : SmallLine;
     }
 
     s32 LineHeight(const TextStyle &style)
@@ -155,20 +182,8 @@ namespace UI
         if (fit.empty())
             return 0;
 
-        const s32 w = std::min(NativeWidth(fit, style.font), MaskW);
-        const s32 h = std::min(NativeHeight(style.font), MaskH);
-        if (w <= 0 || h <= 0)
-            return 0;
-
-        if (style.font == Font::System && s_system != nullptr)
-        {
-            if (!s_system->rasterize(fit, s_mask, w, h))
-                return 0;
-        }
-        else
-            RenderSmallMask(fit, s_mask, w, h, style.font == Font::System ? 2 : 1);
-
-        const s32 width = w * scale, height = h * scale;
+        const s32 width = NativeWidth(fit, style.font) * scale;
+        const s32 height = NativeHeight(style.font) * scale;
         s32 x = box.x;
         if (style.align == Align::Center)
             x = box.x + (box.w - width) / 2;
@@ -176,6 +191,26 @@ namespace UI
             x = box.Right() - width;
         const s32 y = box.y + (box.h - height) / 2;
 
+        if (GlyphCache *cache = CacheFor(style.font))
+        {
+            // Glyph masks start at the top of the line, so each one is drawn
+            // at the pen position plus its left bearing.
+            s32 pen = x;
+            for (size_t i = 0; i < fit.size();)
+            {
+                const Glyph *g = cache->Get(NextCodePoint(fit.data(), fit.size(), i));
+                if (g->w > 0)
+                    canvas.DrawMask(pen + g->left * scale, y, g->mask, g->w, g->h, g->w, scale, style.color);
+                pen += g->advance * scale;
+            }
+            return width;
+        }
+
+        const s32 small = SmallScale(style.font);
+        const s32 w = std::min(width / scale, MaskW), h = std::min(height / scale, MaskH);
+        if (w <= 0 || h <= 0)
+            return 0;
+        RenderSmallMask(fit, s_mask, w, h, small);
         canvas.DrawMask(x, y, s_mask, w, h, w, scale, style.color);
         return width;
     }
