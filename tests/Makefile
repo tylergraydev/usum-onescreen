@@ -6,7 +6,7 @@ CXX      ?= g++
 CXXFLAGS := -std=c++17 -Wall -Wextra -Werror -I ../Includes
 OUT      := build
 
-TESTS    := $(OUT)/input_capture_test $(OUT)/settings_test
+TESTS    := $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/ui_host_test
 
 all: run
 
@@ -18,9 +18,19 @@ $(OUT)/settings_test: settings_test.cpp ../Sources/Settings.cpp ../Includes/Sett
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) settings_test.cpp ../Sources/Settings.cpp -o $@
 
+UI_SRCS  := $(addprefix ../Sources/UI/,Raster.cpp Text.cpp Icons.cpp Demo.cpp)
+UI_HDRS  := $(wildcard ../Includes/UI/*.hpp)
+PREVIEW  := ../analysis/private/ui-demo.png
+
+$(OUT)/ui_host_test: ui_host_test.cpp $(UI_SRCS) $(UI_HDRS)
+	@mkdir -p $(OUT)
+	$(CXX) $(CXXFLAGS) ui_host_test.cpp $(UI_SRCS) -o $@
+
 run: $(TESTS)
 	./$(OUT)/input_capture_test
 	./$(OUT)/settings_test
+	@mkdir -p $(dir $(PREVIEW))
+	./$(OUT)/ui_host_test $(PREVIEW)
 
 clean:
 	rm -rf $(OUT)

@@ -13,6 +13,7 @@
 #include "Scene.hpp"
 #include "Settings.hpp"
 #include "Shot.hpp"
+#include "UI/Device.hpp"
 
 namespace CTRPluginFramework
 {
@@ -217,6 +218,8 @@ namespace CTRPluginFramework
             WriteVtableScan(word);
         else if (line == "scene")
             WriteLog("scene: " + OneScreen::SceneModule(s_game->offsets.sceneManager), false);
+        else if (line == "uidemo on" || line == "uidemo off")
+            OneScreen::UiDemoSetEnabled(line == "uidemo on");
         else if (line == "auto on" || line == "auto off")
             OneScreen::AutoPanelSetEnabled(line == "auto on");
         else if (line.compare(0, 11, "capture on ") == 0 || line == "capture on"
