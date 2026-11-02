@@ -10,6 +10,7 @@
 #include "Framebuffer.hpp"
 #include "Panel.hpp"
 #include "Scene.hpp"
+#include "Screens/PartyScreen.hpp"
 #include "Screens/XMenuGrid.hpp"
 #include "UI/Device.hpp"
 #include "UI/Layer.hpp"
@@ -188,7 +189,14 @@ namespace OneScreen
         s_scanWanted = false;
         log.push_back(Utils::Format("xmenu: open %s", EntryName(index)));
         if (ActionStart(XMenuAction(index), sceneManager, log))
+        {
             s_opening = index;
+            // Pokémon opens the game's Party screen, which the native Party
+            // screen takes over (Screens/PartyScreen.hpp): it holds the panel
+            // off from here, so the panel doesn't flash on in between.
+            if (index == XMenuFind("pokemon"))
+                PartyScreenExpect();
+        }
     }
 
     static void HandleInput(u32 sceneManager, std::vector<std::string> &log)
