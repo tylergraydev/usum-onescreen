@@ -173,7 +173,8 @@ def cmd_go(args):
                    lambda: plugin(args.instance, "press a"))
         wait_scene(args.instance, lambda s: s == "FieldRo", deadline)
     lines = [l for l in log.read_text(errors="replace").splitlines() if l.startswith("scene: ")]
-    print("\n".join(lines))
+    if lines:
+        print("\n".join(lines))
     print(f"at '{args.point}' in '{args.instance}', scene now: {scene(args.instance) or '(none)'}")
 
 
