@@ -109,7 +109,9 @@ AutoPanel's default for the Bag scene is the panel. While the native Bag
 shows it holds the panel off with AutoPanel's manual override (as the X menu
 does), and clears the override when the Bag closes. If the player turns the
 panel on by hand (L+R), the native Bag stops what it was doing and stays
-hidden until the Bag closes. The X menu's Bag entry tells the Bag it is
+hidden until the Bag closes. On the frame the scene changes AutoPanel clears
+its override itself and turns the panel on for the Bag; that one is not the
+player's doing and is just turned off again. The X menu's Bag entry tells the Bag it is
 opening (`BagExpectOpen`), so the panel stays off between the tap and the
 Bag's first frame.
 
@@ -138,10 +140,14 @@ Bag's first frame.
   two-tap pick and messages, Give over a held item with Yes, Cancel, Close, a
   game that ignores taps, a wrong starting screen, the Bag closing, settling);
   drawing every mode inside the area.
-- `scenarios/native-bag.txt`: Pichu is hurt in a wild battle (switched in
-  twice, then Run); X menu -> Bag with auto on and the panel held off; every
+- `scenarios/native-bag.txt`: Pichu is hurt in a wild battle (switched in for
+  a free hit, then Run; battles repeat until `party` shows Pichu at 7-26 HP,
+  `repeat N until-log` in `tools/scenario.py`); X menu -> Bag with auto on and
+  the panel held off; every
   pocket with R (wrapping) and L / left / right; the cursor wrapping; a Potion
   on Pichu (HP back to full, count 9 -> 8) and on Torracat (no effect); Quick
   Claw given to Pichu; Escape Rope given over it (Yes); a Poké Ball (No);
   a menu cancelled with B; B closes the Bag to the native X menu.
-  `check-save` at the end.
+  `check-save` at the end. Passed in 187 s (instance `p24`, 2026-11-02).
+- `actions.txt` and `open-each-app.txt` check the Bag's panel: they send
+  `bagui off` first.

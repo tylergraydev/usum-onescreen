@@ -188,6 +188,7 @@ namespace OneScreen
     static bool s_capturing = false;
     static u32  s_frames = 0;
     static u32  s_expectUntil = 0;
+    static std::string s_prevScene;
     static u32  s_repeatKey = 0, s_repeatAt = 0;
     static BagDriver s_driver;
     static BagGame   s_game;
@@ -693,9 +694,13 @@ namespace OneScreen
             s_yield = false;
 
         // The panel: off while the native Bag is (about to be) up. A panel
-        // turned on while we hold it off is the player's doing: step aside.
+        // turned on while we hold it off is the player's doing (L+R): step
+        // aside. Not on a scene change: AutoPanel then clears its override
+        // and picks the scene's mode itself (the panel, for the Bag).
+        const bool sceneChanged = scene != s_prevScene;
+        s_prevScene = scene;
         bool holdOff = s_enabled && !s_yield && ((inBag && s_game.Valid()) || expecting);
-        if (holdOff && s_forcedOff && GetPanelMode() != PanelMode::Off)
+        if (holdOff && s_forcedOff && !sceneChanged && GetPanelMode() != PanelMode::Off)
         {
             s_yield = true;
             holdOff = false;
