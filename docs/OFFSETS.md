@@ -12,6 +12,8 @@ Found by static analysis of the local `code.bin` (`tools/extract_code.py`, `tool
 | `hidTouchRead` | `0x2826F0` | Touch sample reader used by both `TouchPanelReader::Read` (`0x1790B0`) and `ReadLatest` (`0x17902C`): `(touch shm, status* out, count, int* outCount, ...)`. Each status is 8 bytes: `u16 x, u16 y, u8 touching`. |
 | `hidPadRead` | `0x282548` | Pad sample reader used by both `PadReader::Read` (`0x17A108`) and `ReadLatest` (`0x179FD8`): `(pad shm, status* out, count, int* outCount, ...)`. Each status is 16 bytes: `u32 held, u32 pressed, u32 released, s16 stick x, s16 stick y`. `ReadLatest` derives pressed/released from `held` itself; `Read` uses the sample's own edge bits. |
 | `sceneManager` | `0x6A599C` | Global pointer to the scene manager (`0x34021048` at runtime). Manager `+0` points to the current scene object; that object's vtable names the scene (see "Scene detection"). |
+| `gxDisplayTransfer` | `0x27A5BC` | Called, not hooked (panel, P1-6). gx DisplayTransfer: `(in, in width, in height, out, out width, out height, flags)`; builds GX command 3 and pushes it with `0x279A2C` onto the game's queue (shared `+0x800`; lock-free `ldrex`/`strex`, triggers `TriggerCmdReqQueue` when the queue was empty). Verified: decompiled (Ghidra), prologue checked at boot, and bottom-to-top copies at 1x scale and 2x2 down drawn correctly in Azahar (screenshots, readback check). |
+| `gxTextureCopy` | `0x279E28` | Called, not hooked (panel). gx TextureCopy: `(in, out, size, in width, in gap, out width, out gap, flags)`, widths and gaps in 16-byte units; GX command 4, same queue push. Verified the same way. |
 
 ## Scene detection (runtime, 2026-11-02)
 
