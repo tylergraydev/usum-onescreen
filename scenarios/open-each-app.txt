@@ -3,6 +3,8 @@
 # Entries are tapped, not picked with the cursor, so the X menu's
 # remembered cursor position doesn't matter.
 include common/boot
+# Checks the automatic view per scene, which is off by default.
+send auto on
 # This checks the panel path for the X menu: turn the native menu off.
 send xmenu off
 

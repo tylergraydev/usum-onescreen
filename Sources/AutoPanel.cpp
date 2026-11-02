@@ -15,7 +15,7 @@ namespace OneScreen
     static const char *SceneTitle = "TitleMenu";
     static const char *SceneField = "FieldRo";
 
-    static bool s_enabled = true;
+    static bool s_enabled = false;      // Settings::autoPanel; set at boot
     static bool s_override = false;
     static bool s_menuOpen = false;     // X menu, an overlay inside FieldRo
     static int s_fieldState = -1;       // last FieldState() that worked, -1 if none yet
