@@ -10,7 +10,7 @@ OUT      := build
 PYTHON   ?= python3
 CODE_BIN ?=
 
-TESTS    := $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/ui_host_test $(OUT)/action_queue_test
+TESTS    := $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/ui_host_test $(OUT)/party_data_test             $(OUT)/action_queue_test
 
 all: run
 
@@ -26,6 +26,10 @@ $(OUT)/action_queue_test: action_queue_test.cpp ../Sources/ActionQueue.cpp ../In
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) action_queue_test.cpp ../Sources/ActionQueue.cpp -o $@
 
+$(OUT)/party_data_test: party_data_test.cpp ../Sources/PartyData.cpp ../Includes/PartyData.hpp
+	@mkdir -p $(OUT)
+	$(CXX) $(CXXFLAGS) party_data_test.cpp ../Sources/PartyData.cpp -o $@
+
 UI_SRCS  := $(addprefix ../Sources/UI/,Raster.cpp Text.cpp Icons.cpp Demo.cpp)
 UI_HDRS  := $(wildcard ../Includes/UI/*.hpp)
 PREVIEW  := ../analysis/private/ui-demo.png
@@ -37,6 +41,7 @@ $(OUT)/ui_host_test: ui_host_test.cpp $(UI_SRCS) $(UI_HDRS)
 run: $(TESTS)
 	./$(OUT)/input_capture_test
 	./$(OUT)/settings_test
+	./$(OUT)/party_data_test
 	./$(OUT)/action_queue_test
 	$(PYTHON) -I ../tools/gen_layouts.py --check
 	@mkdir -p $(dir $(PREVIEW))
