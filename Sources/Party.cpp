@@ -185,7 +185,7 @@ namespace OneScreen
     }
 
     // One line of a full-load MsgData, checked as docs/RE2-text.md proposes.
-    static std::string MsgLine(u32 msg, u32 dat, u32 line)
+    std::string MsgLine(u32 msg, u32 dat, u32 line)
     {
         if (!Readable(msg, 0x30) || Read32(msg) != VtMsgData || Read8(msg + 0x08) != 1 || Read32(msg + 0x0C) != dat)
             return "";
