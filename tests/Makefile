@@ -2,9 +2,13 @@
 #   make -C tests            (MSYS2 / WSL / Linux g++)
 #   make -C tests CXX=clang++
 # MSVC: cl /std:c++17 /EHsc /I ..\Includes settings_test.cpp ..\Sources\Settings.cpp
+# sigscan_test.py needs Python 3.9+ (Windows: PYTHON="py -3"); pass
+# CODE_BIN=<Ultra Sun v1.2 code.bin> to also run the real and shifted-copy checks.
 CXX      ?= g++
 CXXFLAGS := -std=c++17 -Wall -Wextra -Werror -I ../Includes
 OUT      := build
+PYTHON   ?= python3
+CODE_BIN ?=
 
 TESTS    := $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/ui_host_test
 
@@ -31,6 +35,7 @@ run: $(TESTS)
 	./$(OUT)/settings_test
 	@mkdir -p $(dir $(PREVIEW))
 	./$(OUT)/ui_host_test $(PREVIEW)
+	$(PYTHON) -I sigscan_test.py $(CODE_BIN)
 
 clean:
 	rm -rf $(OUT)
