@@ -36,19 +36,20 @@ static Settings Parse(const std::string &text, std::vector<std::string> &warning
     return ParseSettings(text, warnings);
 }
 
-// The defaults must give the same view per scene as AutoPanel.cpp did before
-// settings existed: TitleMenu off, FieldRo off (panel with the X menu open),
-// Party full, everything else panel.
+// The default [scenes] table must give the same view per scene as AutoPanel.cpp
+// did before settings existed: TitleMenu off, FieldRo off (panel with the X
+// menu open), Party full, everything else panel. Auto is off by default and
+// L+R cycles the view: native menus come first, the panel is a fallback.
 static void TestDefaultsMatchOldBehaviour(void)
 {
     const Settings s;
-    CHECK(s.panelKey == KeyBits::ZR);
+    CHECK(s.panelKey == (KeyBits::L | KeyBits::R));
     CHECK(s.touchKey == KeyBits::ZL);
     CHECK(s.cursorSource == CursorSource::CStick);
     CHECK(s.cursorSpeed == 6);
     CHECK(s.panelSize == PanelSize::Half);
     CHECK(s.panelCorner == PanelCorner::BottomRight);
-    CHECK(s.autoPanel);
+    CHECK(!s.autoPanel);
 
     CHECK(ModeForScene(s, "TitleMenu", false) == SceneMode::Off);
     CHECK(ModeForScene(s, "TitleMenu", true) == SceneMode::Off);
@@ -221,7 +222,8 @@ static void TestKeyNames(void)
 static void TestDescribe(void)
 {
     const std::string d = DescribeSettings(Settings{});
-    CHECK(d.find("panel_key ZR") != std::string::npos);
+    CHECK(d.find("panel_key L+R") != std::string::npos);
+    CHECK(d.find("auto off") != std::string::npos);
     CHECK(d.find("corner bottom-right") != std::string::npos);
     CHECK(d.find("main:00647FCC=full") != std::string::npos);
     std::printf("  %s\n", d.c_str());
@@ -230,11 +232,11 @@ static void TestDescribe(void)
 static void TestCurrentSettings(void)
 {
     Settings s;
-    s.autoPanel = false;
+    s.autoPanel = true;
     SetSettings(s);
-    CHECK(!GetSettings().autoPanel);
-    SetSettings(Settings{});
     CHECK(GetSettings().autoPanel);
+    SetSettings(Settings{});
+    CHECK(!GetSettings().autoPanel);
 }
 
 int main(void)

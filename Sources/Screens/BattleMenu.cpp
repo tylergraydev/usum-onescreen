@@ -419,7 +419,7 @@ namespace Screens
             // question, where A opens a keyboard on the bottom screen.
             DrawText(canvas, "B: next, no nickname", line, Style(Font::System, Good));
             DrawHints(canvas, hints1, "Nickname? A: yes (keyboard below)", "");
-            DrawHints(canvas, hints2, "ZR: show the bottom screen", "");
+            DrawHints(canvas, hints2, snap.panelKey + ": show the bottom screen", "");
         }
         else if (snap.menu == GameMenu::Bag)
         {
@@ -459,7 +459,7 @@ namespace Screens
             DrawText(canvas, "The game asks", title, main);
             DrawText(canvas, "The choices are below", line, Style(Font::System, TextDim));
             DrawHints(canvas, hints1, "Up/Down + A: choose", "B: back");
-            DrawHints(canvas, hints2, "ZR: show the bottom screen", "");
+            DrawHints(canvas, hints2, snap.panelKey + ": show the bottom screen", "");
         }
         else
         {

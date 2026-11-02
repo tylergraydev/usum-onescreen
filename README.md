@@ -2,7 +2,7 @@
 
 A 3GX plugin (CTRPluginFramework) that makes Pokémon Ultra Sun / Ultra Moon playable on the top screen only, in Azahar with the 3GX plugin loader enabled. Plan: https://claude.ai/artifact/LxD6pmGFR8x91NrRRF8P7R
 
-**Status:** Phase 1 started. The plugin draws the bottom screen onto the top screen (CTRPF OSD callback, `Sources/Panel.cpp`): a half-size panel in the lower-right corner by default, and **ZR** cycles off / panel / full view. The panel follows the scene automatically (`Sources/AutoPanel.cpp`): title and overworld off, X menu / battle / Pokédex / Bag / unknown scenes as a panel, Party as full view; a ZR choice holds until the next scene change. The X menu is tracked from the game's X/B presses, so closing it by touch isn't noticed. A touch cursor (`Sources/Cursor.cpp`) is drawn inside the panel/full view: **C-stick** moves it, **ZL** touches. It hooks the game's touch reader (`0x2826F0`) and returns the cursor's point while touching.  Nothing here has been compiled yet.
+**Status:** Phase 2 under way. The goal is native menus on the top screen; the X menu has one (`Sources/Screens/XMenu.cpp`). Until every screen has one, **L+R** shows the bottom screen on the top screen as a half-size panel or a full view (`Sources/Panel.cpp`, copied on the emulated GPU), and a touch cursor (`Sources/Cursor.cpp`) on it: **C-stick** moves it, **ZL** touches. The panel can also follow the scene automatically (`auto = on`, `Sources/AutoPanel.cpp`). See [docs/PLAYING.md](docs/PLAYING.md).
 
 **Players:** see [docs/PLAYING.md](docs/PLAYING.md) for install, controls and bug reports, and [CHANGELOG.md](CHANGELOG.md) for what's new.
 
@@ -48,11 +48,11 @@ CI (`.github/workflows/build.yml`) does the same in the `devkitpro/devkitarm` co
 
 ## Settings (`usum-onescreen.ini`)
 
-At boot the plugin reads `usum-onescreen.ini` at the emulated SD root (next to the log). If it is missing, the plugin writes a commented default file there. The defaults reproduce the behaviour described above, so an untouched file changes nothing.
+At boot the plugin reads `usum-onescreen.ini` at the emulated SD root (next to the log). If it is missing, the plugin writes a commented default file there. The defaults are shown below: the bottom-screen view stays off until **L+R**.
 
 ```ini
 [controls]
-panel_key = ZR          ; cycles off / panel / full; A B X Y L R ZL ZR Start Select Up Down Left Right, L+R for a combo, or none
+panel_key = L+R         ; cycles off / panel / full; A B X Y L R ZL ZR Start Select Up Down Left Right, L+R for a combo, or none
 touch_key = ZL          ; touches at the cursor while held
 cursor_move = cstick    ; cstick, dpad or circlepad (dpad / circlepad still reach the game too)
 cursor_speed = 6        ; top speed in px/frame, 1-20; starts at 1, then 3 (or less), then this
@@ -60,7 +60,7 @@ cursor_speed = 6        ; top speed in px/frame, 1-20; starts at 1, then 3 (or l
 [panel]
 size = 1/2              ; 1/2 or 2/3 (easier to read, costs more speed: docs/PERF.md)
 corner = bottom-right   ; bottom-right, bottom-left, top-right, top-left
-auto = on               ; on: the view follows [scenes]; off: it stays as panel_key sets it
+auto = off              ; on: the view follows [scenes]; off (default): it stays as panel_key sets it
 
 [scenes]                ; off, panel or full per scene ID (as logged: "scene: ...")
 TitleMenu = off

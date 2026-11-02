@@ -70,6 +70,8 @@ namespace Screens
         // menu == Other: the game's screen object's vtable (module-relative
         // in a CRO), for the log.
         u32 otherVtable = 0;
+        // The panel_key setting as text ("L+R"), for the helpers' hints.
+        std::string panelKey = "L+R";
     };
 
     enum class BattlePage : u8

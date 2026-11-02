@@ -2,6 +2,8 @@
 # point and checks the scene it ends in. Actions tap the bottom screen
 # themselves; nothing here taps or presses A in a menu.
 include common/boot
+# Checks the automatic view per scene, which is off by default.
+send auto on
 
 # Field -> Pokédex (Rotom's face, or the X menu while Rotom chats) -> field.
 mark

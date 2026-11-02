@@ -34,15 +34,19 @@ If you use an HD texture pack, turn off **Emulation → Configure… → Graphic
 
 | Button | What it does |
 |---|---|
-| **ZR** | Cycle the bottom-screen view by hand: off → corner panel → full view. Your choice holds until the next scene change, then the automatic view takes over again. |
+| **L+R** | Show the bottom screen on the top screen when you need it: off → corner panel → full view → off. It stays as you set it. |
 | **C-stick** | Move the touch cursor (a crosshair on the panel or full view). It starts slow for precise taps and speeds up while you hold it. |
 | **ZL** | Touch the bottom screen at the cursor, for as long as you hold it. The crosshair turns red while touching. |
 
 Every other button works as normal.
 
-## What shows automatically
+## The bottom-screen view
 
-The plugin watches which scene the game is in and picks a view:
+The goal is native menus on the top screen (the X menu has one already), so the bottom screen is hidden by default and **L+R** brings it up when a screen has no native menu yet. The corner panel is a half-size copy of the bottom screen in the lower-right corner of the top screen. Full view replaces the top screen with the bottom screen.
+
+### Automatic view (optional)
+
+Set `auto = on` in `usum-onescreen.ini` (or **Auto panel** in the plugin menu) and the plugin picks a view by scene instead. **L+R** then holds your choice until the next scene change.
 
 | Scene | View |
 |---|---|
@@ -55,8 +59,6 @@ The plugin watches which scene the game is in and picks a view:
 | Talking to people, Poké Mart lists (top screen only) | off |
 | Anything not listed yet | corner panel |
 
-The corner panel is a half-size copy of the bottom screen in the lower-right corner of the top screen. Full view replaces the top screen with the bottom screen.
-
 ## Battles
 
 Battles are played with buttons, no panel: when it is your turn a menu appears on the right of the top screen.
@@ -64,9 +66,10 @@ Battles are played with buttons, no panel: when it is your turn a menu appears o
 - **Up/Down** pick Fight, Bag, Pokémon or Run, **A** chooses.
 - **Fight** lists your moves with their type, PP, and how effective each is against the opponent. **A** uses one, **B** goes back.
 - **Bag** and **Pokémon** open the game's own screens; a small box on the top screen says what is highlighted (on the Poké Balls tab, which ball). Use **Left/Right** for the Bag's tabs, **Up/Down**, **A** and **B** as on the bottom screen. To catch: Bag → Poké Balls → a ball → A → A (Use).
-- After a catch the game asks whether to give a nickname: **B** for no (yes opens a keyboard on the bottom screen; use ZR for the panel).
+- After a catch, **B** goes through the Pokédex page and the nickname question (No). Yes opens a keyboard on the bottom screen: use **L+R** to see it.
+- When the game asks something else in battle (learning a move, sending in the next Pokémon), a box at the top says so; the choices are on the bottom screen (**L+R**).
 
-If something in a battle isn't covered (a double battle's target screen, for example), ZR still shows the bottom screen.
+If something in a battle isn't covered (a double battle's target screen, for example), **L+R** still shows the bottom screen.
 
 ## Known gaps
 

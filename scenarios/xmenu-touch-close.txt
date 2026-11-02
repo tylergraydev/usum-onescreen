@@ -3,6 +3,8 @@
 # close that the old X/B key tracking missed. Opens it by touch too (via
 # Pokémon and back) to check the state survives another scene.
 include common/boot
+# Checks the automatic view per scene, which is off by default.
+send auto on
 # This checks the panel path for the X menu: turn the native menu off.
 send xmenu off
 
