@@ -3,6 +3,8 @@
 # close that the old X/B key tracking missed. Opens it by touch too (via
 # Pokémon and back) to check the state survives another scene.
 include common/boot
+# This checks the panel path for the X menu: turn the native menu off.
+send xmenu off
 
 # Coming back from the Town Map the field state says "menu" for a moment;
 # the panel must not flash on (TownMap = full, then FieldRo = off).
