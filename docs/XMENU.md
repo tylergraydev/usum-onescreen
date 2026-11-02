@@ -29,6 +29,11 @@ by screenshot); where they show up later in the game was not checked. They are
 not entries; page 2's two empty slots are drawn as outlines. If a later save
 fills those slots, they need entries here (and measured taps in the layouts).
 
+Options, Trainer Passport and Battle Video open native top-screen screens
+(`docs/NATIVE-SCREENS.md`; `XMenuOpensNative` lists them). With the cursor on
+another entry that opens a scene, the footer says it opens on the bottom
+screen (L+R shows it).
+
 QR Scanner is shown but greyed out: its tap was never verified (Azahar has no
 camera and hangs in it), so the action layer refuses it, and A logs
 `xmenu: qr_scanner not available`. Mark it `verified: tap` in
