@@ -1,0 +1,52 @@
+# The X menu closed by tapping its back button (not B) turns the panel off.
+# Auto panel reads the field state (docs/OFFSETS.md), so it sees a touch
+# close that the old X/B key tracking missed. Opens it by touch too (via
+# Pokémon and back) to check the state survives another scene.
+include common/boot
+
+# Coming back from the Town Map the field state says "menu" for a moment;
+# the panel must not flash on (TownMap = full, then FieldRo = off).
+send move 160 100; tap 6  # the map on Rotom's screen
+wait-scene TownMap 30
+expect-mode full
+sleep 3
+shot townmap
+mark
+send move 16 224; tap 6   # Town Map's back button
+wait-scene FieldRo 30
+expect-mode off
+sleep 3
+reject-log scene FieldRo.*-> panel: mode panel
+
+mark
+send press x
+expect-mode panel         # FieldRo.xmenu = panel
+expect-log x menu open \(field state 4\)
+sleep 2
+shot xmenu
+send move 16 224; tap 6   # back button, bottom left
+expect-mode off           # FieldRo = off
+expect-log x menu closed \(field state 0\)
+sleep 2
+shot closed
+
+# Again, after visiting Party: back in the open menu, then close by touch.
+send press x
+expect-mode panel
+sleep 2
+send move 88 48; tap 6    # POKÉMON
+wait-scene main:00647FCC 30
+expect-mode full
+sleep 3
+send move 16 223; tap 6   # Party's back button
+wait-scene FieldRo 30
+expect-mode panel
+sleep 2
+shot xmenu-again
+mark
+send move 16 224; tap 6
+expect-mode off
+expect-log x menu closed \(field state 0\)
+sleep 1
+shot field
+stop
