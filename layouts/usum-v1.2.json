@@ -1,0 +1,233 @@
+{
+  "game": "Pokemon Ultra Sun 00040000001B5000 v2048 (0x0800)",
+  "measured": "2026-11-02, Azahar instance, early save (Route 2, 6 Pokemon, no Z-Crystal)",
+  "coordinates": "bottom-screen pixels, x 0-319, y 0-239. rect = [x0, y0, x1, y1] inclusive. tap = the point that was tapped to verify; use it.",
+  "verified_values": {
+    "tap": "a tap at this point produced the result in 'does' (evidence = screenshot names in analysis/private/shots/, not in git, plus scene log)",
+    "measured": "bounds measured from a screenshot, NOT tapped on purpose (would change game state); 'why' says why",
+    "none": "tapped, nothing happens (listed so Phase 2 avoids it)"
+  },
+  "screens": {
+    "field": {
+      "scene": "FieldRo",
+      "reach": "overworld, X menu closed",
+      "buttons": {
+        "rotom_face": {"rect": [113, 0, 207, 89], "tap": [160, 35], "does": "opens the Pokedex (scene Zukan)", "verified": "tap", "evidence": "re5-f-rotom, re5-f-rotom2; also (160,5); log scene: Zukan"},
+        "map": {"rect": [29, 84, 290, 231], "tap": [160, 100], "does": "opens the Town Map (scene TownMap)", "verified": "tap", "evidence": "re5-f-edge-160-100; also (60,200) and (280,110); log scene: TownMap"},
+        "rotom_eye_left": {"rect": [56, 17, 116, 80], "tap": [86, 48], "does": "nothing", "verified": "none", "evidence": "re5-f-edge-86-48, also (40,40)"},
+        "rotom_eye_right": {"rect": [203, 17, 263, 80], "tap": [233, 48], "does": "nothing", "verified": "none", "evidence": "re5-f-edge-233-48"},
+        "player_marker": {"rect": [150, 148, 169, 167], "tap": [160, 160], "does": "nothing (the map around it opens the Town Map)", "verified": "none", "evidence": "re5-f-map, re5-f-pt-160-160 (tried twice)"},
+        "frame_outside_map": {"rect": null, "tap": [300, 225], "does": "nothing", "verified": "none", "evidence": "re5-f-pt-300-225"}
+      },
+      "notes": ["map rect is the visible map window from pixels; taps inside it except the player marker opened the Town Map at 3 of 3 points tried"]
+    },
+    "town_map": {
+      "scene": "TownMap",
+      "reach": "field: tap the map",
+      "buttons": {
+        "back": {"rect": [0, 210, 33, 239], "tap": [16, 224], "does": "back to the field (scene FieldRo)", "verified": "tap", "evidence": "re5-map-back"},
+        "zoom": {"rect": [284, 19, 313, 48], "tap": [298, 33], "does": "toggles zoom (Y)", "verified": "tap", "evidence": "re5-map-zoom (in, tapped at 298,47), re5-map-zoomout (out)"},
+        "prev_island": {"rect": [8, 111, 20, 128], "tap": [14, 120], "does": "previous island/area", "verified": "tap", "evidence": "re5-map-left; also (10,120)"},
+        "next_island": {"rect": [299, 111, 311, 128], "tap": [305, 120], "does": "next island/area", "verified": "tap", "evidence": "re5-map-right2; also (306,131)"}
+      },
+      "notes": ["arrow rects are the drawn glyphs; taps up to ~11 px below them (y 131) still worked"]
+    },
+    "pokedex_top": {
+      "scene": "Zukan",
+      "reach": "field: Rotom face, or X menu: Pokedex",
+      "buttons": {
+        "alola_dex": {"rect": [20, 26, 309, 53], "tap": [164, 39], "does": "opens the Alola Pokedex list", "verified": "tap", "evidence": "re5-dex-alola"},
+        "island_dex_1": {"rect": [27, 63, 309, 88], "tap": [168, 75], "does": "opens the Melemele Pokedex grid", "verified": "tap", "evidence": "re5-dex-melemele"},
+        "island_dex_2": {"rect": [29, 95, 307, 116], "tap": [168, 105], "does": "locked in this save: nothing", "verified": "none", "evidence": "re5-dex-locked1"},
+        "island_dex_3": {"rect": [29, 125, 307, 146], "tap": [168, 135], "does": "locked in this save (same row style as island_dex_2)", "verified": "measured", "why": "locked row; island_dex_2 shows locked rows do nothing"},
+        "island_dex_4": {"rect": [29, 155, 307, 176], "tap": [168, 165], "does": "locked in this save (same row style as island_dex_2)", "verified": "measured", "why": "locked row"},
+        "evaluation": {"rect": [60, 191, 309, 212], "tap": [184, 201], "does": "Rotom asks which Pokedex to evaluate (B cancels)", "verified": "tap", "evidence": "re5-dex-eval (top screen shows the question)"},
+        "back": {"rect": [0, 212, 31, 234], "tap": [15, 223], "does": "leaves the Pokedex (to the field or the X menu, wherever it was opened from); from a list it goes back to this screen", "verified": "tap", "evidence": "re5-dex-exit2 (log Zukan -> FieldRo), re5-x-dexback (X menu), re5-dex-back1/back2 (list -> top)"}
+      },
+      "notes": ["row colour is fixed per row, not a selection highlight; the red arrow is the cursor", "rows 2-4 are locked (blank) in this save"]
+    },
+    "xmenu": {
+      "scene": "FieldRo (overlay)",
+      "reach": "field: press X. The cursor remembers its last entry.",
+      "buttons": {
+        "pokemon": {"rect": [34, 29, 143, 68], "tap": [88, 48], "does": "opens Party (scene main:00647FCC)", "verified": "tap", "evidence": "re5-x-party; edges (88,65) and (40,48) also open it"},
+        "pokedex": {"rect": [176, 29, 286, 68], "tap": [230, 48], "does": "opens the Pokedex (scene Zukan)", "verified": "tap", "evidence": "re5-x-dex"},
+        "bag": {"rect": [34, 89, 143, 128], "tap": [88, 108], "does": "opens the Bag (scene main:006488C8)", "verified": "tap", "evidence": "re5-x-bag"},
+        "quick_link": {"rect": [176, 89, 286, 128], "tap": [230, 108], "does": "Quick Link screen (no scene change); back (15,223) returns", "verified": "tap", "evidence": "re5-x-ql, re5-ql-back"},
+        "festival_plaza": {"rect": [34, 149, 143, 188], "tap": [88, 168], "does": "goes straight to Festival Plaza (scene stays FieldRo). To leave: back (16,223) asks 'quit?', then press Y", "verified": "tap", "evidence": "re5-x-fp, re5-fp-back, re5-fp-quit1"},
+        "trainer_passport": {"rect": [176, 149, 286, 188], "tap": [230, 168], "does": "opens the Trainer Passport (scene TrainerPass); back (15,223) returns", "verified": "tap", "evidence": "re5-x-tp, re5-tp-back"},
+        "save": {"rect": [183, 206, 319, 239], "tap": [251, 222], "does": "Save (Y)", "verified": "measured", "why": "never tapped: the rules forbid saving"},
+        "back": {"rect": [0, 210, 33, 239], "tap": [16, 224], "does": "closes the X menu", "verified": "tap", "evidence": "re5-x-preback -> re5-x-back"},
+        "next_page": {"rect": [299, 9, 308, 16], "tap": [303, 12], "does": "page 2 (Pokemon Refresh, QR Scanner, Battle Video, Options)", "verified": "tap", "evidence": "re5-x-page"},
+        "pill_label_area": {"rect": null, "tap": [88, 80], "does": "nothing: the text labels under the pills are not part of the button", "verified": "none", "evidence": "re5-xe-label"},
+        "gap_between_columns": {"rect": null, "tap": [160, 48], "does": "nothing", "verified": "none", "evidence": "re5-xe-gap"}
+      },
+      "notes": ["pill rects: x from the white outline, y from the 60 px row pitch and column scans; edge taps (88,65) and (40,48) opened Party"]
+    },
+    "xmenu_page2": {
+      "scene": "FieldRo (overlay)",
+      "reach": "X menu: next_page",
+      "buttons": {
+        "pokemon_refresh": {"rect": [34, 29, 143, 68], "tap": [88, 48], "does": "Pokemon Refresh (same grid slot as page 1 pokemon)", "verified": "measured", "why": "not needed for Phase 2; same grid as page 1"},
+        "qr_scanner": {"rect": [176, 29, 286, 68], "tap": [230, 48], "does": "QR Scanner", "verified": "measured", "why": "not needed for Phase 2"},
+        "battle_video": {"rect": [34, 89, 143, 128], "tap": [88, 108], "does": "Battle Video", "verified": "measured", "why": "not needed for Phase 2"},
+        "options": {"rect": [176, 89, 286, 128], "tap": [230, 108], "does": "Options (scene Config); back (15,223) leaves without confirming", "verified": "tap", "evidence": "re5-x2-options, re5-x2-options-back"},
+        "prev_page": {"rect": [13, 11, 19, 14], "tap": [16, 12], "does": "page 1", "verified": "tap", "evidence": "re5-x-page1"},
+        "save": {"rect": [183, 206, 319, 239], "tap": [251, 222], "does": "Save", "verified": "measured", "why": "never tapped"},
+        "back": {"rect": [0, 210, 33, 239], "tap": [16, 224], "does": "closes the X menu", "verified": "measured", "why": "same button as page 1"}
+      },
+      "notes": ["slots 5 and 6 are empty on page 2"]
+    },
+    "party": {
+      "scene": "main:00647FCC",
+      "reach": "X menu: Pokemon",
+      "buttons": {
+        "slot1": {"rect": [6, 6, 169, 62], "tap": [87, 35], "does": "opens slot 1's menu", "verified": "tap", "evidence": "re5-party-l1 (Torracat); edge (165,45) also slot 1"},
+        "slot2": {"rect": [170, 24, 319, 80], "tap": [247, 52], "does": "opens slot 2's menu", "verified": "tap", "evidence": "re5-party-r1 (Zorua); edge (176,45) also slot 2"},
+        "slot3": {"rect": [6, 66, 169, 122], "tap": [87, 95], "does": "opens slot 3's menu", "verified": "tap", "evidence": "re5-party-l2 (Pikipek); top edge (87,72) also slot 3, (87,66) is a gap"},
+        "slot4": {"rect": [170, 84, 319, 140], "tap": [247, 112], "does": "opens slot 4's menu", "verified": "tap", "evidence": "re5-party-r2 (Pichu)"},
+        "slot5": {"rect": [6, 126, 169, 182], "tap": [87, 155], "does": "opens slot 5's menu", "verified": "tap", "evidence": "re5-party-l3 (Ledyba)"},
+        "slot6": {"rect": [170, 144, 319, 200], "tap": [247, 172], "does": "opens slot 6's menu", "verified": "tap", "evidence": "re5-party-r3 (Buneary)"},
+        "back": {"rect": [0, 212, 32, 235], "tap": [16, 223], "does": "back to the X menu", "verified": "tap", "evidence": "re5-party-back (log -> FieldRo, x menu still shown)"},
+        "move_pokemon": {"rect": [90, 212, 203, 235], "tap": [146, 223], "does": "(Y) reorder mode: 'Which Pokemon do you want to move?' B cancels", "verified": "tap", "evidence": "re5-party-before-y -> re5-party-y"},
+        "held_item": {"rect": [215, 212, 319, 235], "tap": [267, 223], "does": "(X) move-held-item mode: 'Which item do you want to move?' B cancels", "verified": "tap", "evidence": "tapped at (266,218): re5-pe-87-66 -> re5-pe-87-72"}
+      },
+      "notes": ["party order: slot n is column (n-1)%2, row (n-1)/2; left column y 6+60r, right column y 24+60r", "slot rects: inner panel colours measured, outer edge from edge taps; the left/right columns meet at x 169/170 (x 165 = left, 176 = right, both tested)"]
+    },
+    "party_slot_menu": {
+      "scene": "main:00647FCC",
+      "reach": "Party: tap a slot",
+      "buttons": {
+        "summary": {"rect": [215, 123, 315, 145], "tap": [266, 134], "does": "Summary (scene Status); back (15,223) returns to Party", "verified": "tap", "evidence": "re5-party-summary, re5-summary-back"},
+        "restore": {"rect": [215, 151, 315, 173], "tap": [266, 162], "does": "Restore (label on the button; not tried)", "verified": "measured", "why": "not needed; avoided game-state actions"},
+        "held_item": {"rect": [215, 179, 315, 201], "tap": [266, 190], "does": "Held Item submenu", "verified": "measured", "why": "avoided item changes"},
+        "back": {"rect": [215, 207, 315, 229], "tap": [266, 218], "does": "closes the slot menu", "verified": "tap", "evidence": "re5-party-sub-back"}
+      },
+      "notes": ["the top text box names the Pokemon; 28 px pitch; inner highlight rects measured (x 223-308), outer edges approximate"]
+    },
+    "bag": {
+      "scene": "main:006488C8",
+      "reach": "X menu: Bag",
+      "buttons": {
+        "item_row1": {"rect": [157, 4, 315, 29], "tap": [235, 16], "does": "opens the item menu for the 1st visible row", "verified": "tap", "evidence": "re5-bag-row-y16 (Awakening, list scrolled)"},
+        "item_row2": {"rect": [157, 32, 315, 57], "tap": [235, 44], "does": "item menu, row 2", "verified": "tap", "evidence": "re5-bag-row2 (Paralyze Heal)"},
+        "item_row3": {"rect": [157, 60, 315, 85], "tap": [235, 72], "does": "item menu, row 3", "verified": "measured", "why": "same 28 px pitch as the tapped rows 1, 2, 4, 7"},
+        "item_row4": {"rect": [157, 88, 315, 113], "tap": [235, 100], "does": "item menu, row 4", "verified": "tap", "evidence": "re5-bag-row-y100 (Ice Heal)"},
+        "item_row5": {"rect": [157, 116, 315, 141], "tap": [235, 128], "does": "item menu, row 5", "verified": "measured", "why": "same pitch"},
+        "item_row6": {"rect": [157, 144, 315, 169], "tap": [235, 156], "does": "item menu, row 6", "verified": "measured", "why": "same pitch"},
+        "item_row7": {"rect": [157, 172, 315, 197], "tap": [235, 184], "does": "item menu, row 7", "verified": "tap", "evidence": "re5-bag-row-y184 (Fresh Water)"},
+        "item_row8_partial": {"rect": [157, 200, 315, 212], "tap": [235, 210], "does": "nothing (half-visible row)", "verified": "none", "evidence": "re5-bag-partial"},
+        "pocket_rotom_powers": {"rect": [122, 216, 145, 239], "tap": [134, 230], "does": "Rotom Powers pocket", "verified": "tap", "evidence": "re5-bag-tab0 (top: Rotom Powers)"},
+        "pocket_medicine": {"rect": [146, 216, 169, 239], "tap": [158, 230], "does": "Medicine pocket", "verified": "tap", "evidence": "re5-bag-tab1"},
+        "pocket_items": {"rect": [170, 216, 193, 239], "tap": [182, 230], "does": "Items pocket", "verified": "tap", "evidence": "re5-bag-tab2"},
+        "pocket_tms": {"rect": [194, 216, 217, 239], "tap": [206, 230], "does": "TMs pocket", "verified": "tap", "evidence": "re5-bag-tab3"},
+        "pocket_berries": {"rect": [218, 216, 241, 239], "tap": [230, 230], "does": "Berries pocket", "verified": "tap", "evidence": "re5-bag-tab4"},
+        "pocket_key_items": {"rect": [242, 216, 265, 239], "tap": [254, 230], "does": "Key Items pocket", "verified": "tap", "evidence": "re5-bag-tab5"},
+        "pocket_free_space": {"rect": [266, 216, 289, 239], "tap": [278, 230], "does": "Free Space pocket", "verified": "tap", "evidence": "re5-bag-tab6"},
+        "scrollbar": {"rect": [316, 10, 318, 210], "tap": [317, 190], "does": "display only: tap and drag did nothing", "verified": "none", "evidence": "re5-bag-sbtap, re5-bag-sbdrag"},
+        "back": {"rect": [0, 214, 31, 234], "tap": [15, 224], "does": "back to the X menu", "verified": "tap", "evidence": "re5-bag-back"}
+      },
+      "notes": [
+        "DANGER: touch-drag or a fast flick on an item row picks the item up and reorders the pocket. Phase 2 must only tap (touch on/off at one point).",
+        "Scrolling: no touch scroll found. D-pad Up/Down moves the cursor; the list scrolls past row 7 and wraps (Up from row 1 jumps to the last item). Evidence re5-bag-dpad, re5-bag-dpup.",
+        "The party column on the left (x 0-150) was not tapped.",
+        "Tabs: white separators every 24 px at x 146..290; selected tab is taller (top ~210)."
+      ]
+    },
+    "bag_item_menu": {
+      "scene": "main:006488C8",
+      "reach": "Bag: tap an item row",
+      "buttons": {
+        "use": {"rect": [161, 125, 316, 150], "tap": [236, 138], "does": "Use this item", "verified": "measured", "why": "rules: never confirm item use"},
+        "give": {"rect": [161, 153, 316, 178], "tap": [236, 166], "does": "Give to Pokemon", "verified": "measured", "why": "changes held items"},
+        "move_to_free_space": {"rect": [161, 181, 316, 206], "tap": [236, 194], "does": "Move to Free Space", "verified": "measured", "why": "changes the bag"},
+        "cancel": {"rect": [161, 209, 316, 236], "tap": [236, 222], "does": "closes the item menu", "verified": "tap", "evidence": "re5-bag-cancel"}
+      },
+      "notes": ["entries depend on the item (this is the Medicine list); 28 px pitch"]
+    },
+    "battle_command": {
+      "scene": "Battle",
+      "reach": "wild battle start",
+      "buttons": {
+        "fight": {"rect": [235, 20, 319, 219], "tap": [285, 120], "does": "move list", "verified": "tap", "evidence": "re5-b-fight, re5-b3-fight"},
+        "pokemon": {"rect": [0, 32, 67, 107], "tap": [35, 75], "does": "battle party list", "verified": "tap", "evidence": "re5-b-pkmn"},
+        "bag": {"rect": [0, 130, 73, 211], "tap": [35, 165], "does": "battle bag", "verified": "tap", "evidence": "re5-b-bag, re5-b3-bag"},
+        "run": {"rect": [60, 193, 259, 239], "tap": [160, 225], "does": "runs; with a wild Pokemon it escaped to the field without needing A (log Battle -> (none) -> FieldRo)", "verified": "tap", "evidence": "re5-b-prerun -> re5-b-run; second battle re5-b2-run"},
+        "quick_ball": {"rect": [0, 0, 28, 28], "tap": [12, 12], "does": "(Y) throws a Poke Ball", "verified": "measured", "why": "would use an item"},
+        "z_move": {"rect": null, "tap": null, "does": "not present: no Z-move button in the move list; the bag has no Z-Crystal pocket in this save", "verified": "measured", "why": "unreachable"},
+        "mega": {"rect": null, "tap": null, "does": "not present in this save", "verified": "measured", "why": "unreachable"}
+      },
+      "notes": ["fight/pokemon/bag/run rects are bounding boxes of each shape's colour in re5-b-cmd (the shapes are not rectangles; run's box includes its blue outline); use the tap points", "(88,80) and the arena centre (160,48) did nothing in battle"]
+    },
+    "battle_moves": {
+      "scene": "Battle",
+      "reach": "battle_command: fight",
+      "buttons": {
+        "move1": {"rect": [150, 14, 319, 66], "tap": [235, 41], "does": "uses move 1 at once (no target screen in a single battle)", "verified": "tap", "evidence": "re5-b-fight2 -> re5-b-move1 (turn ran)"},
+        "move2": {"rect": [150, 72, 319, 116], "tap": [235, 95], "does": "uses move 2", "verified": "tap", "evidence": "re5-b3-move2: Fire Fang KO'd the wild Spearow, battle ended"},
+        "move3": {"rect": [150, 122, 319, 166], "tap": [235, 145], "does": "uses move 3", "verified": "tap", "evidence": "Double Kick PP 30 -> 29 (re5-b3-fight2 -> re5-b3-fight3)"},
+        "move4": {"rect": [150, 172, 319, 216], "tap": [235, 195], "does": "uses move 4", "verified": "tap", "evidence": "Lick PP 29 -> 28 (re5-b3-premove4 -> re5-b3-fight2); also hit at (154,195)"},
+        "info1": {"rect": [145, 22, 164, 41], "tap": [154, 31], "does": "move info for move 1; tap anywhere closes it", "verified": "tap", "evidence": "re5-b3-info-24 (Scratch; tapped at 154,24)"},
+        "info2": {"rect": [145, 72, 164, 91], "tap": [154, 81], "does": "move info, move 2", "verified": "tap", "evidence": "re5-b3-info-81 (Fire Fang)"},
+        "info3": {"rect": [145, 122, 164, 141], "tap": [154, 131], "does": "move info, move 3", "verified": "tap", "evidence": "re5-b-info3 (Double Kick; tapped at 154,138)"},
+        "info4": {"rect": [145, 172, 164, 191], "tap": [154, 181], "does": "move info, move 4", "verified": "tap", "evidence": "re5-b3-info4 (Lick)"},
+        "back": {"rect": [0, 213, 31, 235], "tap": [15, 224], "does": "back to battle_command", "verified": "tap", "evidence": "re5-b-fightback"}
+      },
+      "notes": ["50 px pitch. The info circle is small: (154,195) is below info4 and USES move 4", "target selection: does not appear in single battles (tested move 1-4); double battles not reachable in this save"]
+    },
+    "battle_party": {
+      "scene": "Battle",
+      "reach": "battle_command: pokemon",
+      "buttons": {
+        "slots": {"rect": null, "tap": null, "does": "same slot layout as party (slot1..slot6 rects/taps)", "verified": "tap", "evidence": "re5-b-pkmn; slot5 (35,165) opened Ledyba's page (re5-b-bag-try)"},
+        "back": {"rect": [0, 212, 32, 235], "tap": [15, 224], "does": "back to battle_command", "verified": "tap", "evidence": "re5-b-bk2 -> re5-b-bk3"}
+      },
+      "notes": ["bottom bar says 'Choose a Pokemon.' instead of the Y/X buttons"]
+    },
+    "battle_party_page": {
+      "scene": "Battle",
+      "reach": "battle_party: tap a slot",
+      "buttons": {
+        "switch": {"rect": [57, 181, 310, 207], "tap": [182, 194], "does": "Switch (label on the button)", "verified": "measured", "why": "avoided spending a turn on a switch"},
+        "restore": {"rect": [57, 213, 178, 238], "tap": [118, 226], "does": "Restore (label on the button; not tried)", "verified": "measured", "why": "avoided"},
+        "summary": {"rect": [186, 213, 310, 238], "tap": [248, 226], "does": "summary page", "verified": "tap", "evidence": "re5-b-summary"},
+        "party_icon_1": {"rect": [0, 4, 40, 34], "tap": [20, 18], "does": "show slot 1", "verified": "measured", "why": "same strip as party_icon_2"},
+        "party_icon_2": {"rect": [0, 38, 40, 68], "tap": [20, 52], "does": "show slot 2", "verified": "tap", "evidence": "re5-b-sum-icon2 (Zorua)"},
+        "party_icon_3": {"rect": [0, 72, 40, 102], "tap": [20, 87], "does": "show slot 3", "verified": "measured", "why": "~34 px pitch from the screenshot"},
+        "party_icon_4": {"rect": [0, 106, 40, 136], "tap": [20, 120], "does": "show slot 4", "verified": "measured", "why": "pitch"},
+        "party_icon_5": {"rect": [0, 140, 40, 170], "tap": [20, 155], "does": "show slot 5", "verified": "measured", "why": "pitch"},
+        "party_icon_6": {"rect": [0, 174, 40, 204], "tap": [20, 189], "does": "show slot 6", "verified": "measured", "why": "pitch"},
+        "back": {"rect": [0, 212, 32, 235], "tap": [15, 224], "does": "back (summary -> page -> list)", "verified": "tap", "evidence": "re5-b-bk1, re5-b-bk2"}
+      }
+    },
+    "battle_bag": {
+      "scene": "Battle",
+      "reach": "battle_command: bag",
+      "buttons": {
+        "item_rows": {"rect": null, "tap": null, "does": "same row layout as bag item_row1..7; a tap opens the item page", "verified": "tap", "evidence": "re5-b3-row1 (Potion)"},
+        "pocket_rotom_powers": {"rect": [106, 216, 147, 239], "tap": [127, 228], "does": "Rotom Powers (Roto Boost)", "verified": "tap", "evidence": "re5-b-tab0"},
+        "pocket_hp_pp": {"rect": [148, 216, 189, 239], "tap": [169, 228], "does": "HP/PP Restore", "verified": "tap", "evidence": "re5-b-tab1, re5-b3-tab1"},
+        "pocket_status": {"rect": [190, 216, 231, 239], "tap": [211, 228], "does": "status restore (Paralyze Heal...)", "verified": "tap", "evidence": "re5-b-tab2"},
+        "pocket_balls": {"rect": [232, 216, 273, 239], "tap": [253, 228], "does": "Poke Balls", "verified": "tap", "evidence": "re5-b-tab3"},
+        "pocket_battle_items": {"rect": [274, 216, 315, 239], "tap": [295, 228], "does": "battle items (X Defense...)", "verified": "tap", "evidence": "re5-b-tab4"},
+        "back": {"rect": [0, 214, 31, 234], "tap": [15, 224], "does": "back to battle_command", "verified": "tap", "evidence": "re5-b-bagback, re5-b3-bagback"}
+      }
+    },
+    "battle_bag_item_page": {
+      "scene": "Battle",
+      "reach": "battle_bag: tap an item row",
+      "buttons": {
+        "use": {"rect": [65, 208, 300, 236], "tap": [182, 222], "does": "Use; rect approximate (inner fill measured 72-291 x 225-230, column scan 208-235)", "verified": "measured", "why": "rules: never confirm item use"},
+        "prev_item": {"rect": [14, 76, 22, 86], "tap": [18, 81], "does": "previous item in the pocket", "verified": "tap", "evidence": "re5-b3-itemprev"},
+        "next_item": {"rect": [297, 76, 305, 86], "tap": [301, 81], "does": "next item in the pocket", "verified": "tap", "evidence": "re5-b3-itemnext2 (Super Potions); (306,95) missed"},
+        "back": {"rect": [0, 214, 31, 234], "tap": [15, 224], "does": "back to the item list", "verified": "tap", "evidence": "re5-b3-itemback"}
+      }
+    }
+  },
+  "not_reached": {
+    "z_move_button": "no Z-move button in the move list and no Z-Crystal pocket in the bag in this save",
+    "mega_button": "no Mega Evolution in this save",
+    "target_selection": "does not appear in single battles; no double battle reachable from this save",
+    "save_confirm": "Save is never tapped (rules)"
+  }
+}
