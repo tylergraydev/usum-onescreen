@@ -11,12 +11,17 @@ system font**, decoded and cached by the plugin instead of CTRPF's
 
 ```cpp
 static UI::Layer layer;
-static u8 pixels[W * H * 4];          // >= Layer::BytesFor(screen, area)
+static std::vector<u8> pixels;        // Layer::BytesFor(screen, area) bytes
 
 // In the OSD callback, top screen:
 UiInitFont();                          // once; cheap afterwards
 const UI::Surface fb = SurfaceFromScreen(screen);
-if (!layer.Matches(fb)) { layer.Setup(fb, area, radius, pixels, sizeof(pixels)); dirty = true; }
+if (!layer.Matches(fb))
+{
+    pixels.resize(UI::Layer::BytesFor(fb, area));
+    layer.Setup(fb, area, radius, pixels.data(), pixels.size());
+    dirty = true;
+}
 if (dirty) { UI::Canvas c = layer.Begin(); DrawMyMenu(c); dirty = false; }
 layer.Present(fb);
 ```
