@@ -2,7 +2,16 @@
 
 #include <string>
 
+// Plain struct, no CTRPF: the native map's pure part (Screens/MapView.hpp)
+// and its host tests use it too.
+#ifdef __3DS__
 #include <3ds/types.h>
+#else
+#include <cstdint>
+typedef uint16_t u16;
+typedef uint32_t u32;
+typedef int32_t  s32;
+#endif
 
 namespace OneScreen
 {

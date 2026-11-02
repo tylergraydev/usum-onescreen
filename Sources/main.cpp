@@ -14,6 +14,7 @@
 #include "Panel.hpp"
 #include "Party.hpp"
 #include "Scene.hpp"
+#include "Screens/Map.hpp"
 #include "Screens/XMenu.hpp"
 #include "Settings.hpp"
 #include "Shot.hpp"
@@ -116,6 +117,7 @@ namespace CTRPluginFramework
     //     screen: open-pokedex, open-party, open-bag, battle-run, close; Actions.hpp)
     //   xmenu on|off|status | xmenu select NAME | xmenu open NAME   (native X menu,
     //     Screens/XMenu.hpp; NAME as in XMenuGrid.cpp: pokemon, pokedex, ..., map, save)
+    //   map on|off|open|close|status   (native top-screen map, Screens/Map.hpp)
     static const char *CommandPath = "/usum-cmd.txt";
 
     // Global data + bss of USUM v1.2 (from the exheader): 0x669000 .. 0x6D5F44.
@@ -302,6 +304,18 @@ namespace CTRPluginFramework
                 return;
             }
         }
+        else if (line.compare(0, 4, "map ") == 0)
+        {
+            std::vector<std::string> log;
+            const bool known = OneScreen::MapCommand(line.substr(4), log);
+            for (const std::string &l : log)
+                WriteLog(l, false);
+            if (!known)
+            {
+                WriteLog("cmd: unknown map command in '" + line + "'", false);
+                return;
+            }
+        }
         else if ((fields = std::sscanf(line.c_str(), "peek %x %u", &a, &b)) >= 1)
         {
             // Logs COUNT words (default 4) at ADDR, if readable.
@@ -443,6 +457,11 @@ namespace CTRPluginFramework
         for (const std::string &line : xmenuLog)
             WriteLog(line, false);
 
+        std::vector<std::string> mapLog;
+        OneScreen::MapUpdate(s_game->offsets.sceneManager, scene, fieldState, mapLog);
+        for (const std::string &line : mapLog)
+            WriteLog(line, false);
+
         OneScreen::ShotPoll();
         PollCommands();
     }
@@ -539,6 +558,7 @@ namespace CTRPluginFramework
         // Before the panel: its callback takes the screenshots, so it must
         // run after the native menus have drawn.
         OneScreen::StartXMenu();
+        OneScreen::StartMap();
         OneScreen::StartPanel(OneScreen::PanelMode::Off, s_game->offsets.gxDisplayTransfer.address,
                               s_game->offsets.gxTextureCopy.address);
         OneScreen::StartActions();
