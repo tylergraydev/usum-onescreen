@@ -139,6 +139,7 @@ namespace Screens
 
         BattlePage m_page = BattlePage::Hidden;
         GameMenu m_menu = GameMenu::None;
+        bool m_afterCatch = false;
         u8 m_cursor = 0;
         u32 m_stable = 0;           // frames the game's menu has been up
         bool m_pending = false;     // a choice was sent, the game hasn't moved yet

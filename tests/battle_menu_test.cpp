@@ -90,6 +90,8 @@ static void TestPages(void)
     BattleMenu after;
     CHECK(!after.Update(caught, BattleKeys::B).capture && after.Page() == BattlePage::Game && after.Visible());
     CHECK(after.Status(caught).find("after catch") != std::string::npos);
+    // ...drawn at the top: the question is along the bottom of the screen.
+    CHECK(after.Area().Bottom() <= 120 && !after.Area().Empty());
 
     // Other screens get the helper only after the game's Bag / Pokémon list.
     BattleMenu intro;
