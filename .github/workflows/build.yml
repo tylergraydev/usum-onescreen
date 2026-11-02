@@ -4,6 +4,11 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      deps_offline:
+        description: Install libctrpf/3gxtool only from the actions cache (tests the fallback)
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -26,6 +31,8 @@ jobs:
 
       - name: Install libctrpf and 3gxtool
         run: sh tools/ci/install-deps.sh .ci-pkgs
+        env:
+          DEPS_OFFLINE: ${{ inputs.deps_offline && '1' || '0' }}
 
       - name: Save libctrpf and 3gxtool for later runs
         if: steps.pkg-cache.outputs.cache-matched-key != format('tpo-pkgs-v1-{0}', hashFiles('.ci-pkgs/*'))
