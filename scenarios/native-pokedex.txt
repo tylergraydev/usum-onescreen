@@ -1,0 +1,199 @@
+# The native Pokédex (Screens/Pokedex.cpp, docs/RE7-pokedex.md): with the
+# panel off, the Pokédex opens from the native X menu and everything is done
+# with buttons while the top screen shows the native Pokédex: the top level,
+# the Melemele grid (the island dex this save has), an entry page and the next
+# seen one, the Alola list, an entry from it, and back out to the X menu.
+# Then from Rotom's face: the panel turned on by hand makes it step aside, and
+# `pokedex off` gives the Pokédex back to the panel. A screenshot is taken
+# before every A. The save is early (Route 2): 22 caught, 38 seen, Melemele
+# open, Akala / Ula'ula / Poni locked.
+include common/boot
+# The panel hold is checked against the automatic view (off by default).
+send auto on
+
+# --- X menu -> Pokédex, native top level ---
+mark
+send press x
+expect-log ^xmenu: shown 10
+expect-log ^xmenu: game cursor page 10
+send xmenu select pokedex
+expect-log ^xmenu: cursor pokedex 5
+shot pre-pokedex
+send press a
+expect-log ^action: xmenu-pokedex ok 15
+wait-scene Zukan 10
+expect-log ^pokedex: data 403 records, alola 22 caught 38 seen \(126 rows\), melemele open 22/38, akala locked \d+/\d+, ulaula locked \d+/\d+, poni locked \d+/\d+, evaluation 15
+expect-log ^pokedex: shown top 10
+# A fresh boot opens on Alola.
+expect-log ^pokedex: top cursor alola 5
+expect-mode off           # Zukan would be panel; the native Pokédex holds it off
+sleep 1
+shot top
+
+# The game's own cursor moves (keys go to the game); locked rows are
+# skipped and both ends wrap.
+mark
+send press down
+expect-log ^pokedex: top cursor melemele 5
+sleep 1
+mark
+send press down
+expect-log ^pokedex: top cursor evaluation 5
+sleep 1
+mark
+send press down
+expect-log ^pokedex: top cursor alola 5
+sleep 1
+mark
+send press up
+expect-log ^pokedex: top cursor evaluation 5
+sleep 1
+mark
+send press up
+expect-log ^pokedex: top cursor melemele 5
+sleep 1
+shot top-melemele
+
+# --- Melemele grid ---
+# An injected press sometimes moves the game's cursor two steps (each step is
+# logged), so every check below only relies on the press just before it.
+mark
+send press a
+expect-log ^pokedex: shown grid 10
+expect-log ^pokedex: grid melemele 0/150 #001 Rowlet seen 5
+sleep 1
+mark
+send press right
+expect-log ^pokedex: grid melemele 1/150 #002 \?\?\?\?\? unseen 5
+sleep 1
+# Down: the next row of the 15-column grid (16 or 17).
+mark
+send press down
+expect-log ^pokedex: grid melemele 1[67]/150 #01[78] 5
+sleep 1
+shot grid
+
+# --- Entry page from the grid (#017 Caterpie or #018 Metapod), the next seen one, back ---
+shot pre-entry
+mark
+send press a
+expect-log ^pokedex: shown entry 10
+expect-log ^pokedex: entry melemele 1[67]/150 #01[78] (Caterpie caught|Metapod seen) 5
+sleep 2
+shot entry
+mark
+send press down
+expect-log ^pokedex: entry melemele (1[7-9]|[2-9][0-9]|1[0-4][0-9])/150 #\d{3} \S+ (seen|caught) 5
+sleep 2
+shot entry-next
+mark
+send press b
+expect-log ^pokedex: grid melemele \d+/150 #\d{3} \S+ (seen|caught) 5
+sleep 2
+mark
+send press b
+expect-log ^pokedex: top cursor melemele 10
+expect-mode off
+sleep 1
+
+# --- Alola list: it opens on #001 the first time (later, where it was left) ---
+mark
+send press up
+expect-log ^pokedex: top cursor alola 5
+sleep 1
+shot pre-alola
+send press a
+expect-log ^pokedex: shown list 10
+expect-log ^pokedex: list alola 0/126 #001 Rowlet seen 5
+sleep 2
+
+# --- Entry page from the list (#001 Rowlet), the next seen one (#004 Litten), back ---
+shot pre-rowlet
+mark
+send press a
+expect-log ^pokedex: shown entry 10
+expect-log ^pokedex: entry alola 0/126 #001 Rowlet seen 5
+sleep 2
+shot entry-rowlet
+mark
+send press down
+expect-log ^pokedex: entry alola 3/126 #004 Litten caught 5
+sleep 2
+shot entry-litten
+mark
+send press b
+expect-log ^pokedex: list alola [3-9]/126 10
+sleep 2
+
+# --- Scrolling: one Down, then held (the game's key repeat); the native list follows ---
+mark
+send press down
+expect-log ^pokedex: list alola ([4-9]|1[0-9])/126 5
+sleep 1
+shot list
+mark
+send press down 120
+sleep 4
+expect-log ^pokedex: list alola ([2-9][0-9]|1[01][0-9]|12[0-5])/126 5
+shot list-scrolled
+mark
+send press b
+expect-log ^pokedex: top cursor alola 10
+sleep 2
+
+# --- Out: B leaves the Pokédex to the X menu, B closes it ---
+mark
+send press b
+wait-scene FieldRo 20
+expect-log ^pokedex: closed 10
+expect-log ^xmenu: shown 15
+expect-mode off
+sleep 1
+mark
+send press b
+expect-log ^xmenu: hidden 10
+expect-mode off 10
+check-save
+sleep 3
+
+# --- From Rotom's face; the panel by hand; native off ---
+send xmenu off
+mark
+send action open-pokedex
+wait-scene Zukan 30
+expect-log ^pokedex: top cursor alola 15
+expect-mode off
+mark
+send mode panel
+expect-log ^pokedex: panel turned on by hand 5
+expect-log ^pokedex: hidden \(panel on by hand\) 5
+expect-mode panel
+sleep 1
+shot panel-by-hand
+mark
+send press b
+wait-scene FieldRo 20
+expect-log ^pokedex: closed 10
+# If Rotom ignored the tap, open-pokedex went through the X menu: close it.
+sleep 3
+send press b
+expect-mode off 10
+sleep 5
+send pokedex off
+mark
+send action open-pokedex
+wait-scene Zukan 30
+expect-log ^pokedex: hidden \(off\) 10
+expect-mode panel 10   # AutoPanel's default for Zukan
+reject-log ^pokedex: shown
+sleep 1
+mark
+send press b
+wait-scene FieldRo 20
+sleep 3
+send press b
+expect-mode off 10
+send pokedex on
+send xmenu on
+check-save
+stop
