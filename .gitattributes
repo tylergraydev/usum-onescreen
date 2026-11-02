@@ -1,0 +1,7 @@
+* text=auto
+
+# Run by bash/make (WSL, MSYS2, CI): keep LF line endings.
+*.sh     text eol=lf
+Makefile text eol=lf
+*.ld     text eol=lf
+*.yml    text eol=lf

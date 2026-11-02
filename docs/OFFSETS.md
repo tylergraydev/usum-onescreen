@@ -1,0 +1,59 @@
+# Offsets: Pokémon Ultra Sun (USA) v1.2
+
+Title `00040000001B5000`, update title version `0x0800` (2048). Code layout from the update's exheader: text `0x100000` (size `0x4BB818`), rodata `0x5BC000`, data `0x669000`, bss `0x301BC`. The code is not compressed.
+
+Found by static analysis of the local `code.bin` (`tools/extract_code.py`, `tools/find_refs.py`, `tools/find_calls.py`, `tools/ghidra/decompile.sh`). The plugin checks the first four instruction words of each hook target at boot and writes the result to `usum-onescreen.log`.
+
+## Hook targets (verified in Azahar 2026-11-02)
+
+| Name | Address | What it is |
+|---|---|---|
+| `gspSetFramebuffer` | `0x279BB4` | gx library "set framebuffer" `(screen 0=top/1=bottom, left, right, stride, format, select, attribute)`. Writes the 0x1C-byte framebuffer info into GSP shared memory and sets the screen's update flag. At runtime its first word is already a branch to a `ldr pc,[pc,#-4]` stub at `0x01E80000` (an existing hook, consistent with CTRPF's OSD; owner not yet confirmed). |
+| `hidTouchRead` | `0x2826F0` | Touch sample reader used by both `TouchPanelReader::Read` (`0x1790B0`) and `ReadLatest` (`0x17902C`): `(touch shm, status* out, count, int* outCount, ...)`. Each status is 8 bytes: `u16 x, u16 y, u8 touching`. |
+| `hidPadRead` | `0x282548` | Pad sample reader used by both `PadReader::Read` (`0x17A108`) and `ReadLatest` (`0x179FD8`): `(pad shm, status* out, count, int* outCount, ...)`. Each status is 16 bytes: `u32 held, u32 pressed, u32 released, s16 stick x, s16 stick y`. `ReadLatest` derives pressed/released from `held` itself; `Read` uses the sample's own edge bits. |
+| `sceneManager` | `0x6A599C` | Global pointer to the scene manager (`0x34021048` at runtime). Manager `+0` points to the current scene object; that object's vtable names the scene (see "Scene detection"). |
+
+## Scene detection (runtime, 2026-11-02)
+
+**Current scene** = `*(*(0x6A599C) + 0)` → its vtable. Many scenes are separate CRO modules loaded at runtime (at `0x6DF000` and up); a loaded CRO has `FIXD` at `+0x80` and an absolute name pointer at `+0x84` (`+0x88` next module, `+0x8C` previous). `Sources/Scene.cpp` walks back from the vtable to the module header and returns its name, or `main:<vtable>` when the class is in the main image. The plugin logs every change as `scene: …`.
+
+| Scene | ID | Verified |
+|---|---|---|
+| Title screen | `TitleMenu` | boot |
+| Overworld (incl. X menu, which is an overlay) | `FieldRo` | Pokémon Center, Route 2 |
+| Pokédex | `Zukan` | via Rotom tap and X menu |
+| Party | `main:00647FCC` | via X menu |
+| Bag | `main:006488C8` | via X menu |
+| Battle | `Battle` | wild Ekans on Route 2 |
+| Loading / transition | (none) | between every scene |
+
+Found by: `vtscan` (plugin: every global heap pointer → first 64 words → objects with a rodata vtable), diffed with `tools/vtdiff.py` across scenes, then `peek` on the manager showed vtables outside the main image, and Azahar's log (`CRO "…" loaded at …`) named the modules.
+
+Earlier, weaker signals (kept for reference):
+
+| Address | Field | X menu | Festival Plaza | Pokédex | Bag | Party |
+|---|---|---|---|---|---|---|
+| `0x6A5DFC` | 0 | 0 | 0 | ptr | ptr | ptr |
+| `0x69EB2C` | ptr | ptr | ? | 0 | ptr | ptr |
+
+- `0x6A5DFC`: non-null while a full-screen app (Pokédex, Bag, Party) is open. It is slot 1 of an 8-slot font registry at `0x6A5DF8` (names at `+0x68 + slot*0x40`, set by `0x35BB0C`): `num_font.bffnt`. A side effect of opening an app, not a scene ID.
+- `0x69EB2C`: object with vtable `0x646A5C` in field, Bag and Party (a different instance per scene), null in the Pokédex. Not a scene ID.
+- `0x6A1D04`: changes per scene, but its target starts with a heap address, not a vtable.
+- Ruled out as scene IDs: `0x66EB54` (Bag and Party both 1), `0x66EA24` and `0x670D68` (drift like counters), `0x6B67D4` (non-zero in some X-menu snapshots, 0 in others).
+- `0x6A60xx`-`0x6A63xx` is a block of graphics floats/matrices that changes with anything on screen; ignore it when diffing.
+
+## Related addresses
+
+GSP (display):
+- `0x27A118`: GSP client init. Calls `RegisterInterruptRelayQueue`, and stores the top/bottom framebuffer-info pointers (shared `+0x200 + thread*0x80`, `+0x40` for bottom) at manager `+0x5C` / `+0x60`.
+- `0x66FC40`: GSP manager object. `0x69EA68`: its parent (`+0x1C` -> manager).
+- `0x279A2C`: GX command queue push (shared `+0x800`).
+- GX commands: `0x279C48` MemoryFill, `0x27A5BC` DisplayTransfer, `0x279E28` TextureCopy, `0x279D5C` FlushCacheRegions + ProcessCommandList.
+- IPC wrappers: `0x27A7F4` AcquireRight, `0x27A860` FlushDataCache, `0x27AA80` RegisterInterruptRelayQueue.
+
+HID (input):
+- `0x179D88`: `HID::GetIPCHandles`. `0x1775A0`: HID init (maps shared memory).
+- `0x6BB2E0`: HID object. `+0x04` pad section (shm `+0x00`), `+0x0C` touch section (shm `+0xA8`), `+0x14` accelerometer (`+0x108`), `+0x20` gyro (`+0x158`).
+- `0x6BB2E8`: touch device `{event handle, touch shm}`; getter `0x177894`.
+- `0x34FDD4`: the game's input device constructor; `0x34FB44`: its per-frame update (reads pad, then touch into object `+0x110`/`+0x118`).
+- `0x4B6790`: game accessor that copies the latest `{x, y, touching}`.
