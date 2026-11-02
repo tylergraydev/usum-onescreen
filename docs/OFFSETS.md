@@ -84,6 +84,13 @@ Full write-up: [RE1-battle.md](RE1-battle.md). Read by the `battle` command (`So
 - Menu: top of the scene manager's stack (`mgr+0..+0x1C`). Command Battle+`0x10B598` (cursor u8 `+0x278`), moves Battle+`0x10B724` (cursor `+0x114`, entries `+0xB0` stride `0x18`), Pokémon list main `0x648394`, Bag Bag+`0x16E24`, none Battle+`0x10B43C`.
 - Verified against screenshots in 6 wild battles (Drowzee, Smeargle, 2× Yungoos, Makuhita), a PP drop for both sides, a faint and a switch.
 
+Added for the native battle menu (P2-1, `Sources/Battle.cpp`), runtime 2026-11-02, instance `p21`, wild Growlithe, Ekans, Drowzee, Makuhita on Route 2:
+
+- **Move names.** The busy object (stack entry with vtable Battle+`0x10B43C`, always on the stack in battle) `+0x94` → the battle's WordSet; WordSet `+0x14` → its loader; loader `+0x0C` u32 count (2), `+0x10` → entries of `0x10` bytes `{buffer, size, u32 dat, MsgData*}`. The entry with dat `118` (`0x76`) holds the move-name file (a full-load MsgData, vtable `0x64B104`, its own dat field `+0x0C` = 0 because it was loaded from the loader's buffer; 729 lines); the other is dat `101` (abilities). Found by searching a full heap dump taken in battle for MsgData objects with 729 lines and section size `0x5970` (RE2's move-file size), decoding lines 10/424/24/122 to Scratch/Fire Fang/Double Kick/Lick, and following pointers back to the busy object (command menu `+0x244` and two other battle objects hold the same WordSet). Checked live: the `battle` log line prints `player move names: Scratch, Fire Fang, Double Kick, Lick`, matching the game's move list, in every battle since. The Bag CRO keeps a second copy (heap `0x30F0BC00`), not used.
+- **Bag item page.** Bag frame (Bag+`0x16E24`) `+0x6E` u8: 1 while the item list shows, 0 on an item's page (the one with Use). Found by diffing the frame and its child in both states (child `+0x72` flips the same way); checked on the Poké Balls and Status Restore tabs, list → page → list.
+- **Battle party.** `party[0].record[0..count-1]` (same container as above) is the battle's party in battle order, which is what the battle Pokémon list shows; its cursor (`p+0x52`) indexes it.
+- Seen, not an address: the battle Bag's Poké Balls tab lists the Items pocket's balls in pocket order, skipping count-0 slots (Poké Ball, Great Ball, Heal Ball with Premier Ball ×0 left out). The menu names the highlighted ball from that only when the counts agree.
+
 ## Party and bag (runtime, 2026-11-02)
 
 Full write-up: [RE3-party-bag.md](RE3-party-bag.md). Read by the `party` and `bag` commands (`Sources/Party.cpp`). Verified against the Party and Bag screens before and after battle damage, a Potion, two party reorders and giving a held item.

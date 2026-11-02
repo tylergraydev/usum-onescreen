@@ -49,12 +49,24 @@ The plugin watches which scene the game is in and picks a view:
 | Title screen | off |
 | Overworld | off |
 | X menu (opened with X in the overworld), Quick Link, the save dialog, Festival Plaza | corner panel |
-| Battle, Pokédex, Bag, Pokémon summary, Trainer Passport, Battle Video | corner panel |
+| Pokédex, Bag, Pokémon summary, Trainer Passport, Battle Video | corner panel |
+| Battle | nothing: the battle menu is drawn on the top screen (see "Battles" below) |
 | Party, PC boxes, Town Map, Options, Pokémon Refresh | full view |
 | Talking to people, Poké Mart lists (top screen only) | off |
 | Anything not listed yet | corner panel |
 
 The corner panel is a half-size copy of the bottom screen in the lower-right corner of the top screen. Full view replaces the top screen with the bottom screen.
+
+## Battles
+
+Battles are played with buttons, no panel: when it is your turn a menu appears on the right of the top screen.
+
+- **Up/Down** pick Fight, Bag, Pokémon or Run, **A** chooses.
+- **Fight** lists your moves with their type, PP, and how effective each is against the opponent. **A** uses one, **B** goes back.
+- **Bag** and **Pokémon** open the game's own screens; a small box on the top screen says what is highlighted (on the Poké Balls tab, which ball). Use **Left/Right** for the Bag's tabs, **Up/Down**, **A** and **B** as on the bottom screen. To catch: Bag → Poké Balls → a ball → A → A (Use).
+- After a catch the game asks whether to give a nickname: **B** for no (yes opens a keyboard on the bottom screen; use ZR for the panel).
+
+If something in a battle isn't covered (a double battle's target screen, for example), ZR still shows the bottom screen.
 
 ## Known gaps
 
