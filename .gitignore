@@ -17,5 +17,5 @@ analysis/private/
 # Host test binaries
 tests/build/
 
-# Python bytecode (tools/ import tools/emu.py)
+# Python bytecode
 __pycache__/

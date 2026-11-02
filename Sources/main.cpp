@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "AutoPanel.hpp"
+#include "Battle.hpp"
 #include "Buttons.hpp"
 #include "Cursor.hpp"
 #include "InputCapture.hpp"
@@ -100,6 +101,8 @@ namespace CTRPluginFramework
     //   peek ADDR [COUNT]   (log COUNT words at hex ADDR, default 4)
     //   vtscan NAME   (global -> object -> vtable scan to /usum-vt-NAME.bin)
     //   scene   (log the current scene's module name)
+    //   battle   (log the battle state, docs/RE1-battle.md; also logged on change)
+    //   memmap | dump ADDR SIZE NAME   (readable blocks; raw memory to /usum-dump-NAME.bin)
     //   auto on | auto off   (panel follows the scene, or stays as set)
     //   capture on|off [KEY|stick|touch ...]   (hide input from the game as a plugin
     //     menu would; on adds, off removes; no list = everything)
@@ -216,6 +219,12 @@ namespace CTRPluginFramework
             WriteSnapshot(word);
         else if (std::sscanf(line.c_str(), "vtscan %15s", word) == 1)
             WriteVtableScan(word);
+        else if (line == "battle")
+            WriteLog(OneScreen::DescribeBattle(OneScreen::ReadBattle(s_game->offsets.sceneManager)), false);
+        else if (line == "memmap")
+            WriteLog(OneScreen::MemoryMap(), false);
+        else if (std::sscanf(line.c_str(), "dump %x %x %15s", &a, &b, word) == 3)
+            WriteLog(OneScreen::DumpMemory(a, b, word), false);
         else if (line == "scene")
             WriteLog("scene: " + OneScreen::SceneModule(s_game->offsets.sceneManager), false);
         else if (line == "uidemo on" || line == "uidemo off")
@@ -345,6 +354,16 @@ namespace CTRPluginFramework
             {
                 scene = now;
                 WriteLog("scene: " + (now.empty() ? std::string("(none)") : now), false);
+            }
+
+            static std::string battle;
+            const std::string state = scene == "Battle"
+                ? OneScreen::DescribeBattle(OneScreen::ReadBattle(s_game->offsets.sceneManager)) : "";
+            if (state != battle)
+            {
+                battle = state;
+                if (!state.empty())
+                    WriteLog(state, false);
             }
         }
 
