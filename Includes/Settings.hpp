@@ -24,7 +24,7 @@ namespace OneScreen
     enum class SceneMode : uint8_t { Off, Panel, Full };
 
     enum class CursorSource : uint8_t { CStick, DPad, CirclePad };
-    enum class PanelSize : uint8_t { Half, TwoThirds };     // 2/3 is parsed but not drawn yet
+    enum class PanelSize : uint8_t { Half, TwoThirds };
     enum class PanelCorner : uint8_t { BottomRight, BottomLeft, TopRight, TopLeft };
 
     struct Settings
