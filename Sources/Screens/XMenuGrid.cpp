@@ -217,6 +217,11 @@ namespace OneScreen
         return actions[index < 0 || index >= (int)actions.size() ? 0 : index];
     }
 
+    const char *XMenuNativeScreen(int index)
+    {
+        return index >= 0 && index == XMenuFind("pokedex") ? "pokedex" : nullptr;
+    }
+
     // --- Drawing ---
 
     static constexpr UI::Color PanelBg   = Rgb(22, 30, 52);
