@@ -34,15 +34,19 @@ If you use an HD texture pack, turn off **Emulation → Configure… → Graphic
 
 | Button | What it does |
 |---|---|
-| **ZR** | Cycle the bottom-screen view by hand: off → corner panel → full view. Your choice holds until the next scene change, then the automatic view takes over again. |
+| **L+R** | Show the bottom screen on the top screen when you need it: off → corner panel → full view → off. It stays as you set it. |
 | **C-stick** | Move the touch cursor (a crosshair on the panel or full view). It starts slow for precise taps and speeds up while you hold it. |
 | **ZL** | Touch the bottom screen at the cursor, for as long as you hold it. The crosshair turns red while touching. |
 
 Every other button works as normal.
 
-## What shows automatically
+## The bottom-screen view
 
-The plugin watches which scene the game is in and picks a view:
+The goal is native menus on the top screen (the X menu has one already), so the bottom screen is hidden by default and **L+R** brings it up when a screen has no native menu yet. The corner panel is a half-size copy of the bottom screen in the lower-right corner of the top screen. Full view replaces the top screen with the bottom screen.
+
+### Automatic view (optional)
+
+Set `auto = on` in `usum-onescreen.ini` (or **Auto panel** in the plugin menu) and the plugin picks a view by scene instead. **L+R** then holds your choice until the next scene change.
 
 | Scene | View |
 |---|---|
@@ -53,8 +57,6 @@ The plugin watches which scene the game is in and picks a view:
 | Party, PC boxes, Town Map, Options, Pokémon Refresh | full view |
 | Talking to people, Poké Mart lists (top screen only) | off |
 | Anything not listed yet | corner panel |
-
-The corner panel is a half-size copy of the bottom screen in the lower-right corner of the top screen. Full view replaces the top screen with the bottom screen.
 
 ## Known gaps
 
