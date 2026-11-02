@@ -81,6 +81,9 @@ namespace UI
         m_font = font;
         for (Slot &slot : m_slots)
             slot.used = false;
+        m_maskW = font != nullptr ? (s32)std::ceil(font->cellW * m_scale) : 0;
+        m_maskH = font != nullptr ? (s32)std::ceil(font->cellH * m_scale) : 0;
+        m_masks.assign((size_t)(Slots * m_maskW * m_maskH), 0);
     }
 
     s32 GlyphCache::Scaled(s32 v) const
@@ -109,7 +112,9 @@ namespace UI
         if (m_font == nullptr)
             return nullptr;
         // Latin-1 never collides; other scripts share slots.
-        Slot &slot = m_slots[codePoint % Slots];
+        const u32 index = codePoint % Slots;
+        Slot &slot = m_slots[index];
+        u8 *mask = m_masks.data() + (size_t)index * m_maskW * m_maskH;
         if (slot.used && slot.codePoint == codePoint)
         {
             hits++;
@@ -118,19 +123,19 @@ namespace UI
         misses++;
 
         const FontSource &f = *m_font;
-        const int index = f.indexOf(codePoint);
+        const int glyph = f.indexOf(codePoint);
         s32 left, glyphW, advance;
-        f.widths(index, left, glyphW, advance);
+        f.widths(glyph, left, glyphW, advance);
 
         // Scratch for one decoded cell; only the OSD thread renders glyphs.
         static u8 s_cell[64 * 64];
         static u8 s_crop[64 * 64];
         Glyph &g = slot.glyph;
-        g.mask = slot.mask;
+        g.mask = mask;
         g.left = 0;
         g.advance = Scaled(advance);
         g.w = 0;
-        g.h = std::min<s32>(MaxGlyphH, (s32)std::ceil(f.cellH * m_scale));
+        g.h = m_maskH;
 
         // Spacing comes from the ink, not the width table: in the font Azahar
         // provides, glyphWidth and charWidth are 0-4 px wider than the ink,
@@ -138,7 +143,7 @@ namespace UI
         // uneven (docs/UI.md). The ink is searched in the glyph's own columns
         // plus one, so a neighbour's overhang into this cell is ignored.
         s32 ink0 = -1, ink1 = -1;
-        if ((s32)f.cellW * f.cellH <= (s32)sizeof(s_cell) && DecodeGlyphCell(f, index, s_cell))
+        if ((s32)f.cellW * f.cellH <= (s32)sizeof(s_cell) && DecodeGlyphCell(f, glyph, s_cell))
         {
             const s32 search = std::min<s32>(f.cellW, std::max<s32>(0, glyphW) + 1);
             for (s32 x = 0; x < search; x++)
@@ -154,12 +159,12 @@ namespace UI
         if (ink0 >= 0)
         {
             const s32 inkW = ink1 - ink0 + 1;
-            g.w = std::min<s32>(MaxGlyphW, (s32)std::ceil(inkW * m_scale));
+            g.w = std::min<s32>(m_maskW, (s32)std::ceil(inkW * m_scale));
             g.left = Scaled(InkGap) / 2;
             g.advance = Scaled(inkW + InkGap);
             for (s32 y = 0; y < f.cellH; y++)
                 std::memcpy(s_crop + y * inkW, s_cell + y * f.cellW + ink0, (size_t)inkW);
-            ScaleMask(s_crop, inkW, f.cellH, m_scale, slot.mask, g.w, g.h);
+            ScaleMask(s_crop, inkW, f.cellH, m_scale, mask, g.w, g.h);
         }
         slot.codePoint = codePoint;
         slot.used = true;
