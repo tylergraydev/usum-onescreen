@@ -1,5 +1,7 @@
 #include "UI/Device.hpp"
 
+#include <vector>
+
 #include "Framebuffer.hpp"
 #include "UI/Demo.hpp"
 #include "UI/Font.hpp"
@@ -95,7 +97,9 @@ namespace OneScreen
 
     // The demo panel, drawn off-screen when the highlight moves.
     static UI::Layer s_demoLayer;
-    static u8 s_demoPixels[UI::DemoPanel.w * UI::DemoPanel.h * 4];
+    // Allocated by the OSD thread the first time the demo is shown (~215 KB),
+    // so the plugin doesn't carry it when the demo isn't used.
+    static std::vector<u8> s_demoPixels;
     static s32 s_demoDrawn = -1;
 
     // Emulated ticks per demo frame, and how many frames re-rendered the
@@ -143,7 +147,8 @@ namespace OneScreen
             }
             if (!s_demoLayer.Matches(fb))
             {
-                s_demoLayer.Setup(fb, UI::DemoPanel, UI::DemoRadius, s_demoPixels, sizeof(s_demoPixels));
+                s_demoPixels.resize(UI::Layer::BytesFor(fb, UI::DemoPanel));
+                s_demoLayer.Setup(fb, UI::DemoPanel, UI::DemoRadius, s_demoPixels.data(), s_demoPixels.size());
                 s_demoDrawn = -1;
             }
             if (selected != s_demoDrawn)
