@@ -61,15 +61,21 @@ namespace OneScreen
         return CroModuleName(CroModuleOf(vtable));
     }
 
-    // The FieldRo scene object holds a state object at +0x618 (vtable FieldRo
-    // +0xD735C) whose word at +4 is the field state.
-    static const u32 FieldStateObject = 0x618;
+    // The FieldRo scene object holds a state object (vtable FieldRo +0xD735C)
+    // whose word at +4 is the field state. Where it sits depends on the map
+    // (+0x618 in the Route 2 Pokemon Center, +0x3DC on Route 2), so it is
+    // found by its vtable in the scene object's first FieldStateSearch bytes.
     static const u32 FieldStateVtable = 0xD735C;
+    static const u32 FieldStateSearch = 0x800;
+    static const u32 FieldStateRetry = 15;
 
     int FieldState(u32 sceneManager)
     {
-        // Finding the module walks pages, so remember it per scene vtable.
+        // Finding the module walks pages and finding the object scans the
+        // scene, so remember both per scene vtable / scene object, and retry
+        // a failed scan only every FieldStateRetry calls.
         static u32 s_vtable = 0, s_module = 0;
+        static u32 s_scene = 0, s_offset = 0, s_retry = 0;
 
         u32 manager = 0, scene = 0, vtable = 0;
         if (!Process::Read32(sceneManager, manager) || manager == 0
@@ -81,12 +87,34 @@ namespace OneScreen
             const u32 module = CroModuleOf(vtable);
             s_vtable = vtable;
             s_module = CroModuleName(module) == "FieldRo" ? module : 0;
+            s_scene = 0;
         }
+        if (s_module == 0)
+            return -1;
 
         u32 object = 0, state = 0;
-        if (s_module == 0
-            || !Process::Read32(scene + FieldStateObject, object) || object != s_module + FieldStateVtable
-            || !Process::Read32(scene + FieldStateObject + 4, state))
+        if (scene == s_scene && s_offset == 0 && s_retry > 0)
+        {
+            s_retry--;
+            return -1;
+        }
+        if (scene != s_scene || !Process::Read32(scene + s_offset, object) || object != s_module + FieldStateVtable)
+        {
+            s_scene = scene;
+            s_offset = 0;
+            for (u32 offset = 4; offset < FieldStateSearch; offset += 4)
+                if (Process::Read32(scene + offset, object) && object == s_module + FieldStateVtable)
+                {
+                    s_offset = offset;
+                    break;
+                }
+            if (s_offset == 0)
+            {
+                s_retry = FieldStateRetry;
+                return -1;
+            }
+        }
+        if (!Process::Read32(scene + s_offset + 4, state))
             return -1;
         return (int)state;
     }
