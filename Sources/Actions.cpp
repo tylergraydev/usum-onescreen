@@ -35,7 +35,13 @@ namespace OneScreen
     };
     static const s32 ProbeTolerance = 40;
 
+    // The page arrow: on page 1 it points right at the top right, on page 2
+    // left at the top left (same blue; the other corner is the yellow
+    // background). Colours from screenshots of both pages (p2-2 x1, x2).
+    static const PixelProbe XMenuPage2Probe = { 16, 12, 119, 187, 255 };
+
     static volatile bool s_xmenuSeen = false;   // written by the OSD callback
+    static volatile bool s_page2Seen = false;
 
     static ActionRunner s_runner;
     static ActionWorld s_world;
@@ -50,6 +56,13 @@ namespace OneScreen
         return d <= ProbeTolerance && d >= -ProbeTolerance;
     }
 
+    static bool Matches(const FbLayout &fb, const PixelProbe &p)
+    {
+        u8 r, g, b;
+        DecodePixel(fb.origin + (s32)p.x * fb.stepX + (s32)p.y * fb.stepY, fb.format, r, g, b);
+        return Near(r, p.r) && Near(g, p.g) && Near(b, p.b);
+    }
+
     static bool ActionsOnScreen(const Screen &screen)
     {
         if (screen.IsTop)
@@ -57,12 +70,9 @@ namespace OneScreen
         const FbLayout fb = GetLayout(screen);
         bool all = true;
         for (const PixelProbe &p : XMenuProbe)
-        {
-            u8 r, g, b;
-            DecodePixel(fb.origin + (s32)p.x * fb.stepX + (s32)p.y * fb.stepY, fb.format, r, g, b);
-            all = all && Near(r, p.r) && Near(g, p.g) && Near(b, p.b);
-        }
+            all = all && Matches(fb, p);
         s_xmenuSeen = all;
+        s_page2Seen = all && Matches(fb, XMenuPage2Probe);
         return false;
     }
 
@@ -85,16 +95,19 @@ namespace OneScreen
             if (menu == BattleMenu::Moves)
                 s_world.flags |= WorldBattleMoves;
         }
-        if (s_xmenuSeen)
-            s_world.flags |= WorldXMenu;
-        else
-            s_world.flags &= ~WorldXMenu;
+        s_world.flags = (s_world.flags & ~(WorldXMenu | WorldXMenuPage2)) | ActionProbeFlags();
+    }
+
+    u32 ActionProbeFlags(void)
+    {
+        return (s_xmenuSeen ? WorldXMenu : 0) | (s_page2Seen ? WorldXMenuPage2 : 0);
     }
 
     static std::string DescribeWorld(const ActionWorld &world)
     {
-        return Utils::Format("scene %s%s%s%s", world.scene.empty() ? "(none)" : world.scene.c_str(),
+        return Utils::Format("scene %s%s%s%s%s", world.scene.empty() ? "(none)" : world.scene.c_str(),
                              (world.flags & WorldXMenu) ? ", x menu" : "",
+                             (world.flags & WorldXMenuPage2) ? " page 2" : "",
                              (world.flags & WorldBattleCommand) ? ", battle command" : "",
                              (world.flags & WorldBattleMoves) ? ", battle moves" : "");
     }
@@ -164,17 +177,20 @@ namespace OneScreen
             log.push_back(line);
         }
         else if (const ActionDef *def = FindAction(args))
-        {
-            ReadWorld(sceneManager, true);
-            if (s_runner.Start(*def, s_world, log))
-            {
-                s_startFrame = s_frames;
-                if (!s_capturing)
-                    BeginCapture();
-            }
-        }
+            ActionStart(*def, sceneManager, log);
         else
             return false;
+        return true;
+    }
+
+    bool ActionStart(const ActionDef &def, u32 sceneManager, std::vector<std::string> &log)
+    {
+        ReadWorld(sceneManager, true);
+        if (!s_runner.Start(def, s_world, log))
+            return false;
+        s_startFrame = s_frames;
+        if (!s_capturing)
+            BeginCapture();
         return true;
     }
 

@@ -37,7 +37,8 @@ namespace OneScreen
     // What the action layer sees of the game, once per frame.
     const u32 WorldXMenu         = 1u << 0;  // the X menu is on the bottom screen (pixel probe)
     const u32 WorldBattleCommand = 1u << 1;  // battle: Fight / Pokémon / Bag / Run is up
-    const u32 WorldBattleMoves   = 1u << 2;  // battle: the move list is up
+    const u32 WorldXMenuPage2    = 1u << 2;  // with WorldXMenu: its second page is showing
+    const u32 WorldBattleMoves   = 1u << 3;  // battle: the move list is up
 
     struct ActionWorld
     {

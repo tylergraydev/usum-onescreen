@@ -1,0 +1,281 @@
+# The native X menu (Screens/XMenu.cpp, docs/XMENU.md): X in the field shows
+# it on the top screen with the panel off; every entry opens from it and
+# comes back; B closes it. Each entry is picked with `xmenu select` (checked
+# in the log) and a screenshot is taken before every A. Save stops at the
+# game's confirm dialog and backs out with B; nothing is ever saved.
+include common/boot
+
+# --- Open: native menu, panel held off, the game's cursor read ---
+mark
+send press x
+expect-log ^xmenu: shown 10
+expect-log ^xmenu: game cursor page 10
+expect-mode off           # FieldRo.xmenu would be panel; the native menu holds it off
+sleep 1
+shot menu
+
+# --- Moving: D-pad and L/R move the native cursor, not the game's ---
+mark
+send xmenu select pokemon
+expect-log ^xmenu: cursor pokemon 5
+send press right
+expect-log ^xmenu: cursor pokedex 5
+send press right
+expect-log ^xmenu: cursor pokemon_refresh 5
+send press down
+expect-log ^xmenu: cursor battle_video 5
+send press down
+expect-log ^xmenu: cursor save 5
+send press left
+expect-log ^xmenu: cursor map 5
+send press up
+expect-log ^xmenu: cursor festival_plaza 5
+send press r
+expect-log ^xmenu: cursor battle_video 5
+send press l
+expect-log ^xmenu: cursor bag 5
+sleep 1
+shot moved                # bottom: the game's own cursor hasn't moved
+reject-log ^action:
+expect-scene FieldRo
+
+# --- Pokémon (Party) and back with B ---
+mark
+send xmenu select pokemon
+expect-log ^xmenu: cursor pokemon 5
+shot pre-pokemon
+send press a
+expect-log ^action: xmenu-pokemon ok 15
+wait-scene main:00647FCC 10
+expect-mode full
+sleep 2
+shot party
+mark
+send press b
+wait-scene FieldRo 20
+expect-log ^xmenu: shown 15
+expect-mode off
+# Opening an entry moved the game's cursor there; the native one agrees.
+expect-log ^xmenu: game cursor page 1 slot 0, native cursor pokemon 5
+
+# --- Pokédex and back by its back button (returns to the X menu) ---
+mark
+send xmenu select pokedex
+expect-log ^xmenu: cursor pokedex 5
+shot pre-pokedex
+send press a
+expect-log ^action: xmenu-pokedex ok 15
+wait-scene Zukan 10
+sleep 2
+shot pokedex
+mark
+send move 15 223; tap 6
+wait-scene FieldRo 20
+expect-log ^xmenu: shown 15
+expect-mode off
+
+# --- Bag and back with B ---
+mark
+send xmenu select bag
+expect-log ^xmenu: cursor bag 5
+shot pre-bag
+send press a
+expect-log ^action: xmenu-bag ok 15
+wait-scene main:006488C8 10
+sleep 2
+shot bag
+mark
+send press b
+wait-scene FieldRo 20
+expect-log ^xmenu: shown 15
+expect-mode off
+
+# --- Quick Link: no scene change, the panel shows it ---
+mark
+send xmenu select quick_link
+expect-log ^xmenu: cursor quick_link 5
+shot pre-quick-link
+send press a
+expect-log ^action: xmenu-quick_link ok 10
+expect-log ^xmenu: hidden 5
+expect-mode panel
+sleep 2
+shot quick-link
+mark
+send move 15 223; tap 6
+expect-log ^xmenu: shown 15
+expect-mode off
+
+# --- Trainer Passport ---
+mark
+send xmenu select trainer_passport
+expect-log ^xmenu: cursor trainer_passport 5
+shot pre-passport
+send press a
+expect-log ^action: xmenu-trainer_passport ok 15
+wait-scene TrainerPass 10
+sleep 2
+shot passport
+mark
+send move 15 223; tap 6
+wait-scene FieldRo 20
+expect-log ^xmenu: shown 15
+expect-mode off
+
+# --- Page 2: Pokémon Refresh (the game turns its page first) ---
+mark
+send xmenu select pokemon_refresh
+expect-log ^xmenu: cursor pokemon_refresh 5
+shot pre-refresh
+send press a
+expect-log ^action: xmenu-pokemon_refresh ok 15
+wait-scene Kawaigari 10
+sleep 3
+shot refresh
+# The first visit shows a tutorial that B skips; its back button sometimes
+# needs a second tap.
+mark
+send press b
+sleep 3
+repeat 4 until-scene FieldRo
+  send move 14 222; tap 4
+  sleep 5
+end
+expect-log ^xmenu: shown 15
+expect-mode off
+
+# --- QR Scanner: not available (its tap isn't verified: Azahar hangs in it) ---
+mark
+send xmenu select qr_scanner
+expect-log ^xmenu: cursor qr_scanner 5
+shot pre-qr
+send press a
+expect-log ^xmenu: qr_scanner not available 5
+reject-log ^action:
+expect-scene FieldRo
+
+# --- Battle Video ---
+mark
+send xmenu select battle_video
+expect-log ^xmenu: cursor battle_video 5
+shot pre-battle-video
+send press a
+expect-log ^action: xmenu-battle_video ok 15
+wait-scene BattleVideoPlayer 10
+sleep 2
+shot battle-video
+mark
+send move 16 224; tap 6
+wait-scene FieldRo 20
+expect-log ^xmenu: shown 15
+expect-mode off
+
+# --- Options ---
+mark
+send xmenu select options
+expect-log ^xmenu: cursor options 5
+shot pre-options
+send press a
+expect-log ^action: xmenu-options ok 15
+wait-scene Config 10
+sleep 2
+shot options
+mark
+send move 15 223; tap 6
+wait-scene FieldRo 20
+expect-log ^xmenu: shown 15
+expect-mode off
+
+# --- Save: Y opens the confirm dialog; B backs out. Never A here. ---
+mark
+send xmenu select save
+expect-log ^xmenu: cursor save 5
+shot pre-save
+send press a
+expect-log ^action: xmenu-save ok 10
+expect-log ^xmenu: hidden 5
+expect-mode panel
+sleep 2
+shot save-dialog          # "Would you like to save your adventure so far?"
+mark
+send press b
+expect-log ^xmenu: shown 15
+expect-mode off
+check-save
+# Y straight from the native menu is the game's own Save too.
+mark
+send press y
+expect-log ^xmenu: hidden 10
+sleep 2
+shot save-dialog-y
+send press b
+expect-log ^xmenu: shown 15
+check-save
+
+# --- Cursor memory: close with B, reopen, the cursor is where it was ---
+# (The game's own cursor stays on Options, the last entry tapped.)
+mark
+send xmenu select bag
+expect-log ^xmenu: cursor bag 5
+send press b
+expect-log ^xmenu: hidden 10
+expect-mode off
+sleep 2
+mark
+send press x
+expect-log ^xmenu: shown 10
+expect-log ^xmenu: game cursor page 2 slot 3, native cursor bag 10
+sleep 1
+shot reopened
+
+# --- Map: B closes the X menu, then Rotom's map ---
+mark
+send xmenu select map
+expect-log ^xmenu: cursor map 5
+shot pre-map
+send press a
+expect-log ^action: xmenu-map ok 20
+wait-scene TownMap 10
+expect-mode full
+sleep 2
+shot map
+send move 16 224; tap 6
+wait-scene FieldRo 20
+expect-mode off
+sleep 2
+
+# --- Festival Plaza: goes straight in; leave with back -> "quit?" -> Y ---
+mark
+send press x
+expect-log ^xmenu: shown 10
+send xmenu select festival_plaza
+expect-log ^xmenu: cursor festival_plaza 5
+shot pre-plaza
+send press a
+expect-log ^action: xmenu-festival_plaza ok 10
+sleep 8
+shot plaza
+send move 16 223; tap 6
+sleep 3
+shot plaza-quit           # "Would you like to quit playing in Festival Plaza?"
+send press y
+sleep 12
+wait-scene FieldRo 30
+expect-mode off
+
+# --- Close with B: field, panel off, input back to the game ---
+mark
+send press x
+expect-log ^xmenu: shown 10
+sleep 1
+send press b
+expect-log ^xmenu: hidden 10
+expect-log x menu closed \(field state 0\) 10
+expect-mode off
+sleep 1
+send xmenu status
+expect-log ^xmenu: on, hidden, cursor festival_plaza 5
+expect-log ^buttons: .*capture 00000000 5
+shot field
+check-save
+stop
