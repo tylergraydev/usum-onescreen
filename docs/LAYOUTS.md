@@ -56,7 +56,9 @@ Page 1. Only the pills are buttons: the text labels under them and the gap betwe
 | Back | 0,210-33,239 | 16,224 | closes the X menu | tap |
 | ▶ page arrow | 299,9-308,16 (glyph) | 303,12 | page 2 | tap |
 
-Page 2 uses the same grid: Pokémon Refresh (88,48), QR Scanner (230,48), Battle Video (88,108), Options (230,108, opens `Config`, verified; back leaves without confirming), two empty slots. ◀ back to page 1 at 16,12 (glyph 13,11-19,14), verified. Refresh, QR Scanner and Battle Video were not tapped.
+Page 2 uses the same grid: Pokémon Refresh (88,48), QR Scanner (230,48), Battle Video (88,108), Options (230,108, opens `Config`, verified; back leaves without confirming), two empty slots. ◀ back to page 1 at 16,12 (glyph 13,11-19,14), verified. Pokémon Refresh (opens `Kawaigari`, a tutorial the first time that B skips; its back at 14,222 sometimes needs a second tap) and Battle Video (opens `BattleVideoPlayer`; back 16,224) were verified by P2-2; QR Scanner was not tapped (Azahar hangs in it: no camera).
+
+The X menu remembers its page and cursor: it reopens on the page and entry last used, and tapping an entry moves the cursor there. The cursor is a red arrow left of the pill (x 33-39 in the left column, 176-181 in the right, y 44-51 + 60·row); the page arrow (blue, 119,187,255) is at 303,12 on page 1 and at 16,12 on page 2. `Sources/Actions.cpp` and `Sources/Screens/XMenu.cpp` read these.
 
 ## Party (`main:00647FCC`)
 
