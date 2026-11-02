@@ -3,6 +3,10 @@
 Usage: py -3 -I tools/perf.py --instance NAME [--modes off,panel,full]
            [--rounds 2] [--windows 6] [--seconds 10] [--csv OUT]
 
+A mode `ui:X` measures the `uidemo X` test menu instead, with the panel off:
+e.g. `--modes off,ui:on,ui:shade,ui:direct` (see docs/UI.md). The `ui` columns
+are the demo's emulated time per frame.
+
 For each round and mode: sets the mode, lets it settle, then takes WINDOWS
 timing windows of SECONDS each with the plugin's `perf` command. Each window
 pairs the plugin's numbers (emulated time from svcGetSystemTick, top and
@@ -24,6 +28,8 @@ PERF = re.compile(r"perf: (?P<state>\w+), mode (?P<mode>\w+), window (?P<window>
                   r"top frames (?P<top>\d+), bottom frames (?P<bottom>\d+), "
                   r"capture n (?P<cn>\d+) mean (?P<cmean>\d+) us max (?P<cmax>\d+) us, "
                   r"draw n (?P<dn>\d+) mean (?P<dmean>\d+) us max (?P<dmax>\d+) us")
+UI = re.compile(r"ui: demo \w+, frames (?P<frames>\d+), redraws (?P<redraws>\d+), "
+                r"mean (?P<mean>\d+) us, max (?P<max>\d+) us")
 
 
 def sdmc_for(name):
@@ -86,7 +92,10 @@ def main():
     rows = []
     for rnd in range(args.rounds):
         for mode in args.modes.split(","):
-            plugin.send(f"mode {mode}")
+            if mode.startswith("ui:"):
+                plugin.send("mode off", f"uidemo {mode[3:]}")
+            else:
+                plugin.send("uidemo off", f"mode {mode}")
             time.sleep(args.settle)
             last, _ = plugin.send("perf")      # starts the first window
             for _ in range(args.windows):
@@ -96,21 +105,24 @@ def main():
                 if not m:
                     sys.exit("no perf line in:\n" + text)
                 d = {k: (int(v) if v.isdigit() else v) for k, v in m.groupdict().items()}
+                u = UI.search(text)
+                ui = {k: int(v) for k, v in u.groupdict().items()} if u else dict(frames=0, redraws=0, mean=0, max=0)
                 wall = now - last
                 last = now
                 emu = d["window"] / 1e6
-                row = dict(round=rnd + 1, mode=d["mode"], wall_s=wall, emu_s=emu, speed=emu / wall,
+                row = dict(round=rnd + 1, mode=mode, wall_s=wall, emu_s=emu, speed=emu / wall,
                            top_fps_wall=d["top"] / wall, top_fps_emu=d["top"] / emu,
                            bottom_fps_wall=d["bottom"] / wall,
                            capture_mean_us=d["cmean"], capture_max_us=d["cmax"],
                            draw_mean_us=d["dmean"], draw_max_us=d["dmax"],
+                           ui_mean_us=ui["mean"], ui_max_us=ui["max"], ui_redraws=ui["redraws"],
                            panel_ms_per_s_emu=(d["cn"] * d["cmean"] + d["dn"] * d["dmean"]) / 1000 / emu,
                            azahar=azahar_count())
                 rows.append(row)
-                print(f"r{row['round']} {row['mode']:5} wall {wall:6.2f}s emu {emu:6.2f}s speed {row['speed']:5.3f} "
+                print(f"r{row['round']} {row['mode']:9} wall {wall:6.2f}s emu {emu:6.2f}s speed {row['speed']:5.3f} "
                       f"top {row['top_fps_wall']:5.1f}/s wall {row['top_fps_emu']:5.1f}/s emu "
                       f"capture {d['cmean']:5d}/{d['cmax']:5d} us draw {d['dmean']:5d}/{d['dmax']:5d} us "
-                      f"azahar {row['azahar']}", flush=True)
+                      f"ui {ui['mean']:5d}/{ui['max']:5d} us azahar {row['azahar']}", flush=True)
 
     if args.csv:
         keys = list(rows[0].keys())
@@ -119,14 +131,17 @@ def main():
             for r in rows:
                 f.write(",".join(f"{r[k]:.4f}" if isinstance(r[k], float) else str(r[k]) for k in keys) + "\n")
 
-    print("\nmode   n  speed (mean sd)   top fps wall   top fps emu   capture us   draw us   panel ms per emu s")
+    if any(mode.startswith("ui:") for mode in args.modes.split(",")):
+        plugin.send("uidemo off")
+    print("\nmode       n  speed (mean sd)   top fps wall   top fps emu   capture us   draw us   panel ms per emu s"
+          "   ui us")
     for mode in args.modes.split(","):
         rs = [r for r in rows if r["mode"] == mode]
         def ms(k):
             v = [r[k] for r in rs]
             return f"{statistics.mean(v):7.2f} {statistics.stdev(v) if len(v) > 1 else 0:5.2f}"
-        print(f"{mode:5} {len(rs):2}  {ms('speed')}  {ms('top_fps_wall')}  {ms('top_fps_emu')}  "
-              f"{ms('capture_mean_us')}  {ms('draw_mean_us')}  {ms('panel_ms_per_s_emu')}")
+        print(f"{mode:9} {len(rs):2}  {ms('speed')}  {ms('top_fps_wall')}  {ms('top_fps_emu')}  "
+              f"{ms('capture_mean_us')}  {ms('draw_mean_us')}  {ms('panel_ms_per_s_emu')}  {ms('ui_mean_us')}")
 
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@ OUT      := build
 PYTHON   ?= python3
 CODE_BIN ?=
 
-TESTS    := $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/ui_host_test $(OUT)/party_data_test             $(OUT)/action_queue_test
+TESTS    := $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/ui_host_test $(OUT)/party_data_test             $(OUT)/action_queue_test $(OUT)/xmenu_test
 
 all: run
 
@@ -30,9 +30,14 @@ $(OUT)/party_data_test: party_data_test.cpp ../Sources/PartyData.cpp ../Includes
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) party_data_test.cpp ../Sources/PartyData.cpp -o $@
 
-UI_SRCS  := $(addprefix ../Sources/UI/,Raster.cpp Text.cpp Icons.cpp Demo.cpp)
+UI_SRCS  := $(addprefix ../Sources/UI/,Raster.cpp Text.cpp Font.cpp Layer.cpp Icons.cpp Demo.cpp)
 UI_HDRS  := $(wildcard ../Includes/UI/*.hpp)
 PREVIEW  := ../analysis/private/ui-demo.png
+XMENU_PREVIEW := ../analysis/private/xmenu-preview.ppm
+
+$(OUT)/xmenu_test: xmenu_test.cpp ../Sources/Screens/XMenuGrid.cpp ../Includes/Screens/XMenuGrid.hpp                    ../Sources/ActionQueue.cpp ../Includes/ActionQueue.hpp ../Includes/Layouts.hpp $(UI_SRCS) $(UI_HDRS)
+	@mkdir -p $(OUT)
+	$(CXX) $(CXXFLAGS) xmenu_test.cpp ../Sources/Screens/XMenuGrid.cpp ../Sources/ActionQueue.cpp $(UI_SRCS) -o $@
 
 $(OUT)/ui_host_test: ui_host_test.cpp $(UI_SRCS) $(UI_HDRS)
 	@mkdir -p $(OUT)
@@ -46,6 +51,7 @@ run: $(TESTS)
 	$(PYTHON) -I ../tools/gen_layouts.py --check
 	@mkdir -p $(dir $(PREVIEW))
 	./$(OUT)/ui_host_test $(PREVIEW)
+	./$(OUT)/xmenu_test $(XMENU_PREVIEW)
 	$(PYTHON) -I sigscan_test.py $(CODE_BIN)
 
 clean:

@@ -72,6 +72,10 @@ namespace UI
     {
     public:
         explicit Canvas(const Surface &surface);
+        // Surface pixel (0, 0) is drawn as point (originX, originY), so code
+        // that draws in screen coordinates can draw into an off-screen Layer
+        // that covers only part of the screen.
+        Canvas(const Surface &surface, s32 originX, s32 originY);
 
         const Surface &GetSurface(void) const { return m_surface; }
         const Rect    &GetClip(void) const { return m_clip; }
@@ -103,8 +107,13 @@ namespace UI
 
     private:
         void Span(s32 x0, s32 x1, s32 y, Color c);
+        u8  *At(s32 x, s32 y) const
+        {
+            return m_surface.origin + (x - m_ox) * m_surface.stepX + (y - m_oy) * m_surface.stepY;
+        }
 
         Surface m_surface;
+        s32     m_ox = 0, m_oy = 0;
         Rect    m_clip;
     };
 }
