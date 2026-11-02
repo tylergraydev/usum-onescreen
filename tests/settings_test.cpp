@@ -68,6 +68,21 @@ static void TestDefaultsMatchOldBehaviour(void)
     CHECK(left == KeyBits::CStickLeft && right == KeyBits::CStickRight);
 }
 
+// Scenes mapped in P1-1 (docs/OFFSETS.md): full where the bottom screen is
+// the whole scene, panel where the top screen still says something.
+static void TestMappedSceneDefaults(void)
+{
+    const Settings s;
+    CHECK(ModeForScene(s, "Status", false) == SceneMode::Panel);
+    CHECK(ModeForScene(s, "Box", false) == SceneMode::Full);
+    CHECK(ModeForScene(s, "TownMap", false) == SceneMode::Full);
+    CHECK(ModeForScene(s, "TrainerPass", false) == SceneMode::Panel);
+    CHECK(ModeForScene(s, "Config", false) == SceneMode::Full);
+    CHECK(ModeForScene(s, "Kawaigari", false) == SceneMode::Full);
+    CHECK(ModeForScene(s, "BattleVideoPlayer", false) == SceneMode::Panel);
+    CHECK(ModeForScene(s, "box", true) == SceneMode::Full);
+}
+
 static void TestDefaultFileRoundTrip(void)
 {
     std::vector<std::string> warnings;
@@ -225,6 +240,7 @@ static void TestCurrentSettings(void)
 int main(void)
 {
     TestDefaultsMatchOldBehaviour();
+    TestMappedSceneDefaults();
     TestDefaultFileRoundTrip();
     TestEmptyFile();
     TestTolerantParsing();

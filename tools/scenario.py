@@ -19,6 +19,7 @@ expect-log / reject-log lines, where # is part of the regex). Steps:
   expect-log REGEX [TIMEOUT]   a log line since the mark matches REGEX (default 10 s; a
                                trailing number is always read as the timeout)
   reject-log REGEX             no log line since the mark matches REGEX
+  guard-ignore REGEX            the log guard (below) skips log lines matching REGEX from here on
   check-save                   the real save is unchanged since the run began (also done at the end)
   if-scene SCENE STEP          run the one STEP only if the scene is SCENE now
   include FILE                 the steps of FILE (next to this one, or in scenarios/; .txt optional)
@@ -32,8 +33,13 @@ as (none), the loading gap between scenes); "the mode" is the last
 %APPDATA%\\Azahar\\sdmc\\...\\title\\00040000\\001b5000\\data\\00000001\\main; its
 mtime and SHA-256 are recorded when a scenario begins and compared at its end.
 
-`start` resets the mark (the instance starts a fresh log). The first failing
-step stops the scenario: its line is printed, a <scenario>-FAIL screenshot is
+`start` resets the mark (the instance starts a fresh log). After every step
+(and at the end) the log guard reads what Azahar and the plugin logged since
+the last check: Azahar's user/log/azahar_log.txt for <Critical>, assertion,
+unreachable-code and unmapped-memory lines (its many <Error> lines for
+unimplemented services are normal), and usum-onescreen.log for a failed hook
+check, a hook that did not enable, or an unsupported game. Any match fails
+that step. guard-ignore exempts known lines; --no-guard turns it off. The first failing step stops the scenario: its line is printed, a <scenario>-FAIL screenshot is
 taken if the plugin answers, and the last screenshot paths are listed. An
 instance that this run started is stopped on failure unless --keep. Exit code
 0 if every scenario passed, else 1.
@@ -52,6 +58,12 @@ import emu  # noqa: E402
 
 SCENARIOS = emu.REPO / "scenarios"
 INSTANCE_PY = Path(__file__).resolve().parent / "instance.py"
+# Log guard: Azahar log lines that mean the emulator or the game broke. Plain
+# <Error> lines are not here: unimplemented services log them on every boot.
+AZAHAR_BAD = re.compile(r"<Critical>|Assertion Failed|Unreachable code|unmapped (?:read|write)", re.I)
+# Plugin log lines that mean a hook is missing (see VerifyHooks, StartCursor, StartButtons).
+PLUGIN_BAD = re.compile(r"^(?:hooks: FAILED.*|.*: MISMATCH at .*|.*: unreadable at .*"
+                        r"|(?:cursor|buttons): \w+ hook at \w+ -> [1-9]\d*|.*unsupported game.*)$", re.M)
 REAL_SAVE = (Path(os.environ.get("APPDATA", ".")) / "Azahar" / "sdmc" / "Nintendo 3DS" / ("0" * 32) / ("0" * 32)
              / "title" / "00040000" / "001b5000" / "data" / "00000001" / "main")
 
@@ -68,7 +80,7 @@ class Step:
 # op -> (min args, max args); None = the rest of the line is one argument
 ARITY = {"start": (0, 1), "stop": (0, 0), "send": None, "sleep": (1, 1), "shot": (1, 1),
          "wait-scene": (1, 2), "expect-scene": (1, 1), "expect-mode": (1, 2), "mark": (0, 0),
-         "expect-log": None, "reject-log": None, "check-save": (0, 0), "repeat": (1, 3),
+         "expect-log": None, "reject-log": None, "guard-ignore": None, "check-save": (0, 0), "repeat": (1, 3),
          "include": (1, 1), "if-scene": None}
 
 
@@ -108,7 +120,7 @@ def parse_step(text, where):
     elif op == "expect-log":
         m = re.fullmatch(r"(.*?)\s+(\d+(?:\.\d+)?)", rest)
         step.args = [m.group(1), m.group(2)] if m else [rest]
-    if op in ("expect-log", "reject-log"):
+    if op in ("expect-log", "reject-log", "guard-ignore"):
         try:
             re.compile(step.args[0])
         except re.error as e:
@@ -126,7 +138,7 @@ def parse(path, seen=()):
     for lineno, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         # Comments: a line starting with #, or " # ..." after a step (not in a regex step).
         text = raw.strip()
-        if not text.startswith(("expect-log", "reject-log")):
+        if not text.startswith(("expect-log", "reject-log", "guard-ignore")):
             text = re.split(r"(?:^|\s)#", text, maxsplit=1)[0].strip()
         if not text:
             continue
@@ -169,7 +181,7 @@ def last_match(pattern, text):
 
 
 class Runner:
-    def __init__(self, name, instance, verbose):
+    def __init__(self, name, instance, verbose, guard=True):
         self.name = name
         self.instance = instance
         self.verbose = verbose
@@ -178,6 +190,12 @@ class Runner:
         self.shots = []
         self.started = False
         self.save = save_fingerprint()
+        self.guard = guard
+        self.guard_ignore = []
+        self.azahar_log = emu.REPO / "analysis" / "private" / "instances" / instance / "azahar" / "user" / "log" / "azahar_log.txt"
+        # Only what is logged from here on counts; a start step rewinds both.
+        self.azahar_seen = self.azahar_log.stat().st_size if self.azahar_log.is_file() else 0
+        self.plugin_seen = len(self.log())
 
     def log(self):
         return emu.read_log(self.sdmc)
@@ -205,6 +223,36 @@ class Runner:
                 raise StepFailed(what())
             time.sleep(0.25)
 
+    def check_logs(self):
+        """The log guard: fail on new crash lines in Azahar's log or hook failures in the plugin's."""
+        if not self.guard:
+            return
+        try:
+            with open(self.azahar_log, "rb") as f:
+                f.seek(0, 2)
+                if f.tell() < self.azahar_seen:  # Azahar started over with a new log
+                    self.azahar_seen = 0
+                f.seek(self.azahar_seen)
+                new = f.read()
+        except OSError:
+            new = b""
+        # Only whole lines; a partly written last line is read next time.
+        new = new[:new.rfind(b"\n") + 1]
+        self.azahar_seen += len(new)
+        plugin = self.log()
+        if len(plugin) < self.plugin_seen:
+            self.plugin_seen = 0
+        plugin_new, self.plugin_seen = plugin[self.plugin_seen:], len(plugin)
+        bad = [f"azahar log: {line.strip()}" for line in new.decode(errors="replace").splitlines()
+               if AZAHAR_BAD.search(line)]
+        bad += [f"plugin log: {m.group(0).strip()}" for m in PLUGIN_BAD.finditer(plugin_new)]
+        bad = [b for b in bad if not any(re.search(r, b) for r in self.guard_ignore)]
+        if bad:
+            more = f" (+{len(bad) - 1} more)" if len(bad) > 1 else ""
+            for line in bad[1:5]:
+                print(f"      {line}")
+            raise StepFailed(bad[0][:300] + more)
+
     def run_steps(self, steps):
         for step in steps:
             self.run_step(step)
@@ -218,6 +266,7 @@ class Runner:
                 out = self.instance_py("start", self.instance, "--wait", args[0] if args else "90")
                 self.started = True
                 self.mark = 0
+                self.azahar_seen = self.plugin_seen = 0
                 if "hooks: all ok" not in out:
                     raise StepFailed("plugin boot log has no 'hooks: all ok'")
             elif op == "stop":
@@ -261,6 +310,8 @@ class Runner:
             elif op == "if-scene":
                 if self.scene() == args[0]:
                     self.run_step(step.body[0], quiet)
+            elif op == "guard-ignore":
+                self.guard_ignore.append(args[0])
             elif op == "check-save":
                 self.check_save()
             elif op == "repeat":
@@ -279,8 +330,17 @@ class Runner:
                 if not quiet:
                     print(f"  {step.where}  end of repeat after {rounds} round(s)"
                           + (f", scene {until}" if until else ""), flush=True)
+            if op not in ("repeat", "if-scene"):  # their inner steps were checked
+                self.check_logs()
         except emu.PluginTimeout as e:
-            raise StepFailed(str(e))
+            try:
+                self.check_logs()  # a crash explains the timeout better
+            except StepFailed as crash:
+                failed = StepFailed(f"{e}; {crash}")
+            else:
+                failed = StepFailed(str(e))
+            failed.step = step
+            raise failed
         except StepFailed as e:
             if not hasattr(e, "step"):
                 e.step = step
@@ -295,7 +355,7 @@ class Runner:
                              f"now {describe_fingerprint(now)}")
 
 
-def run(path, instance, keep, verbose):
+def run(path, instance, keep, verbose, guard=True):
     name = path.stem
     print(f"scenario {name} ({path})")
     try:
@@ -303,11 +363,12 @@ def run(path, instance, keep, verbose):
     except SyntaxError as e:
         print(f"FAIL {name}: {e}")
         return False
-    runner = Runner(name, instance, verbose)
+    runner = Runner(name, instance, verbose, guard)
     print(f"  real save: {describe_fingerprint(runner.save)}")
     t0 = time.time()
     try:
         runner.run_steps(steps)
+        runner.check_logs()
         runner.check_save()
     except StepFailed as e:
         step = getattr(e, "step", None)
@@ -354,6 +415,7 @@ def main():
     parser.add_argument("--instance", help="instance name (tools/instance.py)")
     parser.add_argument("--check", action="store_true", help="only parse the scenarios (no emulator)")
     parser.add_argument("--keep", action="store_true", help="leave the instance running on failure")
+    parser.add_argument("--no-guard", action="store_true", help="don't fail on crash/hook lines in the logs")
     parser.add_argument("-v", "--verbose", action="store_true", help="print plugin output and shot paths")
     parser.add_argument("scenarios", nargs="+")
     args = parser.parse_args()
@@ -371,7 +433,7 @@ def main():
     if not emu.sdmc_path(args.instance).is_dir():
         sys.exit(f"no instance '{args.instance}' (see tools/instance.py)")
     paths = [resolve(s) for s in args.scenarios]
-    results = [(p.stem, run(p, args.instance, args.keep, args.verbose)) for p in paths]
+    results = [(p.stem, run(p, args.instance, args.keep, args.verbose, not args.no_guard)) for p in paths]
     if len(results) > 1:
         print("summary: " + ", ".join(f"{n} {'PASS' if ok else 'FAIL'}" for n, ok in results))
     sys.exit(0 if all(ok for _, ok in results) else 1)

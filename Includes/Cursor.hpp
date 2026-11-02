@@ -30,6 +30,10 @@ namespace OneScreen
     // touch); false if not touching. See InputCaptureBegin.
     bool CaptureRealTouch(u32 &x, u32 &y);
 
+    // Touch from the action layer (Actions.hpp): while `touching`, the game
+    // reads (x, y). Applied after capture, so it works while touch is captured.
+    void CursorActionTouch(bool touching, u32 x, u32 y);
+
     // One line for the log: cursor position, touch state, and what the game's
     // touch reader last returned.
     std::string CursorStatus(void);

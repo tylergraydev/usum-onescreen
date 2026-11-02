@@ -5,16 +5,19 @@
 #include <cstdio>
 #include <vector>
 
+#include "Actions.hpp"
 #include "AutoPanel.hpp"
 #include "Battle.hpp"
 #include "Buttons.hpp"
 #include "Cursor.hpp"
 #include "InputCapture.hpp"
 #include "Panel.hpp"
+#include "Party.hpp"
 #include "Scene.hpp"
 #include "Settings.hpp"
 #include "Shot.hpp"
 #include "UI/Device.hpp"
+#include "Where.hpp"
 
 namespace CTRPluginFramework
 {
@@ -100,11 +103,15 @@ namespace CTRPluginFramework
     //   vtscan NAME   (global -> object -> vtable scan to /usum-vt-NAME.bin)
     //   scene   (log the current scene's module name)
     //   battle   (log the battle state, docs/RE1-battle.md; also logged on change)
+    //   where   (log the zone, position and facing, docs/RE4-map.md)
+    //   party | bag   (log the party / the bag pockets, docs/RE3-party-bag.md)
     //   memmap | dump ADDR SIZE NAME   (readable blocks; raw memory to /usum-dump-NAME.bin)
     //   auto on | auto off   (panel follows the scene, or stays as set)
     //   perf on | perf off | perf   (panel timing; perf logs and restarts the window)
     //   capture on|off [KEY|stick|touch ...]   (hide input from the game as a plugin
     //     menu would; on adds, off removes; no list = everything)
+    //   action NAME | action status | action cancel | action list   (drive the bottom
+    //     screen: open-pokedex, open-party, open-bag, battle-run, close; Actions.hpp)
     static const char *CommandPath = "/usum-cmd.txt";
 
     // Global data + bss of USUM v1.2 (from the exheader): 0x669000 .. 0x6D5F44.
@@ -220,6 +227,12 @@ namespace CTRPluginFramework
             WriteVtableScan(word);
         else if (line == "battle")
             WriteLog(OneScreen::DescribeBattle(OneScreen::ReadBattle(s_game->offsets.sceneManager)), false);
+        else if (line == "where")
+            WriteLog(OneScreen::DescribeWhere(OneScreen::ReadWhere()), false);
+        else if (line == "party")
+            WriteLog(OneScreen::DescribeParty(OneScreen::ReadParty(s_game->offsets.sceneManager)), false);
+        else if (line == "bag")
+            WriteLog(OneScreen::DescribeBag(OneScreen::ReadBag()), false);
         else if (line == "memmap")
             WriteLog(OneScreen::MemoryMap(), false);
         else if (std::sscanf(line.c_str(), "dump %x %x %15s", &a, &b, word) == 3)
@@ -241,6 +254,18 @@ namespace CTRPluginFramework
             if (!RunCapture(line.substr(on ? 10 : 11), on))
             {
                 WriteLog("cmd: unknown key in '" + line + "'", false);
+                return;
+            }
+        }
+        else if (line.compare(0, 7, "action ") == 0)
+        {
+            std::vector<std::string> log;
+            const bool known = OneScreen::ActionCommand(line.substr(7), s_game->offsets.sceneManager, log);
+            for (const std::string &l : log)
+                WriteLog(l, false);
+            if (!known)
+            {
+                WriteLog("cmd: unknown action in '" + line + "'", false);
                 return;
             }
         }
@@ -343,6 +368,11 @@ namespace CTRPluginFramework
         OneScreen::CursorUpdate();
         OneScreen::ButtonsUpdate();
 
+        std::vector<std::string> actionLog;
+        OneScreen::ActionsUpdate(s_game->offsets.sceneManager, actionLog);
+        for (const std::string &line : actionLog)
+            WriteLog(line, false);
+
         if (++frames == 300)
         {
             WriteLog(OneScreen::PanelStatus(), false);
@@ -370,7 +400,8 @@ namespace CTRPluginFramework
             }
         }
 
-        if (OneScreen::AutoPanelUpdate(scene, OneScreen::ButtonsGameHeld()))
+        const int fieldState = scene == "FieldRo" ? OneScreen::FieldState(s_game->offsets.sceneManager) : -1;
+        if (OneScreen::AutoPanelUpdate(scene, OneScreen::ButtonsGameHeld(), fieldState))
             WriteLog(OneScreen::AutoPanelStatus() + " -> " + OneScreen::PanelStatus(), false);
 
         OneScreen::ShotPoll();
@@ -468,6 +499,7 @@ namespace CTRPluginFramework
 
         OneScreen::StartPanel(OneScreen::PanelMode::Off, s_game->offsets.gxDisplayTransfer.address,
                               s_game->offsets.gxTextureCopy.address);
+        OneScreen::StartActions();
 
         std::string cursorReport;
         OneScreen::StartCursor(s_game->offsets.hidTouchRead.address, cursorReport);
