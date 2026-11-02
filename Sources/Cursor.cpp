@@ -27,6 +27,10 @@ namespace OneScreen
     static volatile u16 s_realX = 0, s_realY = 0;
     static volatile u8 s_realTouching = 0;
 
+    // Touch from the action layer, applied after capture.
+    static volatile bool s_actionTouching = false;
+    static volatile u16 s_actionX = 0, s_actionY = 0;
+
     static bool IsTouching(void)
     {
         return s_zlTouch || s_cmdTouch || s_tapFrames > 0;
@@ -62,7 +66,21 @@ namespace OneScreen
         }
         MaskTouchSamples(s_capture, InputCaptureRequest(), out, n);
 
-        if (n > 0)
+        s32 seen = n;
+        if (s_actionTouching && out != nullptr && max > 0 && count != nullptr)
+        {
+            if (*count < 1)
+                *count = 1;
+            seen = *count < max ? *count : max;
+            for (s32 i = 0; i < seen; i++)
+            {
+                out[i].x = s_actionX;
+                out[i].y = s_actionY;
+                out[i].touching = 1;
+            }
+        }
+
+        if (seen > 0)
         {
             s_seenX = out[0].x;
             s_seenY = out[0].y;
@@ -155,6 +173,13 @@ namespace OneScreen
         x = s_realX;
         y = s_realY;
         return s_realTouching != 0;
+    }
+
+    void CursorActionTouch(bool touching, u32 x, u32 y)
+    {
+        s_actionX = (u16)Clamp((s32)x, 0, BottomWidth - 1);
+        s_actionY = (u16)Clamp((s32)y, 0, ScreenHeight - 1);
+        s_actionTouching = touching;
     }
 
     std::string CursorStatus(void)

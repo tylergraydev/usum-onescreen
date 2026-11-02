@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <vector>
 
+#include "Actions.hpp"
 #include "AutoPanel.hpp"
 #include "Battle.hpp"
 #include "Buttons.hpp"
@@ -109,6 +110,8 @@ namespace CTRPluginFramework
     //   perf on | perf off | perf   (panel timing; perf logs and restarts the window)
     //   capture on|off [KEY|stick|touch ...]   (hide input from the game as a plugin
     //     menu would; on adds, off removes; no list = everything)
+    //   action NAME | action status | action cancel | action list   (drive the bottom
+    //     screen: open-pokedex, open-party, open-bag, battle-run, close; Actions.hpp)
     static const char *CommandPath = "/usum-cmd.txt";
 
     // Global data + bss of USUM v1.2 (from the exheader): 0x669000 .. 0x6D5F44.
@@ -252,6 +255,18 @@ namespace CTRPluginFramework
                 return;
             }
         }
+        else if (line.compare(0, 7, "action ") == 0)
+        {
+            std::vector<std::string> log;
+            const bool known = OneScreen::ActionCommand(line.substr(7), s_game->offsets.sceneManager, log);
+            for (const std::string &l : log)
+                WriteLog(l, false);
+            if (!known)
+            {
+                WriteLog("cmd: unknown action in '" + line + "'", false);
+                return;
+            }
+        }
         else if ((fields = std::sscanf(line.c_str(), "peek %x %u", &a, &b)) >= 1)
         {
             // Logs COUNT words (default 4) at ADDR, if readable.
@@ -350,6 +365,11 @@ namespace CTRPluginFramework
 
         OneScreen::CursorUpdate();
         OneScreen::ButtonsUpdate();
+
+        std::vector<std::string> actionLog;
+        OneScreen::ActionsUpdate(s_game->offsets.sceneManager, actionLog);
+        for (const std::string &line : actionLog)
+            WriteLog(line, false);
 
         if (++frames == 300)
         {
@@ -476,6 +496,7 @@ namespace CTRPluginFramework
         LoadSettings();
 
         OneScreen::StartPanel(OneScreen::PanelMode::Off);
+        OneScreen::StartActions();
 
         std::string cursorReport;
         OneScreen::StartCursor(s_game->offsets.hidTouchRead.address, cursorReport);

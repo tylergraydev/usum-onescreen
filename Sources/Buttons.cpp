@@ -32,6 +32,11 @@ namespace OneScreen
     static volatile u32 s_realHeld = 0, s_realPrevHeld = 0, s_realPressed = 0;
     static volatile s16 s_realStickX = 0, s_realStickY = 0;
 
+    // Keys from the action layer, added after capture, with their own edges.
+    static volatile u32 s_actionKeys = 0;
+    static u32 s_actionLastSeen = 0;
+    static volatile bool s_actionNewFrame = true;
+
     // Circle pad direction bits the HID module sets alongside the raw position.
     static u32 StickBits(s32 x, s32 y)
     {
@@ -93,7 +98,27 @@ namespace OneScreen
         }
         MaskPadSamples(s_capture, s_captureRequest, out, n);
 
-        if (n > 0)
+        const u32 action = s_actionKeys;
+        if ((action != 0 || s_actionLastSeen != 0) && out != nullptr && max > 0 && count != nullptr)
+        {
+            if (*count < 1)
+            {
+                out[0] = PadSample();
+                *count = 1;
+            }
+            const s32 m = *count < max ? *count : max;
+            for (s32 i = 0; i < m; i++)
+                out[i].held |= action;
+            if (s_actionNewFrame)
+            {
+                out[0].pressed |= action & ~s_actionLastSeen;
+                out[0].released |= s_actionLastSeen & ~action;
+                s_actionLastSeen = action;
+                s_actionNewFrame = false;
+            }
+        }
+
+        if (out != nullptr && count != nullptr && *count > 0)
             s_gameSaw = out[0].held;
         return result;
     }
@@ -118,6 +143,7 @@ namespace OneScreen
         if (s_stickFrames > 0)
             s_stickFrames--;
         s_newFrame = true;
+        s_actionNewFrame = true;
 
         const u32 real = s_realHeld;
         s_realPressed = real & ~s_realPrevHeld;
@@ -158,6 +184,11 @@ namespace OneScreen
             if (name == k.name)
                 return k.key;
         return 0;
+    }
+
+    void ButtonsActionSet(u32 keys)
+    {
+        s_actionKeys = keys;
     }
 
     u32 ButtonsGameHeld(void)
