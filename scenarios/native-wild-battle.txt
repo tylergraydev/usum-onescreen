@@ -4,8 +4,7 @@
 #      Run.
 #   2. Bag -> Poké Balls tab -> Poké Ball -> Use, until it is caught; B
 #      through the Pokédex page / nickname question (No) to the field.
-#   3. Fight with the first move (the list starts on it) until the battle
-#      is won.
+#   3. Fight, a different move each turn, until the battle is won.
 # Every choice is a press; the menu taps the hidden bottom screen itself.
 include common/boot
 
@@ -136,10 +135,14 @@ repeat 8 until-scene FieldRo
   # Since the last turn's mark: the bar as shown, not yet "sent".
   expect-log ^battle-ui: page command, cursor 0 of 4 \(Fight\)$ 40
   send press a            # Fight
-  expect-log ^battle-ui: page moves, cursor 0 of 4 \(Scratch 10
+  expect-log ^battle-ui: page moves, cursor \d of 4 10
   sleep 1
-  send press a            # Scratch
-  expect-log ^action: battle-move1 ok 10
+  # The list starts on the last move used; take the next one each turn, so
+  # a Disable (Drowzee has it: it blocks the last move used) never stops us.
+  send press down
+  sleep 1
+  send press a
+  expect-log ^action: battle-move\d ok 10
   mark
   # The turn, then EXP and level-up windows (Exp. Share): B advances them.
   # A move-learning question ("Forget an old move?") isn't answered here;
