@@ -94,6 +94,7 @@ CTRPF opens its menu with **Select** (its default menu hotkey; `Preferences::Men
 - Buttons too: `press KEY [FRAMES]` (default 3; menus key-repeat by 8 frames), `hold KEY`, `release KEY`, with KEY one of `a b x y l r start select up down left right`, and `stick X Y [FRAMES]` for the circle pad (walking uses the circle pad, not the D-pad). Injected through the game's pad reader (`0x282548`), so the game sees them as real presses.
 - Input capture (for plugin-drawn menus): `capture on [KEY|stick|touch ...]` hides those from the game (no list = everything), `capture off [...]` gives them back (no list = all). A key still held when it is given back stays hidden until released, so the game never sees a fresh press. The status lines show `capture`/`suppressing` (pad) and `touch captured`/`suppressed`.
 - The log records every scene change (`scene: FieldRo`, `Zukan`, `Battle`, …); `scene` logs the current one. Memory tools: `snap NAME`, `vtscan NAME`, `peek ADDR [N]` (see `docs/OFFSETS.md`).
+- `uidemo on` / `uidemo off` shows or hides a sample plugin-drawn menu on the top screen (off by default), for checking the UI drawing layer.
 - `py -3 -I tools/shot.py [name]` asks the running plugin for a screenshot and saves `analysis/private/shots/<name>-top.png` and `-bottom.png`. The top shot includes anything the plugin draws.
 
 ### Isolated Azahar instances
@@ -124,6 +125,7 @@ Azahar 2126.2 has no command-line flag or environment variable for its user fold
 - `Sources/Settings.cpp`, `Includes/Settings.hpp`: `usum-onescreen.ini` parser and settings model (plain C++, tested by `tests/`).
 - `Sources/Game.cpp`, `Includes/Game.hpp`: supported games and their offset tables. Phase 0 fills in `gspPresent`, `hidTouchRead` and `sceneState` from Ghidra.
 - `Sources/InputCapture.cpp`, `Includes/InputCapture.hpp`: pure masking logic for input capture, used by the pad and touch hooks (`Buttons.cpp`, `Cursor.cpp`). Plugin menus read the real input with `CaptureRealHeld/Pressed/Stick` and `CaptureRealTouch`: the game's latest read before masking. That view (not CTRPF's `Controller`, which reads HID directly) includes injected test input, so `press`/`stick`/`tap` drive plugin menus too, and it has the same timing as what the game sees. It goes stale if the game stops reading input; `Controller` is the fallback then.
-- `tests/`: host tests for the pure logic (`make -C tests` with any g++; CI runs them).
+- `tests/`: host tests for the pure logic (`make -C tests` with any g++, e.g. `wsl make -C tests` on Windows; CI runs them). The UI test also writes a preview of the `uidemo` menu to `analysis/private/ui-demo.png`.
+- `Sources/UI`, `Includes/UI`: drawing layer for plugin-drawn top-screen menus. `Raster` (rects, rounded rects, lines, triangles, alpha blending, clipping), `Text` (system font via CTRPF, built-in 5x7 font, measuring, alignment, ellipsis), `Icons`, `Layout` and the `uidemo` menu are free of CTRPF; `Device.cpp` is the CTRPF glue.
 - `Makefile`, `3gx.ld`, `usum-onescreen.plgInfo`: build setup, adapted from [Gen6CTRPFrameworkOverhauled](https://github.com/samaBR85/Gen6CTRPFrameworkOverhauled).
 - `docs/RE2-text.md`: how the game stores and looks up text (species/move/item names), with `tools/romfs_text.py` to extract and decode it from your own dump into `analysis/private/`.

@@ -1,0 +1,111 @@
+#pragma once
+
+#include <cstdint>
+
+// Drawing primitives for plugin-drawn menus. Nothing here depends on CTRPF or
+// libctru, so the same code builds for the 3DS and for the PC host test.
+namespace OneScreen
+{
+namespace UI
+{
+    using u8  = std::uint8_t;
+    using u16 = std::uint16_t;
+    using u32 = std::uint32_t;
+    using s32 = std::int32_t;
+
+    static constexpr s32 ScreenW = 400;
+    static constexpr s32 ScreenH = 240;
+
+    // Same values as libctru's GSPGPU_FramebufferFormat, so a GSP format
+    // (masked with & 7) can be cast straight in.
+    enum class PixelFormat : u8
+    {
+        RGBA8  = 0,
+        BGR8   = 1,
+        RGB565 = 2,
+        RGB5A1 = 3,
+        RGBA4  = 4,
+    };
+
+    struct Color
+    {
+        u8 r, g, b, a;
+    };
+
+    constexpr Color Rgb(u8 r, u8 g, u8 b, u8 a = 255)
+    {
+        return Color{ r, g, b, a };
+    }
+
+    struct Rect
+    {
+        s32 x, y, w, h;
+
+        s32  Right(void) const  { return x + w; }
+        s32  Bottom(void) const { return y + h; }
+        bool Empty(void) const  { return w <= 0 || h <= 0; }
+    };
+
+    Rect Intersect(const Rect &a, const Rect &b);
+
+    // A framebuffer described by where pixel (0, 0) is and how far apart its
+    // neighbours are. 3DS framebuffers are stored rotated, so the steps come
+    // from the real screen (UI/Device.hpp) and may be negative.
+    struct Surface
+    {
+        u8         *origin;
+        s32         stepX;
+        s32         stepY;
+        PixelFormat format;
+        s32         width;
+        s32         height;
+    };
+
+    u32  BytesPerPixel(PixelFormat format);
+    void ReadPixel(const u8 *p, PixelFormat format, u8 &r, u8 &g, u8 &b);
+    void WritePixel(u8 *p, PixelFormat format, u8 r, u8 g, u8 b);
+
+    // Draws onto a Surface. Everything is clipped to the clip rect, which is
+    // never larger than the surface. Colors with a < 255 blend onto the
+    // pixels already there.
+    class Canvas
+    {
+    public:
+        explicit Canvas(const Surface &surface);
+
+        const Surface &GetSurface(void) const { return m_surface; }
+        const Rect    &GetClip(void) const { return m_clip; }
+        void           SetClip(const Rect &clip);
+        void           ResetClip(void);
+
+        bool GetPixel(s32 x, s32 y, Color &out) const;
+        // Blends c at (x, y), scaled by coverage (255 = fully covered).
+        void BlendPixel(s32 x, s32 y, Color c, u8 coverage = 255);
+
+        void FillRect(const Rect &r, Color c);
+        void StrokeRect(const Rect &r, Color c, s32 thickness = 1);
+        void HLine(s32 x, s32 y, s32 length, Color c);
+        void VLine(s32 x, s32 y, s32 length, Color c);
+
+        // Anti-aliased corners. Radius is limited to half the shorter side;
+        // stroke thickness is limited to the radius.
+        void FillRoundRect(const Rect &r, s32 radius, Color c);
+        void StrokeRoundRect(const Rect &r, s32 radius, Color c, s32 thickness = 1);
+
+        // Anti-aliased line with round-ish ends and a filled triangle, in
+        // pixel coordinates (pixel centers are at +0.5).
+        void Line(float x0, float y0, float x1, float y1, float width, Color c);
+        void FillTriangle(float ax, float ay, float bx, float by, float cx, float cy, Color c);
+
+        // Draws a coverage mask (0 = empty, 255 = solid) in color c, each mask
+        // pixel blown up to scale x scale screen pixels.
+        void DrawMask(s32 x, s32 y, const u8 *mask, s32 w, s32 h, s32 stride, s32 scale, Color c);
+
+    private:
+        void Span(s32 x0, s32 x1, s32 y, Color c);
+
+        Surface m_surface;
+        Rect    m_clip;
+    };
+}
+}
