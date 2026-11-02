@@ -1,0 +1,80 @@
+name: Release
+
+# Pushing a tag like v0.1.0 builds the plugin and attaches usum-onescreen.3gx
+# to a draft GitHub Release for that tag. Publishing the draft is done by hand.
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: devkitpro/devkitarm:latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The tag must match the version in usum-onescreen.plgInfo (v<Major>.<Minor>.<Revision>).
+      - name: Check tag matches plgInfo version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION=$(awk '/Major:/{ma=$2} /Minor:/{mi=$2} /Revision:/{re=$2} END{print "v" ma "." mi "." re}' usum-onescreen.plgInfo)
+          echo "tag $TAG, plgInfo $VERSION"
+          if [ "$TAG" != "$VERSION" ]; then
+            echo "::error::Tag $TAG does not match usum-onescreen.plgInfo version $VERSION"
+            exit 1
+          fi
+
+      # Same steps as build.yml.
+      - name: Add ThePixellizerOSS package repo
+        run: |
+          CONF=/opt/devkitpro/pacman/etc/pacman.conf
+          if ! grep -Fxq "[thepixellizeross-lib]" "$CONF"; then
+            printf '\n[thepixellizeross-lib]\nServer = https://thepixellizeross.gitlab.io/packages/any\nSigLevel = Optional\n' >> "$CONF"
+          fi
+          if ! grep -Fxq "[thepixellizeross-linux]" "$CONF"; then
+            printf '\n[thepixellizeross-linux]\nServer = https://thepixellizeross.gitlab.io/packages/x86_64/linux\nSigLevel = Optional\n' >> "$CONF"
+          fi
+
+      - name: Install libctrpf and 3gxtool
+        run: |
+          dkp-pacman -Sy --noconfirm
+          dkp-pacman -Sl thepixellizeross-lib thepixellizeross-linux
+          dkp-pacman -S --noconfirm --needed libctrpf 3gxtool
+
+      - name: Build
+        run: make
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: usum-onescreen
+          path: usum-onescreen.3gx
+          if-no-files-found: error
+
+  # Runs outside the devkitARM container, where the gh CLI is preinstalled.
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: usum-onescreen
+
+      - name: Create or update the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" usum-onescreen.3gx --clobber
+          else
+            gh release create "$TAG" usum-onescreen.3gx --draft --verify-tag \
+              --title "USUM One Screen $TAG" \
+              --notes "Install and controls: docs/PLAYING.md. Changes: CHANGELOG.md. Requires Pokémon Ultra Sun (USA) v1.2 and Azahar with the 3GX plugin loader."
+          fi
