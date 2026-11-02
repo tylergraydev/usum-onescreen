@@ -217,6 +217,14 @@ namespace OneScreen
         return actions[index < 0 || index >= (int)actions.size() ? 0 : index];
     }
 
+    const ActionDef &XMenuCloseAction(void)
+    {
+        static const ActionDef def = {
+            "xmenu-close", "X menu: B (close)", InScene(SceneField).With(WorldXMenu),
+            { StepPress(ActionKeyB), StepWaitFor(InScene(SceneField).Without(WorldXMenu), 60) } };
+        return def;
+    }
+
     // --- Drawing ---
 
     static constexpr UI::Color PanelBg   = Rgb(22, 30, 52);

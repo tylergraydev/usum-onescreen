@@ -26,6 +26,23 @@ static unsigned AllBut(const char *name)
     return ~(1u << E(name));
 }
 
+static void TestCloseAction(void)
+{
+    // The Map entry's hand-over to the native map: B, then the field without
+    // the X menu; allowed only from the open X menu.
+    const ActionDef &def = XMenuCloseAction();
+    CHECK(CheckAction(def).empty());
+    CHECK(std::string(def.name) == "xmenu-close");
+    CHECK(def.steps.size() == 2);
+    CHECK(def.steps.size() == 2 && def.steps[0].kind == StepKind::Press && def.steps[0].keys == ActionKeyB);
+    CHECK(def.steps.size() == 2 && def.steps[1].kind == StepKind::WaitFor);
+    ActionWorld menu, field;
+    menu.scene = field.scene = SceneField;
+    menu.flags = WorldXMenu;
+    CHECK(def.needs.Matches(menu) && !def.needs.Matches(field));
+    CHECK(def.steps.size() == 2 && def.steps[1].until.Matches(field) && !def.steps[1].until.Matches(menu));
+}
+
 static void TestTable(void)
 {
     const std::vector<XMenuEntry> &entries = XMenuEntries();
@@ -392,6 +409,7 @@ static void TestDraw(const char *preview)
 int main(int argc, char **argv)
 {
     TestTable();
+    TestCloseAction();
     TestMove();
     TestFlipPage();
     TestCursorMemory();
