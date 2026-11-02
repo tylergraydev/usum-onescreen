@@ -52,6 +52,28 @@ CI (`.github/workflows/build.yml`) does the same in the `devkitpro/devkitarm` co
 - The log records every scene change (`scene: FieldRo`, `Zukan`, `Battle`, …); `scene` logs the current one. Memory tools: `snap NAME`, `vtscan NAME`, `peek ADDR [N]` (see `docs/OFFSETS.md`).
 - `py -3 -I tools/shot.py [name]` asks the running plugin for a screenshot and saves `analysis/private/shots/<name>-top.png` and `-bottom.png`. The top shot includes anything the plugin draws.
 
+### Isolated Azahar instances
+
+`tools/instance.py` runs Ultra Sun in Azahar instances that share nothing with each other or with your own Azahar (`%APPDATA%\Azahar`), so several tests can run at once:
+
+```bash
+py -3 -I tools/instance.py create a          # once; --force rebuilds it
+py -3 -I tools/instance.py install a         # copies ./usum-onescreen.3gx in (or give a path)
+py -3 -I tools/instance.py start a --wait 90 # boots Ultra Sun, prints the plugin's boot log
+py -3 -I tools/cmd.py --instance a "press a"
+py -3 -I tools/shot.py --instance a a-title
+py -3 -I tools/instance.py stop a
+py -3 -I tools/instance.py status
+```
+
+Azahar 2126.2 has no command-line flag or environment variable for its user folder; on Windows it uses a folder named `user` next to `azahar.exe` if there is one (`SetUserPath` in `src/common/file_util.cpp`), else `%APPDATA%\Azahar`. So an instance is `analysis/private/instances/<name>/azahar/`: a copy of `C:\Program Files\Azahar` (~100 MB) plus its own `user\` folder holding:
+
+- `config`: copied from `%APPDATA%\Azahar\config`, with custom textures off, the 3GX plugin loader on, update checks off, and stored paths pointed at the instance.
+- `nand`, `sysdata`: copied whole (small; holds the update's ticket).
+- `sdmc`: only the Ultra Sun v1.2 update title, a **copy** of the save and extdata, and the plugin in `luma/plugins/00040000001B5000/`. Tests never touch the real save.
+
+`stop` ends only the process `start` recorded, after checking its exe path is that instance's `azahar.exe` and its start time matches. Instance names are per checkout (each worktree has its own `analysis/private/`). Limits: each instance uses ~170 MB of disk and its own emulator window; game controllers are seen by every instance, so don't touch a pad during tests; after Azahar updates, re-`create --force` to pick up the new build. Without `--instance`, `cmd.py` and `shot.py` work on `%APPDATA%\Azahar` as before.
+
 ## Layout
 
 - `Sources/main.cpp`: plugin entry points (`PatchProcess`, `main`, menu).
