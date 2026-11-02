@@ -2,6 +2,7 @@
 
 #include <string>
 
+#include "UI/Font.hpp"
 #include "UI/Raster.hpp"
 
 namespace OneScreen
@@ -10,7 +11,8 @@ namespace UI
 {
     enum class Font : u8
     {
-        System, // the 3DS system font, drawn through CTRPF (16 px line)
+        System, // the 3DS system font at 3/5 size (18 px line)
+        Large,  // the 3DS system font at 4/5 size (24 px line), for titles
         Small,  // built-in 5x7 ASCII font (8 px line), also used on the PC
     };
 
@@ -29,20 +31,14 @@ namespace UI
         Align align = Align::Left;
     };
 
-    // How the System font is measured and turned into a coverage mask. The
-    // 3DS build installs one that goes through CTRPF (UI/Device.cpp). With
-    // none set, System text uses the Small font at twice the size so layouts
-    // keep roughly the same metrics on the PC.
-    struct FontBackend
-    {
-        s32 lineHeight;
-        s32 (*measure)(const std::string &text);
-        // Fills mask (w x h, stride w) with coverage, 0 = empty. Returns false
-        // if it could not, and the text is then skipped.
-        bool (*rasterize)(const std::string &text, u8 *mask, s32 w, s32 h);
-    };
+    // Where System and Large glyphs come from. The 3DS build passes the
+    // shared system font (UI/Device.cpp); nullptr (the default, and on the
+    // PC) draws them with the Small font at 2x and 3x instead, with the same
+    // line heights.
+    void SetSystemFont(const FontSource *font);
 
-    void SetSystemFont(const FontBackend *backend);
+    // Glyph cache counters (hits, misses) of the System and Large fonts.
+    void TextCacheStats(u32 &hits, u32 &misses);
 
     s32 LineHeight(const TextStyle &style);
     s32 MeasureText(const std::string &text, const TextStyle &style);
@@ -56,7 +52,7 @@ namespace UI
     s32 DrawText(Canvas &canvas, const std::string &text, const Rect &box, const TextStyle &style);
 
     // Renders the Small font into a coverage mask at the given scale. Used by
-    // the fallback System font and by the host test's fake backend.
+    // the fallback System font.
     void RenderSmallMask(const std::string &text, u8 *mask, s32 w, s32 h, s32 scale);
 }
 }
