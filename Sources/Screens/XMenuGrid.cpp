@@ -148,7 +148,7 @@ namespace OneScreen
 
     bool XMenuOpensNative(int index)
     {
-        static const char *const native[] = { "options", "trainer_passport" };
+        static const char *const native[] = { "options", "trainer_passport", "battle_video" };
         const std::vector<XMenuEntry> &entries = XMenuEntries();
         if (index < 0 || index >= (int)entries.size())
             return false;
