@@ -1,11 +1,14 @@
 #include "UI/Device.hpp"
 
-#include <algorithm>
-#include <cmath>
-
 #include "Framebuffer.hpp"
 #include "UI/Demo.hpp"
+#include "UI/Font.hpp"
+#include "UI/Layer.hpp"
 #include "UI/Text.hpp"
+
+// libctru's shared system font; CTRPF maps it at startup (font.h declares it
+// only inside an inline function).
+extern "C" CFNT_s *g_sharedFont;
 
 namespace OneScreen
 {
@@ -24,88 +27,159 @@ namespace OneScreen
         return surface;
     }
 
-    static const Screen *s_screen = nullptr;
+    static UI::FontSource s_font;
+    static bool s_fontReady = false;
 
-    // DrawSysfont writes straight into the framebuffer and has no size or
-    // alpha, so text is drawn white-on-black into a corner of the screen, read
-    // back as a coverage mask, and the corner is restored. The mask is then
-    // drawn wherever it is wanted, scaled and in any color. The margin covers
-    // glyph pixels that may land outside the measured box (not yet checked
-    // in-game).
-    static constexpr s32 SysLine = 16, Margin = 8;
-    static constexpr s32 SaveW = UI::ScreenW, SaveH = SysLine + Margin;
-    static u8 s_saved[SaveW * SaveH * 4];
-
-    static s32 SysMeasure(const std::string &text)
+    static int FontIndexOf(u32 codePoint)
     {
-        return (s32)std::ceil(OSD::GetTextWidth(true, text));
+        return fontGlyphIndexFromCodePoint(g_sharedFont, codePoint);
     }
 
-    static bool SysRasterize(const std::string &text, u8 *mask, s32 w, s32 h)
+    static void FontWidths(int index, s32 &left, s32 &glyphW, s32 &advance)
     {
-        if (s_screen == nullptr || w > SaveW || h > SysLine)
+        const charWidthInfo_s *w = fontGetCharWidthInfo(g_sharedFont, index);
+        left = w->left;
+        glyphW = w->glyphWidth;
+        advance = w->charWidth;
+    }
+
+    bool UiInitFont(void)
+    {
+        if (s_fontReady)
+            return true;
+        // CTRPF maps the font when it first needs it (already at boot in
+        // testing); measuring a string makes sure.
+        if (g_sharedFont == nullptr)
+            OSD::GetTextWidth(true, "A");
+        if (g_sharedFont == nullptr || g_sharedFont->finf.tglp == nullptr)
             return false;
 
-        const UI::Surface surface = SurfaceFromScreen(*s_screen);
-        const s32 bpp = (s32)UI::BytesPerPixel(surface.format);
-        const s32 saveW = std::min(w + Margin, surface.width), saveH = SaveH;
-        auto pixel = [&](s32 x, s32 y) { return surface.origin + x * surface.stepX + y * surface.stepY; };
-
-        for (s32 y = 0; y < saveH; y++)
-            for (s32 x = 0; x < saveW; x++)
-                std::copy(pixel(x, y), pixel(x, y) + bpp, s_saved + (y * saveW + x) * bpp);
-
-        UI::Canvas canvas(surface);
-        canvas.FillRect(UI::Rect{ 0, 0, saveW, saveH }, UI::Rgb(0, 0, 0));
-        s_screen->DrawSysfont(text, 0, 0, Color::White);
-
-        for (s32 y = 0; y < h; y++)
-            for (s32 x = 0; x < w; x++)
-            {
-                u8 r, g, b;
-                UI::ReadPixel(pixel(x, y), surface.format, r, g, b);
-                mask[y * w + x] = std::max(r, std::max(g, b));
-            }
-
-        for (s32 y = 0; y < saveH; y++)
-            for (s32 x = 0; x < saveW; x++)
-                std::copy(s_saved + (y * saveW + x) * bpp, s_saved + (y * saveW + x + 1) * bpp, pixel(x, y));
+        const FINF_s &finf = g_sharedFont->finf;
+        const TGLP_s &tglp = *finf.tglp;
+        s_font.sheets = tglp.sheetData;
+        s_font.sheetSize = tglp.sheetSize;
+        s_font.sheetCount = tglp.nSheets;
+        s_font.sheetFormat = tglp.sheetFmt;
+        s_font.sheetW = tglp.sheetWidth;
+        s_font.sheetH = tglp.sheetHeight;
+        s_font.cellsPerRow = tglp.nRows;
+        s_font.cellRows = tglp.nLines;
+        s_font.cellW = tglp.cellWidth;
+        s_font.cellH = tglp.cellHeight;
+        s_font.baseline = tglp.baselinePos;
+        s_font.lineFeed = finf.lineFeed;
+        s_font.indexOf = FontIndexOf;
+        s_font.widths = FontWidths;
+        if (s_font.sheetFormat != UI::SheetFormatA4)
+            return false;
+        UI::SetSystemFont(&s_font);
+        s_fontReady = true;
         return true;
     }
 
-    static const UI::FontBackend s_sysfont = { SysLine, SysMeasure, SysRasterize };
-
-    void UiBindScreen(const Screen *screen)
+    std::string UiFontInfo(void)
     {
-        s_screen = screen;
-        UI::SetSystemFont(screen != nullptr ? &s_sysfont : nullptr);
+        if (!UiInitFont())
+            return Utils::Format("uifont: no system font (g_sharedFont %08lX)", (u32)g_sharedFont);
+        u32 hits, misses;
+        UI::TextCacheStats(hits, misses);
+        return Utils::Format("uifont: %08lX cell %ux%u baseline %u line %u, %u sheets %ux%u format %u at %08lX, "
+                             "cache hits %lu misses %lu",
+                             (u32)g_sharedFont, s_font.cellW, s_font.cellH, s_font.baseline, s_font.lineFeed,
+                             s_font.sheetCount, s_font.sheetW, s_font.sheetH, s_font.sheetFormat,
+                             (u32)s_font.sheets, hits, misses);
     }
 
-    static volatile bool s_demo = false;
+    static volatile UiDemoMode s_demo = UiDemoMode::Off;
     static u32 s_demoFrames = 0;
 
-    void UiDemoSetEnabled(bool enabled)
+    // The demo panel, drawn off-screen when the highlight moves.
+    static UI::Layer s_demoLayer;
+    static u8 s_demoPixels[UI::DemoPanel.w * UI::DemoPanel.h * 4];
+    static s32 s_demoDrawn = -1;
+
+    // Emulated ticks per demo frame, and how many frames re-rendered the
+    // layer; the layer re-renders and copies are also timed on their own.
+    static u32 s_uiFrames = 0, s_uiRedraws = 0, s_uiPresents = 0;
+    static u64 s_uiSum = 0, s_uiMax = 0, s_uiRedrawSum = 0, s_uiPresentSum = 0;
+
+    void UiDemoSetMode(UiDemoMode mode)
     {
-        s_demo = enabled;
+        s_demo = mode;
         s_demoFrames = 0;
+        s_demoDrawn = -1;
     }
 
-    bool UiDemoEnabled(void)
+    UiDemoMode UiDemoGetMode(void)
     {
         return s_demo;
     }
 
     bool UiDemoOnScreen(const Screen &screen)
     {
-        if (!s_demo || !screen.IsTop)
+        const UiDemoMode mode = s_demo;
+        if (mode == UiDemoMode::Off || !screen.IsTop)
             return false;
 
-        UiBindScreen(&screen);
-        UI::Canvas canvas(SurfaceFromScreen(screen));
-        // Move the highlight about once a second so it is clear the menu is
-        // redrawn every frame.
-        UI::DrawDemoMenu(canvas, (s32)((s_demoFrames++ / 60) % UI::DemoRows));
-        UiBindScreen(nullptr);
+        const u64 start = svcGetSystemTick();
+        UiInitFont();
+        const UI::Surface fb = SurfaceFromScreen(screen);
+        // Move the highlight about once a second so redraws can be seen.
+        const s32 selected = (s32)((s_demoFrames++ / 60) % UI::DemoRows);
+
+        if (mode == UiDemoMode::Direct)
+        {
+            UI::Canvas canvas(fb);
+            UI::DrawDemoShade(canvas);
+            UI::DrawDemoMenu(canvas, selected);
+            s_uiRedraws++;
+        }
+        else
+        {
+            if (mode == UiDemoMode::Shade)
+            {
+                UI::Canvas canvas(fb);
+                UI::DrawDemoShade(canvas);
+            }
+            if (!s_demoLayer.Matches(fb))
+            {
+                s_demoLayer.Setup(fb, UI::DemoPanel, UI::DemoRadius, s_demoPixels, sizeof(s_demoPixels));
+                s_demoDrawn = -1;
+            }
+            if (selected != s_demoDrawn)
+            {
+                const u64 redraw = svcGetSystemTick();
+                UI::Canvas canvas = s_demoLayer.Begin();
+                UI::DrawDemoMenu(canvas, selected);
+                s_demoDrawn = selected;
+                s_uiRedraws++;
+                s_uiRedrawSum += svcGetSystemTick() - redraw;
+            }
+            const u64 present = svcGetSystemTick();
+            s_demoLayer.Present(fb);
+            s_uiPresents++;
+            s_uiPresentSum += svcGetSystemTick() - present;
+        }
+
+        const u64 ticks = svcGetSystemTick() - start;
+        s_uiFrames++;
+        s_uiSum += ticks;
+        if (ticks > s_uiMax)
+            s_uiMax = ticks;
         return true;
+    }
+
+    std::string UiPerfReport(void)
+    {
+        static const char *names[] = { "off", "on", "shade", "direct" };
+        const auto us = [](u64 ticks) { return (unsigned long)(ticks * 1000000 / SYSCLOCK_ARM11); };
+        const auto mean = [](u64 sum, u32 n) { return n ? sum / n : 0; };
+        const std::string line = Utils::Format(
+            "ui: demo %s, frames %lu, redraws %lu, mean %lu us, max %lu us, layer redraw mean %lu us, copy mean %lu us",
+            names[(int)s_demo], s_uiFrames, s_uiRedraws, us(mean(s_uiSum, s_uiFrames)), us(s_uiMax),
+            us(mean(s_uiRedrawSum, s_uiRedraws)), us(mean(s_uiPresentSum, s_uiPresents)));
+        s_uiFrames = s_uiRedraws = s_uiPresents = 0;
+        s_uiSum = s_uiMax = s_uiRedrawSum = s_uiPresentSum = 0;
+        return line;
     }
 }

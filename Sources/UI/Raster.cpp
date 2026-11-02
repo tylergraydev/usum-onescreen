@@ -120,21 +120,27 @@ namespace UI
         ResetClip();
     }
 
+    Canvas::Canvas(const Surface &surface, s32 originX, s32 originY)
+        : m_surface(surface), m_ox(originX), m_oy(originY)
+    {
+        ResetClip();
+    }
+
     void Canvas::SetClip(const Rect &clip)
     {
-        m_clip = Intersect(clip, Rect{ 0, 0, m_surface.width, m_surface.height });
+        m_clip = Intersect(clip, Rect{ m_ox, m_oy, m_surface.width, m_surface.height });
     }
 
     void Canvas::ResetClip(void)
     {
-        m_clip = Rect{ 0, 0, m_surface.width, m_surface.height };
+        m_clip = Rect{ m_ox, m_oy, m_surface.width, m_surface.height };
     }
 
     bool Canvas::GetPixel(s32 x, s32 y, Color &out) const
     {
-        if (x < 0 || y < 0 || x >= m_surface.width || y >= m_surface.height)
+        if (x < m_ox || y < m_oy || x >= m_ox + m_surface.width || y >= m_oy + m_surface.height)
             return false;
-        const u8 *p = m_surface.origin + x * m_surface.stepX + y * m_surface.stepY;
+        const u8 *p = At(x, y);
         ReadPixel(p, m_surface.format, out.r, out.g, out.b);
         out.a = 255;
         return true;
@@ -148,7 +154,7 @@ namespace UI
         if (alpha == 0)
             return;
 
-        u8 *p = m_surface.origin + x * m_surface.stepX + y * m_surface.stepY;
+        u8 *p = At(x, y);
         if (alpha == 255)
         {
             WritePixel(p, m_surface.format, c.r, c.g, c.b);
@@ -174,7 +180,7 @@ namespace UI
         if (x1 <= x0 || c.a == 0)
             return;
 
-        u8 *p = m_surface.origin + x0 * m_surface.stepX + y * m_surface.stepY;
+        u8 *p = At(x0, y);
         if (c.a != 255)
         {
             // Same result as BlendPixel per pixel, with the clip check, the
@@ -205,6 +211,17 @@ namespace UI
         u8 encoded[4];
         WritePixel(encoded, m_surface.format, c.r, c.g, c.b);
         const u32 bpp = BytesPerPixel(m_surface.format);
+        if (bpp == 3)
+        {
+            const u8 e0 = encoded[0], e1 = encoded[1], e2 = encoded[2];
+            for (s32 x = x0; x < x1; x++, p += m_surface.stepX)
+            {
+                p[0] = e0;
+                p[1] = e1;
+                p[2] = e2;
+            }
+            return;
+        }
         for (s32 x = x0; x < x1; x++, p += m_surface.stepX)
             for (u32 i = 0; i < bpp; i++)
                 p[i] = encoded[i];
@@ -383,20 +400,40 @@ namespace UI
     {
         if (scale < 1)
             scale = 1;
-        for (s32 j = 0; j < h; j++)
+        // Clip once to the mask pixels that touch the clip rect (BlendPixel
+        // clips the scaled ones exactly), then blend row by row with the
+        // colour products hoisted: glyph masks are drawn this way.
+        const s32 i0 = std::max<s32>(0, (m_clip.x - x) / scale);
+        const s32 i1 = std::min<s32>(w, (m_clip.Right() - x + scale - 1) / scale);
+        const s32 j0 = std::max<s32>(0, (m_clip.y - y) / scale);
+        const s32 j1 = std::min<s32>(h, (m_clip.Bottom() - y + scale - 1) / scale);
+        const bool fast = scale == 1 && m_surface.format == PixelFormat::BGR8;
+        for (s32 j = j0; j < j1; j++)
         {
-            const s32 top = y + j * scale;
-            if (top >= m_clip.Bottom() || top + scale <= m_clip.y)
-                continue;
-            for (s32 i = 0; i < w; i++)
+            const u8 *row = mask + j * stride;
+            if (fast)
             {
-                const u8 cov = mask[j * stride + i];
+                u8 *p = At(x + i0, y + j);
+                for (s32 i = i0; i < i1; i++, p += m_surface.stepX)
+                {
+                    const u32 cov = row[i];
+                    if (cov == 0)
+                        continue;
+                    const u32 alpha = Mul255(c.a, cov), inv = 255 - alpha;
+                    p[0] = (u8)Div255(c.b * alpha + p[0] * inv);
+                    p[1] = (u8)Div255(c.g * alpha + p[1] * inv);
+                    p[2] = (u8)Div255(c.r * alpha + p[2] * inv);
+                }
+                continue;
+            }
+            for (s32 i = i0; i < i1; i++)
+            {
+                const u8 cov = row[i];
                 if (cov == 0)
                     continue;
-                const s32 left = x + i * scale;
                 for (s32 sy = 0; sy < scale; sy++)
                     for (s32 sx = 0; sx < scale; sx++)
-                        BlendPixel(left + sx, top + sy, c, cov);
+                        BlendPixel(x + i * scale + sx, y + j * scale + sy, c, cov);
             }
         }
     }

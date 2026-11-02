@@ -22,7 +22,7 @@ $(OUT)/settings_test: settings_test.cpp ../Sources/Settings.cpp ../Includes/Sett
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) settings_test.cpp ../Sources/Settings.cpp -o $@
 
-UI_SRCS  := $(addprefix ../Sources/UI/,Raster.cpp Text.cpp Icons.cpp Demo.cpp)
+UI_SRCS  := $(addprefix ../Sources/UI/,Raster.cpp Text.cpp Font.cpp Layer.cpp Icons.cpp Demo.cpp)
 UI_HDRS  := $(wildcard ../Includes/UI/*.hpp)
 PREVIEW  := ../analysis/private/ui-demo.png
 
