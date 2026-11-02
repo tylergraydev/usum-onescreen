@@ -33,8 +33,6 @@ namespace OneScreen
     // A key press seen by both readers (the game's pad read and CTRPF's) may
     // land a frame apart; ignore a second toggle this soon.
     static const u32 ToggleGuard = 10;
-    // Readings of a new zone in a row before it is shown.
-    static const u32 ZoneStable = 3;
     // MapRequestOpen waits this long for the field.
     static const u32 RequestFrames = 90;
 
@@ -58,8 +56,7 @@ namespace OneScreen
     static u32  s_requestUntil = 0;
     static MapView s_view;
     static bool s_logged = false;               // the current view's zone was logged
-    static int  s_pendingZone = -1;             // a new zone not yet read ZoneStable times
-    static u32  s_pendingCount = 0;
+    static MapZoneFilter s_zones;
     static bool s_namesTried = false;
     static std::vector<std::string> s_names;
     static std::string s_namesStatus = "place names: not loaded";
@@ -178,25 +175,17 @@ namespace OneScreen
         if (!where.valid && s_view.known)
             return;
         const MapView view = MakeMapView(where, s_names, KeysToString(GetSettings().mapKey));
-        // Right after a door the field briefly reads zone 0 with the old
-        // position (seen once: 79 -> 0 -> 7). A new zone counts once it reads
-        // the same ZoneStable times in a row.
-        if (view.known && s_view.known && view.zone != s_view.zone)
+        // A new zone counts once it has settled (MapZoneFilter): right
+        // after a door the field reads a wrong zone for a few frames.
+        if (view.known)
         {
-            if (view.zone != s_pendingZone)
-            {
-                if (s_pendingZone >= 0)
-                    log.push_back(Utils::Format("map: zone %d read %lu time(s), ignored", s_pendingZone, s_pendingCount));
-                s_pendingZone = view.zone;
-                s_pendingCount = 0;
-            }
-            if (++s_pendingCount < ZoneStable)
+            int ignored = -1;
+            const bool changed = s_zones.Feed(view.zone, where.entryZone, ignored);
+            if (ignored >= 0)
+                log.push_back(Utils::Format("map: zone %d not settled, ignored", ignored));
+            if (!changed && view.zone != s_zones.Current())
                 return;
         }
-        else if (s_pendingZone >= 0)
-            log.push_back(Utils::Format("map: zone %d read %lu time(s), ignored", s_pendingZone, s_pendingCount));
-        s_pendingZone = -1;
-        s_pendingCount = 0;
         if (view.known && (!s_logged || view.zone != s_view.zone))
         {
             log.push_back(std::string(s_logged ? "map: now " : "map: shown ") + DescribeMapView(view));
@@ -218,8 +207,7 @@ namespace OneScreen
         s_logged = false;
         s_copyFailed = false;
         s_view = MapView();
-        s_pendingZone = -1;
-        s_pendingCount = 0;
+        s_zones.Reset();
         s_lastToggle = s_frames;
         log.push_back(std::string("map: open (") + how + ")" + (s_pixels == nullptr ? ", NO MEMORY for the layer" : ""));
         Refresh(log);

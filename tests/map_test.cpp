@@ -361,6 +361,32 @@ static void TestKeys(void)
     CHECK(MapKeys(false, true, L | R, L | R) == MapKeyResult::Open);
 }
 
+static void TestZoneFilter(void)
+{
+    MapZoneFilter f;
+    int ignored = -1;
+    CHECK(f.Feed(79, 79, ignored) && ignored == -1 && f.Current() == 79);    // first reading
+    CHECK(!f.Feed(79, 79, ignored) && f.Current() == 79);
+    // The door, as logged: zone 0 three times while the entry already says 7,
+    // then zone 7 settled.
+    CHECK(!f.Feed(0, 7, ignored) && !f.Feed(0, 7, ignored) && !f.Feed(0, 7, ignored));
+    CHECK(f.Current() == 79);
+    CHECK(!f.Feed(7, 7, ignored) && ignored == 0);
+    CHECK(!f.Feed(7, 7, ignored) && ignored == -1);
+    CHECK(f.Feed(7, 7, ignored) && f.Current() == 7);
+    // A one-reading blip back to the old zone is dropped.
+    CHECK(!f.Feed(13, 13, ignored));
+    CHECK(!f.Feed(7, 7, ignored) && ignored == 13 && f.Current() == 7);
+    // A zone the entry never agrees with still counts after `patient` readings.
+    MapZoneFilter g(3, 5);
+    CHECK(g.Feed(7, 7, ignored));
+    for (int i = 0; i < 4; i++)
+        CHECK(!g.Feed(13, 7, ignored));
+    CHECK(g.Feed(13, 7, ignored) && g.Current() == 13);
+    g.Reset();
+    CHECK(g.Current() == -1 && g.Feed(13, 7, ignored));
+}
+
 static UI::Color At(const UI::Canvas &canvas, int x, int y)
 {
     UI::Color c = {};
@@ -452,6 +478,7 @@ int main(int argc, char **argv)
     TestRealPlaceNames(argc > 2 ? argv[2] : "../analysis/private/romfs-base/a/0/3/2");
     TestView();
     TestKeys();
+    TestZoneFilter();
     TestLayout();
     TestDraw(argc > 1 ? argv[1] : nullptr);
     if (s_failures != 0)

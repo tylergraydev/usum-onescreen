@@ -61,6 +61,36 @@ namespace OneScreen
         return view;
     }
 
+    bool MapZoneFilter::Feed(u16 zone, u16 entryZone, int &ignored)
+    {
+        ignored = -1;
+        if (m_current < 0 || zone == m_current)
+        {
+            if (m_pending >= 0)
+                ignored = m_pending;
+            m_pending = -1;
+            m_count = m_agree = 0;
+            const bool first = m_current < 0;
+            m_current = zone;
+            return first;
+        }
+        if (zone != m_pending)
+        {
+            if (m_pending >= 0)
+                ignored = m_pending;
+            m_pending = zone;
+            m_count = m_agree = 0;
+        }
+        m_count++;
+        m_agree = zone == entryZone ? m_agree + 1 : 0;
+        if (m_agree < m_stable && m_count < m_patient)
+            return false;
+        m_current = zone;
+        m_pending = -1;
+        m_count = m_agree = 0;
+        return true;
+    }
+
     std::string DescribeMapView(const MapView &view)
     {
         if (!view.known)
@@ -108,8 +138,8 @@ namespace OneScreen
         const float a = yaw * 3.14159265f / 180.0f;
         const float dx = std::sin(a), dy = std::cos(a);
         const float tipX = cx + dx * r, tipY = cy + dy * r;
-        const float baseX = cx - dx * r * 0.35f, baseY = cy - dy * r * 0.35f;
-        const float w = r * 0.45f;
+        const float baseX = cx - dx * r * 0.6f, baseY = cy - dy * r * 0.6f;
+        const float w = r * 0.6f;
         canvas.FillTriangle(tipX, tipY, baseX - dy * w, baseY + dx * w, baseX + dy * w, baseY - dx * w, Arrow);
     }
 
