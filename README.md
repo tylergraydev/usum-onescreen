@@ -117,7 +117,27 @@ Azahar 2126.2 has no command-line flag or environment variable for its user fold
 - `nand`, `sysdata`: copied whole (small; holds the update's ticket).
 - `sdmc`: only the Ultra Sun v1.2 update title, a **copy** of the save and extdata, and the plugin in `luma/plugins/00040000001B5000/`. Tests never touch the real save.
 
-`stop` ends only the process `start` recorded, after checking its exe path is that instance's `azahar.exe` and its start time matches. Instance names are per checkout (each worktree has its own `analysis/private/`). Limits: each instance uses ~170 MB of disk and its own emulator window; game controllers are seen by every instance, so don't touch a pad during tests; after Azahar updates, re-`create --force` to pick up the new build. Without `--instance`, `cmd.py` and `shot.py` work on `%APPDATA%\Azahar` as before.
+`stop` ends only the process `start` recorded, after checking its exe path is that instance's `azahar.exe` and its start time matches. Instance names are per checkout (each worktree has its own `analysis/private/`).
+
+### Start points
+
+`tools/startpoint.py` starts an instance at a known place instead of booting the save and walking:
+
+```bash
+py -3 -I tools/startpoint.py go a grass      # restore, start, drive to the point; prints the scene log
+py -3 -I tools/startpoint.py list
+py -3 -I tools/startpoint.py restore a pc    # only put the save in place (instance stopped)
+py -3 -I tools/startpoint.py check           # mtime and SHA-256 of the real save, to compare
+```
+
+| Point | Where | `go` ends with |
+|---|---|---|
+| `title` | title screen | the title; Start opens `TitleMenu` |
+| `pokecenter` | inside the Route 2 Pokémon Center, the save as copied | `scene: FieldRo` |
+| `grass` | standing in the tall grass south of that Pokémon Center | `scene: FieldRo` (the next steps may start a wild battle) |
+| `pc` | facing the PC at the right end of the nurse's counter | `scene: FieldRo`; A opens `Box` |
+
+Azahar 2126.2 has no headless save states: no command-line option for them, and its RPC server has no save/load request (added upstream in 2127.0-alpha4, on a fixed UDP port shared by every instance). So a start point is an in-game save: `go` copies the point's save and extdata folders into the stopped instance, starts it, waits for the title, and for field points presses Start until `TitleMenu`, A until it leaves, then waits for `FieldRo`. The instance stays running; `go` took 14 s (`title`) and 22–25 s (field points) in testing. Points live in `analysis/private/startpoints/<point>/` with a `point.json` of file hashes, checked on every restore, and can go into any instance of the checkout; another checkout can copy that folder. To make a new one: drive an instance there, save in the game (X, then Y: Save, then A on Yes), `instance.py stop`, then `startpoint.py save <instance> <point> [--kind title|field] [--note TEXT]`. Restores write only inside `analysis/private/instances/` (checked before writing); the real save is only read, by `check`. Limits: each instance uses ~170 MB of disk and its own emulator window; game controllers are seen by every instance, so don't touch a pad during tests; after Azahar updates, re-`create --force` to pick up the new build. Without `--instance`, `cmd.py` and `shot.py` work on `%APPDATA%\Azahar` as before.
 
 ## Layout
 
