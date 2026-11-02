@@ -1,6 +1,6 @@
 # RE1: battle state (Ultra Sun USA v1.2)
 
-What the native battle UI (P2-1) needs to read, where it lives, and how it was found. Everything here was checked at runtime in an isolated Azahar instance on 2026-11-02, in five wild battles on Route 2: Drowzee Lv10, Smeargle Lv7, Yungoos ♀ Lv8, Yungoos ♂ Lv9, Makuhita Lv10 (final build). The `battle` command (`Sources/Battle.cpp`) prints all of it; the plugin also logs it on every change while the scene is `Battle`.
+What the native battle UI (P2-1) needs to read, where it lives, and how it was found. Everything here was checked at runtime in an isolated Azahar instance on 2026-11-02, in six wild battles on Route 2 (two instance restarts): Drowzee Lv10, Smeargle Lv7, Yungoos ♀ Lv8, Yungoos ♂ Lv9, Makuhita Lv10 (final build). The `battle` command (`Sources/Battle.cpp`) prints all of it; the plugin also logs it on every change while the scene is `Battle`.
 
 ```
 battle: menu moves (30FDB930 vt 0010B724) cursor 1 of 4 [type/eff 0/1 9/1 1/2 7/0]
