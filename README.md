@@ -38,7 +38,7 @@ No game code, assets, or keys go in this repo (`.gitignore` blocks the common fi
    `libctrpf` is the documented package name. `3gxtool` is assumed; if pacman can't find it, list what the repo has with `pacman -Sl thepixellizeross-win` and install the matching package, or point the Makefile at an existing binary with `make TOOL=/path/to/3gxtool`.
 4. From this folder (no spaces in the path), run `make`. Output: `usum-onescreen.3gx`.
 
-CI (`.github/workflows/build.yml`) does the same in the `devkitpro/devkitarm` container and uploads the `.3gx` as a build artifact.
+CI (`.github/workflows/build.yml`) does the same in the `devkitpro/devkitarm` container and uploads the `.3gx` as a build artifact. `tools/ci/install-deps.sh` syncs only the ThePixellizerOSS repos (pkg.devkitpro.org's `-Sy` sometimes answered 403, and the image already has everything else), retries with backoff, and falls back to the two package files kept in the Actions cache by an earlier run; the `deps_offline` input of a manual run tests that fallback.
 
 ## Run in Azahar
 
@@ -166,9 +166,12 @@ A scenario is a text file, one step per line; `#` starts a comment (except in `e
 | `expect-log REGEX [T]` | a log line since the mark matches, within T s (default 10; a trailing number is the timeout) |
 | `reject-log REGEX` | no log line since the mark matches |
 | `check-save` | the real save is unchanged so far |
+| `guard-ignore REGEX` | the log guard skips lines matching REGEX from here on |
 | `if-scene SCENE STEP` | runs STEP only if the scene is SCENE now |
 | `include FILE` | inlines FILE's steps (looked up next to the scenario, then in `scenarios/`; `.txt` optional) |
 | `repeat N [until-scene SCENE]` … `end` | runs the block N times; with `until-scene`, stops once that is the scene (checked before each step) and fails if it never is |
+
+Log guard: after every step it reads what was newly logged to the instance's `user/log/azahar_log.txt` and `usum-onescreen.log`, and fails that step on an Azahar `<Critical>`, `Assertion Failed`, `Unreachable code` or `unmapped read/write` line, or on a plugin `hooks: FAILED`, `MISMATCH at`, `unreadable at`, a `cursor:`/`buttons:` hook that returned non-zero, or `unsupported game`. Azahar's `<Error>` lines (unimplemented services) are normal and ignored. `--no-guard` turns it off.
 
 "The scene" is the last `scene:` line in the log (an empty one counts as `(none)`, the loading gap between scenes); "the mode" is the last `panel: mode` line. Included scenarios:
 
@@ -177,6 +180,18 @@ A scenario is a text file, one step per line; `#` starts a comment (except in `e
 - `wild-battle-run`: out of the Pokémon Center, south into the tall grass, back and forth until `Battle` (panel), Run by tap, back to `FieldRo` (off). One long circle-pad push stops partway down the path, so it walks in short steps.
 
 Screenshots come before every A press in a menu (only the Continue menu here).
+
+### Regression run
+
+`tools/regress.py` installs a build into an instance (default `regress`; created if missing, `--fresh` rebuilds it) and runs every scenario, restoring a start point's save (default `pokecenter`, from `analysis/private/startpoints/`) before each one, then prints a summary and exits 0 only if all passed:
+
+```bash
+py -3 -I tools/regress.py --instance a                   # ./usum-onescreen.3gx
+py -3 -I tools/regress.py --instance a --main            # newest green CI build on main (gh run download)
+py -3 -I tools/regress.py --instance a --run 41489129071 boot-to-field
+```
+
+`--keep` stops at the first failing scenario and leaves the instance running. Downloaded artifacts go to `analysis/private/regress/run-<id>/`.
 
 ## Layout
 
