@@ -8,6 +8,7 @@
 #include "Battle.hpp"
 #include "Buttons.hpp"
 #include "Party.hpp"
+#include "Settings.hpp"
 #include "Screens/BattleMenu.hpp"
 #include "UI/Device.hpp"
 #include "UI/Layer.hpp"
@@ -184,6 +185,7 @@ namespace OneScreen
             s_snap.afterCatch = s_enabled && afterCatch && scene == SceneDex;
         }
         s_snap.actionRunning = ActionRunning();
+        s_snap.panelKey = KeysToString(GetSettings().panelKey);
 
         const Screens::BattlePage before = s_menu.Page();
         const u32 beforeFrames = s_menu.Stable();

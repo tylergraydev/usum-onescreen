@@ -16,7 +16,7 @@ namespace OneScreen
     static const char *SceneField = "FieldRo";
     static const char *SceneBattle = "Battle";
 
-    static bool s_enabled = true;
+    static bool s_enabled = false;      // Settings::autoPanel; set at boot
     static bool s_nativeBattle = false;
     static bool s_afterBattle = false;  // in the Pokédex straight after a battle (a catch)
     static bool s_override = false;

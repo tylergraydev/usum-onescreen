@@ -285,7 +285,7 @@ namespace OneScreen
             s_yield = false;
 
         // The panel: off while the native menu is (about to be) up. A panel
-        // turned on while we hold it off is the player's doing (ZR): step aside.
+        // turned on while we hold it off is the player's doing (L+R): step aside.
         bool holdOff = s_enabled && !s_yield && (menuUp || s_frames < s_pendingUntil);
         if (holdOff && s_forcedOff && GetPanelMode() != PanelMode::Off)
         {

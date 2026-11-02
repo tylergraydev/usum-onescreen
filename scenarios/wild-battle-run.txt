@@ -1,10 +1,12 @@
 # Walk from the Pokémon Center to the tall grass south of it, wait for a
 # wild battle, Run, and get back to the overworld.
 include common/boot
+# Checks the automatic view per scene, which is off by default.
+send auto on
 # The panel path: with the native battle menu off, Battle gets the panel
 # ([scenes] Battle = panel). native-wild-battle.txt covers the menu.
 send battleui off
-# Its X menu check expects the panel too: the native X menu (#22) off.
+# This checks the panel path for the X menu: turn the native menu off.
 send xmenu off
 
 # Out of the door: the map change logs scene (none), then FieldRo again.
