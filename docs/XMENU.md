@@ -92,8 +92,10 @@ Festival Plaza's menu. So `XMenu.cpp` decides, without changing AutoPanel:
   probe sees the menu) and while the native menu shows, it holds the panel off
   with AutoPanel's manual override.
 - When the X menu goes away it clears the override, and AutoPanel picks the
-  mode for what is up now: panel for Quick Link and the save dialog, full for
-  Party, off for the field.
+  mode for what is up now: panel for Quick Link and the save dialog, off for
+  the field. Party is the native Party screen's (`docs/PARTY-UI.md`): opening
+  Pokémon calls `PartyScreenExpect()`, which holds the panel off from the tap
+  until the native Party list shows.
 - If the player turns the panel on by hand (ZR) while the native menu shows,
   the native menu steps aside until the X menu closes (`xmenu: panel turned on
   by hand ...`).
