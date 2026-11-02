@@ -142,14 +142,30 @@ No Z-move or Mega button: this save has no Z-Crystal pocket and the move list ha
 - **Party list**: same slot layout as Party; tapping a slot opens that Pokémon's page (verified slot 5 at 35,165). Back 15,224 (verified). The bottom bar says "Choose a Pokémon." instead of the Y/X buttons.
 - **Pokémon page**: Switch 182,194 (rect ~57,181-310,207) and Restore 118,226 (~57,213-178,238) measured only (not tapped, to avoid spending a turn); Summary 248,226 (186,213-310,238) verified; party icon strip at x 0-40, about 34 px pitch, centres y 18, 52, 87, 120, 155, 189 (52 verified: shows slot 2); back 15,224 verified (summary → page → list).
 - **Bag**: same item-row layout as the field Bag (row 1 at 235,16 verified: opens the item page). Five pockets, 42 px wide from x 106, y 216-239, tap x 127+42k, y 228: Rotom Powers, HP/PP Restore, status restore, Poké Balls, battle items (all verified). Back 15,224 (verified).
-- **Item page**: Use 182,222 (~65,208-300,236; measured only: item use is forbidden); ◀ 18,81 and ▶ 301,81 switch between items in the pocket (verified; 306,95 misses); back 15,224 (verified).
+- **Item page**: Use 182,222 (~65,208-300,236; verified on the Poké Balls pocket only, where it throws the ball: W5-1's catches. Other items are still never used); ◀ 18,81 and ▶ 301,81 switch between items in the pocket (verified; 306,95 misses); back 15,224 (verified).
+
+## Keyboard (`StrInput`, any scene; seen over `Zukan`)
+
+Reached by Yes to the nickname question after a catch (W5-1, [KEYBOARD.md](KEYBOARD.md)). The QWERTY page it opens on, every key verified by a tap with shift off and on (the typed character read back from the game's text object):
+
+| Keys | Rects | Taps |
+|---|---|---|
+| Row 0: `! 1 2 3 4 5 6 7 8 9 0` (shift: `! ♂ ♀ + - * / = % ( )`) | 21+20i,60-38+20i,88 | 30+20i, 74 |
+| Row 1: `q w e r t y u i o p` | 31+20i,95-48+20i,123 | 40+20i, 109 |
+| Row 2: `a s d f g h j k l ’ : é` | 41+20i,130-58+20i,158 | 50+20i, 144 |
+| Row 3: `z x c v b n m , . ? “ ”` | 51+20i,165-68+20i,193 | 60+20i, 179 |
+| Delete / OK (↵) | 240,60-289,88 / 230,95-289,123 | 265,74 / 260,109 |
+| Space / Shift (⇧, orange while on) | 20,200-218,228 / 221,200-289,228 | 119,214 / 255,214 |
+| ◀ to the grid page / ▶ back to QWERTY (grid page) | 10,132-24,148 / 296,132-312,148 | 16,140 / 304,140 |
+
+Shift is one-shot and on when the keyboard opens; Delete turns it off. The game's own D-pad cursor (a yellow box) follows the last tapped key. Past the limit (12 for a nickname) a key does nothing. The grid page (CAPS / lower / Sym. tabs, Delete, OK) isn't recorded beyond its ▶.
 
 ## Not reached
 
 - Z-move button, Mega Evolution: not in this save.
 - Target selection: not shown in single battles; no double battle available.
 - Save confirmation: Save is never tapped.
-- Not tapped by choice (listed above as measured): item Use/Give/Move, Party Restore/Held Item, battle Switch/Restore, the Y Poké Ball, X menu page 2 entries other than Options.
+- Not tapped by choice (listed above as measured): item Use (except Poké Balls in battle)/Give/Move, Party Restore/Held Item, battle Switch/Restore, the Y Poké Ball, X menu page 2 entries other than Options.
 
 ## Side observations
 

@@ -40,6 +40,10 @@ If you use an HD texture pack, turn off **Emulation → Configure… → Graphic
 
 Every other button works as normal.
 
+### Naming a Pokémon
+
+When the game asks for a nickname (Yes to *Would you like to give X a nickname?* after a catch), the keyboard appears on the top screen. D-pad or circle pad moves, **A** types the key, **B** deletes, **Y** is Shift, **X** types a space, **START** jumps to OK and **A** on OK confirms. The first letter is a capital; Shift only lasts for one character, as in the game.
+
 ## The bottom-screen view
 
 The goal is native menus on the top screen (the X menu has one already), so the bottom screen is hidden by default and **L+R** brings it up when a screen has no native menu yet. The corner panel is a half-size copy of the bottom screen in the lower-right corner of the top screen. Full view replaces the top screen with the bottom screen.
