@@ -1,6 +1,9 @@
 # Walk from the Pokémon Center to the tall grass south of it, wait for a
 # wild battle, Run, and get back to the overworld.
 include common/boot
+# The panel path: with the native battle menu off, Battle gets the panel
+# ([scenes] Battle = panel). native-wild-battle.txt covers the menu.
+send battleui off
 
 # Out of the door: the map change logs scene (none), then FieldRo again.
 mark
