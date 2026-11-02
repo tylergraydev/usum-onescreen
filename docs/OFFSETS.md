@@ -21,13 +21,30 @@ Found by static analysis of the local `code.bin` (`tools/extract_code.py`, `tool
 |---|---|---|
 | Title screen | `TitleMenu` | boot |
 | Overworld (incl. X menu, which is an overlay) | `FieldRo` | Pokémon Center, Route 2 |
-| Pokédex | `Zukan` | via Rotom tap and X menu |
+| Pokédex (top level, lists, entry pages) | `Zukan` | via Rotom tap and X menu |
 | Party | `main:00647FCC` | via X menu |
 | Bag | `main:006488C8` | via X menu |
 | Battle | `Battle` | wild Ekans on Route 2 |
+| Pokémon summary | `Status` | X menu → Pokémon → slot → Summary |
+| PC boxes | `Box` | A at the Pokémon Center PC (start point `pc`) |
+| Town Map | `TownMap` | tap the map on Rotom's screen |
+| Trainer Passport | `TrainerPass` | X menu → Trainer Passport |
+| Options | `Config` | X menu page 2 → Options |
+| Pokémon Refresh | `Kawaigari` | X menu page 2 → Pokémon Refresh |
+| Battle Video (Vs. Recorder) | `BattleVideoPlayer` | X menu page 2 → Battle Video |
+| QR Scanner | `QRReader` | X menu page 2 → QR Scanner; logged, then Azahar hung (no camera), no screenshot |
+| Quick Link, save dialog | `FieldRo` (field state 4) | X menu → Quick Link; X menu → Y |
+| Festival Plaza | `FieldRo` (field state 4) | X menu → Festival Plaza; a second FieldRo scene object, `JoinFesta` CRO loaded |
+| Poké Mart (Buy list), talking to people | `FieldRo` (field state 0x11) | the clerk in the Route 2 Pokémon Center; `Shop` CRO loaded |
 | Loading / transition | (none) | between every scene |
 
 Found by: `vtscan` (plugin: every global heap pointer → first 64 words → objects with a rodata vtable), diffed with `tools/vtdiff.py` across scenes, then `peek` on the manager showed vtables outside the main image, and Azahar's log (`CRO "…" loaded at …`) named the modules.
+
+Default views (`Includes/Settings.hpp`): full where the bottom screen is the whole scene and the top shows little (Party, Box, TownMap, Config, Kawaigari); panel where the top still says something (Status: stats on top, moves below; TrainerPass; BattleVideoPlayer; Zukan; Bag; Battle) and for the X menu; off where the bottom screen is unused (TitleMenu, FieldRo walking, talking, shopping).
+
+Not reached on this save: the nickname keyboard (`StrInput`; no rename without a permanent change), trainer and double battles, Rotom's own menus (Roto Loto, Rotom chat: they only come up when Rotom offers them; not reached), the QR Scanner's screen (Azahar hangs).
+
+**Field state** (`Sources/Scene.cpp` `FieldState()`): the FieldRo scene object (`*(*(0x6A599C))`) holds an object at `+0x618` whose vtable is FieldRo `+0xD735C` (`0x7B635C` with FieldRo at `0x6DF000`); its word at `+4` (scene `+0x61C`) is 0 while walking, 4 while a bottom-screen menu is up (X menu, Quick Link, save dialog, Festival Plaza's menu; also for a moment while an app Rotom opened starts or closes) and 0x11 while talking or in a shop. Found with `dump` of the scene object, X menu open ×3 vs closed ×3 (only `+0x61C` and `+0x720` differed; `+0x720` stayed 0 after returning from Party with the menu open); checked with the menu closed by B and by touch, after Party/Summary/Options/Pokémon Refresh, in Festival Plaza and after leaving it, at the Poké Mart, and at the PC. Auto panel uses it for `FieldRo.xmenu` and falls back to X/B presses only if it never reads (scenario `xmenu-touch-close`). After entering the field it waits until the state holds for 30 frames: coming back from the Town Map it reads 4 for about 20 frames before 0.
 
 Earlier, weaker signals (kept for reference):
 
