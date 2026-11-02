@@ -68,9 +68,9 @@
       "scene": "FieldRo (overlay)",
       "reach": "X menu: next_page",
       "buttons": {
-        "pokemon_refresh": {"rect": [34, 29, 143, 68], "tap": [88, 48], "does": "Pokemon Refresh (same grid slot as page 1 pokemon)", "verified": "measured", "why": "not needed for Phase 2; same grid as page 1"},
+        "pokemon_refresh": {"rect": [34, 29, 143, 68], "tap": [88, 48], "does": "Pokemon Refresh (scene Kawaigari; first time a 4-page tutorial, B skips it); its back (14,222) returns to the X menu, sometimes only on a second tap", "verified": "tap", "evidence": "p22 refresh, refresh2, back1"},
         "qr_scanner": {"rect": [176, 29, 286, 68], "tap": [230, 48], "does": "QR Scanner", "verified": "measured", "why": "not needed for Phase 2"},
-        "battle_video": {"rect": [34, 89, 143, 128], "tap": [88, 108], "does": "Battle Video", "verified": "measured", "why": "not needed for Phase 2"},
+        "battle_video": {"rect": [34, 89, 143, 128], "tap": [88, 108], "does": "Battle Video (scene BattleVideoPlayer, 'Open the Vs. Recorder'); back (16,224) returns to the X menu", "verified": "tap", "evidence": "p22 bv1, bv2"},
         "options": {"rect": [176, 89, 286, 128], "tap": [230, 108], "does": "Options (scene Config); back (15,223) leaves without confirming", "verified": "tap", "evidence": "re5-x2-options, re5-x2-options-back"},
         "prev_page": {"rect": [13, 11, 19, 14], "tap": [16, 12], "does": "page 1", "verified": "tap", "evidence": "re5-x-page1"},
         "save": {"rect": [183, 206, 319, 239], "tap": [251, 222], "does": "Save", "verified": "measured", "why": "never tapped"},
