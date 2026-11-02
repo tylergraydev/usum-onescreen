@@ -422,8 +422,10 @@ namespace Screens
         else if (snap.menu == GameMenu::Pokemon)
         {
             DrawText(canvas, "Pok\xC3\xA9mon", title, main);
-            std::string mon = snap.partyName.empty() ? Number("Slot %u of %u", snap.gameCursor + 1u, snap.listCount)
-                                                     : snap.partyName + Number(" Lv%u", snap.partyLevel, 0);
+            // The list's cursor is not set for a few frames as it opens.
+            std::string mon = !snap.partyName.empty() ? snap.partyName + Number(" Lv%u", snap.partyLevel, 0)
+                            : snap.gameCursor < snap.listCount ? Number("Slot %u of %u", snap.gameCursor + 1u, snap.listCount)
+                            : std::string("Choose a Pok\xC3\xA9mon");
             if (snap.partyMaxHp != 0)
                 mon += Number("  HP %u/%u", snap.partyHp, snap.partyMaxHp);
             DrawText(canvas, mon, line, Style(Font::System, Good));
@@ -499,7 +501,9 @@ namespace Screens
                 out += std::string(", ") + BattlePocketName(snap.bagPocket) + (snap.bagItemPage ? ", item page" : "")
                        + ", " + (snap.bagItem.empty() ? Number("item %u of %u", snap.gameCursor + 1u, snap.listCount) : snap.bagItem);
             else if (snap.menu == GameMenu::Pokemon)
-                out += ", " + (snap.partyName.empty() ? Number("slot %u of %u", snap.gameCursor + 1u, snap.listCount) : snap.partyName);
+                out += ", " + (!snap.partyName.empty() ? snap.partyName
+                               : snap.gameCursor < snap.listCount ? Number("slot %u of %u", snap.gameCursor + 1u, snap.listCount)
+                               : std::string("no slot yet"));
         }
         if (m_pending)
             out += ", sent";
