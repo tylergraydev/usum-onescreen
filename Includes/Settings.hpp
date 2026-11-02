@@ -29,13 +29,13 @@ namespace OneScreen
 
     struct Settings
     {
-        uint32_t     panelKey = KeyBits::ZR;            // cycles off / panel / full
+        uint32_t     panelKey = KeyBits::L | KeyBits::R;   // cycles off / panel / full
         uint32_t     touchKey = KeyBits::ZL;            // cursor touches while held
         CursorSource cursorSource = CursorSource::CStick;
         uint32_t     cursorSpeed = 6;                   // pixels per frame once the stick has been held a while
         PanelSize    panelSize = PanelSize::Half;
         PanelCorner  panelCorner = PanelCorner::BottomRight;
-        bool         autoPanel = true;
+        bool         autoPanel = false;                // native menus first; the panel is a fallback
 
         // Mode per scene ID (SceneModule() names). Later entries win.
         // "FieldRo.xmenu" is the X menu overlay inside FieldRo; "default" is

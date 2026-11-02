@@ -381,10 +381,11 @@ namespace CTRPluginFramework
         WriteLog(OneScreen::ButtonsStatus(), false);
     }
 
-    // Runs every frame while the menu is closed. The panel follows the scene
-    // (AutoPanel); panel_key (ZR) cycles it by hand (off -> panel -> full)
-    // until the next scene change. C-stick moves the touch cursor and ZL
-    // touches (cursor_move, touch_key). Scene and panel changes go to the log.
+    // Runs every frame while the menu is closed. panel_key (L+R) cycles the
+    // panel by hand (off -> panel -> full). With auto on, the panel follows the
+    // scene (AutoPanel) and a hand choice holds until the next scene change.
+    // C-stick moves the touch cursor and ZL touches (cursor_move, touch_key).
+    // Scene and panel changes go to the log.
     static void PanelEntry(MenuEntry *entry)
     {
         static u32 frames = 0;
@@ -491,8 +492,8 @@ namespace CTRPluginFramework
 
     static void InitMenu(PluginMenu &menu)
     {
-        MenuEntry *panel = new MenuEntry("Bottom screen on top (auto, ZR to override)", PanelEntry,
-                                         "Shows the bottom screen on the top screen. ZR cycles: off, small panel, full view. "
+        MenuEntry *panel = new MenuEntry("Bottom screen on top (L+R)", PanelEntry,
+                                         "Shows the bottom screen on the top screen. L+R cycles: off, small panel, full view. "
                                          "C-stick moves the touch cursor, ZL touches. Keys are set in usum-onescreen.ini.");
         menu += panel;
         panel->Enable();

@@ -1,6 +1,8 @@
 # Walk from the Pokémon Center to the tall grass south of it, wait for a
 # wild battle, Run, and get back to the overworld.
 include common/boot
+# Checks the automatic view per scene, which is off by default.
+send auto on
 
 # Out of the door: the map change logs scene (none), then FieldRo again.
 mark

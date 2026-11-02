@@ -4,6 +4,8 @@
 # in the log) and a screenshot is taken before every A. Save stops at the
 # game's confirm dialog and backs out with B; nothing is ever saved.
 include common/boot
+# Checks the automatic view per scene, which is off by default.
+send auto on
 
 # --- Open: native menu, panel held off, the game's cursor read ---
 mark

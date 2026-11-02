@@ -1,0 +1,23 @@
+# Defaults: auto off, so a game screen that needs the bottom screen (the
+# Pokédex) leaves the view off until the player presses L+R. Run on an
+# instance without usum-onescreen.ini (or with the default one).
+include common/boot
+# The boot settings line ends with size, corner and auto.
+expect-log , auto off 5
+
+repeat 4 until-scene Zukan
+  send move 160 35; tap 6
+  sleep 6
+  shot rotom
+  if-scene FieldRo send move 210 135; tap 6   # "I'm having fun!"
+  sleep 6
+  if-scene TownMap send move 16 222; tap 6
+  if-scene TownMap sleep 6
+end
+expect-mode off           # Zukan would be panel with auto on
+sleep 3
+shot pokedex
+send move 16 222; tap 6
+wait-scene FieldRo 30
+expect-mode off
+stop

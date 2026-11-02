@@ -11,7 +11,7 @@ namespace OneScreen
     //   TitleMenu: off. FieldRo: off, or panel while the X menu is open.
     //   Party, Box, TownMap, Config, Kawaigari: full view. Others: panel.
     //   Transitions ("" scene): unchanged.
-    // A manual change (ZR) overrides this until the scene changes.
+    // A manual change (panel_key, L+R) overrides this until the scene changes.
 
     // Call every frame. `scene` is the latest SceneModule() result,
     // `gameHeld` the keys the game last read and `fieldState` FieldState()
