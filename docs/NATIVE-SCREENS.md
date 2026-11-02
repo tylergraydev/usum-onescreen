@@ -38,7 +38,8 @@ footer now says which entries open on the top screen (`XMenuOpensNative`).
 - Keys: the screen's keys are captured (`InputCaptureBegin`) while it shows
   and no action runs; each press (or repeat of a held direction: 15 frames,
   then every 5) becomes at most one action, a key press on the game's screen
-  (`options-up`, `passport-next`, `video-open`, ...). B is never captured: the
+  (`options-up`, `passport-next`, `video-open`, ...); a key pressed while
+  one runs is handled after it (the last such key only). B is never captured: the
   game's B does what it always does, and the screen goes when the scene does.
 - Drawing: one `UI::Layer` over the screen's area, redrawn only when its
   `DrawKey()` changes; screen state is shared with the OSD callback under a
