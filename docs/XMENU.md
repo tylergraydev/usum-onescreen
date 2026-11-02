@@ -58,6 +58,8 @@ Each entry is an `ActionDef` (`XMenuAction`), named `xmenu-<entry>`:
   10 more frames, then tap the entry. Done when its scene shows (Party, Zukan,
   Bag, TrainerPass, Kawaigari, BattleVideoPlayer, Config) or, for Quick Link
   and Festival Plaza (no scene change), when the X menu is gone.
+  The Bag opens the native Bag (`docs/BAG.md`): it shows as soon as the
+  game's Bag is up, and holds the panel off from the tap on.
 - Save: press Y; done when the X menu is gone (the game's "Would you like to
   save your adventure so far?" is up). The player answers it on the bottom
   screen (the panel shows it); nothing here presses A.

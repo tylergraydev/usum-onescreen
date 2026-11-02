@@ -10,6 +10,7 @@
 #include "Framebuffer.hpp"
 #include "Panel.hpp"
 #include "Scene.hpp"
+#include "Screens/Bag.hpp"
 #include "Screens/XMenuGrid.hpp"
 #include "UI/Device.hpp"
 #include "UI/Layer.hpp"
@@ -187,8 +188,13 @@ namespace OneScreen
         s_synced = true;
         s_scanWanted = false;
         log.push_back(Utils::Format("xmenu: open %s", EntryName(index)));
-        if (ActionStart(XMenuAction(index), sceneManager, log))
-            s_opening = index;
+        if (!ActionStart(XMenuAction(index), sceneManager, log))
+            return;
+        s_opening = index;
+        // The Bag has a native screen: it takes over once the game's Bag is
+        // up, and keeps the panel off until then.
+        if (XMenuEntries()[index].opens == SceneBag)
+            BagExpectOpen();
     }
 
     static void HandleInput(u32 sceneManager, std::vector<std::string> &log)
