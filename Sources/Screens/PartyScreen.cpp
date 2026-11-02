@@ -189,11 +189,15 @@ namespace OneScreen
     static std::string ReadSpecies(u16 id) { return SpeciesName(id); }
     static std::string ReadItem(u16 id)    { return ItemName(id); }
 
-    static std::string LoaderName(std::map<u16, std::string> &cache, u32 loader, u32 dat, u16 id)
+    // A name from the summary's word loader; the loader is only looked up
+    // (a walk over the CRO headers) when the name isn't cached yet.
+    static std::string LoaderName(std::map<u16, std::string> &cache, u32 sceneManager, u32 &loader, u32 dat, u16 id)
     {
         auto it = cache.find(id);
         if (it != cache.end())
             return it->second;
+        if (loader == 0)
+            loader = SummaryWordLoader(sceneManager);
         const std::string name = LoaderText(loader, dat, id);
         if (!name.empty())
             cache[id] = name;
@@ -683,14 +687,14 @@ namespace OneScreen
         if (view.pos >= 0 && view.pos < Count())
         {
             view.mon = s_mons[view.pos];
-            const u32 loader = SummaryWordLoader(sceneManager);
+            u32 loader = 0;
             const int slot = s_order[view.pos] < s_party.count ? s_order[view.pos] : view.pos;
             const Pk7 &pk = s_party.slots[slot].mon;
             for (int i = 0; i < 4; i++)
                 if (view.mon.moves[i] != 0)
-                    view.mon.moveNames[i] = LoaderName(s_moveNames, loader, MoveNameDat, view.mon.moves[i]);
-            view.mon.ability = LoaderName(s_abilityNames, loader, AbilityNameDat, pk.ability);
-            view.mon.nature = LoaderName(s_natureNames, loader, NatureNameDat, pk.nature);
+                    view.mon.moveNames[i] = LoaderName(s_moveNames, sceneManager, loader, MoveNameDat, view.mon.moves[i]);
+            view.mon.ability = LoaderName(s_abilityNames, sceneManager, loader, AbilityNameDat, pk.ability);
+            view.mon.nature = LoaderName(s_natureNames, sceneManager, loader, NatureNameDat, pk.nature);
 
             std::string text;
             std::string line = Utils::Format("party-ui: summary %d of %d: ", view.pos + 1, view.count)

@@ -49,7 +49,9 @@ shot pre-pokemon
 send press a
 expect-log ^action: xmenu-pokemon ok 15
 wait-scene main:00647FCC 10
-expect-mode full
+# The native Party screen takes over (docs/PARTY-UI.md): panel off.
+expect-log ^party-ui: shown 5
+expect-mode off
 sleep 2
 shot party
 mark

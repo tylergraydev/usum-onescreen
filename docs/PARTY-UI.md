@@ -146,7 +146,7 @@ screenshots include it.
   native list (all six with level, HP, status, item, panel off); moves; Summary
   of Zorua (names), Down to Pikipek, Y and back, B; swap Torracat (1) and
   Buneary (6), the order holds after closing; a wild battle with Buneary in
-  front (Defense Curl ×3, Run) for damage; Use item → Potion on Buneary (HP up,
+  front (Defense Curl ×2, Run until it works) for damage; Use item → Potion on Buneary (HP up,
   Potion ×9 → ×8); B to the X menu, B to the field; `check-save` twice.
   The battle is random: if the foe never hits, the scenario fails at the HP
   check after the battle and says so (rerun).
