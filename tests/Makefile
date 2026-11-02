@@ -30,7 +30,7 @@ $(OUT)/party_data_test: party_data_test.cpp ../Sources/PartyData.cpp ../Includes
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) party_data_test.cpp ../Sources/PartyData.cpp -o $@
 
-UI_SRCS  := $(addprefix ../Sources/UI/,Raster.cpp Text.cpp Icons.cpp Demo.cpp)
+UI_SRCS  := $(addprefix ../Sources/UI/,Raster.cpp Text.cpp Font.cpp Layer.cpp Icons.cpp Demo.cpp)
 UI_HDRS  := $(wildcard ../Includes/UI/*.hpp)
 PREVIEW  := ../analysis/private/ui-demo.png
 

@@ -109,7 +109,8 @@ namespace CTRPluginFramework
     //   party | bag   (log the party / the bag pockets, docs/RE3-party-bag.md)
     //   memmap | dump ADDR SIZE NAME   (readable blocks; raw memory to /usum-dump-NAME.bin)
     //   auto on | auto off   (panel follows the scene, or stays as set)
-    //   perf on | perf off | perf   (panel timing; perf logs and restarts the window)
+    //   perf on | perf off | perf   (panel and uidemo timing; perf logs and restarts the window)
+    //   uidemo off|on|shade|direct | uifont   (UI layer test menu; system font info)
     //   capture on|off [KEY|stick|touch ...]   (hide input from the game as a plugin
     //     menu would; on adds, off removes; no list = everything)
     //   action NAME | action status | action cancel | action list   (drive the bottom
@@ -241,14 +242,31 @@ namespace CTRPluginFramework
             WriteLog(OneScreen::DumpMemory(a, b, word), false);
         else if (line == "scene")
             WriteLog("scene: " + OneScreen::SceneModule(s_game->offsets.sceneManager), false);
-        else if (line == "uidemo on" || line == "uidemo off")
-            OneScreen::UiDemoSetEnabled(line == "uidemo on");
+        else if (line.compare(0, 7, "uidemo ") == 0)
+        {
+            static const char *modes[] = { "off", "on", "shade", "direct" };
+            const std::string arg = line.substr(7);
+            int mode = 3;
+            while (mode >= 0 && arg != modes[mode])
+                mode--;
+            if (mode < 0)
+            {
+                WriteLog("cmd: unknown uidemo mode in '" + line + "'", false);
+                return;
+            }
+            OneScreen::UiDemoSetMode((OneScreen::UiDemoMode)mode);
+        }
+        else if (line == "uifont")
+            WriteLog(OneScreen::UiFontInfo(), false);
         else if (line == "auto on" || line == "auto off")
             OneScreen::AutoPanelSetEnabled(line == "auto on");
         else if (line == "perf on" || line == "perf off")
             OneScreen::PanelPerfSetEnabled(line == "perf on");
         else if (line == "perf")
+        {
             WriteLog(OneScreen::PanelPerfReport(), false);
+            WriteLog(OneScreen::UiPerfReport(), false);
+        }
         else if (line.compare(0, 11, "capture on ") == 0 || line == "capture on"
                  || line.compare(0, 12, "capture off ") == 0 || line == "capture off")
         {
