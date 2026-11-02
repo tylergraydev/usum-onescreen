@@ -54,6 +54,9 @@ static void TestTable(void)
             CHECK(bad.empty());
         }
         CHECK(std::string(XMenuAction(i).name) == std::string("xmenu-") + e.name);
+        // Entries with a native screen (Screens/SubScreens.hpp).
+        const std::string n = e.name;
+        CHECK(XMenuOpensNative(i) == (n == "options"));
 
         // Cells sit inside the menu and don't overlap.
         const UI::Rect r = XMenuCellRect(i);
