@@ -93,9 +93,20 @@ static void TestPages(void)
     // ...drawn at the top: the question is along the bottom of the screen.
     CHECK(after.Area().Bottom() <= 120 && !after.Area().Empty());
 
-    // Other screens get the helper only after the game's Bag / Pokémon list.
+    // Other screens not reached from the Bag / Pokémon list (intro objects,
+    // the battle's questions): a helper at the top, only once it stays.
     BattleMenu intro;
-    CHECK(!intro.Update(snap, 0).capture && intro.Page() == BattlePage::Hidden);
+    CHECK(!intro.Update(snap, 0).capture && intro.Prompt() && !intro.Visible());
+    Idle(intro, snap, BattleMenu::PromptShowFrames);
+    CHECK(intro.Visible() && intro.Area().Bottom() <= 120);
+    CHECK(intro.Status(snap).find("prompt") != std::string::npos);
+    // From the game's Pokémon list (its Switch / Summary screen): at once.
+    BattleMenu fromList;
+    BattleSnapshot list = snap;
+    list.menu = GameMenu::Pokemon;
+    fromList.Update(list, 0);
+    fromList.Update(snap, 0);
+    CHECK(!fromList.Prompt() && fromList.Visible());
 
     // The command bar shows after ShowFrames (the game flashes its command
     // menu between a move and the turn).

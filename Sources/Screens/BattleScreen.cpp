@@ -123,6 +123,7 @@ namespace OneScreen
             return;
         }
         snap.menu = (Screens::GameMenu)state.menu;
+        snap.otherVtable = state.menu == BattleMenu::Other ? state.menuVtable : 0;
         snap.gameCursor = state.cursor;
         snap.listCount = state.listCount;
         snap.activeName = Cached(s_speciesNames, state.player.species, LookupSpecies, state);
