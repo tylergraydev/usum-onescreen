@@ -11,6 +11,7 @@
 #include "Cursor.hpp"
 #include "InputCapture.hpp"
 #include "Panel.hpp"
+#include "Party.hpp"
 #include "Scene.hpp"
 #include "Settings.hpp"
 #include "Shot.hpp"
@@ -102,6 +103,7 @@ namespace CTRPluginFramework
     //   vtscan NAME   (global -> object -> vtable scan to /usum-vt-NAME.bin)
     //   scene   (log the current scene's module name)
     //   battle   (log the battle state, docs/RE1-battle.md; also logged on change)
+    //   party | bag   (log the party / the bag pockets, docs/RE3-party-bag.md)
     //   memmap | dump ADDR SIZE NAME   (readable blocks; raw memory to /usum-dump-NAME.bin)
     //   auto on | auto off   (panel follows the scene, or stays as set)
     //   perf on | perf off | perf   (panel and uidemo timing; perf logs and restarts the window)
@@ -223,6 +225,10 @@ namespace CTRPluginFramework
             WriteVtableScan(word);
         else if (line == "battle")
             WriteLog(OneScreen::DescribeBattle(OneScreen::ReadBattle(s_game->offsets.sceneManager)), false);
+        else if (line == "party")
+            WriteLog(OneScreen::DescribeParty(OneScreen::ReadParty(s_game->offsets.sceneManager)), false);
+        else if (line == "bag")
+            WriteLog(OneScreen::DescribeBag(OneScreen::ReadBag()), false);
         else if (line == "memmap")
             WriteLog(OneScreen::MemoryMap(), false);
         else if (std::sscanf(line.c_str(), "dump %x %x %15s", &a, &b, word) == 3)
@@ -390,7 +396,8 @@ namespace CTRPluginFramework
             }
         }
 
-        if (OneScreen::AutoPanelUpdate(scene, OneScreen::ButtonsGameHeld()))
+        const int fieldState = scene == "FieldRo" ? OneScreen::FieldState(s_game->offsets.sceneManager) : -1;
+        if (OneScreen::AutoPanelUpdate(scene, OneScreen::ButtonsGameHeld(), fieldState))
             WriteLog(OneScreen::AutoPanelStatus() + " -> " + OneScreen::PanelStatus(), false);
 
         OneScreen::ShotPoll();
