@@ -38,9 +38,9 @@ namespace OneScreen
 
     std::string ActionCond::Describe(void) const
     {
-        static const char *flagNames[] = { "x-menu", "battle-command" };
+        static const char *flagNames[] = { "x-menu", "battle-command", "x-menu-page-2" };
         std::string out = scene == nullptr ? "any scene" : std::string(sceneNot ? "not " : "") + SceneName(scene);
-        for (u32 i = 0; i < 2; i++)
+        for (u32 i = 0; i < 3; i++)
         {
             if (set & (1u << i))
                 out += std::string(" +") + flagNames[i];
