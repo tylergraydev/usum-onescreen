@@ -17,7 +17,7 @@ PLGINFO  := $(PLGNAME).plgInfo
 
 BUILD    := Build
 INCLUDES := Includes
-SOURCES  := Sources Sources/UI
+SOURCES  := Sources Sources/UI Sources/Screens
 
 #---------------------------------------------------------------------------------
 # Options for code generation
