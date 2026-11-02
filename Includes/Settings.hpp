@@ -48,6 +48,13 @@ namespace OneScreen
             { "Battle",        SceneMode::Panel },
             { "main:00647FCC", SceneMode::Full },     // Party
             { "main:006488C8", SceneMode::Panel },    // Bag
+            { "Status",        SceneMode::Panel },    // Pokémon summary
+            { "Box",           SceneMode::Full },     // PC boxes
+            { "TownMap",       SceneMode::Full },
+            { "TrainerPass",   SceneMode::Panel },
+            { "Config",        SceneMode::Full },     // Options
+            { "Kawaigari",     SceneMode::Full },     // Pokémon Refresh
+            { "BattleVideoPlayer", SceneMode::Panel },
             { "default",       SceneMode::Panel },
         };
     };
