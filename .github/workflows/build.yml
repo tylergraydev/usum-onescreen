@@ -14,21 +14,25 @@ jobs:
       - uses: actions/checkout@v4
 
       # libctrpf and 3gxtool come from the ThePixellizerOSS package repo, not devkitPro's.
-      - name: Add ThePixellizerOSS package repo
-        run: |
-          CONF=/opt/devkitpro/pacman/etc/pacman.conf
-          if ! grep -Fxq "[thepixellizeross-lib]" "$CONF"; then
-            printf '\n[thepixellizeross-lib]\nServer = https://thepixellizeross.gitlab.io/packages/any\nSigLevel = Optional\n' >> "$CONF"
-          fi
-          if ! grep -Fxq "[thepixellizeross-linux]" "$CONF"; then
-            printf '\n[thepixellizeross-linux]\nServer = https://thepixellizeross.gitlab.io/packages/x86_64/linux\nSigLevel = Optional\n' >> "$CONF"
-          fi
+      # The script syncs only that repo (pkg.devkitpro.org's -Sy sometimes answers 403),
+      # with retries, and falls back to the copies cached here by an earlier run.
+      - name: Restore cached libctrpf and 3gxtool
+        id: pkg-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .ci-pkgs
+          key: tpo-pkgs-v1-
+          restore-keys: tpo-pkgs-v1-
 
       - name: Install libctrpf and 3gxtool
-        run: |
-          dkp-pacman -Sy --noconfirm
-          dkp-pacman -Sl thepixellizeross-lib thepixellizeross-linux
-          dkp-pacman -S --noconfirm --needed libctrpf 3gxtool
+        run: sh tools/ci/install-deps.sh .ci-pkgs
+
+      - name: Save libctrpf and 3gxtool for later runs
+        if: steps.pkg-cache.outputs.cache-matched-key != format('tpo-pkgs-v1-{0}', hashFiles('.ci-pkgs/*'))
+        uses: actions/cache/save@v4
+        with:
+          path: .ci-pkgs
+          key: tpo-pkgs-v1-${{ hashFiles('.ci-pkgs/*') }}
 
       - name: Build
         run: make
