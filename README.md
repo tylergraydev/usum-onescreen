@@ -70,6 +70,13 @@ Zukan = panel           ; Pokédex
 Battle = panel
 main:00647FCC = full    ; Party
 main:006488C8 = panel   ; Bag
+Status = panel          ; Pokémon summary
+Box = full              ; PC boxes
+TownMap = full
+TrainerPass = panel
+Config = full           ; Options
+Kawaigari = full        ; Pokémon Refresh
+BattleVideoPlayer = panel
 default = panel         ; any scene not listed
 ```
 
@@ -182,6 +189,7 @@ Log guard: after every step it reads what was newly logged to the instance's `us
 - `boot-to-field`: title → Continue → `FieldRo`, mode off. The shared boot steps are in `scenarios/common/boot.txt`.
 - `open-each-app`: Pokédex via Rotom (answering Rotom's chat if it pops up) and back; X menu → Party and back; X menu → Bag and back. Entries are tapped, so the X menu's remembered cursor doesn't matter. Checks off (field), panel (X menu, Pokédex, Bag), full (Party).
 - `actions`: each action (`docs/ACTIONS.md`) from its start point, checking the scene and panel mode it ends in, B held through `open-bag` (captured, so the Bag stays open), then a wild battle and `battle-run`.
+- `xmenu-touch-close`: Town Map from Rotom's screen and back (full, then off with no panel flash); X menu opened with X and closed by tapping its back button (panel, then off); again after visiting Party. Checks that auto panel follows the field state, not X/B presses.
 - `wild-battle-run`: out of the Pokémon Center, south into the tall grass, back and forth until `Battle` (panel), Run by tap, back to `FieldRo` (off). One long circle-pad push stops partway down the path, so it walks in short steps.
 
 Screenshots come before every A press in a menu (only the Continue menu here).
