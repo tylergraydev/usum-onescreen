@@ -4,6 +4,7 @@
 
 #include "Cursor.hpp"
 #include "Framebuffer.hpp"
+#include "Settings.hpp"
 #include "Shot.hpp"
 
 namespace OneScreen
@@ -89,8 +90,13 @@ namespace OneScreen
         }
         else
         {
+            // Half size, 4 px from the corner chosen in settings. A 2/3 size
+            // setting is drawn as 1/2 until scaling supports it.
             const u32 w = BottomWidth / 2, h = ScreenHeight / 2;
-            const u32 left = TopWidth - w - 4, top = ScreenHeight - h - 4;
+            const PanelCorner corner = GetSettings().panelCorner;
+            const bool right = corner == PanelCorner::BottomRight || corner == PanelCorner::TopRight;
+            const bool bottom = corner == PanelCorner::BottomRight || corner == PanelCorner::BottomLeft;
+            const u32 left = right ? TopWidth - w - 4 : 4, top = bottom ? ScreenHeight - h - 4 : 4;
             screen.DrawRect(left - 1, top - 1, w + 2, h + 2, Color::White, false);
             DrawCapture(screen, left, top, 2);
             CheckReadback(screen, left, top, 2);

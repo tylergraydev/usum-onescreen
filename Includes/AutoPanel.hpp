@@ -6,7 +6,8 @@
 
 namespace OneScreen
 {
-    // Picks the panel mode from the current scene:
+    // Picks the panel mode from the current scene, using the [scenes]
+    // settings (ModeForScene). Defaults:
     //   TitleMenu: off. FieldRo: off, or panel while the X menu is open.
     //   Battle, Zukan (Pokédex), Bag: panel. Party: full view.
     //   Any other scene: panel. Transitions ("" scene): unchanged.
@@ -21,6 +22,7 @@ namespace OneScreen
     void AutoPanelManualOverride(void);
 
     void AutoPanelSetEnabled(bool enabled);
+    bool AutoPanelEnabled(void);
 
     std::string AutoPanelStatus(void);
 }

@@ -46,6 +46,47 @@ CI (`.github/workflows/build.yml`) does the same in the `devkitpro/devkitarm` co
 2. Copy `usum-onescreen.3gx` into Azahar's emulated SD card at `luma/plugins/00040000001B5000/` (Ultra Sun). This is the Luma plugin folder layout; check it against your Azahar setup.
 3. Start the game. You should see a `USUM One Screen: ...` notice.
 
+## Settings (`usum-onescreen.ini`)
+
+At boot the plugin reads `usum-onescreen.ini` at the emulated SD root (next to the log). If it is missing, the plugin writes a commented default file there. The defaults reproduce the behaviour described above, so an untouched file changes nothing.
+
+```ini
+[controls]
+panel_key = ZR          ; cycles off / panel / full; A B X Y L R ZL ZR Start Select Up Down Left Right, L+R for a combo, or none
+touch_key = ZL          ; touches at the cursor while held
+cursor_move = cstick    ; cstick, dpad or circlepad (dpad / circlepad still reach the game too)
+cursor_speed = 6        ; top speed in px/frame, 1-20; starts at 1, then 3 (or less), then this
+
+[panel]
+size = 1/2              ; 1/2; 2/3 is accepted but drawn as 1/2 for now
+corner = bottom-right   ; bottom-right, bottom-left, top-right, top-left
+auto = on               ; on: the view follows [scenes]; off: it stays as panel_key sets it
+
+[scenes]                ; off, panel or full per scene ID (as logged: "scene: ...")
+TitleMenu = off
+FieldRo = off           ; overworld
+FieldRo.xmenu = panel   ; the X menu, open over the overworld
+Zukan = panel           ; Pokédex
+Battle = panel
+main:00647FCC = full    ; Party
+main:006488C8 = panel   ; Bag
+default = panel         ; any scene not listed
+```
+
+- Comments start with `;` or `#`, anywhere on a line. Names and values are case-insensitive; spaces, CRLF and a UTF-8 BOM are fine.
+- Unknown keys, unknown sections and bad values are skipped (the default stays) and logged as `settings: usum-onescreen.ini line N: ...`. The log also gets one `settings: ...` summary of what is in use.
+- Any scene ID can go in `[scenes]`, including ones not listed yet (scene IDs are in `docs/OFFSETS.md` and in the log).
+- The parser and settings model (`Sources/Settings.cpp`) are plain C++. Host tests: `make -C tests` (g++ / clang++; WSL works) builds and runs every test in `tests/`, also in CI.
+
+### Plugin menu
+
+CTRPF opens its menu with **Select** (its default menu hotkey; `Preferences::MenuHotkeys = 0x4` in libctrpf, changeable under Tools → Settings → "Change menu hotkeys"). Entries:
+
+- **Bottom screen on top**: the main feature (on by default).
+- **Auto panel: on/off**: A switches auto panel until the next boot or reload. The file is not rewritten.
+- **View settings**: shows the settings in use.
+- **Reload settings file**: reads `usum-onescreen.ini` again.
+
 ## Testing without watching the screen
 
 - `usum-onescreen.log` (emulated SD root) gets the boot line, the hook check, and panel status after ~5 s and on every mode change.
@@ -80,6 +121,7 @@ Azahar 2126.2 has no command-line flag or environment variable for its user fold
 ## Layout
 
 - `Sources/main.cpp`: plugin entry points (`PatchProcess`, `main`, menu).
+- `Sources/Settings.cpp`, `Includes/Settings.hpp`: `usum-onescreen.ini` parser and settings model (plain C++, tested by `tests/`).
 - `Sources/Game.cpp`, `Includes/Game.hpp`: supported games and their offset tables. Phase 0 fills in `gspPresent`, `hidTouchRead` and `sceneState` from Ghidra.
 - `Sources/InputCapture.cpp`, `Includes/InputCapture.hpp`: pure masking logic for input capture, used by the pad and touch hooks (`Buttons.cpp`, `Cursor.cpp`). Plugin menus read the real input with `CaptureRealHeld/Pressed/Stick` and `CaptureRealTouch`: the game's latest read before masking. That view (not CTRPF's `Controller`, which reads HID directly) includes injected test input, so `press`/`stick`/`tap` drive plugin menus too, and it has the same timing as what the game sees. It goes stale if the game stops reading input; `Controller` is the fallback then.
 - `tests/`: host tests for the pure logic (`make -C tests` with any g++; CI runs them).
