@@ -4,6 +4,7 @@
 
 #include "ActionQueue.hpp"
 #include "Battle.hpp"
+#include "Box.hpp"
 #include "Buttons.hpp"
 #include "Cursor.hpp"
 #include "Framebuffer.hpp"
@@ -93,6 +94,8 @@ namespace OneScreen
                 s_world.flags |= WorldBattleCommand;
         }
         s_world.flags = (s_world.flags & ~(WorldXMenu | WorldXMenuPage2)) | ActionProbeFlags();
+        const u32 box = WorldBoxIdle | WorldBoxModal | WorldBoxCarrying;
+        s_world.flags = (s_world.flags & ~box) | (s_world.scene == SceneBox ? BoxWorldFlags(sceneManager) : 0);
     }
 
     u32 ActionProbeFlags(void)
@@ -102,10 +105,13 @@ namespace OneScreen
 
     static std::string DescribeWorld(const ActionWorld &world)
     {
-        return Utils::Format("scene %s%s%s%s", world.scene.empty() ? "(none)" : world.scene.c_str(),
+        return Utils::Format("scene %s%s%s%s%s", world.scene.empty() ? "(none)" : world.scene.c_str(),
                              (world.flags & WorldXMenu) ? ", x menu" : "",
                              (world.flags & WorldXMenuPage2) ? " page 2" : "",
-                             (world.flags & WorldBattleCommand) ? ", battle command" : "");
+                             (world.flags & WorldBattleCommand) ? ", battle command" : "",
+                             (world.flags & WorldBoxIdle) ? ", box idle"
+                             : (world.flags & WorldBoxModal) ? ", box modal"
+                             : (world.flags & WorldBoxCarrying) ? ", box carrying" : "");
     }
 
     static void BeginCapture(void)

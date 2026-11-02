@@ -95,6 +95,13 @@ Full write-up: [RE3-party-bag.md](RE3-party-bag.md). Read by the `party` and `ba
 - Bag: MyItem = SaveData `+8` (vtable `0x64F3C4`); pocket pointer table at MyItem `+0xE2C`: Medicine `+0xB78` (60), Items `+0x4` (427), TMs `+0x9C8` (108), Berries `+0xC68` (67), Key Items `+0x6B0` (198), Z-Crystals `+0xD74` (35), Rotom Powers `+0xE00` (11). Slot u32: item bits 0-9, count 10-19, Free Space 20-29, NEW bit 30.
 - Party screen order while it is open: scene (vtable `0x647FCC`) `+0xA8` StaticWork (vtable `0x647F9C`) `+0x53` u8[6]; the party itself is reordered when the screen closes.
 
+## PC boxes (runtime, 2026-11-02)
+
+Full write-up: [RE6-boxes.md](RE6-boxes.md). Read by the `box [N]` command (`Sources/Box.cpp`) and the native boxes (`Sources/Screens/Boxes.cpp`). Verified against the Box screen (screenshots) through cursor moves over every slot, box changes, picking up, dropping, swapping, party ↔ box and box → box moves, in instance `p26` (start point `pc`).
+
+- Box data: SaveData (RE3) `+0x3B98` Savedata::BOX (vtable `0x64F364`; data at +4 = the save's block `0x4C00`: names `0x22` × 32, unlocked count u8 at data `+0x5E1`), `+0x4184` Savedata::BoxPokemon (vtable `0x64F044`; data at +4 = the save's block `0x5200`: 32 × 30 PK7 cores of `0xE8`, stored format). Compared byte for byte with the save file; a drop writes it at once.
+- Box screen (Box CRO; offsets from its load address): `App::Box::BoxLowBgDraw` (vtable Box+`0x2F4D8`) is one of the scene manager's first eight words. `+0x8C` listener: Box+`0x2F6F0` idle, Box+`0x2F6B0` slot menu / message, Box+`0x2FA80` holding a Pokémon. `+0xDC` u32 cursor (0-29 slots, 30-35 party, 36 box name, 38 box list). `+0xC0` → parameter block (`+0` BOX*, `+4` BoxPokemon*, `+0x60` u32 box on screen). `+0xC4` → → work: `+0x1C` 6 PokemonParam* = the screen's own copy of the party (the real party changes when the PC closes).
+
 ## Player location (runtime, 2026-11-02)
 
 Full write-up: [RE4-map.md](RE4-map.md). Read by the `where` command (`Sources/Where.cpp`).

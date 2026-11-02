@@ -12,6 +12,7 @@ namespace OneScreen
     const char *const SceneBag     = "main:006488C8";
     const char *const SceneTownMap = "TownMap";
     const char *const SceneBattle  = "Battle";
+    const char *const SceneBox     = "Box";
 
     static std::string Format(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
     static std::string Format(const char *fmt, ...)
@@ -38,14 +39,18 @@ namespace OneScreen
 
     std::string ActionCond::Describe(void) const
     {
-        static const char *flagNames[] = { "x-menu", "battle-command", "x-menu-page-2" };
-        std::string out = scene == nullptr ? "any scene" : std::string(sceneNot ? "not " : "") + SceneName(scene);
-        for (u32 i = 0; i < 3; i++)
+        static const struct { u32 flag; const char *name; } flags[] =
         {
-            if (set & (1u << i))
-                out += std::string(" +") + flagNames[i];
-            if (clear & (1u << i))
-                out += std::string(" -") + flagNames[i];
+            { WorldXMenu, "x-menu" }, { WorldBattleCommand, "battle-command" }, { WorldXMenuPage2, "x-menu-page-2" },
+            { WorldBoxIdle, "box-idle" }, { WorldBoxModal, "box-modal" }, { WorldBoxCarrying, "box-carrying" },
+        };
+        std::string out = scene == nullptr ? "any scene" : std::string(sceneNot ? "not " : "") + SceneName(scene);
+        for (const auto &f : flags)
+        {
+            if (set & f.flag)
+                out += std::string(" +") + f.name;
+            if (clear & f.flag)
+                out += std::string(" -") + f.name;
         }
         return out;
     }

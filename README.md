@@ -2,7 +2,7 @@
 
 A 3GX plugin (CTRPluginFramework) that makes Pokémon Ultra Sun / Ultra Moon playable on the top screen only, in Azahar with the 3GX plugin loader enabled. Plan: https://claude.ai/artifact/LxD6pmGFR8x91NrRRF8P7R
 
-**Status:** Phase 2 under way. The goal is native menus on the top screen; the X menu has one (`Sources/Screens/XMenu.cpp`). Until every screen has one, **L+R** shows the bottom screen on the top screen as a half-size panel or a full view (`Sources/Panel.cpp`, copied on the emulated GPU), and a touch cursor (`Sources/Cursor.cpp`) on it: **C-stick** moves it, **ZL** touches. The panel can also follow the scene automatically (`auto = on`, `Sources/AutoPanel.cpp`). See [docs/PLAYING.md](docs/PLAYING.md).
+**Status:** Phase 2 under way. The goal is native menus on the top screen; the X menu (`Sources/Screens/XMenu.cpp`) and the PC boxes (`Sources/Screens/Boxes.cpp`) have one. Until every screen has one, **L+R** shows the bottom screen on the top screen as a half-size panel or a full view (`Sources/Panel.cpp`, copied on the emulated GPU), and a touch cursor (`Sources/Cursor.cpp`) on it: **C-stick** moves it, **ZL** touches. The panel can also follow the scene automatically (`auto = on`, `Sources/AutoPanel.cpp`). See [docs/PLAYING.md](docs/PLAYING.md).
 
 **Players:** see [docs/PLAYING.md](docs/PLAYING.md) for install, controls and bug reports, and [CHANGELOG.md](CHANGELOG.md) for what's new.
 
@@ -104,9 +104,11 @@ CTRPF opens its menu with **Select** (its default menu hotkey; `Preferences::Men
 - `battle` logs the battle state (active Pokémon on both sides, moves/PP, which bottom-screen menu is up and its cursor); in battle the same is logged on every change. See `docs/RE1-battle.md`.
 - `where` logs the zone (ID, place-name line, indoor), the player's position and facing, and the Rotom map's centre. See `docs/RE4-map.md`.
 - `party` logs the party (species, nickname, level, HP, status, held item, moves/PP, and the Party screen's order while it is open); `bag` logs every pocket's items and counts in the game's order, with names. See `docs/RE3-party-bag.md`.
+- `box [N]` logs PC box N (default: the one on screen, else 1): name, unlocked boxes, the Pokémon in each slot, and with the PC open its mode, cursor and the screen's own party. See `docs/RE6-boxes.md`.
 - `perf on` / `perf off` / `perf`: panel timing (off by default). `perf` logs emulated time, frames, and the mean/max time spent copying the bottom screen and drawing the panel since the last `perf`. `py -3 -I tools/perf.py --instance NAME` runs the measurement in `docs/PERF.md`.
 - `action NAME` runs a bottom-screen action (`open-pokedex`, `open-party`, `open-bag`, `battle-run`, `close`) with the player's input captured meanwhile; `action status`, `action cancel`, `action list`. Results are logged as `action: NAME ok …` / `FAILED …`. See `docs/ACTIONS.md`.
 - `xmenu on|off|status`, `xmenu select NAME`, `xmenu open NAME`: the native X menu (X in the field shows it on the top screen with the panel off; D-pad/L/R move, A opens through the action layer, B closes). Logs `xmenu: shown`, `cursor NAME`, `open NAME`, `hidden`. See `docs/XMENU.md`.
+- `boxes on|off|status|details|pick|drop|prev|next`: the native PC boxes (at a PC, the box and party on the top screen with the panel off; the D-pad moves the game's cursor, A picks up / drops, L/R turn the box, Y shows the game's own details). Logs `boxes: shown`, `cursor …`, `pick …`, `drop at …`, `box N`, `mode …`, `hidden`. See `docs/BOXES.md`.
 - `uidemo on|off|shade|direct` shows or hides a sample plugin-drawn menu on the top screen (off by default), for checking the UI drawing layer: `on` draws it into an off-screen layer when it changes and copies it every frame, `shade` adds a translucent full-screen shade (reads the framebuffer), `direct` redraws everything on the framebuffer every frame (the old way). `perf` also logs the demo's time per frame; `py -3 -I tools/perf.py --instance NAME --modes off,ui:on,ui:shade` compares them (`docs/UI.md`). `uifont` logs the system font's metrics and the glyph cache counters.
 - `py -3 -I tools/shot.py [name]` asks the running plugin for a screenshot and saves `analysis/private/shots/<name>-top.png` and `-bottom.png`. The top shot includes anything the plugin draws.
 
@@ -169,6 +171,7 @@ A scenario is a text file, one step per line; `#` starts a comment (except in `e
 | Step | Does |
 |---|---|
 | `start [WAIT]` / `stop` | `tools/instance.py start NAME --wait WAIT` (default 90; fails without `hooks: all ok`) / `stop NAME` |
+| `restore POINT` | stops the instance if it runs and puts start point POINT's save in (`tools/startpoint.py restore NAME POINT`); the next `start` boots into it |
 | `send CMD [; CMD ...]` | plugin commands as `tools/cmd.py` takes them; fails on `cmd: unknown` |
 | `sleep S` | waits S seconds |
 | `shot LABEL` | screenshot to `analysis/private/shots/<scenario>-LABEL-top/bottom.png` |
@@ -192,6 +195,7 @@ Log guard: after every step it reads what was newly logged to the instance's `us
 - `open-each-app`: Pokédex via Rotom (answering Rotom's chat if it pops up) and back; X menu → Party and back; X menu → Bag and back. Entries are tapped, so the X menu's remembered cursor doesn't matter. Checks off (field), panel (X menu, Pokédex, Bag), full (Party).
 - `actions`: each action (`docs/ACTIONS.md`) from its start point, checking the scene and panel mode it ends in, B held through `open-bag` (captured, so the Bag stays open), then a wild battle and `battle-run`.
 - `xmenu-touch-close`: Town Map from Rotom's screen and back (full, then off with no panel flash); X menu opened with X and closed by tapping its back button (panel, then off); again after visiting Party. Checks that auto panel follows the field state, not X/B presses.
+- `native-boxes`: starts from the `pc` start point (`restore pc`); A at the PC shows the native boxes with the panel off; browses (D-pad, L/R), details (Y), moves a Pokémon box → another box while holding it, party → box and box → party, checks every move with `box`, the panel by hand, then B back to the field with the party changed and nothing saved. See `docs/BOXES.md`.
 - `native-xmenu`: X shows the native X menu with the panel off; D-pad/L/R moves; every entry opened with A and backed out of (Save stops at the game's confirm dialog and backs out with B); cursor memory after B; Festival Plaza in and out; B closes to the field with input given back. See `docs/XMENU.md`.
 - `wild-battle-run`: out of the Pokémon Center, south into the tall grass, back and forth until `Battle` (panel), Run by tap, back to `FieldRo` (off). One long circle-pad push stops partway down the path, so it walks in short steps.
 
@@ -220,6 +224,7 @@ py -3 -I tools/regress.py --instance a --run 41489129071 boot-to-field
 - `tools/scenario.py`, `scenarios/`: scripted emulator tests; `tools/emu.py` is the shared command/screenshot code behind `cmd.py`, `shot.py` and `scenario.py`.
 - `Makefile`, `3gx.ld`, `usum-onescreen.plgInfo`: build setup, adapted from [Gen6CTRPFrameworkOverhauled](https://github.com/samaBR85/Gen6CTRPFrameworkOverhauled).
 - `docs/PORTING.md`: moving the plugin to another build (the Ultra Moon checklist). `tools/sigscan.py` finds every offset-table address in a new `code.bin` from the byte signatures in `signatures/usum.json` and prints a ready-to-paste `Game.cpp` entry.
+- `Sources/Box.cpp`, `Sources/BoxData.cpp`: the PC box reader (`box`) and its pure part (layout, cursor values, modes, names; tested by `tests/boxes_test.cpp`). `Sources/Screens/Boxes.cpp`, `Sources/Screens/BoxesGrid.cpp`: the native PC boxes (`docs/BOXES.md`). See `docs/RE6-boxes.md`.
 - `Sources/Party.cpp`, `Sources/PartyData.cpp`: the `party` and `bag` readers; `PartyData` (Gen 7 Pokémon decryption, bag slots, message lines) is pure and tested by `tests/party_data_test.cpp`. See `docs/RE3-party-bag.md`.
 - `docs/RE2-text.md`: how the game stores and looks up text (species/move/item names), with `tools/romfs_text.py` to extract and decode it from your own dump into `analysis/private/`.
 - `docs/LAYOUTS.md`, `layouts/usum-v1.2.json`: verified tap points and button bounds on the game's bottom screens (field, X menu, Party, Bag, Pokédex, battle), for driving the hidden bottom screen from plugin menus. `tools/layout_measure.py` measures button bounds on a screenshot. `tools/gen_layouts.py` turns the JSON into `Includes/Layouts.hpp` (generated, committed; the host tests check it is current).

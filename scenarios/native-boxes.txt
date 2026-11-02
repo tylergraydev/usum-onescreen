@@ -1,0 +1,185 @@
+# The native PC boxes (Screens/Boxes.cpp, docs/BOXES.md): at the Pokémon
+# Center PC with the panel off, the top screen shows the box (name, the
+# Pokémon in each slot) and the party; the D-pad moves the game's own cursor,
+# L/R turn the box, Y shows the game's own details of the Pokémon at the
+# cursor, A picks up and drops through the action layer. Moves a Pokémon
+# box -> other box, party -> box and box -> party, puts one back with B, then
+# leaves with B. Nothing is saved: the moves only live in the game's memory,
+# and check-save confirms the real save is untouched.
+#
+# Needs the `pc` start point (tools/startpoint.py; facing the PC). The box
+# contents checked below are that save's: Box 1 holds 21 Pokémon (Buneary in
+# slot 0, Ledyba in slot 1, slots 21-29 empty), Box 2 is empty, the party is
+# Torracat, Zorua, Pikipek, Pichu, Ledyba, Buneary.
+restore pc
+include common/boot
+# The automatic view would show the Box full screen; the native boxes hold it off.
+send auto on
+
+# --- Open the PC: native boxes, panel held off ---
+mark
+shot field
+send press a
+wait-scene Box 30
+expect-log ^boxes: shown \(box 1 "Box 1", idle, cursor slot 0 \(Buneary\)\) 15
+expect-mode off
+sleep 1
+shot box
+send box
+expect-log ^box: 1 "Box 1", 8 of 32 unlocked
+expect-log ^   0 Buneary\(427\)$
+expect-log ^  20 Makuhita\(296\)$
+expect-log ^  21 of 30 slots used
+expect-log ^  box screen: box 1, mode idle, cursor 0
+expect-log ^  box screen party: Torracat\(726\) L17 Zorua\(570\) L14 Pikipek\(731\) L13 Pichu\(172\) L12 Ledyba\(165\) L13 Buneary\(427\) L12$
+
+# --- Browse: the D-pad moves the game's cursor, L/R turn the box ---
+mark
+send press right
+expect-log ^boxes: cursor slot 1 \(Ledyba\) 5
+send press r
+expect-log ^action: box-next ok 10
+expect-log ^boxes: box 2 5
+sleep 1
+shot box2
+send press l
+expect-log ^action: box-prev ok 10
+expect-log ^boxes: box 1 5
+reject-log FAILED
+
+# --- Details: Y shows the game's own top screen for the cursor's Pokémon ---
+mark
+send press y
+expect-log ^boxes: details on 5
+sleep 1
+shot details              # the game's summary of Ledyba, with a small "Y Boxes" badge
+send press y
+expect-log ^boxes: details off 5
+sleep 1
+
+# --- Box 1 -> Box 2: pick Ledyba up, turn the box while holding it, drop ---
+mark
+shot pre-pick-ledyba
+send press a
+expect-log ^boxes: pick slot 1 \(Ledyba\) 5
+expect-log ^action: box-pick-1 ok 10
+expect-log ^boxes: mode carrying 5
+send press r
+expect-log ^action: box-next ok 10
+expect-log ^boxes: box 2 5
+sleep 1
+shot carry-box2
+send press a
+expect-log ^boxes: drop at slot 1 \(empty\) 5
+expect-log ^action: box-drop-1 ok 10
+expect-log ^boxes: mode idle 5
+send box 2
+expect-log ^   1 Ledyba\(165\)$
+expect-log ^  1 of 30 slots used
+send press l
+expect-log ^action: box-prev ok 10
+reject-log FAILED
+
+# --- Party -> box: Zorua (party 2) to Box 1 slot 23 ---
+mark
+repeat 6
+  send press right
+  sleep 0.6
+end
+expect-log ^boxes: cursor party 2 \(Zorua\) 10
+sleep 1
+shot pre-pick-zorua
+send press a
+expect-log ^action: box-pick-31 ok 10
+repeat 2
+  send press left
+  sleep 0.6
+end
+repeat 3
+  send press down
+  sleep 0.6
+end
+expect-log ^boxes: cursor slot 23 \(empty\) 10
+sleep 1
+shot carry-zorua
+send press a
+expect-log ^action: box-drop-23 ok 10
+expect-log ^boxes: mode idle 5
+send box 1
+expect-log ^  23 Zorua\(570\)$
+expect-log ^  box screen party: Torracat\(726\) L17 Pikipek\(731\) L13 Pichu\(172\) L12 Ledyba\(165\) L13 Buneary\(427\) L12 -$
+reject-log FAILED
+
+# --- Box -> party: Buneary (Box 1 slot 0) to the free party slot ---
+mark
+repeat 3
+  send press up
+  sleep 0.6
+end
+repeat 5
+  send press left
+  sleep 0.6
+end
+expect-log ^boxes: cursor slot 0 \(Buneary\) 10
+sleep 1
+shot pre-pick-buneary
+send press a
+expect-log ^action: box-pick-0 ok 10
+repeat 7
+  send press right
+  sleep 0.6
+end
+repeat 2
+  send press down
+  sleep 0.6
+end
+expect-log ^boxes: cursor party 6 \(empty\) 10
+sleep 1
+shot carry-buneary
+send press a
+expect-log ^action: box-drop-35 ok 10
+send box 1
+expect-log ^  box screen party: Torracat\(726\) L17 Pikipek\(731\) L13 Pichu\(172\) L12 Ledyba\(165\) L13 Buneary\(427\) L12 Buneary\(427\) L2$
+reject-log ^   0 Buneary
+sleep 1
+shot moved
+reject-log FAILED
+
+# --- B while holding puts the Pokémon back (the PC stays open) ---
+mark
+shot pre-pick-back
+send press a
+expect-log ^action: box-pick-35 ok 10
+send press up
+sleep 0.6
+expect-log ^boxes: cursor party 4 \(Ledyba\) 5
+send press b
+expect-log ^boxes: mode idle 5
+expect-log ^boxes: cursor party 6 \(Buneary\) 5
+sleep 1
+expect-scene Box
+send box 1
+expect-log ^  box screen: box 1, mode idle, cursor 35
+expect-log ^  box screen party: Torracat\(726\) L17 Pikipek\(731\) L13 Pichu\(172\) L12 Ledyba\(165\) L13 Buneary\(427\) L12 Buneary\(427\) L2$
+reject-log FAILED
+
+# --- The panel turned on by hand: the native boxes step aside ---
+mark
+send mode panel
+expect-log ^boxes: panel turned on by hand 5
+expect-log ^boxes: hidden \(panel on by hand\) 5
+send mode off
+sleep 1
+
+# --- Leave with B: no save question, the party now has the box's Buneary ---
+mark
+send press b
+wait-scene FieldRo 30
+expect-mode off
+sleep 2
+shot left
+send party
+expect-log ^  6 \w+ Buneary\(427\) "Buneary" L2
+reject-log Zorua
+check-save
+stop
