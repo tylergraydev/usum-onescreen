@@ -1,7 +1,9 @@
 # The native Bag (Screens/Bag.cpp, docs/BAG.md): opened from the native X
 # menu with the panel off, every pocket browsed, a Potion used on a Pokémon
 # hurt in a wild battle, items given to hold (also over a held item: Yes and
-# No), and back out to the field. Every choice is made with buttons; the
+# No), a TM taught through the game's move-forget screen (and not learned),
+# Exp. Share turned off and on, an item moved to the Free Space and back,
+# and back out to the field. Every choice is made with buttons; the
 # native Bag carries it out on the bottom screen. A screenshot is taken
 # before every A that changes the game. Nothing is ever saved.
 include common/boot
@@ -99,7 +101,7 @@ send press right
 expect-log ^bag: pocket rotom_powers 10
 send press right
 expect-log ^bag: pocket medicine, 9 items 10
-# Down / up move the native cursor only; the list scrolls past row 8.
+# Down / up move the native cursor only; the list scrolls past row 5.
 mark
 send bagui select 0
 expect-log ^bag: cursor 0 Potion 5
@@ -215,6 +217,87 @@ send press a
 expect-log ^bag: answer no 5
 expect-log ^bag: result give Pok.{1,2} Ball\(4\) on slot 4 Pichu: count 37 -> 37, hp 27/27 -> 27/27, held Escape Rope -> Escape Rope 30
 expect-log ^bag: game list 10
+
+# --- A follow-up item: TM01 on Torracat. The game asks which move to
+# forget on its own screen (WazaOshie, on the panel); back from there
+# without forgetting one, the native Bag finishes the flow. ---
+mark
+send press r
+expect-log ^bag: pocket tms, 2 items 10
+send bagui select 0
+expect-log ^bag: cursor 0 TM01 5
+sleep 1
+shot pre-open-tm
+send press a
+expect-log ^bag: menu TM01: Use, Move to Free Space, Cancel 10
+sleep 1
+shot pre-use-tm
+send press a
+expect-log ^bag: choose Use \(TM01, tm\) 5
+expect-log ^bag: game pick 10
+sleep 1
+shot pre-pick-torracat     # "Which Pokémon do you want to teach it to?", cursor on Torracat
+send press a
+expect-log ^bag: pick slot 1 Torracat 5
+wait-scene WazaOshie 30
+expect-log ^bag: handed over to WazaOshie 10
+expect-mode panel          # [scenes] default = panel: the game's own forget screen
+sleep 2
+shot tm-forget-screen
+send move 15 224; tap 6    # its back button: learn nothing
+wait-scene main:006488C8 30
+expect-log ^bag: back from WazaOshie 15
+expect-log ^bag: result use TM01\(328\) on slot 1 Torracat: count 1 -> 1, .*moves (\S+) -> \1, 30
+expect-mode off
+sleep 1
+shot tm-not-learned
+
+# --- Key Items: Exp. Share Off and On again (the game's own entries);
+# Lens Case to the Free Space and back to its pocket ---
+mark
+send press r
+expect-log ^bag: pocket berries 10
+send press r
+expect-log ^bag: pocket key_items, 3 items 10
+send bagui select 1
+expect-log ^bag: cursor 1 Exp. Share 5
+sleep 1
+shot pre-open-exp-share
+send press a
+expect-log ^bag: menu Exp. Share: Off, Move to Free Space, Cancel 10
+sleep 1
+shot pre-exp-share-off
+send press a
+expect-log ^bag: result off Exp. Share\(216\) 20
+sleep 1
+shot exp-share-off
+send press a
+expect-log ^bag: menu Exp. Share: On, Move to Free Space, Cancel 10
+sleep 1
+shot pre-exp-share-on
+send press a
+expect-log ^bag: result on Exp. Share\(216\) 20
+send bagui select 2
+expect-log ^bag: cursor 2 Lens Case 5
+send press a
+expect-log ^bag: menu Lens Case: Move to Free Space, Cancel 10
+sleep 1
+shot pre-free-space
+send press a
+expect-log ^bag: result free-space Lens Case\(705\) 20
+send press r
+expect-log ^bag: pocket free_space, 1 items 10
+send bagui select 0
+expect-log ^bag: cursor 0 Lens Case 5
+send press a
+expect-log ^bag: menu Lens Case: Return to Pocket, Cancel 10
+sleep 1
+shot pre-return-to-pocket
+send press a
+expect-log ^bag: result return Lens Case\(705\) 20
+expect-log ^bag: game list 10
+send press l
+expect-log ^bag: pocket key_items, 3 items 10
 
 # --- Cancel a menu with B, then close the Bag with B ---
 mark

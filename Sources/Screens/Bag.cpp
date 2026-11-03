@@ -1,10 +1,13 @@
 #include "Screens/Bag.hpp"
 
+#include <atomic>
 #include <cstdlib>
 #include <cstring>
+#include <malloc.h>
 #include <map>
 #include <new>
 
+#include <3ds.h>
 #include <CTRPluginFramework.hpp>
 
 #include "Actions.hpp"
@@ -16,6 +19,7 @@
 #include "Scene.hpp"
 #include "Screens/PartyScreen.hpp"
 #include "UI/Device.hpp"
+#include "UI/GameAssets.hpp"
 #include "UI/Layer.hpp"
 
 namespace OneScreen
@@ -167,6 +171,8 @@ namespace OneScreen
     static volatile bool s_shown = false;
     static u8           *s_pixels = nullptr;
     static const size_t  PixelBytes = BagArea.w * BagArea.h * 4;
+    static const u32     FreeAfter = 4;     // frames after hiding before the buffer is freed
+    static u32           s_freeAt = 0;
 
     // --- Plugin thread ---
     static const u32 MoveUp    = Key::DPadUp | Key::CPadUp;
@@ -207,7 +213,8 @@ namespace OneScreen
     static u32  s_statusUntil = 0;
     static std::map<u16, std::string> s_names;
 
-    // A Use or Give in progress, for the result line.
+    // A choice from the item menu in progress (Use, Give, Free Space,
+    // On / Off), for the result line.
     struct Flow
     {
         bool active = false;
@@ -218,6 +225,112 @@ namespace OneScreen
         PartyState before;
     };
     static Flow s_flow;
+    // The game left the Bag screen during a flow (a TM's move-forget screen,
+    // an evolution): that scene, until the Bag is back.
+    static std::string s_handedTo;
+    // Stepped aside during a flow (a screen the plugin doesn't read): the
+    // panel shows until the game is back in its list.
+    static bool s_aside = false;
+    static u32  s_busyFrames = 0;
+
+    // --- Pocket icons and descriptions (loaded once, in a Task) ---
+
+    // Current text language (0-9, 2 = English), as in Screens/Map.cpp.
+    static const u32 LanguageByte = 0x671A10;
+    static BagAssets *s_assets = nullptr;       // set once loaded, never freed or changed
+    static std::atomic<int> s_assetsState(0);   // 0 not started, 1 loading, 2 done, 3 logged
+    static std::vector<std::string> s_assetsLog;
+    static Task *s_assetsTask = nullptr;
+    static u32 s_assetsMs = 0;
+    static Handle s_romfs = 0;                  // the RomFS, open for descriptions
+    static std::map<u16, std::string> s_descriptions;
+
+    static s32 LoadAssetsTask(void *)
+    {
+        const u64 start = svcGetSystemTick();
+        u8 lang = 0xFF;
+        Process::Read8(LanguageByte, lang);
+        static const u32 lowPath[3] = { 0, 0, 0 };
+        const FS_Path archive = { PATH_EMPTY, 1, "" };
+        const FS_Path file = { PATH_BINARY, sizeof(lowPath), lowPath };
+        Handle handle = 0;
+        const Result res = FSUSER_OpenFileDirectly(&handle, ARCHIVE_ROMFS, archive, file, FS_OPEN_READ, 0);
+        BagAssets *assets = R_SUCCEEDED(res) ? new (std::nothrow) BagAssets() : nullptr;
+        if (R_FAILED(res))
+            s_assetsLog.push_back(Utils::Format("bag assets: can't open the RomFS (0x%08lX), drawn icons", (u32)res));
+        else if (assets == nullptr)
+            s_assetsLog.push_back("bag assets: no memory, drawn icons");
+        else
+        {
+            const RomfsRead read = [handle](uint64_t offset, void *dst, u32 size) {
+                u32 got = 0;
+                return R_SUCCEEDED(FSFILE_Read(handle, &got, offset, dst, size)) && got == size;
+            };
+            LoadBagAssets(read, lang, *assets, s_assetsLog);
+        }
+        // Kept open for the descriptions, read one at a time when shown.
+        if (assets != nullptr && assets->descriptionsSize != 0)
+            s_romfs = handle;
+        else if (R_SUCCEEDED(res))
+            FSFILE_Close(handle);
+        s_assetsMs = (u32)((svcGetSystemTick() - start) / CPU_TICKS_PER_MSEC);
+        s_assets = assets;
+        __sync_synchronize();   // complete before the plugin thread sees it
+        s_assetsState.store(2, std::memory_order_release);
+        return 0;
+    }
+
+    // Starts the load the first time the Bag shows; writes its log once done.
+    static void AssetsUpdate(bool shown, std::vector<std::string> &log)
+    {
+        const int state = s_assetsState.load(std::memory_order_acquire);
+        if (state == 0 && shown)
+        {
+            s_assetsTask = new (std::nothrow) Task(LoadAssetsTask, nullptr, -1);
+            if (s_assetsTask == nullptr)
+            {
+                log.push_back("bag assets: no memory for the load task, drawn icons");
+                s_assetsState.store(3);
+                return;
+            }
+            s_assetsState.store(1);
+            s_assetsTask->Start();
+        }
+        else if (state == 2)
+        {
+            for (const std::string &line : s_assetsLog)
+                log.push_back(line);
+            s_assetsLog = std::vector<std::string>();
+            log.push_back(Utils::Format("bag assets: loaded in %lu ms", s_assetsMs));
+            s_assetsState.store(3);
+        }
+    }
+
+    static const BagAssets *Assets(void)
+    {
+        return s_assetsState.load(std::memory_order_acquire) >= 2 ? s_assets : nullptr;
+    }
+
+    // An item's description, read from the RomFS the first time (a few
+    // hundred bytes) and kept.
+    static const std::string &Description(u16 item)
+    {
+        auto it = s_descriptions.find(item);
+        if (it != s_descriptions.end())
+            return it->second;
+        const BagAssets *assets = Assets();
+        std::string text;
+        if (assets != nullptr && s_romfs != 0)
+        {
+            const Handle handle = s_romfs;
+            const RomfsRead read = [handle](uint64_t offset, void *dst, u32 size) {
+                u32 got = 0;
+                return R_SUCCEEDED(FSFILE_Read(handle, &got, offset, dst, size)) && got == size;
+            };
+            text = BagReadDescription(read, *assets, item);
+        }
+        return s_descriptions.emplace(item, text).first->second;
+    }
 
     static const std::string &Name(u16 item)
     {
@@ -281,6 +394,38 @@ namespace OneScreen
         s_statusUntil = s_frames + frames;
     }
 
+    static const char *FlowName(u8 command)
+    {
+        switch (command)
+        {
+        case BagCommand::Use:            return "use";
+        case BagCommand::Give:           return "give";
+        case BagCommand::FreeSpace:      return "free-space";
+        case BagCommand::ReturnToPocket: return "return";
+        case BagCommand::On:             return "on";
+        case BagCommand::Off:            return "off";
+        }
+        return "other";
+    }
+
+    static std::string MoveNameOr(u16 move)
+    {
+        const UI::GameAssets *assets = UI::GetGameAssets();
+        const std::string name = assets != nullptr ? assets->MoveName(move) : "";
+        return name.empty() ? Utils::Format("move %u", move) : name;
+    }
+
+    static BagResult BaseResult(int countAfter)
+    {
+        BagResult r;
+        r.command = s_flow.command;
+        r.kind = BagItemKindOf(s_flow.item);
+        r.item = NameOr(s_flow.item);
+        r.countBefore = s_flow.countBefore;
+        r.countAfter = countAfter;
+        return r;
+    }
+
     // The flow got back to the list (or to the party pick, after "It won't
     // have any effect"): say what changed.
     static void FinishFlow(u32 sceneManager, std::vector<std::string> &log)
@@ -295,48 +440,74 @@ namespace OneScreen
         if (slot < 0 || slot >= (int)s_partyState.count || slot >= (int)s_flow.before.count)
         {
             log.push_back(Utils::Format("bag: result %s %s(%u): count %d -> %d, no Pokémon chosen",
-                                        s_flow.command == BagCommand::Use ? "use" : "give", item.c_str(),
-                                        s_flow.item, s_flow.countBefore, countAfter));
+                                        FlowName(s_flow.command), item.c_str(), s_flow.item, s_flow.countBefore,
+                                        countAfter));
+            const std::string text = BagResultText(BaseResult(countAfter));
+            if (!text.empty())
+                SetStatus(text);
             return;
         }
         const Pk7 &a = s_flow.before.slots[slot].mon, &b = s_partyState.slots[slot].mon;
-        const std::string mon = MonName(b);
-        const std::string heldA = a.heldItem ? NameOr(a.heldItem) : "-", heldB = b.heldItem ? NameOr(b.heldItem) : "-";
-        log.push_back(Utils::Format("bag: result %s %s(%u) on slot %d %s: count %d -> %d, hp %u/%u -> %u/%u, held %s -> %s",
-                                    s_flow.command == BagCommand::Use ? "use" : "give", item.c_str(), s_flow.item,
-                                    slot + 1, mon.c_str(), s_flow.countBefore, countAfter, a.hp, a.maxHp, b.hp,
-                                    b.maxHp, heldA.c_str(), heldB.c_str()));
-        if (s_flow.command == BagCommand::Use)
+        BagResult r = BaseResult(countAfter);
+        r.picked = true;
+        r.mon = MonName(b);
+        r.hpBefore = a.hp;
+        r.hpAfter = b.hp;
+        r.maxHp = b.maxHp;
+        r.levelBefore = a.level;
+        r.levelAfter = b.level;
+        r.speciesBefore = a.species;
+        r.speciesAfter = b.species;
+        if (a.species != b.species)
+            r.speciesName = SpeciesName(b.species);
+        std::string movesA, movesB;
+        for (int m = 0; m < 4; m++)
         {
-            if (b.hp != a.hp)
-                SetStatus(Utils::Format("%s: HP %u -> %u/%u", mon.c_str(), a.hp, b.hp, b.maxHp));
-            else if (countAfter == s_flow.countBefore)
-                SetStatus(item + " had no effect on " + mon);
-            else
-                SetStatus("Used " + item + " on " + mon);
+            r.ppBefore += a.pp[m];
+            r.ppAfter += b.pp[m];
+            movesA += Utils::Format("%s%u", m ? "," : "", a.moves[m]);
+            movesB += Utils::Format("%s%u", m ? "," : "", b.moves[m]);
+            bool known = b.moves[m] == 0;
+            for (int k = 0; k < 4 && !known; k++)
+                known = a.moves[k] == b.moves[m];
+            if (!known)
+                r.learned.push_back(MoveNameOr(b.moves[m]));
         }
-        else if (b.heldItem == s_flow.item)
-            SetStatus(mon + " now holds " + item + (a.heldItem ? " (" + heldA + " back in the Bag)" : ""));
-        else
-            SetStatus(mon + " still holds " + heldB);
+        r.heldBefore = a.heldItem ? NameOr(a.heldItem) : "";
+        r.heldAfter = b.heldItem ? NameOr(b.heldItem) : "";
+        r.holdsItem = b.heldItem == s_flow.item;
+        log.push_back(Utils::Format("bag: result %s %s(%u) on slot %d %s: count %d -> %d, hp %u/%u -> %u/%u, held %s -> %s, "
+                                    "level %u -> %u, moves %s -> %s, pp %d -> %d",
+                                    FlowName(s_flow.command), item.c_str(), s_flow.item, slot + 1, r.mon.c_str(),
+                                    s_flow.countBefore, countAfter, a.hp, a.maxHp, b.hp, b.maxHp,
+                                    r.heldBefore.empty() ? "-" : r.heldBefore.c_str(),
+                                    r.heldAfter.empty() ? "-" : r.heldAfter.c_str(), a.level, b.level, movesA.c_str(),
+                                    movesB.c_str(), r.ppBefore, r.ppAfter));
+        SetStatus(BagResultText(r));
     }
 
     // --- OSD callback ---
 
     static UI::Layer s_layer;
+    static u8 *s_layerBuffer = nullptr;    // the buffer s_layer was set up with
 
     static bool BagOnScreen(const Screen &screen)
     {
-        if (!screen.IsTop || !s_shown || s_pixels == nullptr)
+        u8 *const pixels = s_pixels;
+        if (!screen.IsTop || !s_shown || pixels == nullptr)
             return false;
         UiInitFont();
         const UI::Surface fb = SurfaceFromScreen(screen);
         const u32 version = s_viewVersion;
         bool redraw = version != s_drawnVersion;
-        if (!s_layer.Matches(fb))
+        // The buffer is freed while the Bag is hidden (it is the whole top
+        // screen), so a new one needs a new setup.
+        if (!s_layer.Matches(fb) || s_layerBuffer != pixels)
         {
-            if (!s_layer.Setup(fb, BagArea, BagRadius, s_pixels, PixelBytes))
+            s_layerBuffer = nullptr;
+            if (!s_layer.Setup(fb, BagArea, BagRadius, pixels, PixelBytes))
                 return false;
+            s_layerBuffer = pixels;
             redraw = true;
         }
         if (redraw)
@@ -393,9 +564,16 @@ namespace OneScreen
         v.commands = s_game.commands;
         v.menuCursor = s_menuCursor;
         if (s_game.YesNo())
-            v.menuTitle = "Switch items?";
+            v.menuTitle = s_flow.active && s_flow.command == BagCommand::Give ? "Would you like to switch the two items?"
+                                                                             : NameOr(s_game.item) + ": Yes or No?";
         else if (v.mode == BagMode::Menu)
-            v.menuTitle = NameOr(s_game.item);
+            v.menuTitle = "What do you want to do with the " + NameOr(s_game.item) + "?";
+        if (v.mode == BagMode::Pick)
+            v.pickQuestion = s_flow.active && s_flow.command == BagCommand::Give
+                             ? "Which Pokémon do you want to give it to?" : BagPickQuestion(s_game.item);
+        v.assets = Assets();
+        if (v.assets != nullptr && s_cursor >= 0 && s_cursor < (int)s_game.items.size())
+            v.description = Description(s_game.items[s_cursor].id);
         v.party = s_party;
         v.partyCursor = s_pickCursor;
         v.busy = s_driver.Busy() || s_game.mode == BagMode::Message || s_game.mode == BagMode::Busy;
@@ -407,7 +585,8 @@ namespace OneScreen
         const BagView &o = s_view;
         const bool same = o.mode == v.mode && o.tab == v.tab && o.wantTab == v.wantTab && SameItems(o.items, v.items)
                           && o.names == v.names && o.cursor == v.cursor && o.top == v.top && o.commands == v.commands
-                          && o.menuCursor == v.menuCursor && o.menuTitle == v.menuTitle && SameMons(o.party, v.party)
+                          && o.menuCursor == v.menuCursor && o.menuTitle == v.menuTitle && o.pickQuestion == v.pickQuestion
+                          && o.description == v.description && o.assets == v.assets && SameMons(o.party, v.party)
                           && o.partyCursor == v.partyCursor && o.status == v.status && o.busy == v.busy;
         // Not while the callback may still be drawing the last one: try
         // again next frame.
@@ -465,13 +644,13 @@ namespace OneScreen
         if (s_menuCursor < 0 || s_menuCursor >= (int)s_game.commands.size())
             return;
         const u8 command = s_game.commands[s_menuCursor];
-        if (!BagCommandEnabled(command, s_game.tab))
+        if (!BagEntryEnabled(s_game.commands, s_menuCursor))
         {
             SetStatus(std::string(BagCommandLabel(command)) + ": use the bottom screen (L+R)", 180);
             log.push_back(std::string("bag: ") + BagCommandLabel(command) + " is not native");
             return;
         }
-        if (command == BagCommand::Use || command == BagCommand::Give)
+        if (command != BagCommand::Cancel)
         {
             s_flow = Flow();
             s_flow.active = true;
@@ -481,9 +660,10 @@ namespace OneScreen
             ReadPartyNow(sceneManager);
             s_flow.before = s_partyState;
         }
-        else if (command == BagCommand::Cancel)
+        else
             s_flow.active = false;
-        log.push_back(Utils::Format("bag: choose %s (%s)", BagCommandLabel(command), NameOr(s_game.item).c_str()));
+        log.push_back(Utils::Format("bag: choose %s (%s, %s)", BagCommandLabel(command), NameOr(s_game.item).c_str(),
+                                    BagItemKindName(BagItemKindOf(s_game.item))));
         s_driver.Choose(s_menuCursor);
     }
 
@@ -695,13 +875,51 @@ namespace OneScreen
         if (!inBag && !expecting)
             s_yield = false;
 
+        // A flow can take the game to another screen (a TM's move-forget
+        // screen, an evolution) and back into the Bag; keep it meanwhile.
+        // Back in the field, the Bag is closed and the flow is over.
+        if (!inBag && !scene.empty() && s_flow.active)
+        {
+            if (scene == SceneField || scene == SceneBag)
+            {
+                log.push_back("bag: the Bag closed during " + NameOr(s_flow.item));
+                s_flow.active = false;
+                s_handedTo.clear();
+            }
+            else if (s_handedTo.empty())
+            {
+                s_handedTo = scene;
+                log.push_back("bag: handed over to " + scene + " (" + NameOr(s_flow.item) + ")");
+            }
+        }
+        if (!inBag)
+            s_aside = false;
+
+        // A screen inside the Bag that the plugin doesn't read: step aside.
+        s_busyFrames = inBag && s_game.mode == BagMode::Busy ? s_busyFrames + 1 : 0;
+        const bool aside = s_enabled && !s_yield && inBag && s_game.Valid()
+                           && BagFollowGame(s_game.mode, s_busyFrames, s_flow.active, s_aside) == BagFollow::Aside;
+        if (aside != s_aside)
+        {
+            s_aside = aside;
+            if (aside)
+            {
+                s_driver.Stop();
+                SetPanelMode(PanelMode::Panel);
+                log.push_back("bag: the game shows a screen the native Bag doesn't read (" + NameOr(s_flow.item)
+                              + "), the panel takes over -> " + PanelStatus());
+            }
+            else
+                log.push_back(std::string("bag: back from the bottom screen, game ") + (s_game.mode == BagMode::Pick ? "pick" : "list"));
+        }
+
         // The panel: off while the native Bag is (about to be) up. A panel
         // turned on while we hold it off is the player's doing (L+R): step
         // aside. Not on a scene change: AutoPanel then clears its override
         // and picks the scene's mode itself (the panel, for the Bag).
         const bool sceneChanged = scene != s_prevScene;
         s_prevScene = scene;
-        bool holdOff = s_enabled && !s_yield && ((inBag && s_game.Valid()) || expecting);
+        bool holdOff = s_enabled && !s_yield && !s_aside && ((inBag && s_game.Valid()) || expecting);
         if (holdOff && s_forcedOff && !sceneChanged && GetPanelMode() != PanelMode::Off)
         {
             s_yield = true;
@@ -725,7 +943,8 @@ namespace OneScreen
             AutoPanelSetEnabled(AutoPanelEnabled());
         }
 
-        const bool shown = s_enabled && !s_yield && inBag && s_game.Valid();
+        const bool shown = s_enabled && !s_yield && !s_aside && inBag && s_game.Valid();
+        AssetsUpdate(shown, log);
         if (shown && !s_shown)
         {
             if (s_pixels == nullptr)
@@ -733,8 +952,12 @@ namespace OneScreen
             s_prevTab = -1;
             s_prevMode = BagMode::None;
             s_wantTab = -1;
-            s_flow.active = false;
-            s_statusUntil = 0;
+            // Back from another screen or the panel: the flow goes on.
+            if (!s_flow.active)
+                s_statusUntil = 0;
+            else if (!s_handedTo.empty())
+                log.push_back("bag: back from " + s_handedTo);
+            s_handedTo.clear();
             s_repeatKey = 0;
             ReadPartyNow(sceneManager);
             log.push_back(Utils::Format("bag: shown (pocket %s, %u items)%s", s_game.tab >= 0 ? BagTabAt(s_game.tab).name : "?",
@@ -743,9 +966,17 @@ namespace OneScreen
         else if (!shown && s_shown)
         {
             s_driver.Stop();
+            s_freeAt = s_frames + FreeAfter;
             log.push_back("bag: hidden");
         }
         s_shown = shown;
+        // The layer's 380 KB go back to the heap once the OSD callback can't
+        // be drawing with them any more (it checks s_shown first).
+        if (!shown && s_pixels != nullptr && s_frames >= s_freeAt)
+        {
+            delete[] s_pixels;
+            s_pixels = nullptr;
+        }
 
         if (shown)
         {
@@ -821,10 +1052,17 @@ namespace OneScreen
     std::string BagStatus(void)
     {
         static const char *const modes[] = { "none", "list", "menu", "pick", "message", "busy" };
-        return Utils::Format("bagui: %s, %s, game %s, pocket %s, cursor %d, driver %s%s%s%s", s_enabled ? "on" : "off",
-                             s_shown ? "shown" : "hidden", modes[(int)s_game.mode],
+        const BagAssets *assets = Assets();
+        const struct mallinfo heap = mallinfo();
+        return Utils::Format("bagui: %s, %s, game %s, pocket %s, cursor %d, driver %s%s%s%s%s%s%s, icons %d, descriptions read %u, heap %u KB used, %u KB free in the arena",
+                             s_enabled ? "on" : "off", s_shown ? "shown" : "hidden", modes[(int)s_game.mode],
                              s_game.tab >= 0 ? BagTabAt(s_game.tab).name : "-", s_cursor, s_driver.Status().c_str(),
-                             s_yield ? ", panel on by hand" : "", s_forcedOff ? ", holding panel off" : "",
-                             s_capturing ? ", input captured" : "");
+                             s_yield ? ", panel on by hand" : "", s_aside ? ", stepped aside" : "",
+                             s_handedTo.empty() ? "" : (", handed over to " + s_handedTo).c_str(),
+                             s_flow.active ? (std::string(", ") + FlowName(s_flow.command) + " " + NameOr(s_flow.item)).c_str() : "",
+                             s_forcedOff ? ", holding panel off" : "", s_capturing ? ", input captured" : "",
+                             assets != nullptr ? assets->PocketCount() : 0,
+                             (unsigned)s_descriptions.size(), (unsigned)(heap.uordblks / 1024),
+                             (unsigned)(heap.fordblks / 1024));
     }
 }

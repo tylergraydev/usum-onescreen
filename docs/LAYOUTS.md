@@ -105,7 +105,7 @@ Item menu (`bag_item_menu`): it grows upwards from Cancel, so its buttons are na
 | from_bottom5 | 161,97-316,122 | 236,110 | no 5-entry menu seen | measured |
 | from_bottom4 | 161,125-316,150 | 236,138 | Use in 4-entry menus (Medicine, Escape Rope, Oran Berry) | tap (Potion: Use) |
 | from_bottom3 | 161,153-316,178 | 236,166 | Give in 3- and 4-entry menus; Use for TMs | tap (Quick Claw, Escape Rope: Give) |
-| from_bottom2 | 161,181-316,206 | 236,194 | Move to Free Space in every menu seen | measured: changes the bag |
+| from_bottom2 | 161,181-316,206 | 236,194 | Move to Free Space in every menu seen; Return to Pocket in the Free Space pocket | tap (W7-3: Quick Claw, Lens Case to the Free Space and back) |
 | from_bottom1 | 161,209-316,236 | 236,222 | Cancel | tap |
 
 Party pick (`bag_party`, after Use or Give: "Which Pokémon do you want to use this item on?"): slots in party order, 32 px pitch, x 0-150; tap x 70, y 18+32k. A tap on a slot moves the cursor there; a tap on the slot under the cursor chooses it. All six tapped (cursor moves; slots 2 and 4 also chosen).
