@@ -10,7 +10,7 @@ OUT      := build
 PYTHON   ?= python3
 CODE_BIN ?=
 
-TESTS    := $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/ui_host_test $(OUT)/party_data_test $(OUT)/action_queue_test $(OUT)/xmenu_test $(OUT)/battle_menu_test $(OUT)/keyboard_test $(OUT)/pokedex_test
+TESTS    := $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/ui_host_test $(OUT)/party_data_test $(OUT)/action_queue_test $(OUT)/xmenu_test $(OUT)/battle_menu_test $(OUT)/keyboard_test $(OUT)/pokedex_test $(OUT)/native_screens_test
 
 all: run
 
@@ -49,6 +49,14 @@ $(OUT)/pokedex_test: pokedex_test.cpp ../Sources/Screens/PokedexList.cpp ../Incl
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) pokedex_test.cpp ../Sources/Screens/PokedexList.cpp $(UI_SRCS) -o $@
 
+SCREEN_SRCS := $(addprefix ../Sources/Screens/,NativeScreen.cpp Options.cpp TrainerPassport.cpp BattleVideo.cpp)
+SCREEN_HDRS := $(addprefix ../Includes/Screens/,NativeScreen.hpp Options.hpp TrainerPassport.hpp BattleVideo.hpp)
+SCREEN_PREVIEWS := ../analysis/private
+
+$(OUT)/native_screens_test: native_screens_test.cpp $(SCREEN_SRCS) $(SCREEN_HDRS)                     ../Sources/ActionQueue.cpp ../Includes/ActionQueue.hpp ../Includes/Layouts.hpp $(UI_SRCS) $(UI_HDRS)
+	@mkdir -p $(OUT)
+	$(CXX) $(CXXFLAGS) native_screens_test.cpp $(SCREEN_SRCS) ../Sources/ActionQueue.cpp $(UI_SRCS) -o $@
+
 $(OUT)/ui_host_test: ui_host_test.cpp $(UI_SRCS) $(UI_HDRS)
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) ui_host_test.cpp $(UI_SRCS) -o $@
@@ -69,6 +77,7 @@ run: $(TESTS)
 	./$(OUT)/xmenu_test $(XMENU_PREVIEW)
 	./$(OUT)/keyboard_test $(KEYBOARD_PREVIEW)
 	./$(OUT)/pokedex_test $(DEX_PREVIEW)
+	./$(OUT)/native_screens_test $(SCREEN_PREVIEWS)
 	$(PYTHON) -I sigscan_test.py $(CODE_BIN)
 
 clean:
