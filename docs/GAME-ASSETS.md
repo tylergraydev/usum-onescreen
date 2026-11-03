@@ -4,8 +4,34 @@ The plugin draws its menus with Pokémon Ultra Sun's own font and icons,
 read from the running game's RomFS when they are needed. The repo has no
 game data: only the formats and the paths below. Code:
 `Includes/UI/GameAssets.hpp`, `Sources/UI/GameAssets.cpp` (pure decoders,
-host-tested on synthetic data), loaded by `Sources/Screens/ThemeScreen.cpp`
-(`uitheme on`, or `uitheme load`).
+host-tested on synthetic data), loaded once and shared by
+`Includes/UI/Assets.hpp`, `Sources/UI/Assets.cpp` (W7-0, below).
+
+## The shared service (W7-0)
+
+Every native screen reads the same set; nothing loads it twice.
+
+- **When**: the first frame the scene is `FieldRo` (after the game's own
+  boot loading, so boot to the field isn't slowed), or earlier when a
+  screen calls `UI::RequestAssets()` (`uitheme on` / `uitheme load` do).
+- **Where**: a CTRPF `Task` (its own thread), so neither the game nor the
+  plugin thread waits the ~0.6 s. The plugin thread (`UI::AssetsUpdate`,
+  called from `main.cpp` every frame) writes the load's log lines when it
+  ends.
+- **API** (any thread): `UI::AssetsStatus()` (`NotStarted`, `Loading`,
+  `Ready`, `Failed`), `UI::Assets()` (the set, `nullptr` until `Ready`),
+  `UI::GameFontOrNull()` / `UI::HaveGameFont()`, `UI::AssetIcon()`,
+  `UI::AssetBall()`, `UI::AssetMove()`, `UI::AssetMoveName(move, fallback)`,
+  `UI::AssetTypeName(type, fallback)`, `UI::AssetsSummary()`. Until
+  `Ready` they return the fallback, so a screen draws its fallback look and
+  switches when the set arrives (check `UI::AssetsReady()` per frame and
+  redraw on the change, as `Screens/ThemeScreen.cpp` does). `Theme::`
+  drawing picks the game font and icons by itself (`GetGameAssets()` is
+  published by the service).
+- **Log**: `assets: loading (field reached)`, the per-part lines below,
+  then `assets: ready, loaded in N ms, N KB kept (heap +N KB), game font on`.
+  "kept" is computed from the parts; "heap" is newlib's `mallinfo()` in-use
+  bytes after the load minus before (other threads may allocate meanwhile).
 
 ## How it is read
 
@@ -13,7 +39,7 @@ As for the map's place names (`docs/MAP.md`):
 `FSUSER_OpenFileDirectly(ARCHIVE_ROMFS, empty path, binary {0, 0, 0})`
 gives the running title's RomFS at IVFC level 3; `RomfsFind` walks its file
 tree and `GarcEntry` finds an entry of a GARC (`Sources/RomfsText.cpp`).
-Everything is read once, on the plugin thread, and kept.
+Everything is read once, in the service's Task, and kept.
 
 Measured in Azahar (instance `w63`, 2026-11-02, USA v1.2 with the v1.2
 update installed):
@@ -26,6 +52,13 @@ assets: moves: 729 from a/0/1/1
 assets: text: 18 type names, 729 move names from a/0/3/2
 uitheme: assets loaded in 657 ms
 ```
+
+With the shared service (instance `w70`, 2026-11-02), the same part lines
+follow `assets: loading (field reached)` and end with
+`assets: ready, loaded in 621 ms, 248 KB kept (heap +247 KB), game font on`.
+Boot to the field (`scenarios/boot-to-field.txt`, start to `FieldRo`) took
+31.6 / 31.0 s before and 31.2 / 31.1 s after: the load starts once the
+field is reached, so it doesn't slow the boot.
 
 Kept in memory: the font 129 KB (logged), ball icons 64 KB (16 x 32x32
 RGBA), the other icons ~22 KB, the move table 4 KB, names ~25 KB: about
