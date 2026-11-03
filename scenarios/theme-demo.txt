@@ -1,0 +1,31 @@
+# The USUM theme demo (W6-3, Screens/ThemeScreen.hpp): loads the game's own
+# font, icons, move table and type/move names from its RomFS and draws the
+# sample screen over the top screen. Screenshots for docs/VISUAL-STYLE.md.
+# Nothing is saved.
+include common/boot
+send auto off
+send mode off
+mark
+send uitheme on
+expect-log ^assets: font: a/0/2/5 entry 0, cell 15x19 30
+expect-log ^assets: icons: 8 of 8 5
+expect-log ^assets: balls: 16 of 16 5
+expect-log ^assets: moves: \d+ from a/0/1/1 5
+expect-log ^assets: text: 18 type names 5
+expect-log ^uitheme: assets loaded 5
+sleep 3
+send uitheme status
+expect-log ^uitheme: shown, page 0, selected 0, game font on 5
+send uitheme select 1
+sleep 1
+shot moves
+send uitheme page 1
+send uitheme select 2
+sleep 2
+shot list
+mark
+send uitheme off
+expect-log ^uitheme: off 5
+sleep 1
+shot off
+stop
