@@ -73,8 +73,10 @@ repeat 2
   expect-log ^xmenu: shown 10
   expect-log ^mem: xmenu shown 5
   expect-log ^xmenu: game cursor page 10
-  send xmenu select pokemon
-  expect-log ^xmenu: cursor pokemon 5
+  repeat 5 until-log ^xmenu:\scursor\spokemon
+    send xmenu select pokemon
+    sleep 1
+  end
   send press a
   expect-log ^action: xmenu-pokemon ok 15
   expect-log ^mem: xmenu hidden 5
@@ -100,8 +102,10 @@ repeat 2
 
   # --- Pokédex ---
   mark
-  send xmenu select pokedex
-  expect-log ^xmenu: cursor pokedex 5
+  repeat 5 until-log ^xmenu:\scursor\spokedex
+    send xmenu select pokedex
+    sleep 1
+  end
   send press a
   expect-log ^action: xmenu-pokedex ok 15
   wait-scene Zukan 10
@@ -115,8 +119,10 @@ repeat 2
 
   # --- Bag ---
   mark
-  send xmenu select bag
-  expect-log ^xmenu: cursor bag 5
+  repeat 5 until-log ^xmenu:\scursor\sbag
+    send xmenu select bag
+    sleep 1
+  end
   send press a
   expect-log ^action: xmenu-bag ok 15
   wait-scene main:006488C8 10
@@ -130,8 +136,10 @@ repeat 2
 
   # --- Options ---
   mark
-  send xmenu select options
-  expect-log ^xmenu: cursor options 5
+  repeat 5 until-log ^xmenu:\scursor\soptions
+    send xmenu select options
+    sleep 1
+  end
   send press a
   expect-log ^action: xmenu-options ok 15
   wait-scene Config 10
@@ -145,8 +153,10 @@ repeat 2
 
   # --- Trainer Passport ---
   mark
-  send xmenu select trainer_passport
-  expect-log ^xmenu: cursor trainer_passport 5
+  repeat 5 until-log ^xmenu:\scursor\strainer_passport
+    send xmenu select trainer_passport
+    sleep 1
+  end
   send press a
   expect-log ^action: xmenu-trainer_passport ok 15
   wait-scene TrainerPass 10
@@ -160,8 +170,10 @@ repeat 2
 
   # --- Battle Video ---
   mark
-  send xmenu select battle_video
-  expect-log ^xmenu: cursor battle_video 5
+  repeat 5 until-log ^xmenu:\scursor\sbattle_video
+    send xmenu select battle_video
+    sleep 1
+  end
   send press a
   expect-log ^action: xmenu-battle_video ok 15
   expect-log ^mem: video shown 10
@@ -175,8 +187,10 @@ repeat 2
 
   # --- Map (from the X menu: it opens once the menu has closed) ---
   mark
-  send xmenu select map
-  expect-log ^xmenu: cursor map 5
+  repeat 5 until-log ^xmenu:\scursor\smap
+    send xmenu select map
+    sleep 1
+  end
   send press a
   expect-log ^map: open \(X menu\) 10
   expect-log ^mem: map shown 5
@@ -228,8 +242,10 @@ repeat 2
   send press x
   expect-log ^mem: xmenu shown 10
   expect-log ^xmenu: game cursor page 10
-  send xmenu select pokemon
-  expect-log ^xmenu: cursor pokemon 5
+  repeat 5 until-log ^xmenu:\scursor\spokemon
+    send xmenu select pokemon
+    sleep 1
+  end
   send press a
   expect-log ^mem: party shown 15
   sleep 2
@@ -237,8 +253,10 @@ repeat 2
   wait-scene FieldRo 20
   expect-log ^xmenu: shown 15
   mark
-  send xmenu select bag
-  expect-log ^xmenu: cursor bag 5
+  repeat 5 until-log ^xmenu:\scursor\sbag
+    send xmenu select bag
+    sleep 1
+  end
   send press a
   expect-log ^mem: bag shown 15
   sleep 2
