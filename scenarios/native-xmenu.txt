@@ -232,19 +232,22 @@ expect-log ^xmenu: game cursor page 2 slot 3, native cursor bag 10
 sleep 1
 shot reopened
 
-# --- Map: B closes the X menu, then Rotom's map ---
+# --- Map: B closes the X menu, then the native map (scenarios/native-map.txt
+# covers it, and the game's Town Map with `map off`) ---
 mark
 send xmenu select map
 expect-log ^xmenu: cursor map 5
 shot pre-map
 send press a
-expect-log ^action: xmenu-map ok 20
-wait-scene TownMap 10
-expect-mode full
+expect-log ^xmenu: open map \(native map\) 5
+expect-log ^action: xmenu-close ok 20
+expect-log ^map: shown 10
+expect-mode off
 sleep 2
 shot map
-send move 16 224; tap 6
-wait-scene FieldRo 20
+send press b
+expect-log ^map: closed \(B\) 5
+expect-scene FieldRo
 expect-mode off
 sleep 2
 

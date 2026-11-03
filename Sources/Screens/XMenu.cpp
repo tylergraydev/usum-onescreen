@@ -11,6 +11,9 @@
 #include "Panel.hpp"
 #include "Scene.hpp"
 #include "Screens/PartyScreen.hpp"
+#include "Screens/Pokedex.hpp"
+#include "Screens/Bag.hpp"
+#include "Screens/Map.hpp"
 #include "Screens/XMenuGrid.hpp"
 #include "UI/Device.hpp"
 #include "UI/Layer.hpp"
@@ -60,6 +63,7 @@ namespace OneScreen
     static bool s_yield = false;        // the player turned the panel on: stay hidden until the X menu closes
     static bool s_capturing = false;
     static int  s_opening = -1;         // entry whose action is running
+    static bool s_mapAfter = false;     // Map: open the native map once the X menu has closed
     static bool s_synced = false;       // the game's cursor was read (or given up on) since the menu showed
     static u32  s_frames = 0;
     static u32  s_shownAt = 0;
@@ -176,6 +180,13 @@ namespace OneScreen
         log.push_back(Utils::Format("xmenu: cursor %s", EntryName(index)));
     }
 
+    // Entry `index` opens a screen the plugin shows natively (and it is on).
+    static bool OpensNative(int index)
+    {
+        const char *native = XMenuNativeScreen(index);
+        return native != nullptr && std::string(native) == "pokedex" && PokedexEnabled();
+    }
+
     static void Open(int index, u32 sceneManager, std::vector<std::string> &log)
     {
         if (((s_enabledMask >> index) & 1u) == 0)
@@ -187,16 +198,22 @@ namespace OneScreen
         s_cursor.Chosen(index);
         s_synced = true;
         s_scanWanted = false;
-        log.push_back(Utils::Format("xmenu: open %s", EntryName(index)));
-        if (ActionStart(XMenuAction(index), sceneManager, log))
-        {
-            s_opening = index;
-            // Pokémon opens the game's Party screen, which the native Party
-            // screen takes over (Screens/PartyScreen.hpp): it holds the panel
-            // off from here, so the panel doesn't flash on in between.
-            if (index == XMenuFind("pokemon"))
-                PartyScreenExpect();
-        }
+        const bool native = std::string(EntryName(index)) == "map" && MapEnabled();
+        log.push_back(Utils::Format("xmenu: open %s%s", EntryName(index),
+                                    native ? " (native map)" : OpensNative(index) ? " (native)" : ""));
+        if (!ActionStart(native ? XMenuCloseAction() : XMenuAction(index), sceneManager, log))
+            return;
+        s_opening = index;
+        s_mapAfter = native;
+        // The Bag has a native screen: it takes over once the game's Bag is
+        // up, and keeps the panel off until then.
+        if (XMenuEntries()[index].opens == SceneBag)
+            BagExpectOpen();
+        // Pokémon opens the game's Party screen, which the native Party
+        // screen takes over (Screens/PartyScreen.hpp): it holds the panel
+        // off from here, so the panel doesn't flash on in between.
+        if (index == XMenuFind("pokemon"))
+            PartyScreenExpect();
     }
 
     static void HandleInput(u32 sceneManager, std::vector<std::string> &log)
@@ -294,7 +311,12 @@ namespace OneScreen
 
         // The panel: off while the native menu is (about to be) up. A panel
         // turned on while we hold it off is the player's doing (L+R): step aside.
-        bool holdOff = s_enabled && !s_yield && (menuUp || s_frames < s_pendingUntil);
+        // Also while an entry with a native screen opens (field and loading
+        // frames): the X menu is gone then, and the panel would show until
+        // the native screen holds it off in its own scene.
+        const bool nativeOpening = (inField || scene.empty()) && s_opening >= 0 && ActionRunning()
+                                   && OpensNative(s_opening);
+        bool holdOff = s_enabled && !s_yield && (menuUp || s_frames < s_pendingUntil || nativeOpening);
         if (holdOff && s_forcedOff && GetPanelMode() != PanelMode::Off)
         {
             s_yield = true;
@@ -320,7 +342,12 @@ namespace OneScreen
         }
 
         if (s_opening >= 0 && !ActionRunning())
+        {
             s_opening = -1;
+            if (s_mapAfter)
+                MapRequestOpen();
+            s_mapAfter = false;
+        }
 
         const bool shown = s_enabled && !s_yield && menuUp;
         if (shown && !s_shown)

@@ -3,6 +3,9 @@
 include common/boot
 # Checks the automatic view per scene, which is off by default.
 send auto on
+# The panel path: with the native battle menu off, Battle gets the panel
+# ([scenes] Battle = panel). native-wild-battle.txt covers the menu.
+send battleui off
 # This checks the panel path for the X menu: turn the native menu off.
 send xmenu off
 

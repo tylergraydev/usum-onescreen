@@ -14,7 +14,8 @@ the native menu drives it with taps through the action layer (`docs/ACTIONS.md`)
 ## What it shows
 
 The game's two pages side by side (page 1 on the left, page 2 on the right, in
-the game's slot order), and a bottom row with **Map** (Rotom's field map) and
+the game's slot order), and a bottom row with **Map** (the native map,
+`docs/MAP.md`) and
 **Save**:
 
 | Page 1 | | Page 2 | |
@@ -28,6 +29,11 @@ Poké Finder and Poké Pelago are not in this save's X menu (both pages checked
 by screenshot); where they show up later in the game was not checked. They are
 not entries; page 2's two empty slots are drawn as outlines. If a later save
 fills those slots, they need entries here (and measured taps in the layouts).
+
+Options, Trainer Passport and Battle Video open native top-screen screens
+(`docs/NATIVE-SCREENS.md`; `XMenuOpensNative` lists them). With the cursor on
+another entry that opens a scene, the footer says it opens on the bottom
+screen (L+R shows it).
 
 QR Scanner is shown but greyed out: its tap was never verified (Azahar has no
 camera and hangs in it), so the action layer refuses it, and A logs
@@ -58,10 +64,14 @@ Each entry is an `ActionDef` (`XMenuAction`), named `xmenu-<entry>`:
   10 more frames, then tap the entry. Done when its scene shows (Party, Zukan,
   Bag, TrainerPass, Kawaigari, BattleVideoPlayer, Config) or, for Quick Link
   and Festival Plaza (no scene change), when the X menu is gone.
+  The Bag opens the native Bag (`docs/BAG.md`): it shows as soon as the
+  game's Bag is up, and holds the panel off from the tap on.
 - Save: press Y; done when the X menu is gone (the game's "Would you like to
   save your adventure so far?" is up). The player answers it on the bottom
   screen (the panel shows it); nothing here presses A.
-- Map: B (closes the X menu), wait for the field, tap `field.map`; done in
+- Map: `xmenu-close` (B; done when the field shows without the X menu), then
+  the native map opens (`MapRequestOpen`, `docs/MAP.md`). With `map off`,
+  `xmenu-map` as before: B, wait for the field, tap `field.map`; done in
   `TownMap`.
 
 The page is read from the bottom screen: the blue page arrow is at 303,12 on
@@ -81,6 +91,15 @@ and tapping an entry moves its cursor there. The native menu follows that:
   including Map and Save, which the game doesn't have. So a cursor moved and
   closed with B is still there next time, as in the game.
 - Opening an entry counts as the game's cursor moving there (it does).
+
+## Native screens behind entries
+
+The Pokédex entry opens the game's Pokédex as usual, and the native Pokédex
+(`docs/POKEDEX.md`) takes over once the game's top level is up
+(`XMenuNativeScreen`). While that entry's action runs (the X menu has gone,
+the field and loading frames remain), the X menu keeps holding the panel off,
+so it doesn't show for the second the Pokédex takes to load; in the Pokédex
+the native screen holds it. `pokedex off` turns this off with it.
 
 ## The panel
 
@@ -106,7 +125,8 @@ Festival Plaza's menu. So `XMenu.cpp` decides, without changing AutoPanel:
 cursor; for tests), `xmenu open NAME` (as A on NAME). NAME: `pokemon pokedex
 bag quick_link festival_plaza trainer_passport pokemon_refresh qr_scanner
 battle_video options map save`. Log lines: `xmenu: shown (game page P)`,
-`xmenu: hidden`, `xmenu: cursor NAME`, `xmenu: open NAME`, then the action's
+`xmenu: hidden`, `xmenu: cursor NAME`, `xmenu: open NAME` (`... (native)` for
+an entry with a native screen), then the action's
 own `action: xmenu-NAME ok ...` / `FAILED ...`.
 
 ## Drawing
@@ -122,7 +142,8 @@ is registered before the panel's, so screenshots (`tools/shot.py`) include it.
   is verified, except QR Scanner), cells inside the area and not overlapping,
   every move and page flip, cursor memory, each action against a fake X menu
   from either page (one page tap only when needed), Save and Map, a page arrow
-  the game ignores (retried, then failed without tapping an entry), drawing.
+  the game ignores (retried, then failed without tapping an entry), drawing,
+  and `xmenu-close` (the Map entry's hand-over to the native map).
 - `scenarios/native-xmenu.txt`: X → native menu with the panel off; moves;
   every entry opened with A and backed out of (Save stops at the confirm
   dialog and backs out with B, then the same with Y); cursor memory after B;

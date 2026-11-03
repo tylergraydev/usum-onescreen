@@ -692,9 +692,9 @@ namespace OneScreen
             const Pk7 &pk = s_party.slots[slot].mon;
             for (int i = 0; i < 4; i++)
                 if (view.mon.moves[i] != 0)
-                    view.mon.moveNames[i] = LoaderName(s_moveNames, sceneManager, loader, MoveNameDat, view.mon.moves[i]);
-            view.mon.ability = LoaderName(s_abilityNames, sceneManager, loader, AbilityNameDat, pk.ability);
-            view.mon.nature = LoaderName(s_natureNames, sceneManager, loader, NatureNameDat, pk.nature);
+                    view.mon.moveNames[i] = LoaderName(s_moveNames, sceneManager, loader, SummaryMoveDat, view.mon.moves[i]);
+            view.mon.ability = LoaderName(s_abilityNames, sceneManager, loader, SummaryAbilityDat, pk.ability);
+            view.mon.nature = LoaderName(s_natureNames, sceneManager, loader, SummaryNatureDat, pk.nature);
 
             std::string text;
             std::string line = Utils::Format("party-ui: summary %d of %d: ", view.pos + 1, view.count)
@@ -729,6 +729,11 @@ namespace OneScreen
     void PartyScreenExpect(void)
     {
         s_expectUntil = s_frames + ExpectFrames;
+    }
+
+    bool PartyScreenUsingBag(void)
+    {
+        return s_stage >= Stage::UseOpen;
     }
 
     void PartyScreenUpdate(u32 sceneManager, const std::string &scene, std::vector<std::string> &log)

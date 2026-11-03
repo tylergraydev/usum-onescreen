@@ -31,6 +31,8 @@ struct FakeGame
     u32 ignoreTaps = 0;
     u32 exitDelay = 10;                 // Pokédex back -> (none)
     bool rotomChat = false;             // Rotom's face ignores taps
+    bool trainerBattle = false;         // Run is refused with a message
+    std::string usedMove;               // last battle_moves.moveN tapped
     u32 taps = 0, xPresses = 0, bPresses = 0;
     std::vector<std::string> tapped;    // layout names of the buttons hit
 
@@ -63,7 +65,8 @@ struct FakeGame
                 || (world.scene == SceneParty && screen == "party")
                 || (world.scene == SceneBag && screen == "bag")
                 || (world.scene == SceneTownMap && screen == "town_map")
-                || (world.scene == SceneBattle && screen == "battle_command"))
+                || (world.scene == SceneBattle && (world.flags & WorldBattleCommand) && screen == "battle_command")
+                || (world.scene == SceneBattle && (world.flags & WorldBattleMoves) && screen == "battle_moves"))
                 return b.name;
         }
         return nullptr;
@@ -87,6 +90,22 @@ struct FakeGame
             pending.push_back({ frame + 10 + 20 + 25, SceneField, WorldXMenu });
         }
         else if (name == "pokedex_top.back")       Go(SceneField, 0, exitDelay);
+        else if (name == "battle_command.fight")   Overlay(WorldBattleMoves, 8);
+        else if (name == "battle_command.bag")     Overlay(0, 8);
+        else if (name == "battle_moves.back")      Overlay(WorldBattleCommand, 8);
+        else if (name.compare(0, 16, "battle_moves.mov") == 0)
+        {
+            // The turn plays out, then the commands come back.
+            usedMove = name;
+            Overlay(0, 5);
+            pending.push_back({ frame + 300, SceneBattle, WorldBattleCommand });
+        }
+        else if (name == "battle_command.run" && trainerBattle)
+        {
+            // "There's no running from a trainer battle!", then the commands.
+            Overlay(0, 5);
+            pending.push_back({ frame + 120, SceneBattle, WorldBattleCommand });
+        }
         else if (name == "battle_command.run")
         {
             Overlay(0, 5);
@@ -167,7 +186,9 @@ static void PrintLog(const std::vector<std::string> &log)
 
 static void TestTables(void)
 {
-    const char *names[] = { "open-pokedex", "open-party", "open-bag", "battle-run", "close" };
+    const char *names[] = { "open-pokedex", "open-party", "open-bag", "battle-run", "close",
+                            "battle-fight", "battle-bag", "battle-pokemon", "battle-flee", "battle-move1",
+                            "battle-move2", "battle-move3", "battle-move4", "battle-moves-back" };
     for (const char *name : names)
     {
         const ActionDef *def = FindAction(name);
@@ -312,6 +333,54 @@ static void TestBattleRun(void)
     CHECK(LogHas(log, "refused"));
 }
 
+// The native battle menu's one-tap actions: each ends as soon as the game's
+// menu goes, and taps again if it stays.
+static void TestBattleMenuActions(void)
+{
+    FakeGame game;
+    game.world.scene = SceneBattle;
+    game.world.flags = WorldBattleCommand;
+    std::vector<std::string> log;
+    CHECK(!Run(game, "battle-move1", log));      // needs the move list
+    CHECK(LogHas(log, "refused: needs Battle +battle-moves"));
+
+    log.clear();
+    CHECK(Run(game, "battle-fight", log));
+    CHECK(game.world.flags == WorldBattleMoves);
+    CHECK(game.tapped.size() == 1 && game.tapped[0] == "battle_command.fight");
+
+    log.clear();
+    CHECK(Run(game, "battle-moves-back", log));
+    CHECK(game.world.flags == WorldBattleCommand);
+
+    log.clear();
+    CHECK(Run(game, "battle-fight", log));
+    log.clear();
+    CHECK(Run(game, "battle-move3", log));
+    CHECK(game.usedMove == "battle_moves.move3");
+    CHECK(game.world.scene == SceneBattle && game.world.flags == 0);
+
+    // A lost tap is tapped again.
+    FakeGame lost;
+    lost.world.scene = SceneBattle;
+    lost.world.flags = WorldBattleCommand;
+    lost.ignoreTaps = 1;
+    log.clear();
+    CHECK(Run(lost, "battle-bag", log));
+    CHECK(lost.taps == 2 && lost.tapped.size() == 1 && lost.tapped[0] == "battle_command.bag");
+    CHECK(LogHas(log, "retry 1 from step 1"));
+
+    // Run in a trainer battle: the action ends when the menu goes, in Battle.
+    FakeGame trainer;
+    trainer.world.scene = SceneBattle;
+    trainer.world.flags = WorldBattleCommand;
+    trainer.trainerBattle = true;
+    log.clear();
+    CHECK(Run(trainer, "battle-flee", log));
+    CHECK(trainer.world.scene == SceneBattle);
+    CHECK(LogHas(log, "battle-flee ok"));
+}
+
 static void TestClose(void)
 {
     // Party -> X menu -> field: two back taps.
@@ -404,6 +473,7 @@ int main(void)
     TestOpenParty();
     TestOpenPokedex();
     TestBattleRun();
+    TestBattleMenuActions();
     TestClose();
     TestRunnerState();
     if (s_failures != 0)

@@ -2,7 +2,16 @@
 
 #include <string>
 
+// Plain struct, no CTRPF: the native map's pure part (Screens/MapView.hpp)
+// and its host tests use it too.
+#ifdef __3DS__
 #include <3ds/types.h>
+#else
+#include <cstdint>
+typedef uint16_t u16;
+typedef uint32_t u32;
+typedef int32_t  s32;
+#endif
 
 namespace OneScreen
 {
@@ -19,6 +28,7 @@ namespace OneScreen
         u16 nameLine = 0;       // place name: line in message file 72 (a/0/3/<lang>); line + 1 is the sub-name
         bool indoor = false;    // the zone has a fixed Rotom map point (interiors); outdoor zones use world coordinates
         s32 mapPointX = 0, mapPointZ = 0;   // that point, in world units of the island map
+        u16 mapArea = 0;        // +0x4E: the zone's map, Rotom map index + 1 (1-4 the islands; docs/MAP.md)
         float x = 0, y = 0, z = 0;  // world position; +x east, +z south (Rotom map right / down)
         float qy = 0, qw = 1;   // facing quaternion (rotation about y)
         int yaw = 0;            // facing in degrees: 0 south, 90 east, 180 north, -90 west

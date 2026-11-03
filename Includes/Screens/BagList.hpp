@@ -1,0 +1,230 @@
+#pragma once
+
+// The native Bag (P2-4): the game's Bag as the plugin reads it, the pocket
+// and list logic, the driver that carries out a choice on the hidden bottom
+// screen one tap or press at a time, and drawing. Pure C++ (no CTRPF), so
+// tests/ can build it on the PC; Screens/Bag.cpp runs it in the plugin.
+// See docs/BAG.md.
+
+#include <string>
+#include <vector>
+
+#include "ActionQueue.hpp"
+#include "UI/Raster.hpp"
+
+namespace OneScreen
+{
+    // The Bag's pocket tabs, left to right, as numbered by the game (its tab
+    // index, docs/BAG.md). The Z-Crystals pocket has no tab in this save.
+    static const int BagTabCount = 7;
+
+    struct BagTab
+    {
+        const char *name;       // for commands and the log: "medicine"
+        const char *label;      // on the native tab
+        const char *button;     // LayoutButtons name of the game's tab
+        bool canUse;            // "Use" runs natively (pick a Pokémon, messages)
+    };
+
+    const BagTab &BagTabAt(int tab);
+    int BagTabFind(const std::string &name);    // -1 if unknown
+
+    // Entries of the game's item menu (and its Yes/No question), as the game
+    // lists them in its menu param (docs/BAG.md).
+    namespace BagCommand
+    {
+        static const u8 Use = 0x00, Give = 0x03, FreeSpace = 0x04, Cancel = 0x11, Yes = 0x12, No = 0x13;
+    }
+    const char *BagCommandLabel(u8 command);   // "Use", ..., "Option 0x05" style for unknown ones
+
+    // What the game's Bag is doing.
+    enum class BagMode : u8
+    {
+        None,       // not the field Bag, or its objects don't check out
+        List,       // the item list waits for input
+        Menu,       // a menu: the item menu, or Yes/No (BagGame::YesNo)
+        Pick,       // "Which Pokémon...?": the party column takes the cursor
+        Message,    // a message box waits for A
+        Busy,       // between those (animations)
+    };
+
+    struct BagItem
+    {
+        u16 id = 0;
+        u16 count = 0;
+        bool isNew = false;
+    };
+
+    // One frame of the game's Bag, read by Screens/Bag.cpp.
+    struct BagGame
+    {
+        BagMode mode = BagMode::None;
+        int tab = -1;                   // 0..BagTabCount-1
+        std::vector<BagItem> items;     // the open pocket, in the game's order
+        int visible = 0;                // rows in the game's window (7, fewer for short lists)
+        int cursorRow = 0;              // the game's cursor, row in its window
+        int scroll = -1;                // first item in the window; -1 while it scrolls
+        std::vector<u8> commands;       // Menu: its entries (BagCommand)
+        int partyCursor = -1;           // Pick: the party slot the cursor is on
+        u16 item = 0;                   // the item the game's menu / pick is about
+
+        bool Valid(void) const { return mode != BagMode::None; }
+        int  Index(void) const { return scroll < 0 ? -1 : scroll + cursorRow; }
+        bool YesNo(void) const
+        {
+            return mode == BagMode::Menu && commands.size() == 2 && commands[0] == BagCommand::Yes;
+        }
+        // Rough identity of what is on the screen, to tell when it settles.
+        u32 Signature(void) const;
+    };
+
+    // --- Native list cursor ---
+
+    // Rows the native list shows.
+    static const int BagListRows = 8;
+    // Up / down with wrap (as the game's list); 0 for an empty list.
+    int BagMoveCursor(int cursor, int delta, int count);
+    // First row to show so that `cursor` is visible, starting from `top`.
+    int BagListTop(int top, int cursor, int count, int rows = BagListRows);
+
+    // Which menu entries the native menu can carry out: Use (if the pocket's
+    // flow is native), Give, Cancel, Yes, No. The others (Move to Free Space,
+    // unknown ones) are shown but left to the bottom screen.
+    bool BagCommandEnabled(u8 command, int tab);
+
+    // --- Driver ---
+
+    // One thing to do on the bottom screen; each is a small ActionDef.
+    enum class BagStep : u8
+    {
+        None,
+        TapTab,     // arg: tab
+        TapRow,     // arg: row in the game's window, 1..7
+        PressUp,
+        PressDown,
+        TapMenu,    // arg: position from the bottom of the menu, 1 = last entry
+        TapParty,   // arg: party slot 0..5
+        TapYes,
+        TapNo,
+        PressA,
+        PressB,
+        TapBack,    // the Bag's back button; waits until the Bag scene is gone
+    };
+
+    struct BagCmd
+    {
+        BagStep step = BagStep::None;
+        int arg = 0;
+        bool operator==(const BagCmd &o) const { return step == o.step && arg == o.arg; }
+    };
+
+    // The action for a command (named "bag-..."); definitions live as long as
+    // the program. nullptr for None or an argument out of range.
+    const ActionDef *BagAction(const BagCmd &cmd);
+
+    enum class BagGoal : u8
+    {
+        None,
+        Tab,        // switch the game to a pocket
+        Open,       // open the item menu of one item
+        Choose,     // tap one entry of the open menu
+        Pick,       // choose a party slot
+        Answer,     // Yes / No
+        Advance,    // A through messages until the Bag waits for input again
+        Cancel,     // back to the list from a menu or the party pick
+        Close,      // leave the Bag (back button)
+    };
+
+    const char *BagGoalName(BagGoal goal);
+
+    // Carries out one goal with closed-loop taps and presses: after each
+    // command it waits for the game to settle, looks again, and decides the
+    // next one. Fails (and logs why) if the game doesn't get there in time.
+    class BagDriver
+    {
+    public:
+        void Tab(int tab);
+        void Open(int index, u16 id);
+        void Choose(int entry);
+        void Pick(int slot);
+        void Answer(bool yes);
+        void Advance(void);
+        void Cancel(void);
+        void Close(void);
+        void Stop(void) { m_goal = BagGoal::None; }
+
+        // Once per frame. `actionRunning`: the action layer is busy (running
+        // our last command, or anything else). Returns the command to start
+        // now (None: nothing this frame). If the command can't be started,
+        // call Refused.
+        BagCmd Update(const BagGame &game, bool actionRunning, std::vector<std::string> &log);
+        void Refused(const std::string &why, std::vector<std::string> &log);
+
+        bool Busy(void) const { return m_goal != BagGoal::None; }
+        BagGoal Goal(void) const { return m_goal; }
+        // "" while running or after success; why the last goal failed.
+        const std::string &Failure(void) const { return m_failure; }
+        // Bumped every time a goal ends (either way).
+        u32 Finished(void) const { return m_finished; }
+        std::string Status(void) const;
+
+        // Frames the game must look the same before the driver acts on it,
+        // after an action and in general; how long a goal may take; how
+        // many commands it may send.
+        static const u32 SettleFrames = 6;
+        static const u32 MessageSettleFrames = 12;
+        static const u32 Timeout = 600;
+        static const u32 MaxCommands = 64;
+
+    private:
+        void Begin(BagGoal goal);
+        void Done(std::vector<std::string> &log);
+        void Fail(const std::string &why, std::vector<std::string> &log);
+        BagCmd Send(BagStep step, int arg = 0);
+
+        BagGoal m_goal = BagGoal::None;
+        int m_arg = 0;              // tab, index, entry, slot, yes
+        u16 m_id = 0;               // Open: the item
+        u32 m_frames = 0;           // frames on this goal
+        u32 m_stable = 0;           // frames the game has looked the same
+        u32 m_signature = 0;
+        bool m_sent = false;        // a command was sent and the action layer hasn't finished it
+        u32 m_commands = 0;         // commands sent for this goal
+        u32 m_startSignature = 0;   // Choose / Answer: the menu when the goal began
+        std::string m_failure;
+        u32 m_finished = 0;
+    };
+
+    // --- What the native Bag shows ---
+
+    struct BagMon
+    {
+        std::string name;
+        int level = 0;
+        int hp = 0, maxHp = 0;
+        std::string held;       // held item's name, empty if none
+        bool egg = false;
+    };
+
+    struct BagView
+    {
+        BagMode mode = BagMode::None;
+        int tab = -1;               // the game's pocket
+        int wantTab = -1;           // the pocket being switched to (-1 none)
+        std::vector<std::string> names;     // item names, as BagGame::items
+        std::vector<BagItem> items;
+        int cursor = 0, top = 0;    // native list cursor and first row shown
+        std::vector<u8> commands;   // Menu entries
+        int menuCursor = 0;
+        std::string menuTitle;      // the item, or the Yes/No question
+        std::vector<BagMon> party;
+        int partyCursor = -1;       // Pick
+        std::string status;         // footer: what is happening, or the last result
+        bool busy = false;          // the driver is working: dim the input hints
+    };
+
+    // Screen area the Bag draws in (top screen) and its corner radius.
+    static constexpr UI::Rect BagArea = { 12, 8, 376, 224 };
+    static constexpr int BagRadius = 12;
+    void DrawBag(UI::Canvas &canvas, const BagView &view);
+}
