@@ -139,6 +139,7 @@ so screenshots include it.
 - Levels of box Pokémon (the box data has experience, not levels).
 - The game's Pokémon icons in the slots (not among the loaded assets), its
   red hand cursor, the party's two-column layout on the right, and the
-  wallpaper's pictures: names on plates, the orange frame and one party row
+  wallpapers (always grass here; the test save's Box 2 is stone in the
+  game): names on plates, the orange frame and one party row
   instead. Balls other than items 1-16 (Beast, Apricorn and Dream Balls) have
   no icon loaded, so none is drawn.
