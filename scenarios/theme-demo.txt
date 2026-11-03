@@ -1,18 +1,23 @@
-# The USUM theme demo (W6-3, Screens/ThemeScreen.hpp): loads the game's own
-# font, icons, move table and type/move names from its RomFS and draws the
-# sample screen over the top screen. Screenshots for docs/VISUAL-STYLE.md.
+# The USUM theme demo (W6-3, Screens/ThemeScreen.hpp): draws the sample
+# screen over the top screen with the game's own font, icons, move table and
+# type/move names, loaded once by the shared asset service (W7-0).
+# Screenshots for docs/VISUAL-STYLE.md.
 # Nothing is saved.
 include common/boot
-send auto off
-send mode off
-mark
-send uitheme on
+# The shared asset service (UI/Assets.hpp) starts loading by itself once the
+# field is reached; no mark yet, so these match from the start of the log.
+expect-log ^assets: loading \(field reached\) 10
 expect-log ^assets: font: a/0/2/5 entry 0, cell 15x19 30
 expect-log ^assets: icons: 8 of 8 5
 expect-log ^assets: balls: 16 of 16 5
 expect-log ^assets: moves: \d+ from a/0/1/1 5
 expect-log ^assets: text: 18 type names 5
-expect-log ^uitheme: assets loaded 5
+expect-log ^assets: ready, loaded in \d+ ms 5
+send auto off
+send mode off
+mark
+send uitheme on
+reject-log ^assets: loading
 sleep 3
 send uitheme status
 expect-log ^uitheme: shown, page 0, selected 0, game font on 5
