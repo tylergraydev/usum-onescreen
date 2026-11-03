@@ -130,7 +130,11 @@ repeat 12 until-scene FieldRo
   if-scene Battle send press b
   sleep 2
   if-scene Battle send press b
-  if-scene Battle send action learn-skip
+  # A move question: B is Don't learn, A A confirms (at the command bar
+  # these pick Fight and a move: the battle goes on).
+  if-scene Battle send press a
+  sleep 1
+  if-scene Battle send press a
 end
 wait-scene FieldRo 30
 expect-mode off
@@ -222,13 +226,16 @@ repeat 8 until-scene FieldRo
   mark
   # The turn, then EXP and level-up windows (Exp. Share): B advances them.
   # The catch's EXP can make Buneary want a fifth move (docs/MOVE-LEARN.md):
-  # learn-skip keeps the old moves; it is refused when the question isn't up.
+  # B moves its cursor to Don't learn, A A confirms. At the command bar
+  # those A presses pick Fight and a move, which is the next turn anyway.
   repeat 7
     sleep 4
     if-scene Battle send press b
   end
-  if-scene Battle send action learn-skip
-  sleep 3
+  if-scene Battle send press a
+  sleep 1
+  if-scene Battle send press a
+  # Then the rest of the messages (the battle may be over).
   repeat 3
     sleep 3
     if-scene Battle send press b
