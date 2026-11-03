@@ -17,7 +17,38 @@ CRO scene names (`FieldRo`, `Zukan`, `Battle`, `TitleMenu`) come from the module
 
 For Ultra Sun v1.2 the build-specific values are: text `0x100000`, rodata `0x5BC000`, data `0x669000` (size `0x3CD88`), bss `0x301BC`, image end `0x6D5F44` → `0x6D6000`.
 
+## Update version 0x0820 and Ultra Moon (checked 2026-11-03)
+
+**Genuine v1.2 is `0x0820`.** Three Ultra Sun v1.2 update files were compared:
+
+| File | TMD version | `code.bin` SHA-256 |
+|---|---|---|
+| `Pokemon Ultra Sun Update v1.2 (RF) ENC (Patch)-decrypted.cia` (the one the plugin was built and tested on) | `0x0800` (2048) | `421774f2…ce16200f` |
+| `0004000E001B5000 Pokemon Ultra Sun (CTR-U-A2AA) (v2.2.0) (W).piratelegit.cia` (Tyler's encrypted original) | `0x0820` (2080) | `421774f2…ce16200f` |
+| `Pokemon Ultra Sun (World) (Update v1.2 - v0820) Decrypted.cia` (another decrypted dump) | `0x0820` (2080) | `421774f2…ce16200f` |
+
+The code is byte-identical, so every hook target sits at the same address and the same offset table serves both. Only the patched copy's TMD says `0x0800`. `Game.cpp` therefore lists Ultra Sun twice: `0x0820` (genuine) and `0x0800` (that patched copy, still used by the test instances and start points).
+
+In Azahar (instance `us20`, genuine update installed): the plugin before this change logged `USUM One Screen: unsupported game 00040000001B5000 v2080 (0x0820)` and did nothing. With the `0x0820` entry it logs `Pokemon Ultra Sun 00040000001B5000 v2080 (0x0820)` and `hooks: all ok`.
+
+**The new-game stall was the patched update.** With the genuine `0x0820` update and no save, a new game passes the language screen (`LangSelect` → "Your settings have been saved." → Professor Kukui's intro, `scene: main:0064787C`). With the patched `0x0800` update it stalls there (docs/PLAYER-APP.md). Since the code is identical, the patched file's RomFS is the likely cause; it was not diffed further.
+
+**Azahar 2126.2 will not install encrypted CIAs.** Even with `aes_keys.txt` in `sysdata`, `azahar.exe -i` exits with code 7 and logs `… is encrypted! Aborting...`. `tools/extract_code.py` and `tools/romfs_text.py` also need NoCrypto content. For this check the encrypted CIAs were decrypted locally with the keys in `Y:\3ds\aes_keys.txt` (title key with the common key, then NCCH AES-CTR; the exheader SHA-256 in the NCCH header was checked). The script is not in the repo, and its output is under `analysis/private/`.
+
+**Ultra Moon USA v1.2:** base `00040000001B5100` (v0), update `0004000E001B5100` TMD version `0x0820`. The exheader layout is identical to Ultra Sun's (text `0x100000` size `0x4BB818`, rodata `0x5BC000`, data `0x669000` size `0x3CD88`, bss `0x301BC`, not compressed), so `CroArea`, `SnapStart`/`SnapEnd` and the vtscan rodata range need no change. `code.bin` SHA-256 is `8854abc9…6949084a`.
+
+- `sigscan.py` resolves every target uniquely, at the same address as Ultra Sun: gspSetFramebuffer `0x279BB4`, hidTouchRead `0x2826F0`, hidPadRead `0x282548`, sceneManager `0x6A599C`, Party `main:00647FCC`, Bag `main:006488C8`, with the same prologue words. `"umoon-1.2"` is now in each target's `known`.
+- A byte diff of the two `code.bin`s: `0x279000`–`0x283000` (all hook targets, gxDisplayTransfer `0x27A5BC`, gxTextureCopy `0x279E28`, the GX queue push) is identical. Elsewhere in text some functions moved by 4 bytes. In rodata and data, 3125 of the differing words are code pointers 4 higher and the rest are 58 small constants. No vtable, global or table moved. So every main-image address the plugin hardcodes (Party, Bag, Box, Pokédex, Rotom, sub-screen vtables, `GameManager` `0x6A59C4`, the message globals, `LanguageByte` `0x671A10`, `FormTable` `0x5D63DC`) holds on Ultra Moon. FormTable's neighbour at `0x5D6250`–`0x5D6268` differs, which looks like version-exclusive data; the plugin does not read it.
+- CROs (update RomFS, 132 modules, same file list): 123 are byte-identical, including `Battle`, `Bag`, `Box`, `WazaOshie` and `Kawaigari`. `FieldRo`, `FieldMenu`, `Zukan`, `TrainerPass`, `Live` and `SequencePlayer` differ only in the header hash (`0x20`–`0x3F`) and 1–10 single-byte immediates. `KisekaeData`, `MovieLib` and `Title` differ more. The plugin reads none of those three. So the CRO-relative offsets (Battle, Bag, FieldRo `+0xD735C`, WazaOshie) hold.
+- Scene IDs: CRO names come from the modules (same names). Party/Bag `main:` IDs are the same as Ultra Sun's, so the settings defaults need no Moon entries.
+
+`Game.cpp` has an Ultra Moon `0x0820` entry using the shared table.
+
+**Not run yet:** the Ultra Moon base CIA uses seed crypto (NCCH flag `0x20`), and no seed for `00040000001B5100` is available locally (no `seeddb.bin`), so it could not be decrypted, installed or booted. The Moon update is installed in instance `um1`, and `instance.py install` now puts the plugin in both `luma/plugins/00040000001B5000/` and `…/00040000001B5100/`. Still to do on Moon: the boot log (`Pokemon Ultra Moon 00040000001B5100 v2080 (0x0820)`, `hooks: all ok`), a new game to the field, the panel, the native X menu and one native screen.
+
 ## Ultra Moon checklist
+
+(Steps 1–3 are done for Ultra Moon v1.2; see the section above. Steps 4–6 wait on a bootable base game.)
 
 1. **Dump and extract.** Dump the base game and the v1.2 update as decrypted CIAs (no Ultra Moon dump exists yet). Extract the update's code:
    ```

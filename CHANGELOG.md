@@ -10,6 +10,9 @@ Supports Pokémon Ultra Sun (USA) v1.2 (`00040000001B5000`, title version `0x080
 
 #### Added
 
+- Genuine Ultra Sun v1.2 updates (title version `0x0820`) are accepted. Before, only `0x0800`, a decrypted copy with a rewritten TMD, was. The code is identical.
+- Ultra Moon (USA) v1.2 (`00040000001B5100`, `0x0820`) is accepted, with the same addresses as Ultra Sun (checked statically; not yet run in the emulator).
+
 - **Windows launcher** (`player/`): checks your own Ultra Sun dump and v1.2 update, sets up its own portable copy of your Azahar (plugin loader on, top screen only, custom textures off), installs the plugin and update, and starts the game. Controller presets and plugin settings are in its window. A new game with no save does not start on the tested v1.2 setup; see [docs/PLAYER-APP.md](docs/PLAYER-APP.md).
 
 Native top-screen menus (the panel is off while they show; the game's own screen keeps running on the hidden bottom screen and the plugin drives it). Details and controls per screen are in [docs/PLAYING.md](docs/PLAYING.md).
@@ -40,11 +43,11 @@ Native top-screen menus (the panel is off while they show; the game's own screen
 
 #### Known gaps
 
-- Ultra Moon is not supported yet (its addresses have not been found; the startup check fails and the plugin does nothing).
+- Ultra Moon has not been played yet: its addresses match Ultra Sun's, but the game has not been booted with the plugin.
 - No native screen for the Ride Pager (**Y** in the field), Poké Pelago, Festival Plaza, Quick Link and Pokémon Refresh: use the bottom-screen panel (**L+R**). The Ride Pager and Pelago need a later save than the one used for testing, so they have not been looked at.
 - SOS / double targeting has a host-tested native page, but its taps are unverified and refused; use the panel (**L+R**). No SOS call was reached during the documented search. Trainer battles were not played.
 - Not native yet: Pokémon summary from the PC, Held Item / Release / Marking in the boxes, Habitat / Appearance / search / Evaluation in the Pokédex, follow-up uses in the field Bag, QR Scanner, Battle Video lists (the test save has none). Party TM teaching is native; Party Ether / Elixir, evolution stones and Rare Candy follow-ups are host-tested only, with unverified taps falling back to the panel.
 - Battle Ether move selection, Pokémon Restore / Summary and Y quick ball are not handled natively; Status Restore, Rotom Powers and Battle Items were not used in the documented testing. Z-moves and Mega Evolution were unavailable. Illusion names the real Pokémon rather than its disguise. Run from the post-faint question was not observed.
-- The launcher stalls on a brand-new game's language screen in the tested v1.2 setup, also with the plugin loader off. Both launcher and plugin refuse update version `0x0820`; whether genuine v1.2 dumps report it is unchecked. Launcher gamepad input, mapping in Azahar, fullscreen and decrypted base-game CIA installation remain untested; see docs/PLAYER-APP.md.
+- The launcher stalls on a brand-new game's language screen in the tested v1.2 setup, also with the plugin loader off. Genuine v1.2 updates report `0x0820`, and with one a new game gets past that screen (docs/PORTING.md), so the stall comes from the patched `0x0800` update. The plugin now accepts `0x0820`; the launcher still refuses it. Launcher gamepad input, mapping in Azahar, fullscreen and decrypted base-game CIA installation remain untested; see docs/PLAYER-APP.md.
 - Game controller input has not been tested on a real pad yet.
 - Only tested in Azahar 2126.2 on Windows; real 3DS hardware has not been tried.

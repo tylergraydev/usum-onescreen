@@ -24,6 +24,8 @@ instance is a copy of the Azahar install with its own `user` folder: config,
 nand, sysdata and sdmc copied from %APPDATA%\\Azahar, holding only the Ultra
 Sun v1.2 update, a copy of its save and extdata, and the plugin. Nothing here
 writes to %APPDATA%\\Azahar.
+Install copies the plugin into both games' plugin folders. Install Ultra Moon into the instance (e.g. run azahar.exe -i from its azahar folder),
+then launch it with start NAME --rom <path to its .app/.cxi>.
 """
 import argparse
 import ctypes
@@ -45,6 +47,7 @@ APPDATA = Path(os.environ["APPDATA"]) / "Azahar"
 ROM = Path("H:/3DS Roms/POKUS-WORLD-(Update1.2)-Ziperto/"
            "00040000001B5000 Pokemon Ultra Sun (CTR-P-A2AA) (v0.0.0) (W).piratelegit (1)-decrypted.cci")
 TITLE = "00040000001B5000"
+MOON_TITLE = "00040000001B5100"
 SD_ID = Path("Nintendo 3DS") / ("0" * 32) / ("0" * 32)
 # Paths under the SD ID folder that Ultra Sun needs: the v1.2 update, the save, the extdata.
 SD_COPIES = [Path("title/0004000e/001b5000"), Path("title/00040000/001b5000"),
@@ -146,7 +149,8 @@ def cmd_create(args):
         if not src.is_dir():
             sys.exit(f"missing {src}")
         shutil.copytree(src, sdmc_dir(args.name) / SD_ID / rel)
-    (sdmc_dir(args.name) / "luma" / "plugins" / TITLE).mkdir(parents=True)
+    for title in (TITLE, MOON_TITLE):
+        (sdmc_dir(args.name) / "luma" / "plugins" / title).mkdir(parents=True)
     print(root)
 
 
@@ -156,10 +160,11 @@ def cmd_install(args):
         sys.exit(f"no plugin at {plugin} (run make first)")
     if not user_dir(args.name).is_dir():
         sys.exit(f"no instance '{args.name}' (run create first)")
-    dst = sdmc_dir(args.name) / "luma" / "plugins" / TITLE / "usum-onescreen.3gx"
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(plugin, dst)
-    print(dst)
+    for title in (TITLE, MOON_TITLE):
+        dst = sdmc_dir(args.name) / "luma" / "plugins" / title / "usum-onescreen.3gx"
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(plugin, dst)
+        print(dst)
 
 
 # --- processes (Win32 through ctypes, stdlib only) ---
