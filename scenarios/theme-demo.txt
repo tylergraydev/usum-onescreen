@@ -2,6 +2,8 @@
 # font, icons, move table and type/move names from its RomFS and draws the
 # sample screen over the top screen. Screenshots for docs/VISUAL-STYLE.md.
 # Nothing is saved.
+# Start in the Pokémon Center whatever ran before (native-move-learn leaves the grass).
+restore pokecenter
 include common/boot
 send auto off
 send mode off

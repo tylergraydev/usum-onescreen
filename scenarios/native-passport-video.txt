@@ -6,6 +6,8 @@
 # Battle Video: the intro, A opens the recorder, which is empty on this save;
 # B goes back, from the recorder and from the intro. A screenshot is taken
 # before every A.
+# Start in the Pokémon Center whatever ran before (native-move-learn leaves the grass).
+restore pokecenter
 include common/boot
 # Both scenes' automatic view is the panel: the native screens hold it off.
 send auto on
