@@ -25,12 +25,14 @@ namespace UsumOneScreen
                 throw new SetupException(game.Message);
             log(game.Message);
 
+            int wanted = -1;    // the version of the update the player picked, if any
             if (!string.IsNullOrEmpty(o.Update))
             {
                 var update = Dump.Check(o.Update, DumpKind.Update);
                 if (!update.Ok)
                     throw new SetupException(update.Message);
                 log(update.Message);
+                wanted = update.Info.Version;
             }
 
             if (o.AzaharSource != null || !home.HasAzahar)
@@ -47,18 +49,22 @@ namespace UsumOneScreen
             log("Azahar set up: plugin loader on, top screen only, custom textures off.");
             home.InstallPlugin(o.Plugin ?? Home.BundledPlugin(), log);
 
-            if (home.InstalledUpdateVersion() != Dump.UpdateVersion)
+            // A picked update replaces a different installed one (Azahar overwrites it).
+            int installed = home.InstalledUpdateVersion();
+            if (wanted >= 0 ? installed != wanted : !Dump.IsSupportedUpdate(installed))
             {
-                if (string.IsNullOrEmpty(o.Update))
+                if (wanted < 0)
                     throw new SetupException("Pick the Ultra Sun v1.2 update (a .cia file); the game needs it.");
                 home.InstallCia(o.Update, log);
-                int v = home.InstalledUpdateVersion();
-                if (v != Dump.UpdateVersion)
-                    throw new SetupException(v < 0 ? "Azahar didn't install the update."
-                                                   : $"Azahar installed update version {Dump.VersionText(v)}, not {Dump.VersionText(Dump.UpdateVersion)}.");
+                installed = home.InstalledUpdateVersion();
+                if (installed != wanted)
+                    throw new SetupException(installed < 0 ? "Azahar didn't install the update."
+                                                           : $"Azahar installed update version {Dump.VersionText(installed)}, not {Dump.VersionText(wanted)}.");
             }
             else
-                log("Update v1.2 is installed.");
+                log($"Update v1.2 is installed (version {Dump.VersionText(installed)}).");
+            if (installed == Dump.PatchedUpdateVersion)
+                log("Note: " + Dump.PatchedWarning);
 
             string boot = o.Rom;
             if (game.Info.Format == "CIA")
@@ -86,7 +92,7 @@ namespace UsumOneScreen
                 return $"The game file is gone: {game}. Pick it again.";
             if (!File.Exists(home.PluginPath))
                 return "The plugin isn't installed. Run setup again.";
-            if (home.InstalledUpdateVersion() != Dump.UpdateVersion)
+            if (!Dump.IsSupportedUpdate(home.InstalledUpdateVersion()))
                 return "The v1.2 update isn't installed. Run setup again.";
             return null;
         }

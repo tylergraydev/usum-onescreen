@@ -21,6 +21,7 @@ namespace UsumOneScreen
     {
         public bool Ok;
         public string Message;
+        public string Warning;         // accepted, but the player should know this
         public DumpInfo Info;
     }
 
@@ -28,7 +29,17 @@ namespace UsumOneScreen
     {
         public const ulong GameTitle = 0x00040000001B5000;    // Pokémon Ultra Sun (USA)
         public const ulong UpdateTitle = 0x0004000E001B5000;  // its update
-        public const int UpdateVersion = 0x0800;              // v1.2, the only one the plugin knows
+        public const int UpdateVersion = 0x0820;              // v1.2 as Nintendo shipped it (v2.2.0)
+        // A decrypted v1.2 copy whose TMD was rewritten to 0x0800. Same code, and it
+        // plays with an existing save, but a new game stops at the language screen
+        // (docs/PLAYER-APP.md).
+        public const int PatchedUpdateVersion = 0x0800;
+
+        public static bool IsSupportedUpdate(int v) => v == UpdateVersion || v == PatchedUpdateVersion;
+
+        public const string PatchedWarning =
+            "This v1.2 update file reports version 0x0800, a rebuilt copy: an existing save plays, " +
+            "but a new game stops at the language screen. A dump of the update that reports 0x0820 has no such problem.";
 
         public static string Title(ulong id) => id.ToString("X16");
 
@@ -54,7 +65,7 @@ namespace UsumOneScreen
                                 $"Pick {(kind == DumpKind.Game ? "Pokémon Ultra Sun (USA), title " + Title(GameTitle) : "the Ultra Sun v1.2 update, title " + Title(UpdateTitle))}.";
                 return check;
             }
-            if (kind == DumpKind.Update && info.Version != UpdateVersion)
+            if (kind == DumpKind.Update && !IsSupportedUpdate(info.Version))
             {
                 check.Message = $"{name} is update version {VersionText(info.Version)}. " +
                                 $"USUM One Screen only supports v1.2, version {VersionText(UpdateVersion)}.";
@@ -66,6 +77,8 @@ namespace UsumOneScreen
                 return check;
             }
             check.Ok = true;
+            if (kind == DumpKind.Update && info.Version == PatchedUpdateVersion)
+                check.Warning = PatchedWarning;
             check.Message = kind == DumpKind.Game
                 ? $"{name}: Pokémon Ultra Sun (USA), title {Title(info.TitleId)}, {info.Format}."
                 : $"{name}: Ultra Sun update v1.2, version {VersionText(info.Version)}.";
