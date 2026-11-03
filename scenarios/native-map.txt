@@ -5,6 +5,8 @@
 # map follows.
 # Then the X menu's Map entry opens it, and with `map off` that entry opens
 # the game's Town Map again. Screenshots before every A; nothing is saved.
+# Start in the Pokémon Center whatever ran before (native-move-learn leaves the grass).
+restore pokecenter
 include common/boot
 reject-log ^map: GPU copy
 
