@@ -85,6 +85,12 @@ namespace ScreenBuffer
                       (unsigned)(LargestFree() / 1024));
         return text;
     }
+
+    std::string HeapLog(const char *what)
+    {
+        return std::string("mem: ") + what + ", " + HeapStatus();
+    }
+
 }
 }
 }
