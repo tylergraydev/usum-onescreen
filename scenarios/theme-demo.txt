@@ -3,6 +3,8 @@
 # type/move names, loaded once by the shared asset service (W7-0).
 # Screenshots for docs/VISUAL-STYLE.md.
 # Nothing is saved.
+# Start in the Pokémon Center whatever ran before (native-move-learn leaves the grass).
+restore pokecenter
 include common/boot
 # The shared asset service (UI/Assets.hpp) starts loading by itself once the
 # field is reached; no mark yet, so these match from the start of the log.

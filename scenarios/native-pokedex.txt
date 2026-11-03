@@ -7,6 +7,8 @@
 # `pokedex off` gives the Pokédex back to the panel. A screenshot is taken
 # before every A. The save is early (Route 2): 22 caught, 38 seen, Melemele
 # open, Akala / Ula'ula / Poni locked.
+# Start in the Pokémon Center whatever ran before (native-move-learn leaves the grass).
+restore pokecenter
 include common/boot
 # The panel hold is checked against the automatic view (off by default).
 send auto on

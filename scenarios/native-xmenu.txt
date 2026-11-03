@@ -3,6 +3,8 @@
 # comes back; B closes it. Each entry is picked with `xmenu select` (checked
 # in the log) and a screenshot is taken before every A. Save stops at the
 # game's confirm dialog and backs out with B; nothing is ever saved.
+# Start in the Pokémon Center whatever ran before (native-move-learn leaves the grass).
+restore pokecenter
 include common/boot
 # Checks the automatic view per scene, which is off by default.
 send auto on

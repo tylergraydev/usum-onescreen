@@ -2,6 +2,8 @@
 # Auto panel reads the field state (docs/OFFSETS.md), so it sees a touch
 # close that the old X/B key tracking missed. Opens it by touch too (via
 # Pokémon and back) to check the state survives another scene.
+# Start in the Pokémon Center whatever ran before (native-move-learn leaves the grass).
+restore pokecenter
 include common/boot
 # Checks the automatic view per scene, which is off by default.
 send auto on
