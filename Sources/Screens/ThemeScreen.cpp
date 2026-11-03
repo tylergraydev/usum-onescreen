@@ -1,15 +1,13 @@
 #include "Screens/ThemeScreen.hpp"
 
 #include <cstdio>
-#include <new>
 
 #include <3ds.h>
 #include <CTRPluginFramework.hpp>
 
 #include "Party.hpp"
-#include "RomfsText.hpp"
+#include "UI/Assets.hpp"
 #include "UI/Device.hpp"
-#include "UI/GameAssets.hpp"
 #include "UI/Layer.hpp"
 #include "UI/ThemeDemo.hpp"
 
@@ -17,8 +15,6 @@ namespace OneScreen
 {
     using namespace CTRPluginFramework;
 
-    // Current text language (0-9, 2 = English), as in Screens/Map.cpp.
-    static const u32 LanguageByte = 0x671A10;
     // Party re-read while the demo shows, every this many frames.
     static const u32 ReadEvery = 30;
 
@@ -31,8 +27,7 @@ namespace OneScreen
     static volatile s32 s_selected = 0;
 
     // --- Plugin thread ---
-    static UI::GameAssets *s_assets = nullptr;  // kept for the plugin's life once loaded
-    static bool s_loadRequested = false;
+    static bool s_hadAssets = false;            // redraw once the shared assets arrive
     static u32  s_frames = 0;
     static UI::ThemeDemoData s_data;
 
@@ -82,43 +77,6 @@ namespace OneScreen
         s_version = s_version + 1;
     }
 
-    static void Load(std::vector<std::string> &log)
-    {
-        s_loadRequested = false;
-        if (s_assets != nullptr)
-            return;
-        u8 lang = 0xFF;
-        Process::Read8(LanguageByte, lang);
-        static const u32 lowPath[3] = { 0, 0, 0 };
-        const FS_Path archive = { PATH_EMPTY, 1, "" };
-        const FS_Path file = { PATH_BINARY, sizeof(lowPath), lowPath };
-        Handle handle = 0;
-        const Result res = FSUSER_OpenFileDirectly(&handle, ARCHIVE_ROMFS, archive, file, FS_OPEN_READ, 0);
-        if (R_FAILED(res))
-        {
-            log.push_back(Utils::Format("uitheme: can't open the RomFS (0x%08lX), fallback look", (u32)res));
-            return;
-        }
-        const RomfsRead read = [handle](uint64_t offset, void *dst, u32 size) {
-            u32 got = 0;
-            return R_SUCCEEDED(FSFILE_Read(handle, &got, offset, dst, size)) && got == size;
-        };
-        UI::GameAssets *assets = new (std::nothrow) UI::GameAssets();
-        if (assets == nullptr)
-        {
-            FSFILE_Close(handle);
-            log.push_back("uitheme: no memory for the assets");
-            return;
-        }
-        const u64 start = svcGetSystemTick();
-        UI::LoadGameAssets(read, lang, *assets, log);
-        const u64 ticks = svcGetSystemTick() - start;
-        FSFILE_Close(handle);
-        s_assets = assets;
-        UI::PublishGameAssets(assets);
-        log.push_back(Utils::Format("uitheme: assets loaded in %lu ms", (u32)(ticks / CPU_TICKS_PER_MSEC)));
-    }
-
     // The demo's data: the party and the lead Pokémon's moves, read from the
     // game; the made-up sample where something can't be read.
     static UI::ThemeDemoData ReadDemoData(u32 sceneManager)
@@ -142,7 +100,8 @@ namespace OneScreen
             out.maxHp = mon.maxHp;
         }
         const Pk7 &lead = party.slots[0].mon;
-        if (s_assets == nullptr || lead.form == Pk7Form::Invalid || s_assets->moves.empty())
+        const UI::GameAssets *assets = UI::Assets();
+        if (assets == nullptr || lead.form == Pk7Form::Invalid || assets->moves.empty())
             return d;
         d.moveCount = 0;
         for (u32 k = 0; k < 4; k++)
@@ -150,11 +109,11 @@ namespace OneScreen
             const u16 move = lead.moves[k];
             if (move == 0)
                 continue;
-            const UI::MoveInfo info = s_assets->Move(move);
+            const UI::MoveInfo info = assets->Move(move);
             UI::ThemeDemoMove &out = d.moves[d.moveCount++];
-            out.name = s_assets->MoveName(move);
+            out.name = assets->MoveName(move);
             out.type = info.type;
-            out.typeName = s_assets->TypeName(info.type);
+            out.typeName = assets->TypeName(info.type);
             out.category = info.category;
             out.pp = lead.pp[k];
             out.maxPp = info.pp;  // base PP: PP Ups are not counted
@@ -165,10 +124,12 @@ namespace OneScreen
     void ThemeScreenUpdate(u32 sceneManager, std::vector<std::string> &log)
     {
         s_frames++;
-        if (s_loadRequested)
+        const bool haveAssets = UI::AssetsReady();
+        if (haveAssets != s_hadAssets)
         {
-            Load(log);
-            s_frames = 0;
+            s_hadAssets = haveAssets;
+            s_frames = ReadEvery - 1;   // moves and font: re-read and redraw now
+            s_version = s_version + 1;
         }
         if (s_shown && s_frames % ReadEvery == 0)
         {
@@ -189,10 +150,9 @@ namespace OneScreen
     static std::string Status(void)
     {
         std::string s = Utils::Format("uitheme: %s, page %ld, selected %ld, ", s_shown ? "shown" : "off", s_page, s_selected);
-        if (s_assets == nullptr)
-            return s + "assets not loaded (fallback look)";
-        s += std::string("game font ") + (s_assets->font.Ready() ? "on" : "off") + "\n";
-        return s + s_assets->status;
+        const UI::GameAssets *assets = UI::Assets();
+        s += std::string("game font ") + (UI::HaveGameFont() ? "on" : "off") + "\n" + UI::AssetsSummary();
+        return assets != nullptr ? s + "\n" + assets->status : s + " (fallback look)";
     }
 
     bool ThemeScreenCommand(const std::string &args, std::vector<std::string> &log)
@@ -200,7 +160,7 @@ namespace OneScreen
         int n = 0;
         if (args == "on")
         {
-            s_loadRequested = s_assets == nullptr;
+            UI::RequestAssets();
             s_shown = true;
             s_frames = ReadEvery - 1;   // read the party on the next frame
             s_version = s_version + 1;
@@ -212,7 +172,7 @@ namespace OneScreen
             log.push_back("uitheme: off");
         }
         else if (args == "load")
-            s_loadRequested = s_assets == nullptr;
+            UI::RequestAssets();
         else if (args == "status")
             log.push_back(Status());
         else if (std::sscanf(args.c_str(), "page %d", &n) == 1)
