@@ -13,9 +13,11 @@
 #include "Panel.hpp"
 #include "Scene.hpp"
 #include "Screens/KeyboardGrid.hpp"
+#include "UI/Assets.hpp"
 #include "UI/Device.hpp"
 #include "UI/Layer.hpp"
 #include "UI/ScreenBuffer.hpp"
+#include "UI/Theme.hpp"
 
 namespace OneScreen
 {
@@ -222,6 +224,7 @@ namespace OneScreen
 
     static UI::Layer s_layer;
     static u32 s_drawnVersion = ~0u;
+    static bool s_drawnGameFont = false;    // the game font was loaded when last drawn
 
     static bool KeyboardOnScreen(const Screen &screen)
     {
@@ -239,7 +242,10 @@ namespace OneScreen
 
         UiInitFont();
         const UI::Surface fb = SurfaceFromScreen(screen);
-        bool redraw = s_viewVersion != s_drawnVersion;
+        // Also once the game's font and icons have loaded (UI::Theme draws
+        // with them from then on).
+        const bool gameFont = UI::Theme::UsingGameFont();
+        bool redraw = s_viewVersion != s_drawnVersion || gameFont != s_drawnGameFont;
         if (fresh || !s_layer.Matches(fb))
         {
             if (!s_layer.Setup(fb, KeyboardArea, KeyboardRadius, pixels, UI::ScreenBuffer::Bytes))
@@ -254,6 +260,7 @@ namespace OneScreen
             UI::Canvas canvas = s_layer.Begin();
             DrawKeyboard(canvas, s_view);
             s_drawnVersion = version;
+            s_drawnGameFont = gameFont;
             s_viewLock.Unlock();
         }
         s_layer.Present(fb);
@@ -485,6 +492,7 @@ namespace OneScreen
         const bool shown = s_enabled && !s_yield && up;
         if (shown && !s_shown)
         {
+            UI::RequestAssets();        // the game's font (normally loaded at the field already)
             s_shownAt = s_frames;
             s_cursor = 0;               // the game's own cursor starts on "!" too
             s_queue.clear();
