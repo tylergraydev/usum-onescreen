@@ -1,4 +1,4 @@
-# Native Bag (P2-4)
+# Native Bag (P2-4, W7-3)
 
 With the panel off, the field Bag shows on the top screen. The game's own Bag
 still runs on the hidden bottom screen; the native Bag reads it from memory
@@ -7,32 +7,99 @@ layer (`docs/ACTIONS.md`), so the game does every change itself.
 
 - `Includes/Screens/BagList.hpp`, `Sources/Screens/BagList.cpp`: the pure part
   (no CTRPF): tabs, the game state as read (`BagGame`), the native list
-  cursor, which menu entries are native, the driver, the actions, drawing.
+  cursor, which menu entries are native, items with a follow-up and the
+  result lines, the pocket icons and descriptions read from the RomFS, the
+  driver, the actions, drawing.
   Host tests in `tests/bag_test.cpp` (`make -C tests` also writes a preview to
   `analysis/private/bag-preview.ppm`).
 - `Includes/Screens/Bag.hpp`, `Sources/Screens/Bag.cpp`: the plugin glue:
   reading the game's Bag, when to show, the panel, input, the result line,
   the OSD layer.
 
-The in-battle Bag (Poké Balls, battle items) is not part of this; it belongs
-with the native battle menu (PR #24) once that is merged.
+The in-battle Bag (Poké Balls, battle items) is not part of this. Its
+layout is the same archive (`a/0/6/5` has `visible_battle` / `bag_battle`
+animations), but whether the battle's Bag uses the same scene and frame
+objects that `ReadBagGame` checks was not looked at. The entry point for a
+screen that opens the field Bag is `BagExpectOpen()` (`Screens/Bag.hpp`):
+call it when the tap that opens the Bag is sent, so the panel stays off
+until the Bag's first frame (the X menu does this).
 
 ## What it shows
 
-- Seven pocket tabs in the game's order: Rotom Powers, Medicine, Items, TMs,
-  Berries, Key Items, Free Space. The open one is the game's.
-- The open pocket's items with counts and a red dot for NEW, eight rows,
-  scrolling with the cursor. The list is the game's own (frame `+0x24`), so
-  sorting and Free Space look exactly as on the bottom screen.
-- The party: nickname, HP and a bar; an orange dot if it holds an item.
-- When the game's item menu is up, its entries over the party column, with
-  the item's name; "Switch items?" with Yes / No when the game asks that.
-- The footer: the keys, `...` while the game is busy, or the result of the
-  last Use / Give ("Pichu: HP 20 -> 27/27", "Pichu now holds Escape Rope
-  (Quick Claw back in the Bag)", "Potion had no effect on Torracat").
+The whole top screen, in the game's Bag look (`docs/VISUAL-STYLE.md`, drawn
+with `UI::Theme`, so in the game's font and with its cursor once the shared
+game assets are loaded):
 
-Not shown: item descriptions (not read), the money and Z-Crystals (no tab in
-this save).
+- The Bag's orange background.
+- At the top, the pocket's name on a green tab over a dark window
+  (`DrawWindow`): the cursor's item with "× 9" and its description (two
+  lines, the game's own text); while a menu is up the game's question
+  ("What do you want to do with the Potion?", "Which Pokémon do you want to
+  teach it to?", "Would you like to switch the two items?"); after a choice
+  its result in blue ("Pichu: HP 20 -> 27/27", "Torracat did not learn the
+  move", "Exp. Share turned off", "Lens Case moved to the Free Space").
+- On the left the party on green plates: nickname, level when it fits, the
+  HP bar (`DrawHpBar`), an orange dot if it holds an item. During "Which
+  Pokémon...?" the chosen one gets the orange frame and the red cursor; in
+  the menu the plates are dimmed.
+- On the right the open pocket's items on the theme's green list rows (28
+  px), five at a time, scrolling with the cursor (arrows when the list goes
+  on); count and a red dot for NEW. The red cursor marks the item. The list
+  is the game's own (frame `+0x24`), so sorting and Free Space look as on
+  the bottom screen.
+- The item menu as option pills anchored at the bottom right, as the game's
+  (Yes / No the same way); entries the native Bag can't carry out are grey.
+- Along the bottom: the button prompts (A Choose, B Close; A OK, B Back) and
+  the seven pocket icons between L and R, the open one on a white slot. The
+  icons are the game's own (below); without them each pocket is a green dot
+  with its first letter.
+
+Not shown: the money and Z-Crystals (no tab in this save), item icons other
+than the pockets', TM compatibility ("Able!" / "Unable!", the game shows it
+on the bottom screen only).
+
+## Pocket icons and descriptions
+
+Read once, the first time the Bag shows, in a CTRPF Task (`LoadBagAssets`,
+logged as `bag assets: ...`), from the running game's RomFS; nothing of the
+game is in the repo.
+
+- **Pocket icons**: `a/0/6/5` entry 0, the Bag layout (LZ11 ALYT, 74 KB
+  packed, 286 KB unpacked), `timg/Bag_Icon_*.bflim`, 24x24 ETC1A4 (flags 8,
+  not transposed). Which icon belongs to which pocket comes from the tab
+  animations `anim/Bag_BTN_LOW_001_icon_00..15.bflan`: their texture-pattern
+  (`FLTP`) key on the `Icon_Field` pane ends on the selected icon in
+  `icon_00..06` (and `icon_14`) and on its `2` variant in `icon_07..13`
+  (`icon_15`). By the game's tab index (Bag param `+0x54`): 0 Rotom Powers
+  `Bag_Icon_06f`, 1 Medicine `01b`, 2 Items `01c`, 3 TMs `01d`, 4 Berries
+  `01e`, 5 Key Items `01f`, 6 Free Space `01g`; the `2` variant (`01b2`,
+  ...) is the white-rimmed unselected icon. The pictures match: a green
+  bottle, a capsule, a disc, a berry, a key, a heart, Rotom. `Bag_Icon_04`
+  (a white diamond, `icon_02`'s first frame) is probably Z-Crystals: not
+  used. The archive is not unpacked whole: `Lz11ArchiveFiles` streams it
+  through a 4 KB window and keeps only its header (47 KB) and the 14 icons,
+  because the plugin's heap is short (below). 14 of 14 loaded in 140 ms in
+  Azahar (instance `w73`).
+- **Descriptions**: message file 39 of `a/0/3/<language>`, line = item ID
+  ("A spray-type medicine for treating wounds..." is line 17, Potion). The
+  file is 190 KB, so only its place is kept; each description is read
+  (header, line entry, ~200 bytes of text) and decrypted when the cursor
+  first lands on that item (`ReadMessageLine`), then kept.
+
+## Memory
+
+The plugin has 5 MiB (`usum-onescreen.plgInfo`) for code, data and heap.
+Measured with `bagui status` (heap from `mallinfo`, instance `w73`): 1148 KB
+used after boot, 1396 KB after the shared game assets loaded (`uitheme
+load`), 1912 KB once the X menu had shown, 2441 KB with the Bag shown. The
+Bag's layer is the whole top screen (400x240x4 = 384 KB). In one run, with
+the game assets and the Bag's first build (which kept its layer), the Bag
+got "NO MEMORY for the layer", and `uitheme load` with the Bag open aborted
+the plugin (`bad_alloc`). So the Bag now allocates its layer when it shows
+and frees it 4 frames after it hides (after the OSD callback has stopped
+drawing with it). Every other native screen keeps its own 300-500 KB layer
+once it has shown; with more screens opened in one session the heap can
+still run out.
 
 ## Keys
 
@@ -52,11 +119,30 @@ screens the native Bag doesn't know. Touch is not captured. Messages ("It won't
 have any effect.", "Your Pokémon is now holding...") are passed with A by the
 native Bag itself.
 
-Native: **Use** for Medicine and Berries (they only ask for a Pokémon),
-**Give** everywhere, **Cancel**, **Yes**, **No**. Use in the other pockets can
-leave the Bag (Escape Rope), start an evolution or teach a move, and Move to
-Free Space was never tapped: those entries are greyed and say "use the bottom
+Native: every entry of every item menu seen (`BagEntryEnabled`): **Use** in
+every pocket, **Give**, **Move to Free Space**, **Return to Pocket**, Key
+Items' **On** / **Off**, **Cancel**, **Yes**, **No**. An entry at the fifth
+position from the bottom (never seen) is greyed and says "use the bottom
 screen (L+R)".
+
+### Items with a follow-up
+
+What the game does after Use depends on the item (`BagItemKindOf`):
+
+| Item | The game | The native Bag | Checked |
+|---|---|---|---|
+| Potion, status heals, Berries | "Which Pokémon...?", HP bar, message, back to the pick | pick, A through the messages | in game (P2-4) |
+| TMs (TM01-100) | "Which Pokémon do you want to teach it to?" (plates say Able! / Unable!), "You booted up the TM.", "Please choose a move that will be replaced with Work Up.", then its own move-forget screen (scene `WazaOshie`); back in the Bag "Torracat did not learn Work Up." | pick, A through the messages; hands over to the forget screen (shown on the panel, AutoPanel's `default`) and takes the flow back when the Bag returns; the result compares the moves | in game: TM01 on Torracat, backed out of the forget screen (`w73`, by hand and in the scenario) |
+| Exp. Share | its menu has Off (0x02) or On (0x01) instead of Use; a message | choose, A | in game (`w73`, scenario) |
+| Escape Rope indoors | "Kukui's words echoed...", two messages, the list | A through them; "Escape Rope wasn't used" | in game (`w73`, by hand) |
+| Ether, Max Ether, PP Up, PP Max | after the Pokémon, a PP screen with its four moves (layout `Bag_PPX_LOW_000`: `SkillButton_00..03` centred at y 76, 106, 136, 166, back at 22,224) | not read: when the game stays busy for 3 s during a Use (`BagAsideFrames`), the native Bag steps aside and the panel shows until the game is back in its list or pick (`BagFollowGame`); the result then compares PP | host tests only (no Ether in the save) |
+| Elixir, Max Elixir | a Pokémon, a message | as Potion | host tests only |
+| Repel, Super Repel, Max Repel | a message (a Yes / No if one still works) | A, Yes / No | host tests only (no Repel) |
+| Evolution stones | a Pokémon, then the evolution scene | hands over like a TM; the result says "evolved into ..." | host tests only (no stone; the Sparkling Stone slot is at count 0) |
+| Rare Candy | a Pokémon, the level-up stats, maybe a move and an evolution | messages with A, the stats by stepping aside, scenes by handing over; "grew to Lv. 13, learned ..." | host tests only (no Rare Candy) |
+| Z-Power Ring, Lens Case, Roto Boost | no Use in the field (Free Space, Give) | - | in game (menus read) |
+
+Registering a Key Item to a button is not in USUM's menus (none seen).
 
 ## How a choice is carried out
 
@@ -76,6 +162,8 @@ decides the next. Goals:
   game's menu is up for that item. If the item at i isn't the one chosen any
   more, it stops without tapping.
 - **Choose** entry k of n: tap the menu at position n - k from the bottom.
+  If the game leaves the Bag screen after a tap (a hand-over), the goal is
+  done, not failed; the same for Pick, Answer and Advance.
 - **Pick** slot s: tap the slot; a tap on a slot not under the game's cursor
   only moves the cursor, so it taps again once the cursor is there.
 - **Answer**: tap Yes / No.
@@ -93,15 +181,21 @@ doesn't count on either: it looks after each press.
 
 ## Commands and log
 
-`bagui on|off` (default on), `bagui status`, `bagui read` (what the plugin
+`bagui on|off` (default on), `bagui status` (also the icons loaded, the
+descriptions read so far and the heap), `bagui read` (what the plugin
 reads of the game's Bag), `bagui select N` (moves the native list cursor; for
 tests). Log lines: `bag: shown (pocket P, N items)`, `bag: pocket P, N items,
 game cursor C`, `bag: cursor I NAME`, `bag: open I NAME`, `bag: menu ITEM:
 entries`, `bag: question ITEM: Yes, No`, `bag: game pick|message|list`,
 `bag: pick cursor S NAME`, `bag: choose ENTRY (ITEM)`, `bag: pick slot S NAME`,
-`bag: answer yes|no`, `bag: GOAL done in N frames, M commands`,
-`bag: result use|give ITEM(id) on slot S NAME: count A -> B, hp .. -> .., held
-.. -> ..`, `bag: hidden`; and the action layer's own `action: bag-... ok`.
+`bag: answer yes|no`, `bag: GOAL done in N frames, M commands`, `bag: choose
+ENTRY (ITEM, KIND)`, `bag: result use|give|free-space|return|on|off ITEM(id)
+on slot S NAME: count A -> B, hp .. -> .., held .. -> .., level .. -> ..,
+moves a,b,c,d -> a,b,c,d, pp A -> B` (or `..., no Pokémon chosen`), `bag:
+handed over to SCENE (ITEM)`, `bag: back from SCENE`, `bag: the game shows a
+screen the native Bag doesn't read (ITEM), the panel takes over`, `bag: back
+from the bottom screen`, `bag: the Bag closed during ITEM`, `bag assets:
+...`, `bag: hidden`; and the action layer's own `action: bag-... ok`.
 
 ## The panel and the X menu
 
@@ -133,13 +227,20 @@ Bag's first frame.
 
 ## Tests
 
-- `tests/bag_test.cpp`: tabs and their buttons; every command's action exists
-  and may run (except menu positions 2 and 5, never tapped); the cursor and
-  window; which entries are native; the driver against a fake Bag (pocket
-  switch, open in / below / above the window, a changed list, Use with the
-  two-tap pick and messages, Give over a held item with Yes, Cancel, Close, a
-  game that ignores taps, a wrong starting screen, the Bag closing, settling);
-  drawing every mode inside the area.
+- `tests/bag_test.cpp`: tabs, their buttons and icons; every command's action
+  exists and may run (except menu position 5, never tapped); the cursor and
+  window; which entries are native (every menu seen); item kinds, when to
+  step aside, every result line (Potion, Ether, Rare Candy, stone, TM learned
+  or not, Repel, Exp. Share, Free Space, Give); descriptions read one line
+  at a time from a made-up message file; the pocket icons streamed out of a
+  made-up LZ11 layout archive bigger than the window (and a cut stream, not
+  LZ11, not an archive); a RomFS that isn't there; the driver against a fake
+  Bag (pocket switch, open in / below / above the window, a changed list, Use
+  with the two-tap pick and messages, Give over a held item with Yes, a TM
+  handing over to another screen and coming back, Move to Free Space,
+  Cancel, Close, a game that ignores taps, a wrong starting screen, the Bag
+  closing, settling); drawing every mode over the whole screen, with and
+  without the game's icons.
 - `scenarios/native-bag.txt`: Pichu is hurt in a wild battle (switched in for
   a free hit, then Run; battles repeat until `party` shows Pichu at 7-26 HP,
   `repeat N until-log` in `tools/scenario.py`); X menu -> Bag with auto on and
@@ -147,7 +248,9 @@ Bag's first frame.
   pocket with R (wrapping) and L / left / right; the cursor wrapping; a Potion
   on Pichu (HP back to full, count 9 -> 8) and on Torracat (no effect); Quick
   Claw given to Pichu; Escape Rope given over it (Yes); a Poké Ball (No);
-  a menu cancelled with B; B closes the Bag to the native X menu.
+  TM01 on Torracat through the game's move-forget screen (on the panel) and
+  back, not learned; Exp. Share off and on; Lens Case to the Free Space and
+  back; a menu cancelled with B; B closes the Bag to the native X menu.
   `check-save` at the end. Passed in 187 s (instance `p24`, 2026-11-02).
 - `actions.txt` and `open-each-app.txt` check the Bag's panel: they send
   `bagui off` first.

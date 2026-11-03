@@ -1,15 +1,18 @@
 #pragma once
 
-// The native Bag (P2-4): the game's Bag as the plugin reads it, the pocket
-// and list logic, the driver that carries out a choice on the hidden bottom
-// screen one tap or press at a time, and drawing. Pure C++ (no CTRPF), so
-// tests/ can build it on the PC; Screens/Bag.cpp runs it in the plugin.
-// See docs/BAG.md.
+// The native Bag (P2-4, W7-3): the game's Bag as the plugin reads it, the
+// pocket and list logic, the driver that carries out a choice on the hidden
+// bottom screen one tap or press at a time, what a choice did, the pocket
+// icons and item descriptions read from the RomFS, and drawing. Pure C++ (no
+// CTRPF), so tests/ can build it on the PC; Screens/Bag.cpp runs it in the
+// plugin. See docs/BAG.md.
 
 #include <string>
 #include <vector>
 
 #include "ActionQueue.hpp"
+#include "RomfsText.hpp"
+#include "UI/GameAssets.hpp"
 #include "UI/Raster.hpp"
 
 namespace OneScreen
@@ -21,9 +24,9 @@ namespace OneScreen
     struct BagTab
     {
         const char *name;       // for commands and the log: "medicine"
-        const char *label;      // on the native tab
+        const char *label;      // the pocket's name, as the game shows it
         const char *button;     // LayoutButtons name of the game's tab
-        bool canUse;            // "Use" runs natively (pick a Pokémon, messages)
+        const char *icon;       // its icon in the Bag layout (a/0/6/5) when selected; + "2" when not
     };
 
     const BagTab &BagTabAt(int tab);
@@ -33,9 +36,12 @@ namespace OneScreen
     // lists them in its menu param (docs/BAG.md).
     namespace BagCommand
     {
-        static const u8 Use = 0x00, Give = 0x03, FreeSpace = 0x04, Cancel = 0x11, Yes = 0x12, No = 0x13;
+        static const u8 Use = 0x00, On = 0x01, Off = 0x02, Give = 0x03, FreeSpace = 0x04, ReturnToPocket = 0x05,
+                        Cancel = 0x11, Yes = 0x12, No = 0x13;
     }
-    const char *BagCommandLabel(u8 command);   // "Use", ..., "Option 0x05" style for unknown ones
+    // Short labels ("Give" for the game's "Give to Pokémon"); "Option 0x07"
+    // style for unknown ones.
+    const char *BagCommandLabel(u8 command);
 
     // What the game's Bag is doing.
     enum class BagMode : u8
@@ -81,16 +87,63 @@ namespace OneScreen
     // --- Native list cursor ---
 
     // Rows the native list shows.
-    static const int BagListRows = 8;
+    static const int BagListRows = 5;
     // Up / down with wrap (as the game's list); 0 for an empty list.
     int BagMoveCursor(int cursor, int delta, int count);
     // First row to show so that `cursor` is visible, starting from `top`.
     int BagListTop(int top, int cursor, int count, int rows = BagListRows);
 
-    // Which menu entries the native menu can carry out: Use (if the pocket's
-    // flow is native), Give, Cancel, Yes, No. The others (Move to Free Space,
-    // unknown ones) are shown but left to the bottom screen.
-    bool BagCommandEnabled(u8 command, int tab);
+    // Whether the native menu can carry out entry `entry` of a menu: every
+    // entry at a position the action layer may tap (1-4 from the bottom; a
+    // fifth was never seen). The others are shown greyed.
+    bool BagEntryEnabled(const std::vector<u8> &commands, int entry);
+
+    // --- Items with a follow-up ---
+
+    enum class BagItemKind : u8
+    {
+        Other,      // the plain flows: a Pokémon (Potion), a message (Escape Rope, Exp. Share), nothing
+        PpOne,      // Ether, Max Ether, PP Up, PP Max: a Pokémon, then one of its moves (the PP screen)
+        PpAll,      // Elixir, Max Elixir: a Pokémon
+        Repel,      // Repel, Super Repel, Max Repel: a message, a question while one still works
+        Stone,      // evolution stones: a Pokémon, then the evolution scene
+        RareCandy,  // a Pokémon, its new level, maybe a new move and an evolution
+        Tm,         // TM01-TM100: a Pokémon, then the move-forget scene (WazaOshie)
+    };
+    BagItemKind BagItemKindOf(u16 item);
+    const char *BagItemKindName(BagItemKind kind);
+    // The game's "Which Pokémon...?" for this item.
+    const char *BagPickQuestion(u16 item);
+
+    // During a Use the game can show a screen the plugin doesn't read (the
+    // PP screen of an Ether, a level-up's stats). The native Bag then steps
+    // aside: the panel takes over until the game is back in its list.
+    static const u32 BagAsideFrames = 180;  // Busy this long during a Use
+    enum class BagFollow : u8 { Native, Aside };
+    // `busyFrames`: how long the game has been Busy without a break;
+    // `usingItem`: a Use or Give is under way; `aside`: stepped aside already.
+    BagFollow BagFollowGame(BagMode mode, u32 busyFrames, bool usingItem, bool aside);
+
+    // What a choice in the menu did, read before and after, for the footer.
+    // The Pokémon fields only when one was picked.
+    struct BagResult
+    {
+        u8  command = 0;
+        BagItemKind kind = BagItemKind::Other;
+        std::string item;                   // the item's name
+        int countBefore = 0, countAfter = 0;
+        bool picked = false;
+        std::string mon;                    // nickname, after
+        int hpBefore = 0, hpAfter = 0, maxHp = 0;
+        int levelBefore = 0, levelAfter = 0;
+        u16 speciesBefore = 0, speciesAfter = 0;
+        std::string speciesName;            // after, when it changed
+        int ppBefore = 0, ppAfter = 0;      // sum over its moves
+        std::vector<std::string> learned;   // moves it knows now and didn't before
+        std::string heldBefore, heldAfter;  // names, "" if none
+        bool holdsItem = false;             // it now holds the item
+    };
+    std::string BagResultText(const BagResult &r);
 
     // --- Driver ---
 
@@ -206,6 +259,42 @@ namespace OneScreen
         bool egg = false;
     };
 
+    // The game's pocket icons and item descriptions, read once from the
+    // RomFS (docs/BAG.md "Pocket icons"). Missing parts draw the fallback.
+    struct BagAssets
+    {
+        UI::Image pockets[BagTabCount][2];  // [tab][0 selected, 1 not]
+        // The description message file in the RomFS image (it is 190 KB, so
+        // each description is read when it is needed, BagReadDescription).
+        uint64_t descriptionsAt = 0;
+        u32 descriptionsSize = 0;
+
+        const UI::Image *Pocket(int tab, bool selected) const;
+        int PocketCount(void) const;        // icons loaded, of BagTabCount * 2
+    };
+    // The Bag layout archive, and the message file with item descriptions
+    // (in a/0/3/<lang>, line = item ID).
+    static const char *const BagLayoutGarc = "a/0/6/5";
+    static const u32 BagDescriptionFile = 39;
+    // Reads files out of an LZ11-compressed layout archive (ALYT / SARC) at
+    // `at` (`size` bytes) without unpacking all of it: the stream is read in
+    // 4 KB chunks and decoded through a 4 KB window, and only the archive's
+    // header and the wanted files are kept (the Bag layout is 290 KB
+    // unpacked; this needs ~60 KB). files[i] gets names[i], empty if absent.
+    bool Lz11ArchiveFiles(const RomfsRead &read, uint64_t at, u32 size, const std::vector<std::string> &names,
+                          std::vector<std::vector<u8>> &files, std::string &error);
+    // Reads the pocket icons and finds the description file through `read`
+    // (the running game's RomFS, language `lang` 0-9); each part that fails
+    // is logged and left empty.
+    void LoadBagAssets(const RomfsRead &read, u32 lang, BagAssets &out, std::vector<std::string> &log);
+    // One line of the message file at `fileAt` (`fileSize` bytes), read and
+    // decrypted on its own, as UTF-8 with control tags removed.
+    bool ReadMessageLine(const RomfsRead &read, uint64_t fileAt, u32 fileSize, u32 line, std::string &out,
+                         std::string &error);
+    // An item's description: its message line with the line breaks made
+    // spaces. "" if it can't be read.
+    std::string BagReadDescription(const RomfsRead &read, const BagAssets &assets, u16 item);
+
     struct BagView
     {
         BagMode mode = BagMode::None;
@@ -216,15 +305,18 @@ namespace OneScreen
         int cursor = 0, top = 0;    // native list cursor and first row shown
         std::vector<u8> commands;   // Menu entries
         int menuCursor = 0;
-        std::string menuTitle;      // the item, or the Yes/No question
+        std::string menuTitle;      // the question over the menu
+        std::string pickQuestion;   // Pick: "Which Pokémon do you want to teach it to?"
+        std::string description;    // the cursor's item; "" if not loaded
+        const BagAssets *assets = nullptr;  // pocket icons, or nullptr
         std::vector<BagMon> party;
         int partyCursor = -1;       // Pick
         std::string status;         // footer: what is happening, or the last result
         bool busy = false;          // the driver is working: dim the input hints
     };
 
-    // Screen area the Bag draws in (top screen) and its corner radius.
-    static constexpr UI::Rect BagArea = { 12, 8, 376, 224 };
-    static constexpr int BagRadius = 12;
+    // Screen area the Bag draws in (the whole top screen) and its corner radius.
+    static constexpr UI::Rect BagArea = { 0, 0, 400, 240 };
+    static constexpr int BagRadius = 0;
     void DrawBag(UI::Canvas &canvas, const BagView &view);
 }
