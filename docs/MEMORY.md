@@ -29,7 +29,23 @@ and takes 1 MiB of the newlib heap for its Search feature at boot
 code has about **1.9 MB** of heap, not 5 MiB. That is why the W7-2 crash came
 at "2448 KB used": mallinfo's `uordblks` counts CTRPF's 1 MiB too.
 
-Static data (.bss) comes out of the same block one for one: a 300 KB static
+### CTRPF's 1 MiB pool (can it go?)
+
+No clean way. `InitHeap()` (`pluginInit.cpp:188-194`) runs unconditionally
+during CTRPF's init (line 308), before `PatchProcess`, so no `FwkSettings`
+field can stop it; `AllowSearchEngine = false` only hides the Search menu
+entry (`PluginMenuHome.cpp:61`, `PluginMenuImpl.cpp:185`). The size is a
+literal (`0x100000`). The pool (`CTRPluginFramework::Heap`, a MemPool set up on
+first use, `Heap.cpp:29-43`) also backs `Directory` listings
+(`Directory.cpp:206`, 100 entries at a time), `LineReader`/`LineWriter` (4 KB
+buffers), `BMPImage` and the Gateway RAM dumper, not just Search
+(`Search32.cpp:20-32` wants 0xB0000 of it). Shrinking it would mean freeing
+`Heap::__ctrpf_heap` and replacing it from `PatchProcess` before the pool's
+first use: internal symbols, not a documented API, so it is not done.
+Rebuilding libctrpf with a smaller literal would work but forks the library.
+
+Static data (.bss) comes out of the same block one for one:
+ a 300 KB static
 array is 300 KB less heap. The biggest left are the screenshot buffers in
 `Sources/Shot.cpp` (`s_top` 281 KB + `s_bottom` 225 KB, used by the test
 tools' `shot`).
