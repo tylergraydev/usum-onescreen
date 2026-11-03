@@ -96,7 +96,7 @@ MOVE_GARC     ?= ../analysis/private/romfs-base/a/0/1/1
 
 # MOVE_GARC: the user's own move data GARC (a/0/1/1), for the real move
 # check; skipped if missing (CI).
-LEARN_SRCS := ../Sources/Screens/MoveLearnMenu.cpp ../Sources/Screens/BattleMenu.cpp ../Sources/MoveData.cpp ../Sources/RomfsText.cpp ../Sources/PartyData.cpp ../Sources/ActionQueue.cpp
+LEARN_SRCS := ../Sources/Screens/MoveLearnMenu.cpp ../Sources/Screens/BattleMenu.cpp ../Sources/Screens/PartyMenu.cpp ../Sources/MoveData.cpp ../Sources/RomfsText.cpp ../Sources/PartyData.cpp ../Sources/ActionQueue.cpp
 LEARN_HDRS := ../Includes/Screens/MoveLearnMenu.hpp ../Includes/Screens/BattleMenu.hpp ../Includes/MoveData.hpp ../Includes/RomfsText.hpp ../Includes/ActionQueue.hpp ../Includes/Layouts.hpp
 
 $(OUT)/move_learn_test: move_learn_test.cpp $(LEARN_SRCS) $(LEARN_HDRS) $(UI_SRCS) $(UI_HDRS)
@@ -122,9 +122,12 @@ $(OUT)/ui_host_test: ui_host_test.cpp $(UI_SRCS) $(UI_HDRS)
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) ui_host_test.cpp $(UI_SRCS) -o $@
 
-$(OUT)/battle_menu_test: battle_menu_test.cpp ../Sources/Screens/BattleMenu.cpp ../Includes/Screens/BattleMenu.hpp $(UI_SRCS) $(UI_HDRS)
+BATTLE_SRCS := $(addprefix ../Sources/Screens/,BattleMenu.cpp BattleMenuDraw.cpp PartyMenu.cpp) ../Sources/ActionQueue.cpp $(THEME_SRCS)
+BATTLE_PREVIEW := ../analysis/private
+
+$(OUT)/battle_menu_test: battle_menu_test.cpp $(BATTLE_SRCS) ../Includes/Screens/BattleMenu.hpp ../Includes/Screens/PartyMenu.hpp ../Includes/Layouts.hpp $(UI_SRCS) $(UI_HDRS)
 	@mkdir -p $(OUT)
-	$(CXX) $(CXXFLAGS) battle_menu_test.cpp ../Sources/Screens/BattleMenu.cpp $(UI_SRCS) -o $@
+	$(CXX) $(CXXFLAGS) battle_menu_test.cpp $(BATTLE_SRCS) $(UI_SRCS) -o $@
 
 run: $(TESTS)
 	./$(OUT)/input_capture_test
@@ -132,7 +135,8 @@ run: $(TESTS)
 	./$(OUT)/field_settle_test
 	./$(OUT)/party_data_test
 	./$(OUT)/action_queue_test
-	./$(OUT)/battle_menu_test
+	@mkdir -p $(BATTLE_PREVIEW)
+	./$(OUT)/battle_menu_test $(BATTLE_PREVIEW)
 	$(PYTHON) -I ../tools/gen_layouts.py --check
 	@mkdir -p $(dir $(PREVIEW))
 	./$(OUT)/ui_host_test $(PREVIEW)
