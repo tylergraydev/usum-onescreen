@@ -10,9 +10,11 @@
 #include "Party.hpp"
 #include "Scene.hpp"
 #include "Screens/PokedexList.hpp"
+#include "UI/Assets.hpp"
 #include "UI/Device.hpp"
 #include "UI/Layer.hpp"
 #include "UI/ScreenBuffer.hpp"
+#include "UI/Theme.hpp"
 
 namespace OneScreen
 {
@@ -482,12 +484,23 @@ namespace OneScreen
             {
                 if (!s_visible)
                 {
+                    // The game's font and icons (normally loaded at the first
+                    // field already).
+                    UI::RequestAssets();
                     log.push_back(Utils::Format("pokedex: shown %s", DexScreenName(view.screen)));
                     log.push_back(UI::ScreenBuffer::HeapLog("pokedex shown"));
                 }
                 log.push_back(key);
                 s_view = view;
                 s_viewKey = key;
+                Publish(true);
+            }
+            // Redraw once the game's font has loaded (UI::Theme draws with
+            // it from then on).
+            static bool s_gameFont = false;
+            if (UI::Theme::UsingGameFont() != s_gameFont)
+            {
+                s_gameFont = !s_gameFont;
                 Publish(true);
             }
             s_lastWhy.clear();
