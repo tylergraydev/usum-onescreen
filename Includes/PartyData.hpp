@@ -41,6 +41,7 @@ namespace OneScreen
         u16 moves[4] = {};
         u8  pp[4] = {};
         bool isEgg = false;
+        u8  ball = 0;               // Poké Ball it was caught in (0xDC; 1-16 = item ID)
         bool calcValid = false;     // the party stats decoded to something plausible
         u32 status = 0;             // status condition word, raw
         u8  level = 0;

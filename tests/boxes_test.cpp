@@ -416,9 +416,10 @@ static UI::Color At(const UI::Canvas &canvas, int x, int y)
     return c;
 }
 
+// The theme's orange highlight frame (UI::Theme::Highlight).
 static bool IsRing(UI::Color c)
 {
-    return c.r > 200 && c.g > 200 && c.b < 160;
+    return c.r > 200 && c.g > 60 && c.g < 130 && c.b < 60;
 }
 
 static void TestDraw(const char *preview)
@@ -479,19 +480,24 @@ static void TestDraw(const char *preview)
     // Nothing outside the area is touched (the Layer copies only it).
     const UI::Color outside = At(canvas, BoxesArea.x - 1, BoxesArea.y + 50);
     CHECK(outside.r == 10 && outside.g == 200 && outside.b == 10);
-    // The cursor cell has the yellow ring just outside it; the others not.
+    // The cursor cell has the orange frame just outside it; the others not.
     const UI::Rect sel = BoxesCellRect(view.cursor);
     CHECK(IsRing(At(canvas, sel.x + sel.w / 2, sel.y - 1)));
     const UI::Rect other = BoxesCellRect(9);
     CHECK(!IsRing(At(canvas, other.x + other.w / 2, other.y - 1)));
-    // Empty cells are outlines (the panel colour inside), occupied ones filled.
+    // Empty cells are outlines (the grass wallpaper inside), occupied ones
+    // a darker plate; party rows are the light list rows.
     const UI::Rect empty = BoxesCellRect(25);
     const UI::Color inside = At(canvas, empty.x + 3, empty.y + empty.h / 2);
-    CHECK(inside.r == 22 && inside.g == 30 && inside.b == 52);
+    CHECK(inside.g > 120 && inside.r < 100 && inside.b < 100);
     const UI::Rect full = BoxesCellRect(1);
-    CHECK(At(canvas, full.x + 3, full.y + full.h / 2).g > 90);
+    const UI::Color plate = At(canvas, full.x + 3, full.y + full.h / 2);
+    CHECK(plate.g < inside.g - 30 && plate.g > plate.r);
+    const UI::Rect row = BoxesCellRect(BoxSlots);
+    const UI::Color light = At(canvas, row.x + row.w / 2, row.y + 6);
+    CHECK(light.r > 200 && light.g > 200 && light.b > 200);
 
-    // Holding: the cursor ring turns orange.
+    // Holding: the cursor frame turns red.
     view.mode = BoxMode::Carrying;
     view.held = "Ledyba";
     view.heldTray = 0;
@@ -499,8 +505,8 @@ static void TestDraw(const char *preview)
     view.cursor = 26;
     DrawBoxes(canvas, view);
     const UI::Rect hold = BoxesCellRect(26);
-    const UI::Color orange = At(canvas, hold.x + hold.w / 2, hold.y - 1);
-    CHECK(orange.r > 200 && orange.g > 100 && orange.g < 200 && orange.b < 120);
+    const UI::Color red = At(canvas, hold.x + hold.w / 2, hold.y - 1);
+    CHECK(red.r > 200 && red.g < 40 && red.b < 40);
 
     if (preview != nullptr)
     {
