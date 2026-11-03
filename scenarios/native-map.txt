@@ -1,0 +1,121 @@
+# The native map (Screens/Map.cpp, docs/MAP.md): in the field, with the
+# panel off, ZR shows the map on the top screen; B or ZR closes it. With
+# the map up, the player walks inside the Route 2 Pokémon Center (zone 79),
+# out of its door onto Route 2 (zone 7, outside) and down the path, and the
+# map follows.
+# Then the X menu's Map entry opens it, and with `map off` that entry opens
+# the game's Town Map again. Screenshots before every A; nothing is saved.
+include common/boot
+reject-log ^map: GPU copy
+
+# --- ZR opens it, inside the Pokémon Center ---
+mark
+send press zr
+expect-log ^map: place names: \d+ lines from a/0/3/2 file 72 10
+expect-log ^map: open \(ZR\) 5
+expect-log ^map: shown zone 79 "Route 2", indoors, Melemele Island, x \d+ z \d+ facing \w+, picture 5
+expect-log ^map: drawing 5
+expect-mode off
+sleep 1
+shot inside
+
+# --- B closes it; the game doesn't get the B ---
+mark
+send press b
+expect-log ^map: closed \(B\) 5
+expect-log ^map: hidden 5
+expect-scene FieldRo
+expect-mode off
+
+# --- A step inside with the map up: east, and the position follows ---
+mark
+send press zr
+expect-log ^map: shown zone 79 "Route 2", indoors 10
+send stick 150 0 15
+sleep 2
+send map status
+expect-log ^map: on, open, shown, input captured, zone 79 "Route 2", indoors, Melemele Island, x 2(2[0-9][0-9]|[3-9][0-9][0-9]) z \d+ facing E, picture 5
+shot inside-east
+send stick -150 0 15
+sleep 2
+
+# --- Out of the door: zone 7 (Route 2), outside, the map centred on the player ---
+mark
+send stick 0 -150 30
+expect-log ^map: now zone 7 "Route 2", outdoors, Melemele Island, x 1260\d z 639\d facing S, picture 30
+reject-log ^map: now zone 0
+expect-scene FieldRo
+expect-mode off
+sleep 4
+shot outside
+# A step down the path: same zone, new position.
+mark
+send stick 0 -150 15
+sleep 2
+send map status
+expect-log ^map: on, open, shown, input captured, zone 7 "Route 2", outdoors, Melemele Island, x \d+ z (6[4-9]\d\d|[7-9]\d\d\d) facing \w+, picture 5
+shot path
+
+# --- ZR closes it ---
+mark
+send press zr
+expect-log ^map: closed \(ZR\) 5
+expect-log ^map: hidden 5
+sleep 1
+
+# --- The X menu's Map entry: closes the X menu, opens the native map ---
+mark
+send press x
+expect-log ^xmenu: shown 10
+send xmenu select map
+expect-log ^xmenu: cursor map 5
+shot pre-map
+send press a
+expect-log ^xmenu: open map \(native map\) 5
+expect-log ^action: xmenu-close ok 20
+expect-log ^map: open \(X menu\) 10
+expect-log ^map: shown zone 7 "Route 2", outdoors 10
+expect-mode off
+sleep 2
+shot from-xmenu
+# X while the map is up: the X menu takes over and the map closes.
+mark
+send press x
+expect-log ^map: closed \(X menu\) 10
+expect-log ^xmenu: shown 10
+expect-mode off
+sleep 1
+send press b
+wait-scene FieldRo 10
+sleep 2
+
+# --- map off: ZR does nothing, the X menu's Map is the game's Town Map ---
+mark
+send map off
+expect-log ^map: off 5
+send press zr
+sleep 2
+reject-log ^map: open
+expect-scene FieldRo      # and the game itself does nothing with ZR
+shot zr-map-off
+send press x
+expect-log ^xmenu: shown 10
+send xmenu select map
+expect-log ^xmenu: cursor map 5
+shot pre-townmap
+send press a
+expect-log ^xmenu: open map$ 5
+expect-log ^action: xmenu-map started 5
+# The game's Town Map opens unless Rotom has started one of its chats on the
+# bottom screen (then the tap lands on the chat and the action times out;
+# seen once). Back out if it opened.
+sleep 8
+shot townmap
+if-scene TownMap send move 16 224; tap 6
+if-scene TownMap sleep 6
+wait-scene FieldRo 20
+expect-mode off
+send map on
+
+check-save
+stop

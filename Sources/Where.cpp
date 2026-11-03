@@ -34,6 +34,7 @@ namespace OneScreen
     static const u32 LoaderTable = 0x14, LoaderSize = 0x18;
     static const u32 ZoneEntrySize = 0x54;
     static const u32 ZoneParent = 0x0A, ZoneName = 0x1C, ZoneMapPoint = 0x44;   // s32 x, z
+    static const u32 ZoneMapArea = 0x4E;            // u8, docs/MAP.md "Island"
 
     // Rotom Dex map: a FieldMenu CRO frame on the scene manager's stack holds
     // the map view (a main-image class).
@@ -111,6 +112,7 @@ namespace OneScreen
                 state.mapPointX = (s32)Read32(entry + ZoneMapPoint);
                 state.mapPointZ = (s32)Read32(entry + ZoneMapPoint + 4);
                 state.indoor = state.mapPointX != 0 || state.mapPointZ != 0;
+                state.mapArea = Read8(entry + ZoneMapArea);
             }
         }
 
@@ -179,8 +181,8 @@ namespace OneScreen
         std::string out = Utils::Format("where: zone %u (entry %u", state.zone, state.entryZone);
         if (state.zoneData)
         {
-            out += Utils::Format(", parent %u) name line %u %s", state.parentZone, state.nameLine,
-                                 state.indoor ? "indoor" : "outdoor");
+            out += Utils::Format(", parent %u) name line %u area %u %s", state.parentZone, state.nameLine,
+                                 state.mapArea, state.indoor ? "indoor" : "outdoor");
             if (state.indoor)
                 out += Utils::Format(" at %ld %ld", state.mapPointX, state.mapPointZ);
         }

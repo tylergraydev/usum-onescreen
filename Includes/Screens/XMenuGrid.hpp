@@ -78,6 +78,9 @@ namespace OneScreen
     // field map); done when the entry's scene shows or the X menu goes away.
     // The definitions live as long as the program.
     const ActionDef &XMenuAction(int index);
+    // Just closes the X menu (B), done when the field shows without it. The
+    // Map entry uses it to hand over to the native map (Screens/Map.hpp).
+    const ActionDef &XMenuCloseAction(void);
 
     // The native screen that takes over once entry `index` has opened the
     // game's own ("pokedex": Screens/Pokedex.hpp), or nullptr. The X menu

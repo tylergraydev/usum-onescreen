@@ -17,6 +17,8 @@ Supports Pokémon Ultra Sun (USA) v1.2 (`00040000001B5000`, title version `0x080
 - Native keyboard on the top screen: when the game asks for a nickname after a catch, its keyboard shows on the top screen with the name typed so far (D-pad moves, **A** types, **B** deletes, **Y** Shift, **X** space, **START** jumps to OK) with the panel off.
 
 - Native Pokédex on the top screen (from the X menu or Rotom's face, with the panel off): the top level with each Pokédex's caught / seen counts and locked islands, the Alola list, an island Pokédex's entries around its cursor, and an entry page's number, name and caught / seen, each next to what the game shows on top (the Pokémon's model, the island map). The game's own keys drive it (D-pad, **A**, **B**; Up/Down on an entry go to the next seen one).
+
+- Native map on the top screen: **ZR** in the overworld (or the X menu's **Map**) shows the place name, the island, inside/outside, the player's position and facing, and the game's own Rotom Dex map around the player, live while walking. **ZR** or **B** closes it (`map_key` in the settings file). Place names are read from the game's own files at runtime; nothing of the game is shipped.
 - **L+R** cycles the bottom-screen view off / panel / full by hand (`panel_key`); with `auto = on` the choice holds until the next scene change.
 - Touch cursor: **C-stick** moves it, **ZL** touches the bottom screen at the cursor.
 - Startup check of the game, its version and every patched function; the plugin does nothing on an unsupported game or if the check fails, and shows an on-screen notice either way.

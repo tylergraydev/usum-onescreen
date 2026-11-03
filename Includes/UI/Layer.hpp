@@ -37,6 +37,9 @@ namespace UI
         Canvas Begin(void);
         // Copies the layer onto screen (which Matches it).
         void   Present(const Surface &screen) const;
+        // The same, leaving the pixels inside `skip` (screen coordinates)
+        // alone, for something else to fill (a GPU copy, Screens/Map.cpp).
+        void   Present(const Surface &screen, const Rect &skip) const;
 
     private:
         static constexpr s32 MaxW = ScreenW;
