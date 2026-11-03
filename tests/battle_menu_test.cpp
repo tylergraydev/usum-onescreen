@@ -112,10 +112,16 @@ static void TestPages(void)
     // ...drawn at the top: the question is along the bottom of the screen.
     CHECK(after.Area().Bottom() <= 120 && !after.Area().Empty());
 
-    // Other screens not reached from the Bag / Pokémon list (intro objects,
-    // the battle's questions): a helper at the top, only once it stays.
+    // Other screens not reached from the Bag / Pokémon list: before the
+    // first command menu (the intro's objects) nothing; after it (the
+    // battle's questions) a helper at the top, only once it stays.
     BattleMenu intro;
     CHECK(!intro.Update(snap, 0).capture && intro.Prompt() && !intro.Visible());
+    Idle(intro, snap, BattleMenu::PromptShowFrames * 2);
+    CHECK(!intro.Visible());
+    intro.Update(CommandSnap(), 0);
+    intro.Update(snap, 0);
+    CHECK(!intro.Visible());
     Idle(intro, snap, BattleMenu::PromptShowFrames);
     CHECK(intro.Visible() && intro.Area().Bottom() <= 120);
     CHECK(intro.Status(snap).find("prompt") != std::string::npos);

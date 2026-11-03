@@ -601,6 +601,10 @@ namespace Screens
             m_moveAge++;
         if (page == BattlePage::Command || !snap.inBattle)
             m_moveAge = 0xFFFF;
+        if (page == BattlePage::Command)
+            m_seenCommand = true;
+        else if (!snap.inBattle)
+            m_seenCommand = false;
         else if (page == BattlePage::Game && snap.menu == GameMenu::Other && m_moveAge < TargetWindowFrames)
             page = BattlePage::Target;
         if (m_page == BattlePage::Target && page == BattlePage::Game && snap.menu == GameMenu::Other)
@@ -731,8 +735,9 @@ namespace Screens
 
     bool BattleMenu::Visible(void) const
     {
+        // Before the first command menu only the intro's objects come up.
         if (Prompt())
-            return m_stable >= PromptShowFrames;
+            return m_seenCommand && m_stable >= PromptShowFrames;
         return m_page != BattlePage::Hidden && (m_page != BattlePage::Command || m_stable >= ShowFrames);
     }
 

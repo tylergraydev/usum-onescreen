@@ -274,6 +274,9 @@ namespace Screens
         const char *m_queued = nullptr; // chosen before the menu settled
         std::string m_note;         // one-line message (e.g. no PP left)
 
+        // The game's command menu has been up in this battle: the intro's
+        // objects come before it, the battle's questions after.
+        bool m_seenCommand = false;
         // A move was sent this many frames ago (0xFFFF: not lately).
         u32 m_moveAge = 0xFFFF;
         // Party page.
