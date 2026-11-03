@@ -1,0 +1,140 @@
+# Native Options (Screens/Options.cpp, docs/NATIVE-SCREENS.md): opened from
+# the native X menu with the panel off; the values read from the bottom
+# screen match the save's ConfigSave word; D-pad moves and changes values on
+# the game's own list; B with no changes goes back; B with changes brings up
+# the game's question, mirrored: No keeps the settings, Yes takes them; A
+# confirms. The settings end as they started (Fast, Off, Switch, L=A,
+# Automatic). Changes only reach the game's memory: nothing is saved, and
+# check-save proves the save file is untouched. A screenshot is taken before
+# every A.
+include common/boot
+# Config's automatic view is full: the native screen must hold it off.
+send auto on
+
+# --- Open from the native X menu ---
+mark
+send press x
+expect-log ^xmenu: shown 10
+send xmenu select options
+expect-log ^xmenu: cursor options 5
+shot pre-options
+send press a
+expect-log ^action: xmenu-options ok 15
+wait-scene Config 10
+expect-log ^options: save word 0002A026: Text Speed Fast, Battle Effects Off, Battle Style Switch, Button Mode L=A, Party/Box Automatic 5
+expect-log ^options: shown, game row 0 \(Text Speed\), Text Speed Fast, Battle Effects Off, Battle Style Switch, Button Mode L=A, Party/Box Automatic 10
+expect-log ^options: screen matches the save word 5
+expect-mode off
+sleep 1
+shot options
+
+# --- Moves: rows wrap, values stop at the ends ---
+mark
+send press down
+expect-log ^options: row Battle Effects 5
+send press left
+expect-log ^options: Battle Effects On 5
+send press right
+expect-log ^options: Battle Effects Off 5
+sleep 1
+mark
+# Off is the last value: nothing is pressed.
+send press right
+sleep 2
+reject-log ^action: options-right
+mark
+send press up
+expect-log ^options: row Text Speed 5
+send press up
+expect-log ^options: row Party/Box 5
+sleep 1
+shot moved
+check-save
+
+# --- B with nothing changed: straight back to the X menu ---
+mark
+send press b
+wait-scene FieldRo 10
+expect-log ^options: hidden 5
+expect-log ^options: closed, save word 0002A026: 5
+expect-log ^xmenu: shown 15
+expect-mode off
+reject-log ^options: question
+
+# --- A change, then B: the question; No leaves the settings as they were ---
+mark
+send xmenu open options
+expect-log ^action: xmenu-options ok 15
+expect-log ^options: shown, game row 0 10
+send press up
+expect-log ^options: row Party/Box 5
+send press left
+expect-log ^options: Party/Box Manual 5
+sleep 1
+send press b
+expect-log ^options: question \(make these changes\?\), cursor Yes 10
+sleep 1
+shot question
+mark
+send press down
+expect-log ^options: question cursor No 5
+sleep 1
+shot pre-answer-no
+send press a
+expect-log ^options: answer No 5
+expect-log ^action: options-answer ok 15
+wait-scene FieldRo 10
+expect-log ^options: closed, save word 0002A026: 5
+expect-log ^xmenu: shown 15
+check-save
+
+# --- A change, B, Yes: the game keeps it (in memory) ---
+mark
+send xmenu open options
+expect-log ^action: xmenu-options ok 15
+expect-log ^options: shown, game row 0 \(Text Speed\), Text Speed Fast 10
+send press left
+expect-log ^options: Text Speed Normal 5
+sleep 1
+send press b
+expect-log ^options: question \(make these changes\?\), cursor Yes 10
+sleep 1
+shot pre-answer-yes
+send press a
+expect-log ^options: answer Yes: Text Speed Normal 5
+expect-log ^action: options-answer ok 15
+wait-scene FieldRo 10
+expect-log ^options: closed, save word 0002A025: Text Speed Normal, Battle Effects Off 5
+expect-log ^xmenu: shown 15
+check-save
+
+# --- Back to Fast with Confirm (A on the list) ---
+mark
+send xmenu open options
+expect-log ^action: xmenu-options ok 15
+expect-log ^options: save word 0002A025: 5
+expect-log ^options: shown, game row 0 \(Text Speed\), Text Speed Normal 10
+expect-log ^options: screen matches the save word 5
+send press right
+expect-log ^options: Text Speed Fast 5
+sleep 1
+shot pre-confirm
+send press a
+expect-log ^options: confirm: Text Speed Fast, Battle Effects Off, Battle Style Switch, Button Mode L=A, Party/Box Automatic 5
+expect-log ^action: options-confirm ok 15
+wait-scene FieldRo 10
+expect-log ^options: closed, save word 0002A026: Text Speed Fast, Battle Effects Off, Battle Style Switch, Button Mode L=A, Party/Box Automatic 5
+expect-log ^xmenu: shown 15
+expect-mode off
+check-save
+
+# --- Close the X menu: field, input given back ---
+mark
+send press b
+expect-log ^xmenu: hidden 10
+expect-mode off
+send status
+expect-log ^buttons: .*capture 00000000 5
+shot field
+check-save
+stop
