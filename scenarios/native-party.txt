@@ -13,6 +13,8 @@
 #   7. TM01 on Torracat: the game's teaching screen asks natively; forget
 #      Lick for Work Up (TMs stay in the Bag).
 # A screenshot is taken before every A. Nothing is saved.
+# Start in the Pokémon Center whatever ran before (native-move-learn leaves the grass).
+restore pokecenter
 include common/boot
 # Checks the automatic view per scene (Party would be full), off by default.
 send auto on

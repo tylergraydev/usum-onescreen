@@ -1,6 +1,8 @@
 # Defaults: auto off, so a game screen that needs the bottom screen (the
 # Pokédex) leaves the view off until the player presses L+R. Run on an
 # instance without usum-onescreen.ini (or with the default one).
+# Start in the Pokémon Center whatever ran before (native-move-learn leaves the grass).
+restore pokecenter
 include common/boot
 # The boot settings line ends with size, corner and auto.
 expect-log , auto off 5
