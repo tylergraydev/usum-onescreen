@@ -10,8 +10,10 @@
 #include "Scene.hpp"
 #include "Settings.hpp"
 #include "Screens/MoveLearnMenu.hpp"
+#include "UI/Assets.hpp"
 #include "UI/Device.hpp"
 #include "UI/Layer.hpp"
+#include "UI/Theme.hpp"
 #include "UI/ScreenBuffer.hpp"
 
 namespace OneScreen
@@ -175,6 +177,7 @@ namespace OneScreen
     static bool s_dirty = false;
     static UI::Layer s_layer;
     static UI::Rect s_layerArea = {};
+    static bool s_drawnGameFont = false;    // the game font was loaded when last drawn
     static const char *const Owner = "movelearn";   // UI::ScreenBuffer
 
     static Screens::LearnMove MakeMove(const BattleState &state, u16 move, u8 pp, u8 maxPp)
@@ -284,6 +287,8 @@ namespace OneScreen
 
         const bool visible = s_menu.Visible();
         const std::string key = visible ? s_menu.DrawKey(s_snap) : std::string();
+        if (visible && !s_visible)
+            UI::RequestAssets();   // the game's font and icons; normally loaded at the first field already
         if (visible != s_visible)
             log.push_back(UI::ScreenBuffer::HeapLog(visible ? "movelearn shown" : "movelearn hidden"));
         if (key != s_drawKey || visible != s_visible)
@@ -327,16 +332,19 @@ namespace OneScreen
                 if (!s_layer.Matches(fb) || area.x != s_layerArea.x || area.y != s_layerArea.y
                     || area.w != s_layerArea.w || area.h != s_layerArea.h)
                 {
-                    s_layer.Setup(fb, area, 10, pixels, UI::ScreenBuffer::Bytes);
+                    s_layer.Setup(fb, area, UI::Theme::WindowRadius, pixels, UI::ScreenBuffer::Bytes);
 
                     s_layerArea = area;
                     s_dirty = true;
                 }
-                if (s_dirty)
+                // Also once the game's font and icons have loaded.
+                const bool gameFont = UI::Theme::UsingGameFont();
+                if (s_dirty || gameFont != s_drawnGameFont)
                 {
                     UI::Canvas canvas = s_layer.Begin();
                     s_drawMenu.Draw(canvas, s_drawSnap);
                     s_dirty = false;
+                    s_drawnGameFont = gameFont;
                 }
             }
             s_drawLock.Unlock();

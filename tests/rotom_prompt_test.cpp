@@ -294,18 +294,18 @@ static void TestDraw(const char *preview)
     CHECK(above.r == 10 && above.g == 200 && above.b == 10);
     const UI::Color inside = At(canvas, area.x + 6, area.y + area.h / 2);
     CHECK(inside.g != 200);
-    // The cursor's yellow frame is around answer 2, not answer 1.
+    // The game's red cursor is on answer 2, not answer 1.
     const UI::Rect a1 = RotomAnswerRect(v, 0), a2 = RotomAnswerRect(v, 1);
-    const UI::Color frame2 = At(canvas, a2.x + 40, a2.y - 1);
-    const UI::Color frame1 = At(canvas, a1.x + 40, a1.y - 1);
-    CHECK(frame2.r > 200 && frame2.g > 200);
-    CHECK(!(frame1.r > 200 && frame1.g > 200));
+    const UI::Color cursor2 = At(canvas, a2.x + 8, a2.y + (a2.h - 2) / 2);
+    const UI::Color cursor1 = At(canvas, a1.x + 8, a1.y + (a1.h - 2) / 2);
+    CHECK(cursor2.r > 200 && cursor2.g < 60 && cursor2.b < 60);
+    CHECK(!(cursor1.r > 200 && cursor1.g < 60 && cursor1.b < 60));
 
     RotomView badge;
     badge.mode = RotomMode::Ready;
     DrawRotomPrompt(canvas, badge);
     const UI::Color edge = At(canvas, RotomBadge.x + RotomBadge.w / 2, RotomBadge.y + 1);
-    CHECK(edge.r > 180 && edge.g < 120);
+    CHECK(edge.r > 240 && edge.g > 150 && edge.g < 200 && edge.b < 40);    // Rotom's orange line
 
     if (preview != nullptr)
         WritePpm(canvas, preview);
