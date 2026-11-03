@@ -13,8 +13,10 @@
 #include "Panel.hpp"
 #include "Party.hpp"
 #include "Scene.hpp"
+#include "Screens/Bag.hpp"
 #include "Screens/PartyMenu.hpp"
 #include "UI/Device.hpp"
+#include "UI/GameAssets.hpp"
 #include "UI/Layer.hpp"
 
 namespace OneScreen
@@ -31,6 +33,10 @@ namespace OneScreen
     static const u32 ExpectFrames = 240;
     // Party data is re-read this often while shown (and after every action).
     static const u32 ReadEvery = 10;
+    // Following a Use / Give: give up (and step aside for the panel) after
+    // this long without progress in the Bag, or in another scene
+    // (an evolution plays there).
+    static const u32 FollowStuckFrames = 900, FollowOtherFrames = 3600;
     // The summary's party balls (bottom screen, x 0-35): the current one has a
     // green ring. Centres 16 + 32 * position; screenshots p23-summary,
     // p23-sum-down, p23-s0 (docs/PARTY-UI.md).
@@ -41,11 +47,15 @@ namespace OneScreen
         Idle,
         Summary,    // party-summary running
         Swap,       // party-swap running
-        UseOpen,    // party-restore running (to the Restore bag)
-        UseSeek,    // in the Restore bag: bringing the item into reach
-        UseRow,     // party-bag-row running (opens the item menu)
-        UseUse,     // party-use running
-        UseBack,    // party-bag-back running (giving up)
+        Take,       // party-take running
+        BagOpen,    // party-restore / party-held-bag running (to the Bag)
+        BagSeek,    // in the Bag: bringing the item into reach
+        BagRow,     // party-bag-row running (opens the item menu)
+        BagMenu,    // waiting for the item menu, then Use / Give
+        Follow,     // following the game after Use / Give
+        FollowAct,  // an action started while following runs
+        Asking,     // the native Ask page waits for the player
+        BagBack,    // party-bag-back running (giving up)
     };
 
     // --- Shared with the OSD callback (game thread) ---
@@ -90,20 +100,32 @@ namespace OneScreen
     static const u32 RingStable = 3;
     static std::string s_summaryLogged;
 
-    // Use item in progress.
-    struct UseState
+    // A Use / Give / Take in progress.
+    struct ItemJob
     {
+        enum Kind : u8 { Use, Give, Take } kind = Use;
         int pos = -1;
         PartyPocket pocket = PartyPocket::Medicine;
         int index = -1;
         PartyBagItem item;
         u32 listCount = 0;
-        u16 hpBefore = 0, maxHp = 0;
-        u32 statusBefore = 0;
+        PartyMonView before;            // the Pokémon when it started
+        std::vector<PartyBagItem> pocketBefore;
         int steps = 0;
-        std::string monName;
+        u32 menuWait = 0;
+        // Following the game.
+        PartyGame game = PartyGame::Gap;
+        u32 signature = 0, stable = 0, sinceProgress = 0;
+        int actions = 0;
+        // The Ask page: what it answers.
+        enum AskKind : u8 { AskNone, AskYesNo, AskMenu, AskTeach } ask = AskNone;
+        int menuEntries = 0;            // AskMenu: entries of the game's menu
+        u16 teachMove = 0;
+        std::string learned;            // "Torracat learned Work Up" style, from the teaching screen
     };
-    static UseState s_use;
+    static ItemJob s_job;
+    static PartyAskView s_ask;
+    static int s_askCancel = -1;
     static std::vector<PartyMonView> s_swapBefore;      // the list when a swap started
     static std::vector<PartyBagItem> s_items[(int)PartyPocket::Count];
 
@@ -204,6 +226,18 @@ namespace OneScreen
         return name;
     }
 
+    // A move's name outside the summary: seen there before, or the game's
+    // own text (UI::GameAssets, once loaded), else its number.
+    static std::string MoveNameOf(u16 move)
+    {
+        auto it = s_moveNames.find(move);
+        if (it != s_moveNames.end() && !it->second.empty())
+            return it->second;
+        const UI::GameAssets *assets = UI::GetGameAssets();
+        const std::string name = assets != nullptr ? assets->MoveName(move) : std::string();
+        return name.empty() ? Utils::Format("Move %u", move) : name;
+    }
+
     // --- Party data ---
 
     static PartyMonView MonView(const Pk7 &mon)
@@ -220,9 +254,11 @@ namespace OneScreen
         if (v.name.empty())
             v.name = v.species;
         v.level = mon.level;
+        v.gender = mon.gender;
         v.hp = mon.hp;
         v.maxHp = mon.maxHp;
         v.status = mon.status;
+        v.itemId = mon.heldItem;
         if (mon.heldItem != 0)
         {
             v.item = Cached(s_itemNames, mon.heldItem, ReadItem);
@@ -255,7 +291,8 @@ namespace OneScreen
     static void ReadPocketItems(void)
     {
         const BagState bag = ReadBag();
-        static const Pocket pockets[(int)PartyPocket::Count] = { Pocket::Medicine, Pocket::Berries };
+        static const Pocket pockets[(int)PartyPocket::Count] = { Pocket::Medicine, Pocket::Items, Pocket::TMs,
+                                                                  Pocket::Berries };
         for (int p = 0; p < (int)PartyPocket::Count; p++)
         {
             std::vector<PartyBagItem> &list = s_items[p];
@@ -318,6 +355,15 @@ namespace OneScreen
     static std::string NameAt(int pos)
     {
         return pos >= 0 && pos < Count() ? s_mons[pos].name : std::string("?");
+    }
+
+    std::vector<PartyMonView> PartyScreenMons(u32 sceneManager)
+    {
+        const PartyState party = ReadParty(sceneManager);
+        std::vector<PartyMonView> mons;
+        for (int slot = 0; party.valid && slot < party.count; slot++)
+            mons.push_back(MonView(party.slots[slot].mon));
+        return mons;
     }
 
     // --- Panel ---
@@ -413,6 +459,12 @@ namespace OneScreen
     {
         if (!ActionStart(s_action.def, sceneManager, log))
         {
+            // Mid-way through the game's Bag: leave the rest to the player.
+            if (s_stage >= Stage::BagSeek && stage != Stage::BagBack)
+            {
+                log.push_back("party-ui: can't go on natively; the native screen steps aside (L+R panel)");
+                s_yield = true;
+            }
             s_note = "Couldn't do that now";
             s_stage = Stage::Idle;
             s_busy.clear();
@@ -421,6 +473,462 @@ namespace OneScreen
         s_stage = stage;
         s_busy = busy;
         return true;
+    }
+
+    // Starts a Use or Give of item `index` of `pocket` on position `pos`.
+    static void StartItem(ItemJob::Kind kind, int pos, PartyPocket pocket, int index, u32 sceneManager,
+                          std::vector<std::string> &log)
+    {
+        const std::vector<PartyBagItem> &items = s_items[(int)pocket];
+        if (index < 0 || index >= (int)items.size() || pos < 0 || pos >= Count())
+            return;
+        s_job = ItemJob();
+        s_job.kind = kind;
+        s_job.pos = pos;
+        s_job.pocket = pocket;
+        s_job.index = index;
+        s_job.item = items[index];
+        s_job.listCount = items.size();
+        s_job.before = s_mons[pos];
+        s_job.pocketBefore = items;
+        const bool give = kind == ItemJob::Give;
+        log.push_back(Utils::Format("party-ui: %s %s (%s %d of %u) %s %d (%s)", give ? "give" : "use",
+                                    s_job.item.name.c_str(), PartyPocketName(pocket), index + 1, s_job.listCount,
+                                    give ? "to" : "on", pos + 1, s_job.before.name.c_str()));
+        if (!give && PartyUseViaRestore(pocket))
+            MakePartyRestoreAction(s_action, pos, pocket);
+        else
+            MakePartyHeldBagAction(s_action, pos, pocket);
+        Start(Stage::BagOpen, sceneManager, (give ? "Giving " + s_job.item.name + " to "
+                                                  : "Using " + s_job.item.name + " on ") + s_job.before.name + "...", log);
+    }
+
+    static void RunCommand(const PartyCommand &cmd, u32 sceneManager, std::vector<std::string> &log);
+
+    static void HandleInput(u32 sceneManager, std::vector<std::string> &log)
+    {
+        const u32 keys = PressedKeys();
+        if (keys == 0)
+            return;
+        PartyMenuInput in;
+        in.count = Count();
+        in.items = &s_items[(int)s_menu.Pocket()];
+        in.holding = s_menu.Cursor() < Count() && s_mons[s_menu.Cursor()].itemId != 0;
+        in.choices = (int)s_ask.choices.size();
+        in.cancelChoice = s_askCancel;
+        const PartyCommand cmd = s_menu.Press(keys, in);
+        if (s_menu.Cursor() != s_lastCursorLogged)
+        {
+            s_lastCursorLogged = s_menu.Cursor();
+            log.push_back(Utils::Format("party-ui: cursor %d (%s)", s_menu.Cursor() + 1, NameAt(s_menu.Cursor()).c_str()));
+        }
+        if (s_menu.Page() != s_lastPageLogged || (keys & (PartyKey::Up | PartyKey::Down | PartyKey::L | PartyKey::R
+                                                          | PartyKey::Left | PartyKey::Right)))
+        {
+            static const char *const pages[] = { "list", "menu", "swap", "items", "ask" };
+            std::string line = std::string("party-ui: page ") + pages[(int)s_menu.Page()];
+            if (s_menu.Page() == PartyPage::Menu)
+            {
+                const std::vector<PartyMenuItem> entries = PartyMenuEntries(in.holding, Count());
+                const int i = s_menu.MenuCursor() < (int)entries.size() ? s_menu.MenuCursor() : (int)entries.size() - 1;
+                line += std::string(", ") + PartyMenuLabel(entries[i]);
+            }
+            else if (s_menu.Page() == PartyPage::Items)
+            {
+                const std::vector<PartyBagItem> &items = s_items[(int)s_menu.Pocket()];
+                line += std::string(s_menu.Giving() ? " (give), " : ", ") + PartyPocketName(s_menu.Pocket());
+                line += items.empty() ? std::string(" (empty)")
+                        : Utils::Format(" %d of %u: %s x%u", s_menu.ItemCursor() + 1, items.size(),
+                                        items[s_menu.ItemCursor()].name.c_str(), items[s_menu.ItemCursor()].count);
+            }
+            else if (s_menu.Page() == PartyPage::Ask && s_menu.AskCursor() < (int)s_ask.choices.size())
+                line += ", " + s_ask.choices[s_menu.AskCursor()].label;
+            if (s_menu.Page() != s_lastPageLogged || s_menu.Page() != PartyPage::List)
+                log.push_back(line);
+            s_lastPageLogged = s_menu.Page();
+        }
+        if (cmd.kind != PartyCommand::None)
+            RunCommand(cmd, sceneManager, log);
+    }
+
+    // --- Results ---
+
+    static u16 CountOf(const std::vector<PartyBagItem> &list, u16 id)
+    {
+        for (const PartyBagItem &i : list)
+            if (i.id == id)
+                return i.count;
+        return 0;
+    }
+
+    static std::string MovesText(const PartyMonView &m)
+    {
+        std::string s;
+        for (int i = 0; i < 4; i++)
+            if (m.moves[i] != 0)
+                s += (s.empty() ? "" : ", ") + MoveNameOf(m.moves[i]);
+        return s.empty() ? std::string("-") : s;
+    }
+
+    static bool SameMoves(const PartyMonView &a, const PartyMonView &b)
+    {
+        for (int i = 0; i < 4; i++)
+            if (a.moves[i] != b.moves[i])
+                return false;
+        return true;
+    }
+
+    // After a Use / Give / Take: what changed, for the log and the footer.
+    static void FinishItem(u32 sceneManager, bool ok, std::vector<std::string> &log)
+    {
+        ReadPartyNow(sceneManager, log);
+        s_busy.clear();
+        const ItemJob &j = s_job;
+        const PartyMonView after = j.pos < Count() ? s_mons[j.pos] : PartyMonView();
+        const PartyMonView &b = j.before;
+        const char *fail = ok ? "" : " (did not get back to the list)";
+        if (j.kind == ItemJob::Take)
+        {
+            const u16 countBefore = CountOf(j.pocketBefore, b.itemId);
+            u16 countAfter = 0;
+            for (int p = 0; p < (int)PartyPocket::Count; p++)
+                countAfter = countAfter ? countAfter : CountOf(s_items[p], b.itemId);
+            const bool took = after.itemId == 0 && b.itemId != 0;
+            log.push_back(Utils::Format("party-ui: %s %s from %s: held %s -> %s, %s x%u -> x%u%s",
+                                        took ? "took" : "take FAILED:", b.item.c_str(), b.name.c_str(), b.item.c_str(),
+                                        after.item.empty() ? "-" : after.item.c_str(), b.item.c_str(), countBefore,
+                                        countAfter, fail));
+            s_note = took ? "Received the " + b.item + " from " + b.name : "Couldn't take the item";
+            return;
+        }
+        const u16 countAfter = CountOf(s_items[(int)j.pocket], j.item.id);
+        if (j.kind == ItemJob::Give)
+        {
+            const bool gave = after.itemId == j.item.id && countAfter != j.item.count;
+            log.push_back(Utils::Format("party-ui: %s %s to %s: held %s -> %s, %s x%u -> x%u%s",
+                                        gave ? "gave" : ok ? "kept:" : "give FAILED:", j.item.name.c_str(),
+                                        b.name.c_str(), b.item.empty() ? "-" : b.item.c_str(),
+                                        after.item.empty() ? "-" : after.item.c_str(), j.item.name.c_str(),
+                                        j.item.count, countAfter, fail));
+            s_note = gave ? after.name + " is now holding the " + j.item.name
+                          : ok ? b.name + " kept its item" : "Something went wrong (see the log)";
+            return;
+        }
+        // A TM stays in the Bag: a changed move set counts as used too.
+        const bool changed = countAfter != j.item.count || !SameMoves(after, b) || after.level != b.level
+                             || after.hp != b.hp || after.status != b.status || after.species != b.species;
+        std::string line = Utils::Format("party-ui: %s %s on %s: hp %u/%u -> %u/%u, status %lX -> %lX, %s x%u -> x%u",
+                                         changed ? "used" : ok ? "no effect:" : "FAILED", j.item.name.c_str(),
+                                         b.name.c_str(), b.hp, b.maxHp, after.hp, after.maxHp, b.status, after.status,
+                                         j.item.name.c_str(), j.item.count, countAfter);
+        if (after.level != b.level)
+            line += Utils::Format(", level %u -> %u", b.level, after.level);
+        if (after.species != b.species)
+            line += ", species " + b.species + " -> " + after.species;
+        if (!SameMoves(after, b))
+            line += ", moves " + MovesText(b) + " -> " + MovesText(after);
+        log.push_back(line + fail);
+        s_note = changed ? (j.learned.empty() ? j.item.name + " used on " + b.name : j.learned)
+                         : ok ? "It won't have any effect" : "Something went wrong (see the log)";
+    }
+
+    static void BackOut(u32 sceneManager, const std::string &why, std::vector<std::string> &log)
+    {
+        log.push_back(std::string("party-ui: ") + (s_job.kind == ItemJob::Give ? "give" : "use") + " FAILED: " + why
+                      + "; back to the Party screen");
+        s_note = "Couldn't " + std::string(s_job.kind == ItemJob::Give ? "give " : "use ") + s_job.item.name;
+        MakePartyBagBackAction(s_action);
+        Start(Stage::BagBack, sceneManager, "Going back...", log);
+    }
+
+    static void Seek(u32 sceneManager, std::vector<std::string> &log)
+    {
+        const BagListState list = ReadBagList(sceneManager);
+        if (!list.valid)
+        {
+            BackOut(sceneManager, "the Bag's list doesn't read", log);
+            return;
+        }
+        if (list.count != s_job.listCount)
+        {
+            BackOut(sceneManager, Utils::Format("the Bag lists %lu items, %s has %lu", list.count,
+                                                PartyPocketName(s_job.pocket), s_job.listCount), log);
+            return;
+        }
+        // The list scrolls smoothly; wait for it to settle on a row.
+        const float whole = std::floor(list.scroll + 0.5f);
+        if (std::fabs(list.scroll - whole) > 0.01f)
+            return;
+        const PartyBagPlan plan = PlanPartyBag(s_job.index, (int)whole, (int)list.rows, (int)list.count);
+        if (plan.row >= 0)
+        {
+            log.push_back(Utils::Format("party-ui: bag scroll %d row %lu, tapping row %d", (int)whole, list.row + 1,
+                                        plan.row + 1));
+            MakePartyBagRowAction(s_action, plan.row);
+            Start(Stage::BagRow, sceneManager, s_busy, log);
+        }
+        else if (plan.dir != 0 && ++s_job.steps <= 2 * (int)list.count)
+        {
+            MakePartyBagStepAction(s_action, plan.dir < 0);
+            Start(Stage::BagSeek, sceneManager, s_busy, log);
+        }
+        else
+            BackOut(sceneManager, "the item didn't come into view", log);
+    }
+
+    // The item menu is up for our item: tap Use / Give.
+    static void ChooseInMenu(u32 sceneManager, std::vector<std::string> &log)
+    {
+        const BagGame g = ReadBagGame(sceneManager);
+        if (g.mode != BagMode::Menu || g.item != s_job.item.id)
+        {
+            if (++s_job.menuWait > 90)
+                BackOut(sceneManager, Utils::Format("the item menu for %s didn't open", s_job.item.name.c_str()), log);
+            return;
+        }
+        std::string entries;
+        for (u8 c : g.commands)
+            entries += Utils::Format(" %02X", c);
+        const bool give = s_job.kind == ItemJob::Give;
+        const int at = PartyItemMenuEntry(g.commands, give);
+        if (at < 1 || at > 5)
+        {
+            BackOut(sceneManager, Utils::Format("%s can't be %s here (menu%s)", s_job.item.name.c_str(),
+                                                give ? "given" : "used", entries.c_str()), log);
+            s_note = give ? s_job.item.name + " can't be held" : s_job.item.name + " can't be used on " + s_job.before.name;
+            return;
+        }
+        log.push_back(Utils::Format("party-ui: item menu%s, %s is %d from the bottom", entries.c_str(),
+                                    give ? "Give" : "Use", at));
+        MakePartyBagMenuAction(s_action, at);
+        s_job.game = PartyGame::Gap;
+        s_job.stable = s_job.sinceProgress = 0;
+        Start(Stage::FollowAct, sceneManager, s_busy, log);
+    }
+
+    // --- Following the game after Use / Give ---
+
+    static PartyGame ReadGame(u32 sceneManager, const std::string &scene, u32 &signature, BagGame &bag,
+                              TeachScreenState &teach)
+    {
+        signature = 0;
+        if (scene.empty())
+            return PartyGame::Gap;
+        if (scene == SceneParty)
+            return (ActionProbeFlags() & WorldPartyList) ? PartyGame::PartyList : PartyGame::PartyOther;
+        if (scene == SceneTeach)
+        {
+            teach = ReadTeachScreen(sceneManager);
+            signature = teach.newMove;
+            return !teach.valid ? PartyGame::Other : teach.confirm ? PartyGame::TeachPage : PartyGame::Teach;
+        }
+        if (scene != SceneBag)
+            return PartyGame::Other;
+        bag = ReadBagGame(sceneManager);
+        signature = bag.Signature();
+        switch (bag.mode)
+        {
+        case BagMode::List:    return PartyGame::BagList;
+        case BagMode::Menu:    return bag.YesNo() ? PartyGame::BagYesNo : PartyGame::BagMenu;
+        case BagMode::Message: return PartyGame::BagMessage;
+        default:               return PartyGame::BagBusy;
+        }
+    }
+
+    // The PP items that ask which move (Ether, Max Ether, PP Up, PP Max).
+    static bool AsksForMove(u16 item)
+    {
+        return item == 38 || item == 39 || item == 51 || item == 53;
+    }
+
+    static void ShowAsk(const BagGame &bag, const TeachScreenState &teach, PartyGame game, std::vector<std::string> &log)
+    {
+        ItemJob &j = s_job;
+        s_ask = PartyAskView();
+        s_askCancel = -1;
+        const PartyMonView &mon = j.pos < Count() ? s_mons[j.pos] : j.before;
+        if (game == PartyGame::Teach)
+        {
+            j.ask = ItemJob::AskTeach;
+            j.teachMove = teach.newMove;
+            const std::string move = MoveNameOf(teach.newMove);
+            s_ask.title = mon.name + " wants to learn " + move + ".\nForget which move?";
+            s_ask.moves = true;
+            for (int i = 0; i < 4; i++)
+            {
+                PartyChoice c;
+                c.move = mon.moves[i];
+                c.pp = mon.pp[i];
+                c.label = mon.moves[i] ? MoveNameOf(mon.moves[i]) : std::string("-");
+                s_ask.choices.push_back(c);
+            }
+            PartyChoice skip;
+            skip.label = "Don't learn " + move;
+            s_ask.choices.push_back(skip);
+            log.push_back(Utils::Format("party-ui: teach screen: %s wants %s (%u, param %u); knows ", mon.name.c_str(),
+                                        move.c_str(), teach.newMove, teach.pokeId) + MovesText(mon));
+        }
+        else if (game == PartyGame::BagYesNo)
+        {
+            j.ask = ItemJob::AskYesNo;
+            s_ask.title = j.kind == ItemJob::Give && !j.before.item.empty()
+                          ? mon.name + " is already holding " + j.before.item + ".\nSwitch it for the " + j.item.name + "?"
+                          : "The game asks about the " + j.item.name + ":\nYes or No? (L+R shows it)";
+            s_ask.choices = { PartyChoice{ "Yes" }, PartyChoice{ "No" } };
+            s_askCancel = 1;
+            log.push_back("party-ui: ask yes/no: " + s_ask.title.substr(0, s_ask.title.find('\n')));
+        }
+        else
+        {
+            // A menu we didn't open: which move (PP items), or something new.
+            j.ask = ItemJob::AskMenu;
+            const int n = (int)bag.commands.size();
+            j.menuEntries = n;
+            int moves = 0;
+            for (int i = 0; i < 4; i++)
+                moves += mon.moves[i] != 0;
+            std::string entries;
+            for (u8 c : bag.commands)
+                entries += Utils::Format(" %02X", c);
+            if (AsksForMove(j.item.id) && n == moves + 1)
+            {
+                s_ask.title = "Restore PP of which move?";
+                s_ask.moves = true;
+                for (int i = 0; i < moves; i++)
+                {
+                    PartyChoice c;
+                    c.move = mon.moves[i];
+                    c.pp = mon.pp[i];
+                    c.label = MoveNameOf(mon.moves[i]);
+                    s_ask.choices.push_back(c);
+                }
+                s_ask.choices.push_back(PartyChoice{ "Cancel" });
+            }
+            else
+            {
+                s_ask.title = "The game asks about the " + j.item.name + "\n(L+R shows the bottom screen)";
+                for (int i = 0; i < n; i++)
+                    s_ask.choices.push_back(PartyChoice{ bag.commands[i] == 0x11 ? std::string("Cancel")
+                                                         : Utils::Format("Option %d", i + 1) });
+            }
+            if (n > 0 && bag.commands[n - 1] == 0x11)
+                s_askCancel = n - 1;
+            log.push_back(Utils::Format("party-ui: ask menu (%d entries:%s): ", n, entries.c_str()) + s_ask.title.substr(0, s_ask.title.find('\n')));
+        }
+        s_menu.Ask(0);
+        s_stage = Stage::Asking;
+        s_busy.clear();
+    }
+
+    static void Answer(int choice, u32 sceneManager, std::vector<std::string> &log)
+    {
+        ItemJob &j = s_job;
+        if (choice < 0 || choice >= (int)s_ask.choices.size())
+            return;
+        log.push_back(Utils::Format("party-ui: answer %d (%s)", choice + 1, s_ask.choices[choice].label.c_str()));
+        const PartyMonView &mon = j.pos < Count() ? s_mons[j.pos] : j.before;
+        switch (j.ask)
+        {
+        case ItemJob::AskTeach:
+            if (choice < 4 && mon.moves[choice] == 0)
+            {
+                s_menu.Ask(choice);     // an empty slot: nothing to forget
+                return;
+            }
+            j.learned = choice < 4 ? mon.name + " forgot " + MoveNameOf(mon.moves[choice]) + " and learned "
+                                     + MoveNameOf(j.teachMove)
+                                   : mon.name + " did not learn " + MoveNameOf(j.teachMove);
+            MakePartyTeachAction(s_action, choice);
+            break;
+        case ItemJob::AskYesNo:
+            MakePartyYesNoAction(s_action, choice == 0);
+            break;
+        default:
+            MakePartyBagMenuAction(s_action, j.menuEntries - choice);
+            break;
+        }
+        j.ask = ItemJob::AskNone;
+        j.stable = j.sinceProgress = 0;
+        Start(Stage::FollowAct, sceneManager, "Telling the game...", log);
+    }
+
+    static void Follow(u32 sceneManager, const std::string &scene, std::vector<std::string> &log)
+    {
+        ItemJob &j = s_job;
+        u32 signature = 0;
+        BagGame bag;
+        TeachScreenState teach;
+        const PartyGame game = ReadGame(sceneManager, scene, signature, bag, teach);
+        if (game != j.game || signature != j.signature)
+        {
+            j.game = game;
+            j.signature = signature;
+            j.stable = 0;
+            j.sinceProgress = 0;
+        }
+        j.stable++;
+        j.sinceProgress++;
+
+        if (s_stage == Stage::Asking)
+        {
+            // The game moved on by itself (or the player used the panel).
+            if (j.stable == 1)
+            {
+                s_menu.EndAsk();
+                s_stage = Stage::Follow;
+                log.push_back("party-ui: the game moved on; ask closed");
+            }
+            return;
+        }
+
+        const PartyFollowDo next = PartyFollow(game, j.stable);
+        switch (next)
+        {
+        case PartyFollowDo::Done:
+            s_stage = Stage::Idle;
+            FinishItem(sceneManager, true, log);
+            return;
+        case PartyFollowDo::Advance:
+            MakePartyMessageAction(s_action, game == PartyGame::BagMessage);
+            break;
+        case PartyFollowDo::LeaveBag:
+            MakePartyBagBackAction(s_action);
+            break;
+        case PartyFollowDo::Ask:
+        case PartyFollowDo::Teach:
+            if (game == PartyGame::BagMenu && (bag.commands.empty() || bag.commands.size() > 5))
+                break;      // nothing the plugin can tap; waits, then steps aside
+            ShowAsk(bag, teach, game, log);
+            return;
+        default:
+            break;
+        }
+        if (next == PartyFollowDo::Advance || next == PartyFollowDo::LeaveBag)
+        {
+            if (++j.actions > 40)
+            {
+                log.push_back("party-ui: follow FAILED: too many steps; the panel (L+R) can finish it");
+                s_stage = Stage::Idle;
+                s_yield = true;
+                s_busy.clear();
+                return;
+            }
+            j.stable = 0;
+            Start(Stage::FollowAct, sceneManager, s_busy, log);
+            return;
+        }
+        const u32 limit = game == PartyGame::Other || game == PartyGame::Gap ? FollowOtherFrames : FollowStuckFrames;
+        if (j.sinceProgress > limit)
+        {
+            static const char *const names[] = { "gap", "party list", "party", "bag list", "bag menu", "bag yes/no",
+                                                 "bag message", "bag busy", "teach", "teach page", "other" };
+            log.push_back(std::string("party-ui: follow FAILED: stuck on ") + names[(int)game] + " (scene "
+                          + (scene.empty() ? "(none)" : scene) + "); the native screen steps aside (L+R panel)");
+            s_stage = Stage::Idle;
+            s_yield = true;
+            s_busy.clear();
+            s_note = "Finish on the bottom screen (L+R)";
+        }
     }
 
     static void RunCommand(const PartyCommand &cmd, u32 sceneManager, std::vector<std::string> &log)
@@ -439,136 +947,44 @@ namespace OneScreen
             log.push_back(Utils::Format("party-ui: swap %d (%s) and %d (%s)", cmd.pos + 1, NameAt(cmd.pos).c_str(),
                                         cmd.other + 1, NameAt(cmd.other).c_str()));
             MakePartySwapAction(s_action, cmd.pos, cmd.other, s_party.screenCursor);
-            s_use.pos = cmd.pos;
-            s_use.index = cmd.other;
+            s_job.pos = cmd.pos;
+            s_job.index = cmd.other;
             s_swapBefore = s_mons;
             Start(Stage::Swap, sceneManager, "Moving " + NameAt(cmd.pos) + "...", log);
             break;
 
         case PartyCommand::UseItem:
-        {
-            const std::vector<PartyBagItem> &items = s_items[(int)cmd.pocket];
-            if (cmd.item < 0 || cmd.item >= (int)items.size() || cmd.pos < 0 || cmd.pos >= Count())
-                break;
-            s_use = UseState();
-            s_use.pos = cmd.pos;
-            s_use.pocket = cmd.pocket;
-            s_use.index = cmd.item;
-            s_use.item = items[cmd.item];
-            s_use.listCount = items.size();
-            s_use.hpBefore = s_mons[cmd.pos].hp;
-            s_use.maxHp = s_mons[cmd.pos].maxHp;
-            s_use.statusBefore = s_mons[cmd.pos].status;
-            s_use.monName = s_mons[cmd.pos].name;
-            log.push_back(Utils::Format("party-ui: use %s (%s %d of %u) on %d (%s)", s_use.item.name.c_str(),
-                                        PartyPocketName(cmd.pocket), cmd.item + 1, s_use.listCount, cmd.pos + 1,
-                                        s_use.monName.c_str()));
-            MakePartyRestoreAction(s_action, cmd.pos, cmd.pocket);
-            Start(Stage::UseOpen, sceneManager, "Using " + s_use.item.name + " on " + s_use.monName + "...", log);
+        case PartyCommand::GiveItem:
+            StartItem(cmd.kind == PartyCommand::GiveItem ? ItemJob::Give : ItemJob::Use, cmd.pos, cmd.pocket, cmd.item,
+                      sceneManager, log);
             break;
-        }
+
+        case PartyCommand::TakeItem:
+            if (cmd.pos < 0 || cmd.pos >= Count() || s_mons[cmd.pos].itemId == 0)
+                break;
+            s_job = ItemJob();
+            s_job.kind = ItemJob::Take;
+            s_job.pos = cmd.pos;
+            s_job.before = s_mons[cmd.pos];
+            for (int p = 0; p < (int)PartyPocket::Count; p++)
+                if (CountOf(s_items[p], s_job.before.itemId) != 0)
+                    s_job.pocketBefore = s_items[p];
+            log.push_back(Utils::Format("party-ui: take %s from %d (%s)", s_job.before.item.c_str(), cmd.pos + 1,
+                                        s_job.before.name.c_str()));
+            MakePartyTakeAction(s_action, cmd.pos);
+            Start(Stage::Take, sceneManager, "Taking the " + s_job.before.item + " from " + s_job.before.name + "...", log);
+            break;
+
+        case PartyCommand::Answer:
+            Answer(cmd.choice, sceneManager, log);
+            break;
 
         default:
             break;
         }
     }
 
-    static void HandleInput(u32 sceneManager, std::vector<std::string> &log)
-    {
-        const u32 keys = PressedKeys();
-        if (keys == 0)
-            return;
-        const PartyCommand cmd = s_menu.Press(keys, Count(), &s_items[(int)s_menu.Pocket()]);
-        if (s_menu.Cursor() != s_lastCursorLogged)
-        {
-            s_lastCursorLogged = s_menu.Cursor();
-            log.push_back(Utils::Format("party-ui: cursor %d (%s)", s_menu.Cursor() + 1, NameAt(s_menu.Cursor()).c_str()));
-        }
-        if (s_menu.Page() != s_lastPageLogged || (keys & (PartyKey::Up | PartyKey::Down | PartyKey::L | PartyKey::R
-                                                          | PartyKey::Left | PartyKey::Right)))
-        {
-            static const char *const pages[] = { "list", "menu", "swap", "items" };
-            std::string line = std::string("party-ui: page ") + pages[(int)s_menu.Page()];
-            if (s_menu.Page() == PartyPage::Menu)
-                line += std::string(", ") + PartyMenuLabel((PartyMenuItem)s_menu.MenuCursor());
-            else if (s_menu.Page() == PartyPage::Items)
-            {
-                const std::vector<PartyBagItem> &items = s_items[(int)s_menu.Pocket()];
-                line += std::string(", ") + PartyPocketName(s_menu.Pocket());
-                line += items.empty() ? std::string(" (empty)")
-                        : Utils::Format(" %d of %u: %s x%u", s_menu.ItemCursor() + 1, items.size(),
-                                        items[s_menu.ItemCursor()].name.c_str(), items[s_menu.ItemCursor()].count);
-            }
-            if (s_menu.Page() != s_lastPageLogged || s_menu.Page() != PartyPage::List)
-                log.push_back(line);
-            s_lastPageLogged = s_menu.Page();
-        }
-        if (cmd.kind != PartyCommand::None)
-            RunCommand(cmd, sceneManager, log);
-    }
-
     // --- Stages after an action ---
-
-    static void FinishUse(u32 sceneManager, bool ok, std::vector<std::string> &log)
-    {
-        ReadPartyNow(sceneManager, log);
-        const PartyMonView after = s_use.pos < Count() ? s_mons[s_use.pos] : PartyMonView();
-        u16 countAfter = 0;
-        for (const PartyBagItem &i : s_items[(int)s_use.pocket])
-            if (i.id == s_use.item.id)
-                countAfter = i.count;
-        const bool used = countAfter != s_use.item.count;
-        log.push_back(Utils::Format("party-ui: %s %s on %s: hp %u/%u -> %u/%u, status %lX -> %lX, %s x%u -> x%u%s",
-                                    used ? "used" : ok ? "no effect:" : "FAILED", s_use.item.name.c_str(),
-                                    s_use.monName.c_str(), s_use.hpBefore, s_use.maxHp, after.hp, after.maxHp,
-                                    s_use.statusBefore, after.status, s_use.item.name.c_str(), s_use.item.count,
-                                    countAfter, ok ? "" : " (did not get back to the list)"));
-        s_note = used ? s_use.item.name + " used on " + s_use.monName
-                      : ok ? "It won't have any effect" : "Something went wrong (see the log)";
-    }
-
-    static void BackOut(u32 sceneManager, const std::string &why, std::vector<std::string> &log)
-    {
-        log.push_back("party-ui: use FAILED: " + why + "; back to the Party screen");
-        s_note = "Couldn't use " + s_use.item.name;
-        MakePartyBagBackAction(s_action);
-        Start(Stage::UseBack, sceneManager, "Going back...", log);
-    }
-
-    static void Seek(u32 sceneManager, std::vector<std::string> &log)
-    {
-        const BagListState list = ReadBagList(sceneManager);
-        if (!list.valid)
-        {
-            BackOut(sceneManager, "the Bag's list doesn't read", log);
-            return;
-        }
-        if (list.count != s_use.listCount)
-        {
-            BackOut(sceneManager, Utils::Format("the Bag lists %lu items, %s has %lu", list.count,
-                                                PartyPocketName(s_use.pocket), s_use.listCount), log);
-            return;
-        }
-        // The list scrolls smoothly; wait for it to settle on a row.
-        const float whole = std::floor(list.scroll + 0.5f);
-        if (std::fabs(list.scroll - whole) > 0.01f)
-            return;
-        const PartyBagPlan plan = PlanPartyBag(s_use.index, (int)whole, (int)list.rows, (int)list.count);
-        if (plan.row >= 0)
-        {
-            log.push_back(Utils::Format("party-ui: bag scroll %d row %lu, tapping row %d", (int)whole, list.row + 1,
-                                        plan.row + 1));
-            MakePartyBagRowAction(s_action, plan.row);
-            Start(Stage::UseRow, sceneManager, s_busy, log);
-        }
-        else if (plan.dir != 0 && ++s_use.steps <= 2 * (int)list.count)
-        {
-            MakePartyBagStepAction(s_action, plan.dir < 0);
-            Start(Stage::UseSeek, sceneManager, s_busy, log);
-        }
-        else
-            BackOut(sceneManager, "the item didn't come into view", log);
-    }
 
     static void AfterAction(u32 sceneManager, std::vector<std::string> &log)
     {
@@ -592,7 +1008,7 @@ namespace OneScreen
             s_busy.clear();
             const std::vector<PartyMonView> &before = s_swapBefore;
             ReadPartyNow(sceneManager, log);
-            const int a = s_use.pos, b = s_use.index;
+            const int a = s_job.pos, b = s_job.index;
             const bool swapped = onList && a < Count() && b < Count() && a < (int)before.size()
                                  && b < (int)before.size() && s_mons[a].name == before[b].name
                                  && s_mons[b].name == before[a].name;
@@ -605,32 +1021,35 @@ namespace OneScreen
             break;
         }
 
-        case Stage::UseOpen:
+        case Stage::Take:
+            FinishItem(sceneManager, onList, log);
+            break;
+
+        case Stage::BagOpen:
             if (scene != SceneBag)
             {
                 s_busy.clear();
                 s_note = "Couldn't open the Bag";
-                log.push_back("party-ui: use FAILED: the Restore bag didn't open (scene " + scene + ")");
+                log.push_back("party-ui: item FAILED: the Bag didn't open (scene " + scene + ")");
                 break;
             }
-            s_stage = Stage::UseSeek;
+            s_stage = Stage::BagSeek;
             break;
 
-        case Stage::UseSeek:
-            s_stage = Stage::UseSeek;   // keep going (Seek runs every frame)
+        case Stage::BagSeek:
+            s_stage = Stage::BagSeek;   // keep going (Seek runs every frame)
             break;
 
-        case Stage::UseRow:
-            MakePartyUseAction(s_action);
-            Start(Stage::UseUse, sceneManager, s_busy, log);
+        case Stage::BagRow:
+            s_job.menuWait = 0;
+            s_stage = Stage::BagMenu;
             break;
 
-        case Stage::UseUse:
-            s_busy.clear();
-            FinishUse(sceneManager, onList, log);
+        case Stage::FollowAct:
+            s_stage = Stage::Follow;
             break;
 
-        case Stage::UseBack:
+        case Stage::BagBack:
             s_busy.clear();
             break;
 
@@ -650,9 +1069,15 @@ namespace OneScreen
         view.menuCursor = s_menu.MenuCursor();
         view.swapFrom = s_menu.SwapFrom();
         view.pocket = s_menu.Pocket();
+        view.giving = s_menu.Giving();
         view.itemCursor = s_menu.ItemCursor();
         if (view.page == PartyPage::Items)
             view.items = s_items[(int)view.pocket];
+        if (view.page == PartyPage::Ask)
+        {
+            view.ask = s_ask;
+            view.askCursor = s_menu.AskCursor();
+        }
         view.busy = s_busy;
         view.note = s_note;
         static std::string last;
@@ -733,7 +1158,7 @@ namespace OneScreen
 
     bool PartyScreenUsingBag(void)
     {
-        return s_stage >= Stage::UseOpen;
+        return s_stage >= Stage::BagOpen;
     }
 
     void PartyScreenUpdate(u32 sceneManager, const std::string &scene, std::vector<std::string> &log)
@@ -758,12 +1183,17 @@ namespace OneScreen
             s_expectUntil = 0;
         const bool inStatus = scene == SceneStatus && s_fromParty;
         const bool ours = s_stage != Stage::Idle;
+        const bool following = s_stage >= Stage::Follow && s_stage <= Stage::Asking;
         const bool inBag = scene == SceneBag && ours;
-        // The loading gap between our scenes (Party <-> Status / Bag).
+        const bool inTeach = scene == SceneTeach && following;
+        // Another scene while following a Use (an evolution): keep the panel
+        // off but let the game's own top screen show.
+        const bool elsewhere = following && !scene.empty() && !inParty && !inBag && !inTeach;
+        // The loading gap between our scenes (Party <-> Status / Bag / teaching).
         const bool gap = scene.empty() && (s_lastScene == SceneParty || (s_lastScene == SceneStatus && s_fromParty)
-                                           || (s_lastScene == SceneBag && ours));
+                                           || ((s_lastScene == SceneBag || following) && ours));
         const bool expecting = s_frames < s_expectUntil;
-        const bool here = inParty || inStatus || inBag || gap;
+        const bool here = inParty || inStatus || inBag || inTeach || elsewhere || gap;
         if (!here && !expecting)
             s_yield = false;
 
@@ -791,6 +1221,7 @@ namespace OneScreen
             log.push_back("party-ui: hidden");
             if (s_stage != Stage::Idle && !ActionRunning())
                 s_stage = Stage::Idle;
+            s_menu.EndAsk();
             s_busy.clear();
         }
         s_shown = shown;
@@ -810,15 +1241,19 @@ namespace OneScreen
         // Stages: one step whenever no action runs.
         if (!ActionRunning())
         {
-            if (s_stage == Stage::UseSeek && scene == SceneBag)
+            if (s_stage == Stage::BagSeek && scene == SceneBag)
                 Seek(sceneManager, log);
-            else if (s_stage != Stage::Idle && s_stage != Stage::UseSeek)
+            else if (s_stage == Stage::BagMenu && scene == SceneBag)
+                ChooseInMenu(sceneManager, log);
+            else if (s_stage == Stage::Follow || s_stage == Stage::Asking)
+                Follow(sceneManager, scene, log);
+            else if (s_stage != Stage::Idle && s_stage != Stage::BagSeek && s_stage != Stage::BagMenu)
                 AfterAction(sceneManager, log);
-            else if (s_stage == Stage::UseSeek && !scene.empty())
+            else if ((s_stage == Stage::BagSeek || s_stage == Stage::BagMenu) && !scene.empty())
             {
                 s_stage = Stage::Idle;
                 s_busy.clear();
-                log.push_back("party-ui: use FAILED: left the Bag (scene " + scene + ")");
+                log.push_back("party-ui: item FAILED: left the Bag (scene " + scene + ")");
             }
         }
 
@@ -840,18 +1275,19 @@ namespace OneScreen
             s_ringWanted = false;
             s_summaryHidden = false;
             s_summaryLogged.clear();
-            const bool owning = inParty && s_stage == Stage::Idle && !ActionRunning()
-                                && (ActionProbeFlags() & WorldPartyList);
+            const bool owning = !ActionRunning()
+                                && ((inParty && s_stage == Stage::Idle && (ActionProbeFlags() & WorldPartyList))
+                                    || s_stage == Stage::Asking);
             if (owning)
             {
                 SetCapture(s_menu.Keys() | (u32)Key::CPad);
                 HandleInput(sceneManager, log);
                 SetCapture(s_menu.Keys() | (u32)Key::CPad);
             }
-            else if (s_stage == Stage::Idle && !ActionRunning())
+            else if (!ActionRunning() && (s_stage == Stage::Idle || elsewhere))
                 SetCapture(0);
             PublishParty();
-            s_showLayer = true;
+            s_showLayer = !elsewhere;
         }
         s_prevScene = scene;
     }
@@ -872,9 +1308,9 @@ namespace OneScreen
 
     std::string PartyScreenStatus(void)
     {
-        static const char *const stages[] = { "idle", "summary", "swap", "use-open", "use-seek", "use-row", "use-use",
-                                              "use-back" };
-        static const char *const pages[] = { "list", "menu", "swap", "items" };
+        static const char *const stages[] = { "idle", "summary", "swap", "take", "bag-open", "bag-seek", "bag-row",
+                                              "bag-menu", "follow", "follow-act", "asking", "bag-back" };
+        static const char *const pages[] = { "list", "menu", "swap", "items", "ask" };
         return Utils::Format("party-ui: %s, %s, page %s, cursor %d, stage %s%s%s", s_enabled ? "on" : "off",
                              s_shown ? "shown" : "hidden", pages[(int)s_menu.Page()], s_menu.Cursor() + 1,
                              stages[(int)s_stage], s_yield ? ", panel on by hand" : "",

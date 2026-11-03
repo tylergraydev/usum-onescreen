@@ -178,10 +178,21 @@
       "buttons": {
         "summary": {"rect": [215, 123, 315, 145], "tap": [266, 134], "does": "Summary (scene Status); back (15,223) returns to Party", "verified": "tap", "evidence": "re5-party-summary, re5-summary-back"},
         "restore": {"rect": [215, 151, 315, 173], "tap": [266, 162], "does": "Restore: the Bag (scene main:006488C8) for this Pokemon, on the pocket it showed last; back (15,224) returns to Party", "verified": "tap", "evidence": "p23-restore (Zorua, Medicine), p23-r1 (Pichu)"},
-        "held_item": {"rect": [215, 179, 315, 201], "tap": [266, 190], "does": "Held Item submenu", "verified": "measured", "why": "avoided item changes"},
+        "held_item": {"rect": [215, 179, 315, 201], "tap": [266, 190], "does": "Held Item submenu (party_held_menu)", "verified": "tap", "evidence": "w72-held1 (Torracat: Use/Give, Take, Move, Back)"},
         "back": {"rect": [215, 207, 315, 229], "tap": [266, 218], "does": "closes the slot menu", "verified": "tap", "evidence": "re5-party-sub-back"}
       },
       "notes": ["the top text box names the Pokemon; 28 px pitch; inner highlight rects measured (x 223-308), outer edges approximate"]
+    },
+    "party_held_menu": {
+      "scene": "main:00647FCC",
+      "reach": "Party: tap a slot, Held Item (\"You can choose an item in the Bag and use it or give it to a Pokemon.\")",
+      "buttons": {
+        "use_give": {"rect": [215, 123, 315, 145], "tap": [266, 134], "does": "the Bag for this Pokemon (scene main:006488C8), every pocket; an item's menu has Use this item / Give to Pokemon / Cancel as the item allows; back (15,224) returns to Party", "verified": "tap", "evidence": "w72-held2 (Items pocket, Torracat), w72-tm1 (TMs pocket)"},
+        "take": {"rect": [215, 151, 315, 173], "tap": [266, 162], "does": "takes the held item: 'You received the Quick Claw from Torracat.' stays until B", "verified": "tap", "evidence": "w72-take1, w72-take2 (still up 4 s later), B -> w72-take3"},
+        "move": {"rect": [215, 179, 315, 201], "tap": [266, 190], "does": "move the held item to another Pokemon", "verified": "measured", "why": "not needed (Give/Take cover it)"},
+        "back": {"rect": [215, 207, 315, 229], "tap": [266, 218], "does": "back to the slot menu", "verified": "measured", "why": "B was used instead"}
+      },
+      "notes": ["same positions and 28 px pitch as party_slot_menu; with nothing held, Take is still listed"]
     },
     "bag": {
       "scene": "main:006488C8",
@@ -217,7 +228,7 @@
       "reach": "Bag: tap an item row",
       "buttons": {
         "from_bottom1": {"rect": [161, 209, 316, 236], "tap": [236, 222], "does": "last entry: Cancel (closes the item menu)", "verified": "tap", "evidence": "re5-bag-cancel; p24 menu1 -> list (frame +0x54 back to 0)"},
-        "from_bottom2": {"rect": [161, 181, 316, 206], "tap": [236, 194], "does": "2nd from the bottom: Move to Free Space in every menu seen", "verified": "measured", "why": "changes the bag (Free Space); not needed by the native Bag"},
+        "from_bottom2": {"rect": [161, 181, 316, 206], "tap": [236, 194], "does": "2nd from the bottom: Move to Free Space in every menu seen", "verified": "measured", "why": "changes the bag (Free Space); not needed by the native Bag (the Party screen's Bag: party_bag_menu)"},
         "from_bottom3": {"rect": [161, 153, 316, 178], "tap": [236, 166], "does": "3rd from the bottom: Give (Potion, Escape Rope, Quick Claw, Oran Berry), Use (TMs)", "verified": "tap", "evidence": "p24 g1 (Quick Claw, 3 entries: Give -> Which Pokemon), p24 Escape Rope (4 entries: Give)"},
         "from_bottom4": {"rect": [161, 125, 316, 150], "tap": [236, 138], "does": "4th from the bottom: Use in 4-entry menus (Medicine, Escape Rope, Oran Berry)", "verified": "tap", "evidence": "p24 use1 (Potion: Use -> 'Which Pokemon do you want to use this item on?')"},
         "from_bottom5": {"rect": [161, 97, 316, 122], "tap": [236, 110], "does": "5th from the bottom: no 5-entry menu seen", "verified": "measured", "why": "same 28 px pitch; never seen"}
@@ -249,12 +260,24 @@
       },
       "notes": ["The party column is in party order. The cursor starts on slot 1 each time; the slot under it is drawn larger."]
     },
+    "party_bag_menu": {
+      "scene": "main:006488C8",
+      "reach": "Party: slot -> Restore, or Held Item -> Use/Give; tap an item row (\"What would you like to do with the X and Y?\")",
+      "buttons": {
+        "from_bottom1": {"rect": [161, 209, 316, 236], "tap": [236, 222], "does": "last entry: Cancel", "verified": "tap", "evidence": "same place as bag_item_menu.from_bottom1 (re5-bag-cancel)"},
+        "from_bottom2": {"rect": [161, 181, 316, 206], "tap": [236, 194], "does": "2nd from the bottom: Give to Pokemon (0x07) when the item can be held, else Use this item (0x06, TMs)", "verified": "tap", "evidence": "w72-held3 -> w72-held4 (Quick Claw given to Torracat), w72-tm2 -> w72-tm3 (TM01 Use: WazaOshie), w72-sw1 (Escape Rope to Zorua holding one: Yes/No)"},
+        "from_bottom3": {"rect": [161, 153, 316, 178], "tap": [236, 166], "does": "3rd from the bottom: Use this item (0x06) in Use / Give / Cancel menus (medicine, Escape Rope)", "verified": "tap", "evidence": "p23-use, p23-r31 (Potion: restore_item_menu.use, same row)"},
+        "from_bottom4": {"rect": [161, 125, 316, 150], "tap": [236, 138], "does": "4th from the bottom: no 4-entry menu seen in the Party screen's Bag", "verified": "measured", "why": "never seen here"},
+        "from_bottom5": {"rect": [161, 97, 316, 122], "tap": [236, 110], "does": "5th from the bottom: an Ether's move list would need it (4 moves + Cancel), not seen", "verified": "measured", "why": "no Ether in this save"}
+      },
+      "notes": ["The same item menu as bag_item_menu, with the Party screen's own entries: Use 0x06, Give 0x07, Cancel 0x11 (Escape Rope 06 07 11, TM 06 11, Quick Claw 07 11; 'bagui read')", "It grows upwards from Cancel at the same 28 px pitch"]
+    },
     "restore_item_menu": {
       "scene": "main:006488C8",
       "reach": "Party: slot -> Restore -> tap an item row (\"What would you like to do with the Potion and Pichu?\")",
       "buttons": {
         "use": {"rect": [177, 155, 313, 178], "tap": [245, 166], "does": "uses the item on that Pokemon; a message (\"Pichu's HP was restored by 9 points.\" / \"It won't have any effect.\") stays until A or B, then the item list", "verified": "tap", "evidence": "p23-use (no effect), p23-r31 (Potion 18 -> 27 HP)"},
-        "give": {"rect": [178, 183, 313, 206], "tap": [245, 194], "does": "Give to Pokemon", "verified": "measured", "why": "changes held items"},
+        "give": {"rect": [178, 183, 313, 206], "tap": [245, 194], "does": "Give to Pokemon: given at once, back on the item list (no message waits)", "verified": "tap", "evidence": "w72-held3 -> w72-held4 (Held Item bag, same menu)"},
         "cancel": {"rect": [178, 211, 313, 236], "tap": [245, 222], "does": "closes the item menu", "verified": "measured", "why": "B was used instead"}
       },
       "notes": ["3 entries (the field Bag's item menu has 4); 28 px pitch; B closes it"]
@@ -357,7 +380,7 @@
         "new": {"rect": [165, 186, 318, 226], "tap": [245, 208], "does": "opens learn_confirm for the new move ('Give up on learning the move')", "verified": "tap", "evidence": "ml-tap-new (Baby-Doll Eyes page)"},
         "back": {"rect": [0, 210, 32, 239], "tap": [16, 222], "does": "back (B)", "verified": "none", "evidence": "seen on screen, not tapped"}
       },
-      "notes": ["WazaOshie CRO screen (vtable WazaOshie+0x76D0) under a main-image frame (0x648E38); a tap opens the move's page, it doesn't forget yet", "rows are ~43 px apart; the new move sits apart at the bottom"]
+      "notes": ["WazaOshie CRO screen (vtable WazaOshie+0x76D0) under a main-image frame (0x648E38); a tap opens the move's page, it doesn't forget yet", "rows are ~43 px apart; the new move sits apart at the bottom", "the same screen (scene WazaOshie) teaches a TM used from the Party screen's Bag: w72-tm3 (move4 tap -> Lick page w72-tm4, yes -> Torracat learned Work Up)"]
     },
     "learn_confirm": {
       "scene": "Battle",
