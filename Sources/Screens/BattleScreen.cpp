@@ -245,7 +245,7 @@ namespace OneScreen
         // and the "the game asks" helper stays away.
         const u32 pressed = inBattle ? CaptureRealPressed() : 0;
         const MoveLearnFrame learn = MoveLearnUpdate(sceneManager, inBattle, pressed, log);
-        if (learn.asked && s_snap.menu == Screens::GameMenu::Other)
+        if (learn.asked && (s_snap.menu == Screens::GameMenu::Other || s_snap.menu == Screens::GameMenu::Question))
         {
             s_snap.menu = Screens::GameMenu::None;
             s_snap.otherVtable = 0;
