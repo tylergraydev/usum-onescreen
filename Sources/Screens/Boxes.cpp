@@ -10,8 +10,10 @@
 #include "Buttons.hpp"
 #include "Panel.hpp"
 #include "Screens/BoxesGrid.hpp"
+#include "UI/Assets.hpp"
 #include "UI/Device.hpp"
 #include "UI/Layer.hpp"
+#include "UI/Theme.hpp"
 
 namespace OneScreen
 {
@@ -66,6 +68,8 @@ namespace OneScreen
     static UI::Layer s_layer, s_badge;
     static u32 s_drawnVersion = ~0u;
     static bool s_badgeDrawn = false;
+    static bool s_drawnGameFont = false;    // the game font was loaded when last drawn
+    static bool s_badgeGameFont = false;
     static BoxesView s_drawView;
 
     static bool BoxesOnScreen(const Screen &screen)
@@ -84,8 +88,9 @@ namespace OneScreen
                     return false;
                 s_badgeDrawn = false;
             }
-            if (!s_badgeDrawn)
+            if (!s_badgeDrawn || UI::Theme::UsingGameFont() != s_badgeGameFont)
             {
+                s_badgeGameFont = UI::Theme::UsingGameFont();
                 UI::Canvas canvas = s_badge.Begin();
                 DrawBoxesBadge(canvas);
                 s_badgeDrawn = true;
@@ -96,7 +101,10 @@ namespace OneScreen
 
         if (s_pixels == nullptr)
             return false;
-        bool redraw = s_sharedVersion != s_drawnVersion;
+        // Also once the game's font and icons have loaded (UI::Theme draws
+        // with them from then on).
+        const bool gameFont = UI::Theme::UsingGameFont();
+        bool redraw = s_sharedVersion != s_drawnVersion || gameFont != s_drawnGameFont;
         if (!s_layer.Matches(fb))
         {
             if (!s_layer.Setup(fb, BoxesArea, BoxesRadius, s_pixels, PixelBytes))
@@ -111,6 +119,7 @@ namespace OneScreen
             s_lock.Unlock();
             UI::Canvas canvas = s_layer.Begin();
             DrawBoxes(canvas, s_drawView);
+            s_drawnGameFont = gameFont;
         }
         s_layer.Present(fb);
         return true;
@@ -144,6 +153,15 @@ namespace OneScreen
         return none;
     }
 
+    static u8 BallAt(u32 cursor)
+    {
+        if (cursor < BoxSlots)
+            return s_view.slotBalls[cursor];
+        if (cursor < BoxSlots + BoxPartySlots)
+            return s_view.partyBalls[cursor - BoxSlots];
+        return 0;
+    }
+
     // Reads the box on screen and the screen's party.
     static void Refresh(void)
     {
@@ -152,9 +170,17 @@ namespace OneScreen
         s_view.unlocked = storage.valid ? storage.unlocked : 1;
         s_view.boxName = BoxName(storage, s_game.tray);
         for (u32 i = 0; i < BoxSlots; i++)
-            s_view.slots[i] = BoxMonLabel(ReadBoxMon(storage, s_game.tray, i));
+        {
+            const Pk7 mon = ReadBoxMon(storage, s_game.tray, i);
+            s_view.slots[i] = BoxMonLabel(mon);
+            s_view.slotBalls[i] = mon.ball;
+        }
         for (u32 i = 0; i < BoxPartySlots; i++)
-            s_view.party[i] = s_game.partyValid ? BoxMonLabel(ReadParam(s_game.party[i])) : "";
+        {
+            const Pk7 mon = s_game.partyValid ? ReadParam(s_game.party[i]) : Pk7();
+            s_view.party[i] = s_game.partyValid ? BoxMonLabel(mon) : "";
+            s_view.partyBalls[i] = mon.ball;
+        }
         s_refreshedAt = s_frames;
         s_dirty = true;
     }
@@ -208,6 +234,7 @@ namespace OneScreen
         if (command == BoxesCommand::Pick)
         {
             s_view.held = LabelAt(cursor);
+            s_view.heldBall = BallAt(cursor);
             s_view.heldTray = (int)s_game.tray;
             s_view.heldIndex = (int)cursor;
         }
@@ -306,6 +333,9 @@ namespace OneScreen
                 s_pixels = new (std::nothrow) u8[PixelBytes];
             if (s_badgePixels == nullptr)
                 s_badgePixels = new (std::nothrow) u8[BadgeBytes];
+            // The game's font and icons (normally loaded at the first field
+            // already); the screen redraws with them once they are in.
+            UI::RequestAssets();
             s_lrKey = 0;
             s_haveView = false;
         }
@@ -341,6 +371,7 @@ namespace OneScreen
         if (s_game.mode != BoxMode::Carrying && !s_ourAction && s_view.heldIndex >= 0)
         {
             s_view.held.clear();
+            s_view.heldBall = 0;
             s_view.heldTray = s_view.heldIndex = -1;
         }
         if (s_view.cursor != s_game.cursor || s_view.mode != s_game.mode)

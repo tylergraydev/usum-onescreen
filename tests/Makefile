@@ -84,7 +84,7 @@ $(OUT)/party_menu_test: party_menu_test.cpp ../Sources/Screens/PartyMenu.cpp ../
 
 BOXES_PREVIEW := ../analysis/private/boxes-preview.ppm
 
-BOXES_SRCS := ../Sources/BoxData.cpp ../Sources/PartyData.cpp ../Sources/Screens/BoxesGrid.cpp ../Sources/ActionQueue.cpp
+BOXES_SRCS := ../Sources/BoxData.cpp ../Sources/PartyData.cpp ../Sources/Screens/BoxesGrid.cpp ../Sources/ActionQueue.cpp $(addprefix ../Sources/UI/,GameAssets.cpp Theme.cpp) ../Sources/RomfsText.cpp
 BOXES_HDRS := ../Includes/BoxData.hpp ../Includes/PartyData.hpp ../Includes/Screens/BoxesGrid.hpp ../Includes/ActionQueue.hpp ../Includes/Layouts.hpp
 
 $(OUT)/boxes_test: boxes_test.cpp $(BOXES_SRCS) $(BOXES_HDRS) $(UI_SRCS) $(UI_HDRS)

@@ -19,25 +19,44 @@ and drives it with taps through the action layer (`docs/ACTIONS.md`).
 ## What it shows
 
 ```
-        ◀ [        Box 1         ] ▶      1/8
+  ◀ (     Box 1    1/8 ) ▶   [(ball) Ledyba          ]   the Pokémon at the cursor
   [Buneary][Ledyba ][Yungoos][Pikipek][Yungoos][Caterpie]
   [Meowth ][Grubbin][Magnem…][Wingull][Mime Jr][Abra    ]
   ...                                  (5 rows of 6, empty slots as outlines)
-  ----------------------------------------------------------
-  [Torracat][Zorua ][Pikipek][Pichu  ][Ledyba ][Buneary ]   the party
-  A Move   Y Details   L/R Box   B Exit
+  (Torracat)(Zorua )(Pikipek)(Pichu  )(Ledyba )(Buneary )   the party
+  (A) Move  (Y) Details  (L)(R) Box  (B) Exit
 ```
+
+It looks like the game's Box screen (bottom screen), drawn with `UI::Theme`
+(docs/VISUAL-STYLE.md) and the game's font and ball icons once they are
+loaded (`UI::RequestAssets` on show, a redraw when they arrive):
+
+- Grass wallpaper (`#52AD4A` to `#378A2F`, dark line `#10220E`, lighter
+  tufts), measured on the game's Box 1.
+- The box name in the game's tab: pale rim `#CCDDFF`, slate line `#335577`,
+  green inside (the game shows the wallpaper's picture there), white text;
+  the game's blue arrows (`#1199FF`) on both sides. Which box of how many,
+  small, at the tab's right end (the game doesn't show it).
+- Beside it, in the dark message window: the ball and name of the Pokémon at
+  the cursor, or the held one in orange while carrying.
+- Box Pokémon on dark green plates with white outlined names (the game shows
+  their icons there, which the plugin doesn't load); the party as the
+  theme's green list rows on the game's dark green party panel `#208318`.
+- Button prompt chips at the bottom; a message window there instead while
+  an action runs or the game is busy.
 
 - The box the game shows (its name, which of the unlocked boxes), every slot
   with the Pokémon's nickname ("Egg" for eggs), and the party in one row in
   the game's cursor order (30-35). The party is the Box screen's own copy,
   so it is compacted as the game does it while you move Pokémon.
-- The cursor is the game's own (yellow ring); it is also on the box name
-  when the game's cursor is there.
-- Holding a Pokémon: the ring turns orange, an empty cell under it shows the
-  held Pokémon's name, its old slot is dimmed, and the footer says what is
-  held.
-- While an action runs, the footer says what it does ("Picking up Ledyba...").
+- The cursor is the game's own (the theme's orange frame, as on the game's
+  selected Party plate); it is also on the box name when the game's cursor
+  is there.
+- Holding a Pokémon: the frame turns red, an empty cell under it shows the
+  held Pokémon's name, its old slot is dimmed, and the window at the top
+  shows what is held.
+- While an action runs, the footer window says what it does ("Picking up
+  Ledyba...").
 
 ## Keys
 
@@ -109,8 +128,8 @@ so screenshots include it.
   passes `CheckAction` and never taps Release; what each key does in each
   mode; pick / drop / swap / box turn against a fake Box screen, a game that
   ignores taps (retried once, then failed without tapping Move), a refused
-  drop (one tap, no tap into the message); cells, footer, cursor ring
-  (yellow, orange while holding), drawing.
+  drop (one tap, no tap into the message); cells, footer, cursor frame
+  (orange, red while holding), wallpaper, plates and party rows.
 - `scenarios/native-boxes.txt`: see README (Testing → Scenarios).
 
 ## Not done
@@ -118,3 +137,8 @@ so screenshots include it.
 - Summary, Held Item, Marking, Release, the box list, team/battle box tabs,
   box names and wallpapers: not native (the panel, L+R, shows them).
 - Levels of box Pokémon (the box data has experience, not levels).
+- The game's Pokémon icons in the slots (not among the loaded assets), its
+  red hand cursor, the party's two-column layout on the right, and the
+  wallpaper's pictures: names on plates, the orange frame and one party row
+  instead. Balls other than items 1-16 (Beast, Apricorn and Dream Balls) have
+  no icon loaded, so none is drawn.

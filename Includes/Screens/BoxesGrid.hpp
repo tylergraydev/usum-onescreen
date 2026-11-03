@@ -46,15 +46,20 @@ namespace OneScreen
         u32 tray = 0, unlocked = 1;
         std::string slots[BoxSlots];        // labels; empty = no Pokémon
         std::string party[BoxPartySlots];
+        u8 slotBalls[BoxSlots] = {};        // Poké Ball per Pokémon (Pk7::ball; 0 = none drawn)
+        u8 partyBalls[BoxPartySlots] = {};
         u32 cursor = 0;                     // the game's cursor (BoxData.hpp)
         BoxMode mode = BoxMode::Idle;
         std::string held;                   // carrying: what (empty: unknown)
+        u8 heldBall = 0;
         int heldTray = -1, heldIndex = -1;  // carrying: where it came from (cursor index)
         std::string busy;                   // an action is running: what it does
     };
 
     // Screen area (top screen) and corner radius; cells by cursor index
-    // (0-35 slots and party, 36 the box name).
+    // (0-35 slots and party, 36 the box name). Drawn like the game's Box
+    // screen (docs/BOXES.md): grass wallpaper, the name tab between blue
+    // arrows, the party as list rows, the orange frame on the cursor.
     static constexpr UI::Rect BoxesArea = { 8, 6, 384, 228 };
     static constexpr int BoxesRadius = 12;
     UI::Rect BoxesCellRect(u32 index);
