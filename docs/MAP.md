@@ -76,6 +76,33 @@ framebuffer format), the window shows "Rotom's map isn't up" instead and the
 log says `map: GPU copy of the Rotom map refused`. Without the Rotom map view
 (`where.mapView == 0`) the window shows the same note.
 
+## The look (W7-6)
+
+The frame around the copied map is drawn like the game's own map screens,
+with `UI::Theme` (`docs/VISUAL-STYLE.md`) for text, windows and prompts.
+Colours were read from screenshots of the Rotom map (the field's bottom
+screen) and the Town Map (`analysis/private/shots/native-map-*-bottom.png`,
+`native-map-townmap-bottom.png`; game imagery, not committed):
+
+- **Body**: Rotom's red, `#E74A42` at the top through `#CB3E36` to
+  `#A83131` at the bottom, with a dark edge `#6B2121`.
+- **Map window**: recessed into the body as on Rotom: 6 px `#9C3030` with a
+  2 px dark line `#3B3333` next to the map (`MapRecess`). Under the copy,
+  and visible when there is none, the Town Map's sea `#0AB5EA` with its
+  22 px grid `#32BEE9`; the "Rotom's map isn't up" note sits in a
+  `DrawWindow` on it.
+- **Header** (`MapHeader`): the theme's dark window, place name in the game
+  font (Body, white) with its second line below it (Small, tan); the island
+  (Body) and the position (Small) right-aligned.
+- **Compass** (`MapCompassBox`): a small dark window, the facing as the
+  game's red cursor arrow.
+- **Footer**: "Outside, facing S" in white ("Inside" in yellow) with a dark
+  red outline; the prompts `ZR` (a named badge, as the theme draws L/R) and
+  the game's (B) icon with "Close".
+
+The layer redraws once the game font has loaded (`UI::RequestAssets()` on
+open), as the X menu does.
+
 ## Place names: read from the game's RomFS
 
 Place names are not resident in the field (RE4: no MsgData for file 72), and

@@ -84,6 +84,11 @@ namespace OneScreen
     static constexpr int MapRadius = 12;
     static constexpr UI::Rect MapSource = { 30, 104, 260, 128 };
     static constexpr UI::Rect MapWindow = { 70, 72, 260, 128 };
+    // Around it: the header window (place name, two text lines), the
+    // recessed frame (MapRecess px), the compass window to its left.
+    static constexpr UI::Rect MapHeader = { 20, 14, 360, 50 };
+    static constexpr int MapRecess = 6;
+    static constexpr UI::Rect MapCompassBox = { 18, 92, 44, 66 };
 
     void DrawMap(UI::Canvas &canvas, const MapView &view);
 }
