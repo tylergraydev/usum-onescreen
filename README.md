@@ -6,6 +6,8 @@ A 3GX plugin (CTRPluginFramework) that makes Pokémon Ultra Sun / Ultra Moon pla
 
 **Players:** see [docs/PLAYING.md](docs/PLAYING.md) for install, controls and bug reports, and [CHANGELOG.md](CHANGELOG.md) for what's new.
 
+The optional Windows launcher in [`player/`](player/README.md) checks your own game and update, sets up a portable copy of your Azahar with the plugin, and starts it. Read [docs/PLAYER-APP.md](docs/PLAYER-APP.md) first: new-game startup and update-version compatibility remain open issues. Native battle Party/Bag controls and Party held-item/TM teaching are described in the player guide; SOS / double targeting still needs **L+R**.
+
 ## Targets
 
 | Game | Title ID | Version | Confirmed |
@@ -116,10 +118,12 @@ CTRPF opens its menu with **Select** (its default menu hotkey; `Preferences::Men
 - `keyboard on|off|status|read`: the native keyboard (the game's keyboard, e.g. a nickname after a catch, shows on the top screen with the panel off; D-pad moves, A types, B deletes, Y Shift, X space, START to OK). `read` looks for the game's keyboard now and logs its text. Logs `keyboard: shown`, `key NAME`, `text "…" (n of max)`, `hidden`. See `docs/KEYBOARD.md`.
 - `boxes on|off|status|details|pick|drop|prev|next`: the native PC boxes (at a PC, the box and party on the top screen with the panel off; the D-pad moves the game's cursor, A picks up / drops, L/R turn the box, Y shows the game's own details). Logs `boxes: shown`, `cursor …`, `pick …`, `drop at …`, `box N`, `mode …`, `hidden`. See `docs/BOXES.md`.
 - `uidemo on|off|shade|direct` shows or hides a sample plugin-drawn menu on the top screen (off by default), for checking the UI drawing layer: `on` draws it into an off-screen layer when it changes and copies it every frame, `shade` adds a translucent full-screen shade (reads the framebuffer), `direct` redraws everything on the framebuffer every frame (the old way). `perf` also logs the demo's time per frame; `py -3 -I tools/perf.py --instance NAME --modes off,ui:on,ui:shade` compares them (`docs/UI.md`). `uifont` logs the system font's metrics and the glyph cache counters.
-- `uitheme on|off|load|status|page N|select N` shows the USUM theme demo: loads the game's own font, icons, move table and type names from its RomFS (once) and draws a sample move list (page 0) and list menu (page 1) with them. See `docs/VISUAL-STYLE.md` and `docs/GAME-ASSETS.md`.
+- `uitheme on|off|load|status|page N|select N` shows the USUM theme demo: with the game's own font, icons, move table and type names (loaded once by `UI/Assets.hpp` when the field is first reached, or by this command if earlier) it draws a sample move list (page 0) and list menu (page 1) with them. See `docs/VISUAL-STYLE.md` and `docs/GAME-ASSETS.md`.
 - `py -3 -I tools/shot.py [name]` asks the running plugin for a screenshot and saves `analysis/private/shots/<name>-top.png` and `-bottom.png`. The top shot includes anything the plugin draws.
 
 ### Isolated Azahar instances
+
+At most 4 instance emulators run at once on the PC, counted across every checkout and worktree: `start` waits for a free slot (set `USUM_EMU_SLOTS` to change the limit, `start --no-queue` to skip the wait). `status` lists every running instance emulator. Your own Azahar is never counted.
 
 `tools/instance.py` runs Ultra Sun in Azahar instances that share nothing with each other or with your own Azahar (`%APPDATA%\Azahar`), so several tests can run at once:
 
