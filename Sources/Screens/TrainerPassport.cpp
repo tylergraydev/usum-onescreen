@@ -2,9 +2,8 @@
 
 #include <cstdio>
 
-#include "UI/Icons.hpp"
 #include "UI/Layout.hpp"
-#include "UI/Text.hpp"
+#include "UI/Theme.hpp"
 
 namespace OneScreen
 {
@@ -167,76 +166,119 @@ namespace OneScreen
         return (u32)(m_page + 2) * 8 + (m_shown.earned ? 1u : 0u) + (m_turning ? 2u : 0u) + (m_shown.valid ? 4u : 0u);
     }
 
+    // The passport's page, measured on the game's bottom screen: beige
+    // paper with a tan band at the top, the stamp's name on a peach plate,
+    // its text on a white strip, dark text, blue page arrows.
+    namespace PassportStyle
+    {
+        constexpr UI::Color Paper     = UI::Rgb(0xF5, 0xF5, 0xE4);
+        constexpr UI::Color BandTop   = UI::Rgb(0xF7, 0xC4, 0x80);
+        constexpr UI::Color BandEnd   = UI::Rgb(0xF7, 0xDF, 0xBE);
+        constexpr UI::Color Plate     = UI::Rgb(0xFF, 0xD7, 0xBE);
+        constexpr UI::Color PlateLine = UI::Rgb(0xA2, 0x80, 0x6F);
+        constexpr UI::Color Strip     = UI::Rgb(0xFF, 0xF9, 0xF9);
+        constexpr UI::Color Ink       = UI::Rgb(0x30, 0x2A, 0x26);
+        constexpr UI::Color InkDim    = UI::Rgb(0x8C, 0x80, 0x76);
+        constexpr UI::Color Arrow     = UI::Rgb(0x33, 0xAA, 0xFF);
+        constexpr UI::Color Label     = UI::Rgb(0xE6, 0xD3, 0xA8);   // field labels on the dark window
+    }
+
     static void DrawField(UI::Canvas &canvas, const UI::Rect &r, const std::string &label, const std::string &value)
     {
-        UI::TextStyle l, v;
-        l.color = ScreenStyle::TextDim;
-        v.color = ScreenStyle::TextMain;
-        UI::DrawText(canvas, label, UI::Rect{ r.x, r.y, 84, r.h }, l);
-        UI::DrawText(canvas, value, UI::Rect{ r.x + 88, r.y, r.w - 88, r.h }, v);
+        using namespace UI::Theme;
+        TextStyle l, v;
+        l.color = PassportStyle::Label;
+        v.color = WindowText;
+        DrawText(canvas, label, UI::Rect{ r.x, r.y, 84, r.h }, l);
+        DrawText(canvas, value, UI::Rect{ r.x + 88, r.y, r.w - 88, r.h }, v);
+    }
+
+    static void DrawPageArrow(UI::Canvas &canvas, s32 x, s32 centerY, bool left)
+    {
+        const float y = (float)centerY + 0.5f, tip = left ? (float)x : (float)x + 10, base = left ? (float)x + 10 : (float)x;
+        canvas.FillTriangle(base, y - 10, tip, y, base, y + 10, PassportStyle::Arrow);
     }
 
     void PassportScreen::Draw(UI::Canvas &canvas) const
     {
-        using namespace ScreenStyle;
-        UI::Rect body = DrawScreenFrame(canvas, PassportArea, "Trainer Passport");
-        body = DrawScreenFooter(canvas, body, "Left/Right, L/R  Page        B Back");
+        using namespace UI::Theme;
+        using namespace PassportStyle;
+        const UI::Rect area = PassportArea;
+        canvas.FillRect(area, Paper);
+        for (s32 dy = 0; dy < 12; dy++)
+        {
+            const float t = dy / 11.f;
+            canvas.HLine(area.x, area.y + dy, area.w, UI::Rgb((u8)(BandTop.r + (BandEnd.r - BandTop.r) * t),
+                                                              (u8)(BandTop.g + (BandEnd.g - BandTop.g) * t),
+                                                              (u8)(BandTop.b + (BandEnd.b - BandTop.b) * t)));
+        }
+        const UI::Rect body = DrawScreenPrompts(canvas, area, { { Button::B, "Back" } },
+                                                { { Button::L, "" }, { Button::R, "Page" } });
 
-        // The card: two columns of two values.
+        // The trainer's card: two columns of two values in the game's window.
         const PassportData &d = m_data;
-        const s32 lineH = 19;
-        const s32 colW = body.w / 2 - 4;
+        const s32 lineH = LineHeight(TextSize::Body);
+        const UI::Rect card = { area.x + 6, area.y + 8, area.w - 12, 2 * lineH + 2 * WindowPad + 4 };
+        DrawWindow(canvas, card);
+        const UI::Rect fields = UI::Inset(card, WindowPad + 4, WindowPad + 2, WindowPad + 4, WindowPad + 2);
+        const s32 colW = fields.w / 2 - 4;
         auto pick = [](const std::string &s, const char *fallback) { return s.empty() ? std::string(fallback) : s; };
-        DrawField(canvas, UI::Rect{ body.x + 4, body.y, colW, lineH }, pick(d.labelName, "Name"), d.found ? d.name : "?");
-        DrawField(canvas, UI::Rect{ body.x + 4, body.y + lineH, colW, lineH }, pick(d.labelId, "ID No."),
+        DrawField(canvas, UI::Rect{ fields.x, fields.y, colW, lineH }, pick(d.labelName, "Name"), d.found ? d.name : "?");
+        DrawField(canvas, UI::Rect{ fields.x, fields.y + lineH, colW, lineH }, pick(d.labelId, "ID No."),
                   d.idValid ? FormatTrainerId(d.id) : "?");
-        DrawField(canvas, UI::Rect{ body.x + colW + 12, body.y, colW, lineH }, pick(d.labelMoney, "Money"),
+        DrawField(canvas, UI::Rect{ fields.x + colW + 8, fields.y, colW, lineH }, pick(d.labelMoney, "Money"),
                   d.moneyValid ? FormatMoney(d.money) : "?");
-        DrawField(canvas, UI::Rect{ body.x + colW + 12, body.y + lineH, colW, lineH }, pick(d.labelTime, "Play time"),
+        DrawField(canvas, UI::Rect{ fields.x + colW + 8, fields.y + lineH, colW, lineH }, pick(d.labelTime, "Play time"),
                   d.timeValid ? FormatPlayTime(d.hours, d.minutes) : "?");
 
-        // The stamp page.
-        const UI::Rect stamp = { body.x, body.y + 2 * lineH + 8, body.w, body.h - 2 * lineH - 8 };
-        canvas.FillRoundRect(stamp, 10, RowBg);
-        UI::TextStyle head, text;
-        head.color = TextDim;
-        text.color = TextMain;
-        const UI::Rect inner = UI::Inset(stamp, 12, 6, 12, 6);
-        const std::string page = m_page >= 0 ? "Stamp " + std::to_string(m_page + 1) + " / " + std::to_string(PassportPages)
-                                             : std::string("Stamp ?");
-        UI::DrawText(canvas, page, UI::Rect{ inner.x, inner.y, inner.w, lineH }, head);
-        if (m_page > 0)
-            UI::DrawIcon(canvas, UI::Icon::ArrowLeft, UI::Rect{ inner.Right() - 40, inner.y + 3, 12, 12 }, Selected);
-        if (m_page >= 0 && m_page < PassportPages - 1)
-            UI::DrawIcon(canvas, UI::Icon::ArrowRight, UI::Rect{ inner.Right() - 14, inner.y + 3, 12, 12 }, Selected);
+        // The stamp page: name plate, text strip, page number, arrows.
+        const UI::Rect page = { area.x + 22, card.Bottom() + 8, area.w - 44, body.Bottom() - card.Bottom() - 8 };
+        const UI::Rect plate = { page.x, page.y, page.w, lineH + 14 };
+        canvas.FillRoundRect(plate, 4, PlateLine);
+        canvas.FillRoundRect(UI::Inset(plate, 1), 3, Plate);
+        TextStyle name;
+        name.color = Ink;
+        name.align = UI::Align::Center;
+        const bool known = !m_turning && m_page >= 0;
+        const std::string title = !known ? "..." : !m_shown.earned ? "Not earned yet." : OneLine(d.stampName[m_page]);
+        if (known && !m_shown.earned)
+            name.color = InkDim;
+        DrawText(canvas, title, UI::Inset(plate, 8, 0, 8, 0), name);
 
-        s32 y = inner.y + lineH + 6;
-        if (m_turning || m_page < 0)
-            UI::DrawText(canvas, "...", UI::Rect{ inner.x, y, inner.w, lineH }, text);
-        else if (!m_shown.earned)
+        if (known && m_shown.earned)
         {
-            text.color = TextDim;
-            UI::DrawText(canvas, "Not earned yet.", UI::Rect{ inner.x, y, inner.w, lineH }, text);
-        }
-        else
-        {
-            UI::TextStyle name;
-            name.font = UI::Font::Large;
-            name.color = Selected;
-            const s32 nameH = UI::LineHeight(name);
-            UI::DrawText(canvas, m_page < PassportPages ? OneLine(d.stampName[m_page]) : "?",
-                         UI::Rect{ inner.x, y, inner.w, nameH }, name);
-            y += nameH + 6;
             // The text is one or two lines ("\n" in the game's text).
-            std::string rest = m_page < PassportPages ? d.stampText[m_page] : "";
-            while (!rest.empty() && y + lineH <= inner.Bottom())
+            std::vector<std::string> lines;
+            std::string rest = d.stampText[m_page];
+            while (!rest.empty() && lines.size() < 2)
             {
                 const size_t nl = rest.find('\n');
-                UI::DrawText(canvas, rest.substr(0, nl), UI::Rect{ inner.x, y, inner.w, lineH }, text);
+                lines.push_back(rest.substr(0, nl));
                 rest = nl == std::string::npos ? "" : rest.substr(nl + 1);
-                y += lineH;
+            }
+            if (!lines.empty())
+            {
+                const UI::Rect strip = { page.x - 8, plate.Bottom() + 10, page.w + 16, (s32)lines.size() * lineH + 10 };
+                canvas.FillRect(strip, Strip);
+                canvas.HLine(strip.x, strip.y, strip.w, PlateLine);
+                canvas.HLine(strip.x, strip.Bottom() - 1, strip.w, PlateLine);
+                TextStyle text;
+                text.color = Ink;
+                for (size_t i = 0; i < lines.size(); i++)
+                    DrawText(canvas, lines[i], UI::Rect{ strip.x + 8, strip.y + 5 + (s32)i * lineH, strip.w - 16, lineH }, text);
             }
         }
+
+        TextStyle number;
+        number.color = Ink;
+        number.align = UI::Align::Right;
+        const std::string count = (m_page >= 0 ? std::to_string(m_page + 1) : std::string("?")) + "/" + std::to_string(PassportPages);
+        DrawText(canvas, count, UI::Rect{ page.x, page.Bottom() - lineH, page.w, lineH }, number);
+        const s32 cy = page.y + page.h / 2;
+        if (m_page > 0)
+            DrawPageArrow(canvas, area.x + 4, cy, true);
+        if (m_page >= 0 && m_page < PassportPages - 1)
+            DrawPageArrow(canvas, area.Right() - 14, cy, false);
     }
 
     std::string PassportScreen::Status(void) const

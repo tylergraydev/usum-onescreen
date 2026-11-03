@@ -1,7 +1,7 @@
 #include "Screens/BattleVideo.hpp"
 
 #include "UI/Layout.hpp"
-#include "UI/Text.hpp"
+#include "UI/Theme.hpp"
 
 namespace OneScreen
 {
@@ -132,45 +132,34 @@ namespace OneScreen
 
     void VideoScreen::Draw(UI::Canvas &canvas) const
     {
-        using namespace ScreenStyle;
-        UI::Rect body = DrawScreenFrame(canvas, VideoArea, "Battle Video");
-        const char *hints = m_state == VideoState::Intro ? "A Open    B Back"
-                          : m_state == VideoState::Empty ? "B Back"
-                                                         : "L+R: bottom screen on top";
-        body = DrawScreenFooter(canvas, body, hints);
-
-        UI::TextStyle text;
-        text.color = TextMain;
-        const s32 lineH = 20;
-        auto line = [&](int i, const std::string &s) {
-            UI::DrawText(canvas, s, UI::Rect{ body.x + 8, body.y + 4 + i * lineH, body.w - 16, lineH }, text);
-        };
+        using namespace UI::Theme;
+        const UI::Rect area = VideoArea;
+        DrawWaterBackground(canvas, area);
+        const UI::Rect inner = UI::Inset(area, 4, 4, 4, 0);
 
         if (m_state == VideoState::Intro)
         {
-            line(0, "Watch battles recorded with the Vs. Recorder.");
-            const UI::Rect button = { body.x + 30, body.y + 4 + 3 * lineH, body.w - 60, 32 };
-            canvas.FillRoundRect(button, 12, RowBg);
-            canvas.StrokeRoundRect(UI::Inset(button, -2), 14, Selected, 2);
-            UI::TextStyle b = text;
-            b.align = UI::Align::Center;
-            UI::DrawText(canvas, m_opening ? "Opening..." : "Open the Vs. Recorder", button, b);
+            // As the game: its message at the top, one big option with the
+            // cursor across the middle of the screen.
+            DrawMessageWindow(canvas, inner, "Open the Vs. Recorder!");
+            const UI::Rect button = { area.x + 24, area.y + 92, area.w - 48, 32 };
+            DrawRow(canvas, button, RowKind::Option, m_opening ? "Opening..." : "Open the Vs. Recorder", !m_opening);
+            std::vector<ScreenPrompt> right;
+            if (!m_opening)
+                right.push_back(ScreenPrompt{ Button::A, "Open" });
+            DrawScreenPrompts(canvas, area, { { Button::B, "Back" } }, right);
         }
         else if (m_state == VideoState::Empty)
         {
-            line(0, "There are no Battle Videos on this save.");
-            text.color = TextDim;
-            line(2, "Videos are recorded in Link Battles,");
-            line(3, "at the Battle Spot and so on.");
+            // The game says this on its top screen, over the empty recorder.
+            DrawMessageWindow(canvas, inner, "There is no Battle Video.");
+            DrawScreenPrompts(canvas, area, { { Button::B, "Back" } }, {});
         }
         else
-        {
-            line(0, "The Vs. Recorder shows something this screen");
-            line(1, "doesn't know yet (a list of videos?).");
-            text.color = TextDim;
-            line(3, "Use the bottom screen: L+R shows it on top.");
-            line(4, "Keys go to the game here.");
-        }
+            DrawMessageWindow(canvas, inner, "The Vs. Recorder shows something this\n"
+                                             "screen doesn't know yet (a list of videos?).\n"
+                                             "L+R shows the bottom screen on top.\n"
+                                             "Keys go to the game here.");
     }
 
     std::string VideoScreen::Status(void) const

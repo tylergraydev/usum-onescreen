@@ -2,9 +2,8 @@
 
 #include <cstdio>
 
-#include "UI/Icons.hpp"
 #include "UI/Layout.hpp"
-#include "UI/Text.hpp"
+#include "UI/Theme.hpp"
 
 namespace OneScreen
 {
@@ -339,64 +338,73 @@ namespace OneScreen
         return key;
     }
 
+    // The game's value arrow: blue on the cursor's row, grey elsewhere,
+    // with a dark edge; `left` points left.
+    static void DrawValueArrow(UI::Canvas &canvas, s32 x, s32 centerY, bool left, bool active)
+    {
+        const UI::Color edge = UI::Rgb(0x24, 0x21, 0x21);
+        const UI::Color fill = active ? UI::Rgb(0x00, 0x77, 0xEE) : UI::Rgb(0x9E, 0x9E, 0x9E);
+        const float y = (float)centerY + 0.5f, x0 = (float)x, x1 = (float)x + 11;
+        const float tip = left ? x0 : x1, base = left ? x1 : x0;
+        canvas.FillTriangle(base, y - 7.5f, tip + (left ? -1.f : 1.f), y, base, y + 7.5f, edge);
+        canvas.FillTriangle(base + (left ? -1.f : 1.f), y - 6, tip + (left ? 1.f : -1.f), y, base + (left ? -1.f : 1.f), y + 6, fill);
+    }
+
     void OptionsScreen::Draw(UI::Canvas &canvas) const
     {
-        using namespace ScreenStyle;
-        UI::Rect body = DrawScreenFrame(canvas, OptionsArea, "Options");
-        const char *hints = m_confirming ? "..." : m_shown.dialog ? "A Choose    B Leave without changes" : "A Confirm    B Back";
-        body = DrawScreenFooter(canvas, body, hints);
+        using namespace UI::Theme;
+        const UI::Rect area = OptionsArea;
+        DrawWaterBackground(canvas, area);
 
-        const s32 rowH = 20, gap = 3;
-        const s32 labelW = 150;
-        UI::TextStyle label, value;
-        label.color = TextMain;
-        value.color = TextMain;
-        value.align = UI::Align::Center;
+        // The game's rows: a menu option pill with the label at the left
+        // and a light value strip on the right half, the value between its
+        // arrows; the cursor marks the row.
+        const s32 pitch = 30, rowH = 28, split = 168;
+        const UI::Color strip = UI::Rgb(0xD6, 0xFF, 0xFF), divider = UI::Rgb(0x64, 0x77, 0x77);
         for (int row = 0; row < OptionRows; row++)
         {
-            const UI::Rect r = { body.x, body.y + row * (rowH + gap), body.w, rowH };
+            const UI::Rect r = { area.x + 6, area.y + 6 + row * pitch, area.w - 12, rowH };
             const bool selected = row == m_shown.row && !m_confirming && !m_shown.dialog;
-            canvas.FillRoundRect(r, 8, RowBg);
-            if (selected)
-            {
-                canvas.StrokeRoundRect(UI::Inset(r, -1), 9, Selected, 2);
-                UI::DrawIcon(canvas, UI::Icon::ArrowRight, UI::Rect{ r.x + 3, r.y + 4, 12, 12 }, Selected);
-            }
-            UI::DrawText(canvas, s_rows[row].label, UI::Rect{ r.x + 18, r.y, labelW - 18, r.h }, label);
+            DrawRowBackground(canvas, r, RowKind::Option);
+            const UI::Rect s = { r.x + split, r.y + 3, r.w - split - 3, r.h - 10 };
+            canvas.FillRoundRect(s, RowRadius - 4, strip);
+            canvas.VLine(s.x, s.y, s.h, divider);
 
+            TextStyle text;
+            text.color = OptionText;
+            DrawText(canvas, s_rows[row].label, UI::Rect{ r.x + RowTextInset + 2, r.y + 2, split - RowTextInset - 6, r.h - 6 }, text);
             const int v = m_shown.values[row];
-            const UI::Rect valueBox = { r.x + labelW, r.y, r.w - labelW - 6, r.h };
-            UI::DrawText(canvas, v >= 0 ? s_rows[row].values[v] : "?", UI::Inset(valueBox, 18, 0, 18, 0), value);
-            const UI::Color arrow = selected ? Selected : TextDim;
+            text.align = UI::Align::Center;
+            DrawText(canvas, v >= 0 ? s_rows[row].values[v] : "?", UI::Inset(s, 22, 0, 22, 0), text);
+            const s32 cy = s.y + s.h / 2;
             if (v > 0)
-                UI::DrawIcon(canvas, UI::Icon::ArrowLeft, UI::Rect{ valueBox.x + 2, r.y + 4, 12, 12 }, arrow);
+                DrawValueArrow(canvas, s.x + 6, cy, true, selected);
             if (v >= 0 && v < s_rows[row].count - 1)
-                UI::DrawIcon(canvas, UI::Icon::ArrowRight, UI::Rect{ valueBox.Right() - 14, r.y + 4, 12, 12 }, arrow);
+                DrawValueArrow(canvas, s.Right() - 17, cy, false, selected);
+            if (selected)
+                DrawCursor(canvas, r.x + 14, r.y + (r.h - 2) / 2);
         }
 
-        if (m_shown.dialog)
+        if (!m_shown.dialog)
         {
-            // The game's question, over the list.
-            const UI::Rect box = { body.x + 40, body.y + 10, body.w - 80, 100 };
-            canvas.FillRoundRect(box, 10, PanelBg);
-            canvas.StrokeRoundRect(box, 10, Border, 2);
-            UI::TextStyle q;
-            q.color = TextMain;
-            q.align = UI::Align::Center;
-            UI::DrawText(canvas, "Make these changes?", UI::Rect{ box.x, box.y + 6, box.w, 22 }, q);
-            const char *answers[2] = { "Yes", "No (leave them)" };
-            for (int c = 0; c < 2; c++)
-            {
-                const UI::Rect pill = { box.x + 40, box.y + 34 + c * 30, box.w - 80, 24 };
-                canvas.FillRoundRect(pill, 10, RowBg);
-                if (c == m_shown.choice && !m_confirming)
-                {
-                    canvas.StrokeRoundRect(UI::Inset(pill, -1), 11, Selected, 2);
-                    UI::DrawIcon(canvas, UI::Icon::ArrowRight, UI::Rect{ pill.x + 4, pill.y + 6, 12, 12 }, Selected);
-                }
-                UI::DrawText(canvas, answers[c], pill, q);
-            }
+            if (!m_confirming)
+                DrawScreenPrompts(canvas, area, { { Button::B, "Back" } }, { { Button::A, "Confirm" } });
+            return;
         }
+
+        // The game's question: the list dims, the message window covers its
+        // top, Yes / No pills at the right with the cursor.
+        canvas.FillRect(area, UI::Rgb(0x00, 0x00, 0x00, 0x60));
+        const UI::Rect below = DrawMessageWindow(canvas, UI::Inset(area, 4, 4, 4, 0), "Would you like to make these changes?");
+        const char *answers[2] = { "Yes", "No" };
+        const s32 pillW = 124;
+        for (int c = 0; c < 2; c++)
+        {
+            const UI::Rect pill = { area.Right() - 10 - pillW, below.y + 26 + c * 32, pillW, rowH };
+            DrawRow(canvas, pill, RowKind::Option, answers[c], c == m_shown.choice && !m_confirming);
+        }
+        if (!m_confirming)
+            DrawScreenPrompts(canvas, area, { { Button::B, "No" } }, { { Button::A, "Choose" } });
     }
 
     std::string OptionsScreen::Status(void) const
