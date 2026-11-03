@@ -62,9 +62,11 @@ $(OUT)/native_screens_test: native_screens_test.cpp $(SCREEN_SRCS) $(SCREEN_HDRS
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) native_screens_test.cpp $(SCREEN_SRCS) ../Sources/ActionQueue.cpp $(THEME_SRCS) $(UI_SRCS) -o $@
 
-$(OUT)/bag_test: bag_test.cpp ../Sources/Screens/BagList.cpp ../Includes/Screens/BagList.hpp                   ../Sources/ActionQueue.cpp ../Includes/ActionQueue.hpp ../Includes/Layouts.hpp $(UI_SRCS) $(UI_HDRS)
+BAG_SRCS := $(addprefix ../Sources/UI/,GameAssets.cpp Theme.cpp) ../Sources/RomfsText.cpp ../Sources/PartyData.cpp
+
+$(OUT)/bag_test: bag_test.cpp ../Sources/Screens/BagList.cpp ../Includes/Screens/BagList.hpp $(BAG_SRCS)                   ../Sources/ActionQueue.cpp ../Includes/ActionQueue.hpp ../Includes/Layouts.hpp $(UI_SRCS) $(UI_HDRS)
 	@mkdir -p $(OUT)
-	$(CXX) $(CXXFLAGS) bag_test.cpp ../Sources/Screens/BagList.cpp ../Sources/ActionQueue.cpp $(UI_SRCS) -o $@
+	$(CXX) $(CXXFLAGS) bag_test.cpp ../Sources/Screens/BagList.cpp ../Sources/ActionQueue.cpp $(BAG_SRCS) $(UI_SRCS) -o $@
 MAP_PREVIEW := ../analysis/private/map-preview.ppm
 PLACE_GARC  ?= ../analysis/private/romfs-base/a/0/3/2
 
