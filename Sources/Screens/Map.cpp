@@ -17,6 +17,7 @@
 #include "UI/Assets.hpp"
 #include "UI/Device.hpp"
 #include "UI/Layer.hpp"
+#include "UI/ScreenBuffer.hpp"
 #include "UI/Theme.hpp"
 #include "Where.hpp"
 
@@ -44,8 +45,7 @@ namespace OneScreen
     static volatile u32  s_viewSlot = 0;        // the slot the OSD callback reads
     static volatile u32  s_viewVersion = 0;
     static volatile bool s_copyFailed = false;  // the GPU copy refused; the window shows the note instead
-    static u8           *s_pixels = nullptr;
-    static const size_t  PixelBytes = MapArea.w * MapArea.h * 4;
+    static const char *const Owner = "map";     // UI::ScreenBuffer
 
     // --- Plugin thread ---
     static bool s_enabled = true;
@@ -72,7 +72,16 @@ namespace OneScreen
 
     static bool MapOnScreen(const Screen &screen)
     {
-        if (!screen.IsTop || !s_shown || s_pixels == nullptr)
+        if (!screen.IsTop)
+            return false;
+        if (!s_shown)
+        {
+            UI::ScreenBuffer::GiveBack(Owner);
+            return false;
+        }
+        bool fresh = false;
+        u8 *pixels = UI::ScreenBuffer::Borrow(Owner, fresh);
+        if (pixels == nullptr)
             return false;
         UiInitFont();
         const UI::Surface fb = SurfaceFromScreen(screen);
@@ -81,9 +90,9 @@ namespace OneScreen
         // with them from then on).
         const bool gameFont = UI::Theme::UsingGameFont();
         bool redraw = version != s_drawnVersion || gameFont != s_drawnGameFont;
-        if (!s_layer.Matches(fb))
+        if (fresh || !s_layer.Matches(fb))
         {
-            if (!s_layer.Setup(fb, MapArea, MapRadius, s_pixels, PixelBytes))
+            if (!s_layer.Setup(fb, MapArea, MapRadius, pixels, UI::ScreenBuffer::Bytes))
                 return false;
             redraw = true;
         }
@@ -212,15 +221,13 @@ namespace OneScreen
         // The game's font and icons (normally loaded at the first field
         // already); the map redraws with them once they are in.
         UI::RequestAssets();
-        if (s_pixels == nullptr)
-            s_pixels = new (std::nothrow) u8[PixelBytes];
         s_open = true;
         s_logged = false;
         s_copyFailed = false;
         s_view = MapView();
         s_zones.Reset();
         s_lastToggle = s_frames;
-        log.push_back(std::string("map: open (") + how + ")" + (s_pixels == nullptr ? ", NO MEMORY for the layer" : ""));
+        log.push_back(std::string("map: open (") + how + ")");
         Refresh(log);
         Publish(s_view);
     }
@@ -320,10 +327,18 @@ namespace OneScreen
         }
 
         if (shown && !s_shown)
+        {
             log.push_back("map: drawing" + std::string(s_copyFailed ? " (GPU copy refused)" : ""));
+            log.push_back(UI::ScreenBuffer::HeapLog("map shown"));
+        }
         else if (!shown && s_shown)
+        {
             log.push_back("map: hidden");
-        s_shown = shown && s_pixels != nullptr;
+            log.push_back(UI::ScreenBuffer::HeapLog("map hidden"));
+        }
+
+        s_shown = shown;
+
 
         static bool reportedCopy = false;
         if (s_copyFailed && !reportedCopy)
