@@ -106,7 +106,7 @@ What went wrong, and what the Bag does now:
   (`UI/ScreenBuffer.hpp`, W7-M): one 281 KB buffer allocated at boot, which
   the OSD callback borrows while the Bag shows (owner `"bag"`) and gives back
   when it hides. While another screen still holds it the Bag skips that
-  frame and asks again. The `bag: shown` / `bag: hidden` lines and `bagui
+  frame and asks again. The `mem: bag shown` / `mem: bag hidden` lines (`HeapLog`) and `bagui
   status` carry `ScreenBuffer::HeapStatus()`.
 - The first icon loader unpacked the whole layout archive (74 + 286 KB) and
   aborted the plugin in `bad_alloc`; then, after the battles, even
