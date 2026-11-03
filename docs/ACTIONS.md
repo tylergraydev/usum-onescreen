@@ -23,6 +23,11 @@ Only buttons verified by a tap (`verified: tap` in the JSON) can be tapped: `Che
 | `open-bag` | field | X (only if the X menu isn't up), taps Bag | `main:006488C8` |
 | `battle-run` | `Battle` | waits for the command menu (+30 frames), taps Run, again if the menu stays | `FieldRo` |
 | `close` | anything but `Battle` | back button of the Pokédex / Party / Bag / Town Map, B in the X menu, until the field shows with the X menu closed | `FieldRo` |
+| `battle-fight`, `battle-bag`, `battle-pokemon`, `battle-flee` | `Battle`, command menu up | taps Fight / Bag / Pokémon / Run; again if the command menu is still up 90 frames later (twice at most) | the command menu gone (anywhere in the battle) |
+| `battle-move1` … `battle-move4` | `Battle`, move list up | taps that move | the move list gone |
+| `battle-moves-back` | `Battle`, move list up | taps the move list's back button | the command menu |
+
+The `battle-*` one-tap actions are what the native battle menu (`docs/BATTLE-UI.md`) uses; they don't wait for the command menu to settle (the menu does that before it starts one). `battle-flee` ends when the command menu goes, so it also suits a trainer battle, where the game answers Run with a message and shows the commands again; `battle-run` waits for the field.
 
 The X menu remembers its cursor, so entries are always tapped, never chosen with the D-pad.
 

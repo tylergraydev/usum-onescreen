@@ -28,6 +28,8 @@ expect-log / reject-log lines, where # is part of the regex). Steps:
   repeat N [until-scene SCENE] the steps up to the matching `end`, N times; with until-scene,
   ...                          stop as soon as that is the scene (checked before each step)
   end                          and fail if it never was
+  repeat N until-log REGEX     the same, stopping after a round once a log line since the mark
+                               matches REGEX (one word: use \\s for spaces); fails if none did
 
 "The scene" is the last `scene:` line in the plugin log (an empty one counts
 as (none), the loading gap between scenes); "the mode" is the last
@@ -107,12 +109,20 @@ def parse_step(text, where):
     else:
         args = rest.split()
         lo, hi = ARITY[op]
-        if not lo <= len(args) <= hi:
+        if not lo <= len(args) <= hi and not (op == "repeat" and args[1:2] == ["until-log"]):
             raise SyntaxError(f"{where}: {op} takes {lo}-{hi} arguments")
     step = Step(where, text, op, args)
+    if op == "repeat" and len(args) > 2 and args[1] == "until-log":
+        # The regex is the rest of the line (it may hold spaces).
+        step.args = args = [args[0], "until-log", rest.split(None, 2)[2]]
     if op == "repeat":
-        if not args[0].isdigit() or (len(args) > 1 and (args[1] != "until-scene" or len(args) != 3)):
-            raise SyntaxError(f"{where}: use 'repeat N' or 'repeat N until-scene SCENE'")
+        if not args[0].isdigit() or (len(args) > 1 and (args[1] not in ("until-scene", "until-log") or len(args) != 3)):
+            raise SyntaxError(f"{where}: use 'repeat N', 'repeat N until-scene SCENE' or 'repeat N until-log REGEX'")
+        if len(args) == 3 and args[1] == "until-log":
+            try:
+                re.compile(args[2])
+            except re.error as e:
+                raise SyntaxError(f"{where}: bad regex: {e}")
         step.body = []
     elif op == "if-scene":
         scene, _, inner = rest.partition(" ")
@@ -329,20 +339,24 @@ class Runner:
                 self.check_save()
             elif op == "repeat":
                 # Steps print in the first round only (all rounds with -v).
-                until = args[2] if len(args) == 3 else None
+                until = args[2] if len(args) == 3 and args[1] == "until-scene" else None
+                log_re = args[2] if len(args) == 3 and args[1] == "until-log" else None
+                logged = lambda: re.search(log_re, self.log()[self.mark:], re.M) is not None  # noqa: E731
                 rounds = 0
                 for rounds in range(1, int(args[0]) + 1):
                     for sub in step.body:
                         if until and self.scene() == until:
                             break
                         self.run_step(sub, quiet=quiet or rounds > 1)
-                    if until and self.scene() == until:
+                    if (until and self.scene() == until) or (log_re and logged()):
                         break
                 if until and self.scene() != until:
                     raise StepFailed(f"scene is {self.scene()}, not {until}, after {args[0]} rounds")
+                if log_re and not logged():
+                    raise StepFailed(f"no log line matching /{log_re}/ after {args[0]} rounds")
                 if not quiet:
                     print(f"  {step.where}  end of repeat after {rounds} round(s)"
-                          + (f", scene {until}" if until else ""), flush=True)
+                          + (f", scene {until}" if until else "") + (", log matched" if log_re else ""), flush=True)
             if op not in ("repeat", "if-scene"):  # their inner steps were checked
                 self.check_logs()
         except emu.PluginTimeout as e:

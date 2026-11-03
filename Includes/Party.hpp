@@ -27,6 +27,8 @@ namespace OneScreen
         // Moves made there reach slots[] only when the screen closes.
         bool partyScreen = false;
         u8  order[6] = {0, 1, 2, 3, 4, 5};
+        // The Party screen's cursor (screen position), -1 if not up.
+        s8  screenCursor = -1;
     };
 
     // Bag pockets in the order of the game's pocket table (MyItem +0xE2C).
@@ -56,6 +58,35 @@ namespace OneScreen
     // Empty if the text is not there or does not check out.
     std::string SpeciesName(u16 species);
     std::string ItemName(u16 item);
+
+    // Line `line` of the full-load MsgData object at `msg` whose dat ID field
+    // (+0xC) is `dat` (0 for files an app loaded from its own buffer), UTF-8.
+    // Empty if the object or the line does not check out.
+    // `lines` (if not 0) is the line count the file must have.
+    std::string MsgLine(u32 msg, u32 dat, u32 line, u32 lines = 0);
+
+    // The item list of the Bag scene (field Bag, and the Party screen's
+    // Restore): the shown pocket's items (count-0 slots left out) and where
+    // its cursor is. The Bag keeps cursor and scroll per pocket, also across
+    // tab changes. See docs/OFFSETS.md.
+    struct BagListState
+    {
+        bool valid = false;
+        u32 count = 0;      // items in the list
+        u32 rows = 0;       // rows shown (7)
+        u32 row = 0;        // cursor row within the shown rows
+        float scroll = 0;   // index of the first shown row (animates between whole numbers)
+    };
+
+    BagListState ReadBagList(u32 sceneManager);
+
+    // The summary (Status scene) keeps a WordSet loader with the move (dat
+    // 118), ability (101) and nature (92) names. 0 if the current scene is
+    // not the summary or the loader doesn't check out.
+    u32 SummaryWordLoader(u32 sceneManager);
+    static const u32 SummaryMoveDat = 118, SummaryAbilityDat = 101, SummaryNatureDat = 92;
+    // Line `line` of the loader's file `dat` (UTF-8), empty if not there.
+    std::string LoaderText(u32 loader, u32 dat, u32 line);
 
     // Log lines for the `party` and `bag` commands.
     std::string DescribeParty(const PartyState &party);

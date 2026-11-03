@@ -1,0 +1,158 @@
+# Native battle menu (P2-1, Screens/BattleScreen.hpp): wild battles played
+# with buttons only, the panel off the whole time.
+#   1. Fight -> move list -> B back; Pokémon -> the game's list (helper) -> B;
+#      Run.
+#   2. Bag -> Poké Balls tab -> Poké Ball -> Use, until it is caught; B
+#      through the Pokédex page / nickname question (No) to the field.
+#   3. Fight, a different move each turn, until the battle is won.
+# Every choice is a press; the menu taps the hidden bottom screen itself.
+include common/boot
+
+send battleui
+expect-log ^battle-ui: on 5
+
+# Out of the door and into the tall grass (as wild-battle-run.txt).
+mark
+send stick 0 -150 120
+expect-log ^scene: \(none\) 15
+wait-scene FieldRo 30
+sleep 6
+repeat 8 until-scene Battle
+  send stick 0 -150 60
+  sleep 1.5
+end
+mark
+repeat 40 until-scene Battle
+  send stick -150 0 20
+  sleep 0.5
+  send stick 150 0 20
+  sleep 0.5
+end
+
+# --- Battle 1 ---
+expect-mode off           # native battle menu: no panel in battle
+expect-log ^battle-ui: page command, cursor 0 of 4 \(Fight\) 40
+shot command
+send press a              # Fight
+expect-log ^action: battle-fight ok 10
+expect-log ^battle-ui: page moves, cursor \d of 4 \((Scratch|Fire Fang|Double Kick|Lick), 5
+expect-log ^  player move names: Scratch, Fire Fang, Double Kick, Lick 10
+sleep 1
+shot moves
+send press b              # back to the commands
+expect-log ^action: battle-moves-back ok 10
+sleep 1
+send press down
+sleep 1
+send press down           # Pokémon
+sleep 1
+shot command-pokemon
+send press a
+expect-log ^action: battle-pokemon ok 10
+expect-log ^battle-ui: page game, game pokemon, Torracat 10
+shot pokemon-list
+send press b              # the game's list takes B itself
+expect-log ^battle-ui: page command, cursor 0 of 4 \(Fight\) 15
+sleep 1
+send press up             # wraps to Run
+sleep 1
+shot command-run
+send press a
+expect-log ^action: battle-flee ok 10
+wait-scene FieldRo 30
+expect-mode off
+sleep 3
+
+# --- Battle 2: catch ---
+mark
+repeat 40 until-scene Battle
+  send stick -150 0 20
+  sleep 0.5
+  send stick 150 0 20
+  sleep 0.5
+end
+expect-mode off
+expect-log ^battle-ui: page command, cursor 0 of 4 \(Fight\) 40
+send press down           # Bag
+sleep 1
+send press a
+expect-log ^action: battle-bag ok 10
+expect-log ^battle-ui: page game, game bag, Rotom Powers 5
+# The Bag opens on its first tab after boot; Poké Balls is the fourth.
+send press right
+sleep 1.2
+send press right
+sleep 1.2
+send press right
+expect-log ^battle-ui: page game, game bag, Poké Balls, Poké Ball$ 5
+send press a              # the ball's page
+expect-log ^battle-ui: page game, game bag, Poké Balls, item page, Poké Ball 5
+sleep 1
+shot ball-page
+send press a              # Use: throw it
+sleep 30                  # the throw, the shakes, the opponent's turn
+# Broke free: the same again (the Bag keeps its tab and cursor).
+repeat 12 until-scene Zukan
+  expect-log ^battle-ui: page command, cursor 0 of 4 \(Fight\)$ 20
+  mark
+  send press down
+  sleep 1
+  send press a
+  expect-log ^battle-ui: page game, game bag, Poké Balls, Poké Ball$ 10
+  send press a
+  expect-log ^battle-ui: page game, game bag, Poké Balls, item page, Poké Ball 5
+  sleep 1
+  shot ball-page-again
+  send press a
+  sleep 30
+end
+wait-scene Zukan 30
+expect-mode off           # the Pokédex scene straight after the battle
+expect-log ^battle-ui: page game, after catch 10
+sleep 2
+shot caught
+# A new species: its Pokédex page, then (any species) the nickname
+# question, where B is No, then "sent to a Box". B through all of it.
+repeat 10 until-scene FieldRo
+  shot after-catch
+  send press b
+  sleep 3
+end
+wait-scene FieldRo 30
+expect-mode off
+sleep 3
+
+# --- Battle 3: win with moves ---
+mark
+repeat 40 until-scene Battle
+  send stick -150 0 20
+  sleep 0.5
+  send stick 150 0 20
+  sleep 0.5
+end
+expect-mode off
+repeat 8 until-scene FieldRo
+  # Since the last turn's mark: the bar as shown, not yet "sent".
+  expect-log ^battle-ui: page command, cursor 0 of 4 \(Fight\)$ 40
+  send press a            # Fight
+  expect-log ^battle-ui: page moves, cursor \d of 4 10
+  sleep 1
+  # The list starts on the last move used; take the next one each turn, so
+  # a Disable (Drowzee has it: it blocks the last move used) never stops us.
+  send press down
+  sleep 1
+  send press a
+  expect-log ^action: battle-move\d ok 10
+  mark
+  # The turn, then EXP and level-up windows (Exp. Share): B advances them.
+  # A move-learning question ("Forget an old move?") isn't answered here;
+  # if one comes, the next expect fails with the prompt helper in the log.
+  repeat 7
+    sleep 4
+    if-scene Battle send press b
+  end
+end
+expect-mode off
+shot field
+reject-log ^action: .* FAILED
+stop

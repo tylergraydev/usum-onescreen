@@ -33,14 +33,24 @@ namespace OneScreen
         u8  cursor = 0;
         u8  listCount = 0;      // entries in the move list / Pokemon list / Bag pocket
         u8  bagPocket = 0;      // Bag tab, 0 = leftmost
+        bool bagItemPage = false;       // Bag: an item's page (Use) instead of the list
         BattleMon player, opponent;     // party slot 0 of client 0 and client 1
         u8  partyCount[2] = {};
+        // The player's battle party in battle order (slot 0 = the active
+        // battler); what the battle Pokémon list shows, slot by slot.
+        BattleMon party[6];
+        // The battle's WordSet (busy object +0x94), for MoveName.
+        u32 wordSet = 0;
         // Move list (menu == Moves): per move its type and effectiveness
         // against the target, as the list shows them.
         u8  moveType[4] = {}, moveEffect[4] = {};
     };
 
     BattleState ReadBattle(u32 sceneManager);
+
+    // Move name from the move-name file (118) the battle's WordSet loaded,
+    // UTF-8; empty if it is not there or does not check out.
+    std::string MoveName(const BattleState &state, u16 move);
     std::string DescribeBattle(const BattleState &state);
 
     // Readable memory blocks of the game process, one "start-end/perm" per

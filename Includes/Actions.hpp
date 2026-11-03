@@ -31,7 +31,7 @@ namespace OneScreen
     // and capture as `action NAME`; false (reason logged) if refused.
     bool ActionStart(const ActionDef &def, u32 sceneManager, std::vector<std::string> &log);
 
-    // The bottom-screen probes' latest result (WorldXMenu, WorldXMenuPage2),
+    // The bottom-screen probes' latest result (WorldXMenu, WorldXMenuPage2, WorldPartyList),
     // sampled every frame whether or not an action runs.
     u32 ActionProbeFlags(void);
 }
