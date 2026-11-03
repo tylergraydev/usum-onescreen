@@ -8,6 +8,8 @@ send auto on
 send bagui off
 # The panel path for Party: the native Party screen would hold the panel off.
 send partyui off
+# ... and for the Pokédex (the native Pokédex would hold the panel off).
+send pokedex off
 
 # Field -> Pokédex (Rotom's face, or the X menu while Rotom chats) -> field.
 mark
