@@ -14,12 +14,30 @@
       "buttons": {
         "rotom_face": {"rect": [113, 0, 207, 89], "tap": [160, 35], "does": "opens the Pokedex (scene Zukan)", "verified": "tap", "evidence": "re5-f-rotom, re5-f-rotom2; also (160,5); log scene: Zukan"},
         "map": {"rect": [29, 84, 290, 231], "tap": [160, 100], "does": "opens the Town Map (scene TownMap)", "verified": "tap", "evidence": "re5-f-edge-160-100; also (60,200) and (280,110); log scene: TownMap"},
-        "rotom_eye_left": {"rect": [56, 17, 116, 80], "tap": [86, 48], "does": "nothing", "verified": "none", "evidence": "re5-f-edge-86-48, also (40,40)"},
+        "rotom_eye_left": {"rect": [56, 17, 116, 80], "tap": [86, 48], "does": "starts a Rotom chat while Rotom wants to talk (its applet shows animation 0x5C, docs/ROTOM-FIELD.md); otherwise nothing", "verified": "tap", "evidence": "re5-f-edge-86-48, also (40,40): nothing; w62 tap2 (2026-11-02): with Rotom ready, the chat 'Heya, Tyler, how're you doing?' opened"},
         "rotom_eye_right": {"rect": [203, 17, 263, 80], "tap": [233, 48], "does": "nothing", "verified": "none", "evidence": "re5-f-edge-233-48"},
         "player_marker": {"rect": [150, 148, 169, 167], "tap": [160, 160], "does": "nothing (the map around it opens the Town Map)", "verified": "none", "evidence": "re5-f-map, re5-f-pt-160-160 (tried twice)"},
         "frame_outside_map": {"rect": null, "tap": [300, 225], "does": "nothing", "verified": "none", "evidence": "re5-f-pt-300-225"}
       },
       "notes": ["map rect is the visible map window from pixels; taps inside it except the player marker opened the Town Map at 3 of 3 points tried"]
+    },
+    "rotom_chat": {
+      "scene": "FieldRo (Rotom's screen)",
+      "reach": "a Rotom chat with two answers: field.rotom_eye_left while Rotom wants to talk, or a chat the game starts itself (docs/ROTOM-FIELD.md)",
+      "buttons": {
+        "answer_1": {"rect": [102, 123, 309, 147], "tap": [210, 135], "does": "picks the first answer; Rotom says its reply", "verified": "tap", "evidence": "w62 tap2, ans1 (2026-11-02): 'I'm doing fine!' taken, Rotom applet +0xC8 2 -> 1 -> 0"},
+        "answer_2": {"rect": [102, 151, 309, 175], "tap": [210, 162], "does": "picks the second answer; Rotom says its reply", "verified": "tap", "evidence": "w62 live-down -> ans2-verify (2026-11-02): 'Cute Pokemon!' taken, Rotom replied 'Oh, nizzze! ...', applet +0xC8 2 -> 1"}
+      },
+      "notes": ["Rotom's line is in the text box at y 179-239; B does not end a chat"]
+    },
+    "rotom_loto": {
+      "scene": "FieldRo (Rotom's screen)",
+      "reach": "Roto Loto: field.rotom_eye_left while Rotom wants to talk, when Rotom picks the Roto Loto over a chat (docs/ROTOM-FIELD.md)",
+      "buttons": {
+        "text_box": {"rect": [0, 179, 319, 239], "tap": [160, 210], "does": "goes on from Rotom's line ('It's Roto Loto time!', 'That's an amazing power!', the power's description); after the last one the field's map is back here, so a second tap opens the Town Map", "verified": "tap", "evidence": "w62 loto2 -> loto3, loto4 -> loto51/53, loto53 -> loto61 (2026-11-02); applet +0x100 3 -> 5, 7 -> 8 -> 9, 9 -> 0"},
+        "reel": {"rect": [100, 80, 220, 230], "tap": [160, 150], "does": "stops the spinning reel (applet +0x100 5 -> 6)", "verified": "tap", "evidence": "w62 loto3 -> loto4 (2026-11-02): Roto Prize Money"}
+      },
+      "notes": ["the applet takes any touch while +0x100 is not 0 (FieldMenu 0x7F72C0); these are the points tried"]
     },
     "town_map": {
       "scene": "TownMap",

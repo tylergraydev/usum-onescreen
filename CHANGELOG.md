@@ -20,6 +20,8 @@ Supports Pokémon Ultra Sun (USA) v1.2 (`00040000001B5000`, title version `0x080
 
 - Native map on the top screen: **ZR** in the overworld (or the X menu's **Map**) shows the place name, the island, inside/outside, the player's position and facing, and the game's own Rotom Dex map around the player, live while walking. **ZR** or **B** closes it (`map_key` in the settings file). Place names are read from the game's own files at runtime; nothing of the game is shipped.
 
+- Rotom's prompts on the top screen: when Rotom wants to talk, a corner badge says so and **Up** starts the chat; Rotom's question and its two answers show at the bottom of the top screen (**Up/Down** choose, **A** answers, then Rotom's reply), and the Roto Loto's steps show there too (**A** goes on and stops the reel). The text is the game's own, read at runtime. The map steps aside while Rotom asks.
+
 - Native Party screen on the top screen: X menu → Pokémon shows the party (name, level, HP, status, held item). **A** opens Summary / Use item / Move, **Y** moves a Pokémon, **B** closes. The summary shows name, level, HP, item, ability, nature and moves with PP (Up/Down change Pokémon, **Y** shows the game's own page). Use item uses Medicine or Berries on that Pokémon.
 
 - Native PC boxes on the top screen: at a Pokémon Center PC the box (its name and the Pokémon in each slot) and the party show with the panel off. The D-pad moves the game's own cursor, **A** picks a Pokémon up and puts it down (swapping with one already there; box ↔ party and across boxes), **L/R** turn the box, **Y** shows the game's own details of the Pokémon at the cursor, **B** puts a held Pokémon back or leaves.
