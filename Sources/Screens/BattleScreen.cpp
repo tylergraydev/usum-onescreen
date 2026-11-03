@@ -1,5 +1,6 @@
 #include "Screens/BattleScreen.hpp"
 
+
 #include <3ds.h>
 
 #include "ActionQueue.hpp"
@@ -8,11 +9,14 @@
 #include "Battle.hpp"
 #include "Buttons.hpp"
 #include "Party.hpp"
+#include "PartyData.hpp"
 #include "Settings.hpp"
 #include "Screens/BattleMenu.hpp"
 #include "Screens/MoveLearn.hpp"
+#include "UI/Assets.hpp"
 #include "UI/Device.hpp"
 #include "UI/Layer.hpp"
+#include "UI/ScreenBuffer.hpp"
 
 namespace OneScreen
 {
@@ -36,7 +40,7 @@ namespace OneScreen
         u16 id;
         std::string name;
     };
-    static std::vector<CachedName> s_moveNames, s_speciesNames;
+    static std::vector<CachedName> s_moveNames, s_speciesNames, s_itemNames;
 
     // What the OSD callback draws, handed over under s_drawLock: the plugin
     // thread copies the menu and snapshot when what they show changes; the
@@ -49,7 +53,10 @@ namespace OneScreen
     static bool s_dirty = false;
     static UI::Layer s_layer;
     static UI::Rect s_layerArea = {};
-    static u8 s_pixels[230 * 200 * 4];  // the largest page (the move list) in RGBA8
+    // A single step of the Pokémon list, Bag or question (one tap or press,
+    // then a short wait); kept here while the action layer runs it.
+    static ActionDef s_step = { nullptr, nullptr, {}, {} };
+    static const char *const Owner = "battle";  // UI::ScreenBuffer
 
     static const std::string &Cached(std::vector<CachedName> &cache, u16 id, std::string (*lookup)(u16, const BattleState &),
                                      const BattleState &state)
@@ -77,41 +84,41 @@ namespace OneScreen
         return SpeciesName(species);
     }
 
-    // The Poké Balls tab's highlighted ball: the Items pocket's balls in
-    // order (BallsInPocket). The pocket is read when the cursor or the
-    // number of balls changes, and about once a second (counts change).
-    static void BagBall(Screens::BattleSnapshot &snap)
+    static std::string LookupItem(u16 item, const BattleState &)
     {
-        static u8 lastCursor = 0xFF, lastCount = 0;
-        static u32 calls = 0;
-        static std::string name;
-        static u16 count = 0;
-        if (snap.gameCursor != lastCursor || snap.listCount != lastCount || ++calls % 30 == 0)
+        return ItemName(item);
+    }
+
+    // Nicknames, held items and status come from the party (RE3), by the
+    // battler record's party index; read when the party or Bag page opens
+    // and about once a second while it shows (decoding six Pokémon).
+    struct PartyExtra
+    {
+        bool valid = false;
+        std::string nickname, item;
+        u32 status = 0;
+        bool egg = false;
+    };
+    static PartyExtra s_extra[6];
+
+    static void ReadPartyExtra(u32 sceneManager)
+    {
+        const PartyState party = ReadParty(sceneManager);
+        for (u32 i = 0; i < 6; i++)
         {
-            lastCursor = snap.gameCursor;
-            lastCount = snap.listCount;
-            name.clear();
-            count = 0;
-            const BagState bag = ReadBag();
-            const u32 slots = bag.valid ? bag.capacity[(int)Pocket::Items] : 0;
-            std::vector<u16> items(slots), counts(slots);
-            for (u32 i = 0; i < slots; i++)
-            {
-                const BagSlot slot = ReadBagSlot(bag, Pocket::Items, i);
-                items[i] = slot.item;
-                counts[i] = slot.count;
-            }
-            u16 balls[32], ballCounts[32];
-            const u8 n = Screens::BallsInPocket(items.data(), counts.data(), slots, balls, ballCounts, 32);
-            // Only trust it if it lists what the game's tab lists.
-            if (n == snap.listCount && snap.gameCursor < n && n <= 32)
-            {
-                name = ItemName(balls[snap.gameCursor]);
-                count = ballCounts[snap.gameCursor];
-            }
+            PartyExtra &extra = s_extra[i];
+            extra = PartyExtra();
+            if (!party.valid || i >= party.count || party.slots[i].mon.form == Pk7Form::Invalid)
+                continue;
+            const Pk7 &mon = party.slots[i].mon;
+            char nick[64];
+            Utf16ToUtf8(mon.nickname, 13, nick, sizeof(nick));
+            extra.valid = true;
+            extra.nickname = nick;
+            extra.item = mon.heldItem ? ItemName(mon.heldItem) : std::string();
+            extra.status = mon.status;
+            extra.egg = mon.isEgg;
         }
-        snap.bagItem = name;
-        snap.bagItemCount = count;
     }
 
     static void ReadSnapshot(u32 sceneManager)
@@ -125,7 +132,8 @@ namespace OneScreen
             return;
         }
         snap.menu = (Screens::GameMenu)state.menu;
-        snap.otherVtable = state.menu == BattleMenu::Other ? state.menuVtable : 0;
+        snap.otherVtable = state.menu == BattleMenu::Other || state.menu == BattleMenu::Question ? state.menuVtable : 0;
+        snap.question = state.question;
         snap.gameCursor = state.cursor;
         snap.listCount = state.listCount;
         snap.activeName = Cached(s_speciesNames, state.player.species, LookupSpecies, state);
@@ -134,22 +142,64 @@ namespace OneScreen
         snap.moveCount = Screens::BuildMoveRows(snap.moves, mon.moves, mon.pp, mon.maxPp, state.moveType,
                                                 state.moveEffect, state.menu == BattleMenu::Moves ? state.listCount : 0);
         for (u8 i = 0; i < snap.moveCount; i++)
-            snap.moves[i].name = Cached(s_moveNames, snap.moves[i].move, LookupMove, state);
+        {
+            Screens::MoveRow &row = snap.moves[i];
+            row.name = Cached(s_moveNames, row.move, LookupMove, state);
+            // Before the game's list is up its types aren't read; the game's
+            // move table has them (W7-0 assets).
+            if (row.type == 0xFF)
+            {
+                const UI::MoveInfo info = UI::AssetMove(row.move);
+                if (info.valid)
+                    row.type = info.type;
+            }
+            if (row.type != 0xFF)
+                row.typeName = UI::AssetTypeName(row.type);
+        }
+
+        // The battle party, battle order, with the party's nicknames.
+        const bool lists = state.menu == BattleMenu::Pokemon || state.menu == BattleMenu::PokemonPage
+                           || state.menu == BattleMenu::Bag;
+        static bool listsBefore = false;
+        static u32 extraFrames = 0;
+        if (lists && (!listsBefore || ++extraFrames % 30 == 0))
+            ReadPartyExtra(sceneManager);
+        listsBefore = lists;
+        snap.partyCount = state.partyCount[0] < 6 ? state.partyCount[0] : 6;
+        for (u8 i = 0; i < snap.partyCount; i++)
+        {
+            const BattleMon &mon = state.party[i];
+            Screens::BattlePartyMon &out = snap.party[i];
+            out.species = Cached(s_speciesNames, mon.species, LookupSpecies, state);
+            out.name = out.species;
+            out.level = mon.level;
+            out.hp = mon.hp;
+            out.maxHp = mon.maxHp;
+            if (mon.partyIndex < 6 && s_extra[mon.partyIndex].valid)
+            {
+                const PartyExtra &extra = s_extra[mon.partyIndex];
+                if (!extra.nickname.empty())
+                    out.name = extra.nickname;
+                out.item = extra.item;
+                out.status = extra.status;
+                out.egg = extra.egg;
+            }
+        }
 
         if (state.menu == BattleMenu::Bag)
         {
             snap.bagPocket = state.bagPocket;
             snap.bagItemPage = state.bagItemPage;
-            if (state.bagPocket == Screens::BattlePocketBalls)
-                BagBall(snap);
-        }
-        else if (state.menu == BattleMenu::Pokemon && state.cursor < 6 && state.cursor < state.partyCount[0])
-        {
-            const BattleMon &slot = state.party[state.cursor];
-            snap.partyName = Cached(s_speciesNames, slot.species, LookupSpecies, state);
-            snap.partyLevel = slot.level;
-            snap.partyHp = slot.hp;
-            snap.partyMaxHp = slot.maxHp;
+            snap.bagPick = state.bagPick;
+            snap.bagPickCursor = state.bagPickCursor;
+            snap.bagPageIndex = state.bagPageIndex;
+            snap.bagItemCount = state.bagItemCount;
+            for (u8 i = 0; i < state.bagItemCount; i++)
+            {
+                snap.bagItems[i].id = state.bagItems[i].item;
+                snap.bagItems[i].count = state.bagItems[i].count;
+                snap.bagItems[i].name = Cached(s_itemNames, state.bagItems[i].item, LookupItem, state);
+            }
         }
         s_snap = snap;
     }
@@ -192,7 +242,7 @@ namespace OneScreen
         // and the "the game asks" helper stays away.
         const u32 pressed = inBattle ? CaptureRealPressed() : 0;
         const MoveLearnFrame learn = MoveLearnUpdate(sceneManager, inBattle, pressed, log);
-        if (learn.asked && s_snap.menu == Screens::GameMenu::Other)
+        if (learn.asked && (s_snap.menu == Screens::GameMenu::Other || s_snap.menu == Screens::GameMenu::Question))
         {
             s_snap.menu = Screens::GameMenu::None;
             s_snap.otherVtable = 0;
@@ -218,14 +268,33 @@ namespace OneScreen
             if (!ActionCommand(out.action, sceneManager, log))
                 log.push_back(std::string("battle-ui: no action ") + out.action);
         }
+        else if (out.tap != nullptr || out.press != 0)
+        {
+            // One step of the Pokémon list, Bag or question: the menu looks
+            // at the game again once it is done.
+            s_step.name = "battle-step";
+            s_step.summary = "battle: one tap or press for the native menu";
+            s_step.needs = InScene(SceneBattle);
+            s_step.steps.clear();
+            if (out.tap != nullptr)
+                s_step.steps.push_back(StepTap(out.tap));
+            else
+                s_step.steps.push_back(StepPress(out.press));
+            s_step.steps.push_back(StepWait(10));
+            log.push_back(std::string("battle-ui: step ") + (out.tap != nullptr ? out.tap : "press B"));
+            if (!ActionStart(s_step, sceneManager, log))
+                log.push_back("battle-ui: step refused");
+        }
 
         // An action captures everything while it runs and then restores the
         // request it found (ours), so only change ours between actions.
         if (!ActionRunning())
-            SetCapture(out.capture ? Screens::BattleMenuKeys : learn.capture);
+            SetCapture(out.capture ? out.keys : learn.capture);
 
         const bool visible = s_menu.Visible();
         const std::string key = visible ? s_menu.DrawKey(s_snap) : std::string();
+        if (visible != s_visible)
+            log.push_back(UI::ScreenBuffer::HeapLog(visible ? "battle shown" : "battle hidden"));
         if (key != s_drawKey || visible != s_visible)
         {
             s_drawLock.Lock();
@@ -241,8 +310,19 @@ namespace OneScreen
     bool BattleScreenOnScreen(const Screen &screen)
     {
         const bool learnDrew = MoveLearnOnScreen(screen);
-        if (!screen.IsTop || !s_visible)
+        if (!screen.IsTop)
             return learnDrew;
+        if (!s_visible)
+        {
+            UI::ScreenBuffer::GiveBack(Owner);
+            return learnDrew;
+        }
+        bool fresh = false;
+        u8 *pixels = UI::ScreenBuffer::Borrow(Owner, fresh);
+        if (pixels == nullptr)
+            return learnDrew;
+        if (fresh)
+            s_layerArea = UI::Rect{};   // set up again before anything is presented
         UiInitFont();
         const UI::Surface fb = SurfaceFromScreen(screen);
 
@@ -256,7 +336,7 @@ namespace OneScreen
                 if (!s_layer.Matches(fb) || area.x != s_layerArea.x || area.y != s_layerArea.y
                     || area.w != s_layerArea.w || area.h != s_layerArea.h)
                 {
-                    s_layer.Setup(fb, area, 10, s_pixels, sizeof(s_pixels));
+                    s_layer.Setup(fb, area, s_drawMenu.Radius(), pixels, UI::ScreenBuffer::Bytes);
                     s_layerArea = area;
                     s_dirty = true;
                 }

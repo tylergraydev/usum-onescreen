@@ -1,0 +1,272 @@
+# Memory tour (docs/MEMORY.md): every native screen, twice, in one boot,
+# checking the heap. Each screen logs "mem: <screen> shown|hidden, heap ...,
+# largest N KB" (UI/ScreenBuffer.hpp); ", LOW" is added under the margin
+# (ScreenBuffer::LowMark, 256 KB). The run fails on any LOW, "NO MEMORY",
+# bad_alloc or PANIC line in the plugin log, and the log guard fails it on
+# an emulated crash (svcBreak is <Critical> in Azahar's log).
+#   Part 1, at the PC: Rotom's prompt (the badge, then its box), then twice:
+#     PC boxes, X menu -> Party + summary, Pokédex, Bag, Options, Passport,
+#     Battle Video, map.
+#   Part 2, in the grass: twice a wild battle (native battle menu, Run),
+#     then X menu -> Party and Bag.
+# The keyboard is left out: it needs a catch (native-nickname), minutes of
+# random grass. Nothing is saved; part 2's restore puts the pokecenter
+# start point back at the end.
+
+restore pc
+include common/boot
+guard-reject NO MEMORY|bad_alloc|PANIC|^mem: .*LOW
+send auto on
+send rotom on
+send battleui on
+expect-log ^screen buffer: 281 KB; heap 5
+
+# --- Rotom first (two prompts drawn, then Party, was the W7-2 crash) ---
+expect-log ^rotom: applet [0-9A-F]+, FieldMenu at [0-9A-F]+, chat table ok 30
+# No mark here: the first question can come before the applet line is read.
+repeat 72 until-log ^rotom:\s(ready\s\(talk\skey\sUp\)|choice\s)
+  sleep 10
+end
+expect-log ^mem: rotom shown 5
+sleep 1
+shot rotom
+send press up
+sleep 3
+repeat 40 until-log ^rotom:\s(choice|reply|roto\sloto)
+  sleep 3
+  send rotom next
+  send rotom talk
+end
+sleep 2
+shot rotom-box
+# Answer if it asks; the next box (reply) goes by itself.
+send rotom answer 1
+sleep 8
+repeat 20 until-log ^mem: rotom hidden
+  sleep 3
+  send rotom next
+end
+
+repeat 2
+  # --- PC boxes ---
+  mark
+  send press a
+  wait-scene Box 30
+  expect-log ^boxes: shown 15
+  expect-log ^mem: boxes shown 5
+  sleep 1
+  send press y
+  expect-log ^boxes: details on 5
+  sleep 1
+  send press y
+  expect-log ^boxes: details off 5
+  sleep 1
+  shot boxes
+  send press b
+  wait-scene FieldRo 30
+  expect-log ^mem: boxes hidden 5
+  sleep 2
+
+  # --- X menu -> Party, summary ---
+  mark
+  send press x
+  expect-log ^xmenu: shown 10
+  expect-log ^mem: xmenu shown 5
+  expect-log ^xmenu: game cursor page 10
+  repeat 5 until-log ^xmenu:\scursor\spokemon
+    send xmenu select pokemon
+    sleep 1
+  end
+  send press a
+  expect-log ^action: xmenu-pokemon ok 15
+  expect-log ^mem: xmenu hidden 5
+  expect-log ^party-ui: shown 10
+  expect-log ^mem: party shown 5
+  sleep 2
+  shot party
+  send press a
+  expect-log ^party-ui: page menu, Summary 5
+  sleep 1
+  send press a
+  expect-log ^action: party-summary ok 15
+  wait-scene Status 10
+  sleep 2
+  shot summary
+  send press b
+  wait-scene main:00647FCC 15
+  sleep 2
+  send press b
+  wait-scene FieldRo 20
+  expect-log ^mem: party hidden 5
+  expect-log ^xmenu: shown 15
+
+  # --- Pokédex ---
+  mark
+  repeat 5 until-log ^xmenu:\scursor\spokedex
+    send xmenu select pokedex
+    sleep 1
+  end
+  send press a
+  expect-log ^action: xmenu-pokedex ok 15
+  wait-scene Zukan 10
+  expect-log ^mem: pokedex shown 10
+  sleep 2
+  shot pokedex
+  send move 15 223; tap 6
+  wait-scene FieldRo 20
+  expect-log ^mem: pokedex hidden 5
+  expect-log ^xmenu: shown 15
+
+  # --- Bag ---
+  mark
+  repeat 5 until-log ^xmenu:\scursor\sbag
+    send xmenu select bag
+    sleep 1
+  end
+  send press a
+  expect-log ^action: xmenu-bag ok 15
+  wait-scene main:006488C8 10
+  expect-log ^mem: bag shown 10
+  sleep 2
+  shot bag
+  send press b
+  wait-scene FieldRo 20
+  expect-log ^mem: bag hidden 5
+  expect-log ^xmenu: shown 15
+
+  # --- Options ---
+  mark
+  repeat 5 until-log ^xmenu:\scursor\soptions
+    send xmenu select options
+    sleep 1
+  end
+  send press a
+  expect-log ^action: xmenu-options ok 15
+  wait-scene Config 10
+  expect-log ^mem: options shown 10
+  sleep 1
+  shot options
+  send press b
+  wait-scene FieldRo 10
+  expect-log ^mem: options hidden 5
+  expect-log ^xmenu: shown 15
+
+  # --- Trainer Passport ---
+  mark
+  repeat 5 until-log ^xmenu:\scursor\strainer_passport
+    send xmenu select trainer_passport
+    sleep 1
+  end
+  send press a
+  expect-log ^action: xmenu-trainer_passport ok 15
+  wait-scene TrainerPass 10
+  expect-log ^mem: passport shown 10
+  sleep 1
+  shot passport
+  send move 15 223; tap 6
+  wait-scene FieldRo 20
+  expect-log ^mem: passport hidden 5
+  expect-log ^xmenu: shown 15
+
+  # --- Battle Video ---
+  mark
+  repeat 5 until-log ^xmenu:\scursor\sbattle_video
+    send xmenu select battle_video
+    sleep 1
+  end
+  send press a
+  expect-log ^action: xmenu-battle_video ok 15
+  expect-log ^mem: video shown 10
+  sleep 1
+  shot video
+  send press b
+
+  wait-scene FieldRo 20
+  expect-log ^mem: video hidden 5
+  expect-log ^xmenu: shown 15
+
+  # --- Map (from the X menu: it opens once the menu has closed) ---
+  mark
+  repeat 5 until-log ^xmenu:\scursor\smap
+    send xmenu select map
+    sleep 1
+  end
+  send press a
+  expect-log ^map: open \(X menu\) 10
+  expect-log ^mem: map shown 5
+  sleep 2
+  shot map
+  send press b
+  expect-log ^map: closed \(B\) 5
+  expect-log ^mem: map hidden 5
+  expect-scene FieldRo
+  sleep 2
+end
+check-save
+
+# --- Part 2: battles, from the grass ---
+restore grass
+include common/boot
+guard-reject NO MEMORY|bad_alloc|PANIC|^mem: .*LOW
+send auto on
+send rotom on
+send battleui on
+sleep 4
+repeat 2
+  mark
+  repeat 40 until-scene Battle  # back and forth in the grass
+    send stick -150 0 20
+    sleep 0.5
+    send stick 150 0 20
+    sleep 0.5
+  end
+  expect-log ^battle-ui: page command, cursor 0 of 4 \(Fight\) 40
+  expect-log ^mem: battle shown 5
+  shot battle
+  send press a              # Fight: the move list, the largest page
+  expect-log ^action: battle-fight ok 10
+  sleep 1
+  shot moves
+  send press b
+  expect-log ^action: battle-moves-back ok 10
+  sleep 1
+  send press up             # wraps to Run
+  sleep 1
+  send press a
+  expect-log ^action: battle-flee ok 10
+  wait-scene FieldRo 30
+  expect-log ^mem: battle hidden 5
+  sleep 3
+
+  mark
+  send press x
+  expect-log ^mem: xmenu shown 10
+  expect-log ^xmenu: game cursor page 10
+  repeat 5 until-log ^xmenu:\scursor\spokemon
+    send xmenu select pokemon
+    sleep 1
+  end
+  send press a
+  expect-log ^mem: party shown 15
+  sleep 2
+  send press b
+  wait-scene FieldRo 20
+  expect-log ^xmenu: shown 15
+  mark
+  repeat 5 until-log ^xmenu:\scursor\sbag
+    send xmenu select bag
+    sleep 1
+  end
+  send press a
+  expect-log ^mem: bag shown 15
+  sleep 2
+  send press b
+  wait-scene FieldRo 20
+  expect-log ^xmenu: shown 15
+  send move 16 224; tap 6   # the X menu's back button
+  expect-log ^mem: xmenu hidden 10
+  sleep 2
+end
+check-save
+stop
+restore pokecenter

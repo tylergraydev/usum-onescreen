@@ -10,8 +10,11 @@
 #include "Party.hpp"
 #include "Scene.hpp"
 #include "Screens/PokedexList.hpp"
+#include "UI/Assets.hpp"
 #include "UI/Device.hpp"
 #include "UI/Layer.hpp"
+#include "UI/ScreenBuffer.hpp"
+#include "UI/Theme.hpp"
 
 namespace OneScreen
 {
@@ -57,8 +60,7 @@ namespace OneScreen
     static DexView s_drawView;
     static volatile bool s_visible = false;
     static bool s_dirty = false;
-    static u8 *s_pixels = nullptr;      // allocated the first time the screen shows
-    static const size_t PixelBytes = PokedexMaxW * PokedexMaxH * 4;
+    static const char *const Owner = "pokedex"; // UI::ScreenBuffer
     static UI::Layer s_layer;
     static UI::Rect s_layerArea = {};
 
@@ -119,8 +121,19 @@ namespace OneScreen
 
     static bool PokedexOnScreen(const Screen &screen)
     {
-        if (!screen.IsTop || !s_visible || s_pixels == nullptr)
+        if (!screen.IsTop)
             return false;
+        if (!s_visible)
+        {
+            UI::ScreenBuffer::GiveBack(Owner);
+            return false;
+        }
+        bool fresh = false;
+        u8 *pixels = UI::ScreenBuffer::Borrow(Owner, fresh);
+        if (pixels == nullptr)
+            return false;
+        if (fresh)
+            s_layerArea = UI::Rect{};   // set up again before anything is presented
         UiInitFont();
         const UI::Surface fb = SurfaceFromScreen(screen);
         // Never wait for the plugin thread here (this is the game's frame):
@@ -132,7 +145,7 @@ namespace OneScreen
             if (!s_layer.Matches(fb) || area.x != s_layerArea.x || area.y != s_layerArea.y
                 || area.w != s_layerArea.w || area.h != s_layerArea.h)
             {
-                s_layerArea = s_layer.Setup(fb, area, PokedexRadius, s_pixels, PixelBytes) ? area : UI::Rect{};
+                s_layerArea = s_layer.Setup(fb, area, PokedexRadius, pixels, UI::ScreenBuffer::Bytes) ? area : UI::Rect{};
                 s_dirty = true;
             }
             if (s_dirty && s_layerArea.w > 0)
@@ -464,22 +477,30 @@ namespace OneScreen
             s_holdUntil = s_frames + ReleaseFrames;
         HoldPanel(s_enabled && inDex && !s_yield && s_frames < s_holdUntil, log);
 
-        if (show && s_pixels == nullptr)
-        {
-            s_pixels = new (std::nothrow) u8[PixelBytes];
-            if (s_pixels == nullptr)
-                log.push_back("pokedex: NO MEMORY for the layer");
-        }
 
         if (show)
         {
             if (!s_visible || key != s_viewKey)
             {
                 if (!s_visible)
+                {
+                    // The game's font and icons (normally loaded at the first
+                    // field already).
+                    UI::RequestAssets();
                     log.push_back(Utils::Format("pokedex: shown %s", DexScreenName(view.screen)));
+                    log.push_back(UI::ScreenBuffer::HeapLog("pokedex shown"));
+                }
                 log.push_back(key);
                 s_view = view;
                 s_viewKey = key;
+                Publish(true);
+            }
+            // Redraw once the game's font has loaded (UI::Theme draws with
+            // it from then on).
+            static bool s_gameFont = false;
+            if (UI::Theme::UsingGameFont() != s_gameFont)
+            {
+                s_gameFont = !s_gameFont;
                 Publish(true);
             }
             s_lastWhy.clear();
@@ -490,9 +511,13 @@ namespace OneScreen
             {
                 Publish(false);
                 s_viewKey.clear();
+                log.push_back(UI::ScreenBuffer::HeapLog("pokedex hidden"));
+
+
             }
             if (inDex && why != s_lastWhy)
                 log.push_back("pokedex: hidden (" + why + ")");
+
             s_lastWhy = inDex ? why : "";
         }
     }
