@@ -10,29 +10,33 @@ Supports Pokémon Ultra Sun (USA) v1.2 (`00040000001B5000`, title version `0x080
 
 #### Added
 
-- Bottom screen drawn on the top screen, as a corner panel (1/2 or 2/3 size, `size` in the settings file) or a full view. The copy runs on the emulated GPU, so the half panel and the full view cost Azahar a few percent of speed at most (was ~40%); 2/3 costs ~8% (docs/PERF.md).
-- Optional automatic view per scene (`auto = on`; off by default, since native top-screen menus come first): off on the title screen and overworld; corner panel for the X menu (also Quick Link, the save dialog and Festival Plaza), battle, Pokédex, Bag, Pokémon summary, Trainer Passport, Battle Video and unmapped scenes; full view for Party, PC boxes, Town Map, Options and Pokémon Refresh.
-- The X menu is detected from the game's field state, so closing it by touch turns the panel off too.
-- Native X menu on the top screen: **X** in the field shows Pokémon, Pokédex, Bag, Quick Link, Festival Plaza, Trainer Passport, Pokémon Refresh, Battle Video, Options, the map and Save as a grid (D-pad and L/R move, **A** opens, **B** closes) with the panel off. It starts on the entry the game's own X menu remembers. QR Scanner is shown but not available yet.
-- Native keyboard on the top screen: when the game asks for a nickname after a catch, its keyboard shows on the top screen with the name typed so far (D-pad moves, **A** types, **B** deletes, **Y** Shift, **X** space, **START** jumps to OK) with the panel off.
+Native top-screen menus (the panel is off while they show; the game's own screen keeps running on the hidden bottom screen and the plugin drives it). Details and controls per screen are in [docs/PLAYING.md](docs/PLAYING.md).
 
-- Native Pokédex on the top screen (from the X menu or Rotom's face, with the panel off): the top level with each Pokédex's caught / seen counts and locked islands, the Alola list, an island Pokédex's entries around its cursor, and an entry page's number, name and caught / seen, each next to what the game shows on top (the Pokémon's model, the island map). The game's own keys drive it (D-pad, **A**, **B**; Up/Down on an entry go to the next seen one).
-
-- Native map on the top screen: **ZR** in the overworld (or the X menu's **Map**) shows the place name, the island, inside/outside, the player's position and facing, and the game's own Rotom Dex map around the player, live while walking. **ZR** or **B** closes it (`map_key` in the settings file). Place names are read from the game's own files at runtime; nothing of the game is shipped.
-
-- Rotom's prompts on the top screen: when Rotom wants to talk, a corner badge says so and **Up** starts the chat; Rotom's question and its two answers show at the bottom of the top screen (**Up/Down** choose, **A** answers, then Rotom's reply), and the Roto Loto's steps show there too (**A** goes on and stops the reel). The text is the game's own, read at runtime. The map steps aside while Rotom asks.
-
-- Native Party screen on the top screen: X menu → Pokémon shows the party (name, level, HP, status, held item). **A** opens Summary / Use item / Move, **Y** moves a Pokémon, **B** closes. The summary shows name, level, HP, item, ability, nature and moves with PP (Up/Down change Pokémon, **Y** shows the game's own page). Use item uses Medicine or Berries on that Pokémon.
-
-- Native PC boxes on the top screen: at a Pokémon Center PC the box (its name and the Pokémon in each slot) and the party show with the panel off. The D-pad moves the game's own cursor, **A** picks a Pokémon up and puts it down (swapping with one already there; box ↔ party and across boxes), **L/R** turn the box, **Y** shows the game's own details of the Pokémon at the cursor, **B** puts a held Pokémon back or leaves.
-
-- Native move learning in battle: when a Pokémon wants a fifth move, the top screen lists its four moves and the new one (type, PP; category, power and accuracy of the highlighted one). **Up/Down** and **A** pick the move to forget or *Don't learn*, **A** confirms, **B** goes back; the plugin answers the game's question and forget screen itself.
-- **L+R** cycles the bottom-screen view off / panel / full by hand (`panel_key`); with `auto = on` the choice holds until the next scene change.
-- Touch cursor: **C-stick** moves it, **ZL** touches the bottom screen at the cursor.
+- **Battle** (single battles): command bar (Fight / Bag / Pokémon / Run) and move list with type, PP and how effective each move is. **Up/Down** and **A**, **B** goes back. Bag and Pokémon open the game's own screens with a helper box saying what is highlighted. Catching works: Bag → Poké Balls → a ball, then the Pokédex page and the nickname question.
+- **Move learning**: when a Pokémon wants a fifth move, the four moves and the new one are listed (type, PP; category, power and accuracy of the highlighted one). **Up/Down** and **A** pick the move to forget or *Don't learn*, **A** confirms, **B** goes back.
+- **X menu**: **X** in the field shows Pokémon, Pokédex, Bag, Quick Link, Festival Plaza, Trainer Passport, Pokémon Refresh, Battle Video, Options, the map and Save as a grid (D-pad and L/R move, **A** opens, **B** closes). It starts on the entry the game's own X menu remembers. QR Scanner is shown but not available yet.
+- **Keyboard**: the nickname keyboard after a catch (D-pad moves, **A** types, **B** deletes, **Y** Shift, **X** space, **START** jumps to OK).
+- **Pokédex** (from the X menu or Rotom's face): the top level with each Pokédex's caught / seen counts and locked islands, the Alola list, an island Pokédex's entries around the cursor, and an entry page's number, name and caught / seen. The game's own keys drive it (D-pad, **A**, **B**; Up/Down on an entry go to the next seen one). Habitat, Appearance, search and Evaluation stay on the bottom screen.
+- **Options, Trainer Passport, Battle Video** (from the X menu). Options: Up/Down pick a row, Left/Right change its value, **A** confirms, **B** leaves (asks first if something changed). Passport: the trainer card values and stamp pages (Left/Right or L/R turn the page). Battle Video: **A** opens the Vs. Recorder.
+- **Bag**: the pockets and their items (counts, NEW marks), the party with HP, the item menu. **Use** (Medicine and Berries) and **Give** are native; other Use entries are greyed out and say to use the bottom screen. D-pad up/down move, **L/R** or left/right change pocket, **A** opens an item, **B** goes back or closes.
+- **Map**: **ZR** in the overworld (or the X menu's **Map**) shows the place name, the island, inside/outside, the player's position and facing, and the game's Rotom Dex map around the player, live while walking. **ZR** or **B** closes it (`map_key` in the settings file). Place names are read from the game's own files at runtime; nothing of the game is shipped.
+- **Rotom's prompts**: when Rotom wants to talk, a corner badge says so and **Up** starts the chat. Rotom's question and its two answers show at the bottom of the top screen (**Up/Down** choose, **A** answers, then Rotom's reply); the Roto Loto's steps show there too (**A** goes on and stops the reel).
+- **Party and summary** (X menu → Pokémon): name, level, HP, status, held item. **A** opens Summary / Use item / Move, **Y** moves a Pokémon, **B** closes. The summary shows name, level, HP, item, ability, nature and moves with PP (Up/Down change Pokémon, **Y** shows the game's own page). Use item uses Medicine or Berries.
+- **PC boxes**: at a Pokémon Center PC, the box (name and each slot's Pokémon) and the party. The D-pad moves the game's cursor, **A** picks up / puts down (swapping with one already there; box ↔ party and across boxes), **L/R** turn the box, **Y** shows the game's own details, **B** puts a held Pokémon back or leaves.
+- **Bottom-screen fallback**: **L+R** cycles the bottom screen on the top screen off / corner panel (1/2 or 2/3 size, `size` in the settings file) / full view (`panel_key`). The copy runs on the emulated GPU, so the half panel and the full view cost Azahar a few percent of speed at most; 2/3 costs ~8% (docs/PERF.md). Screens without a native view, or parts of one (an item that asks a follow-up question, say), use it.
+- **Touch cursor**: **C-stick** moves it, **ZL** touches the bottom screen at the cursor.
+- **Automatic view** (optional, `auto = on`; off by default since native menus come first): picks off / panel / full per scene, and **L+R** then holds your choice until the next scene change. Scene views can be set in the `[scenes]` section.
+- **Settings file** `usum-onescreen.ini` at the emulated SD root: keys, panel size and corner, auto view, per-scene views, written with comments on first run. Bad values are skipped and logged. The plugin menu (**Select**) can reload it.
 - Startup check of the game, its version and every patched function; the plugin does nothing on an unsupported game or if the check fails, and shows an on-screen notice either way.
 - `usum-onescreen.log` at the emulated SD root with the startup check, scene changes and view changes, for bug reports.
-- Developer test harness (command file, headless screenshots, memory tools) and analysis tools; see `README.md` and `docs/OFFSETS.md`.
+- Developer test harness (command file, headless screenshots, memory tools, scenarios) and analysis tools; see `README.md` and `docs/OFFSETS.md`.
 
 #### Known gaps
 
-- Ultra Moon is not supported yet.
+- Ultra Moon is not supported yet (its addresses have not been found; the startup check fails and the plugin does nothing).
+- No native screen for the Ride Pager (**Y** in the field), Poké Pelago, Festival Plaza, Quick Link and Pokémon Refresh: use the bottom-screen panel (**L+R**). The Ride Pager and Pelago need a later save than the one used for testing, so they have not been looked at.
+- Double battles: the target screen was never found, so it needs the panel (**L+R**). Trainer battles were not played.
+- Not native yet: Pokémon summary from the PC, Held Item / Release / Marking in the boxes, Habitat and Appearance in the Pokédex, TM and evolution-stone follow-ups in the Bag and Party, QR Scanner, Battle Video lists (the test save has none).
+- Moves learned outside battle (TMs, Rare Candy) use the game's own screen on the bottom screen.
+- Game controller input has not been tested on a real pad yet.
+- Only tested in Azahar 2126.2 on Windows; real 3DS hardware has not been tried.
