@@ -35,6 +35,13 @@ namespace OneScreen
     static const u32 VtBagScene = 0x6488C8, BagSceneList = 0x88;
     static const u32 ListCount = 0x0C, ListRows = 0x14, ListRow = 0x18, ListScroll = 0x1C;
 
+    // Move teaching (WazaOshie CRO object on the scene stack, as in battle,
+    // docs/MOVE-LEARN.md): +0xB0 -> param {u8 +1, u16 new move +8}, +0xB5
+    // u8 1 while one move's page is up.
+    static const u32 VtWaza = 0x76D0, WazaParam = 0xB0, WazaPage = 0xB5;
+    static const u32 WazaPokeId = 0x01, WazaMove = 0x08, ManagerSlots = 8;
+    static const u16 MoveCount = 729;
+
     // Summary (Status scene, a CRO): +0x58 -> WordSet loader, +0x10 -> entries
     // {buffer, size, u32 dat, MsgData*} (as the battle's, docs/OFFSETS.md).
     static const u32 StatusLoader = 0x58, LoaderEntries = 0x10, LoaderStride = 0x10;
@@ -264,6 +271,33 @@ namespace OneScreen
         std::memcpy(&state.scroll, &bits, 4);
         state.valid = state.count <= 427 && state.rows >= 1 && state.rows <= 10 && state.row < state.rows
                       && state.scroll >= 0 && state.scroll <= 427;
+        return state;
+    }
+
+    TeachScreenState ReadTeachScreen(u32 sceneManager)
+    {
+        TeachScreenState state;
+        const u32 manager = Read32(sceneManager);
+        if (!Readable(manager, ManagerSlots * 4))
+            return state;
+        for (u32 i = 0; i < ManagerSlots; i++)
+        {
+            const u32 object = Read32(manager + i * 4);
+            if (!Readable(object, WazaPage + 1))
+                break;
+            const u32 vtable = Read32(object);
+            const u32 module = CroModuleOf(vtable);
+            if (module == 0 || vtable != module + VtWaza || CroModuleName(module) != "WazaOshie")
+                continue;
+            const u32 param = Read32(object + WazaParam);
+            if (!Readable(param, WazaMove + 2))
+                return state;
+            state.newMove = Read16(param + WazaMove);
+            state.pokeId = Read8(param + WazaPokeId);
+            state.confirm = Read8(object + WazaPage) == 1;
+            state.valid = state.newMove != 0 && state.newMove < MoveCount;
+            return state;
+        }
         return state;
     }
 

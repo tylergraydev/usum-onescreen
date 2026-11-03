@@ -1,0 +1,396 @@
+using System;
+using System.Drawing;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+
+namespace UsumOneScreen
+{
+    sealed class MainForm : Form
+    {
+        readonly Home home;
+
+        readonly TextBox romBox = new TextBox(), updateBox = new TextBox();
+        readonly Label romCheck = new Label(), updateCheck = new Label(), azaharLabel = new Label();
+        readonly ComboBox controls = Combo(Enum.GetValues(typeof(ControlPreset)).Cast<ControlPreset>().Select(ControlPresets.Name).ToArray(), false);
+        readonly ComboBox panelKey = Combo(PluginSettings.KeyChoices, true), touchKey = Combo(PluginSettings.KeyChoices, true),
+                          mapKey = Combo(PluginSettings.KeyChoices, true), cursorMove = Combo(PluginSettings.CursorMoves, false),
+                          size = Combo(PluginSettings.Sizes, false), corner = Combo(PluginSettings.Corners, false),
+                          autoPanel = Combo(PluginSettings.OnOff, false);
+        readonly NumericUpDown cursorSpeed = new NumericUpDown { Minimum = 1, Maximum = 20, Width = 60 };
+        readonly CheckBox fullscreen = new CheckBox { Text = "Fullscreen (F11 or Esc leaves it)", AutoSize = true };
+        readonly TextBox log = new TextBox { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Fill };
+        readonly Button setupButton = new Button { Text = "Set up", AutoSize = true, Padding = new Padding(12, 4, 12, 4) };
+        readonly Button playButton = new Button { Text = "Play", AutoSize = true, Padding = new Padding(24, 4, 24, 4) };
+        readonly Button mapButtons = new Button { Text = "Map buttons in Azahar…", AutoSize = true };
+        string azaharSource;   // set when the player picks another Azahar
+        bool busy;
+
+        public MainForm(Home home)
+        {
+            this.home = home;
+            Text = "USUM One Screen";
+            Font = SystemFonts.MessageBoxFont;
+            AutoScaleMode = AutoScaleMode.Dpi;
+            MinimumSize = new Size(640, 600);
+            Size = new Size(720, 720);
+            StartPosition = FormStartPosition.CenterScreen;
+
+            var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, Padding = new Padding(12) };
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            Controls.Add(root);
+
+            root.Controls.Add(GameGroup());
+            root.Controls.Add(EmulatorGroup());
+            root.Controls.Add(PluginGroup());
+            root.Controls.Add(log);
+            var buttons = new FlowLayoutPanel { FlowDirection = FlowDirection.RightToLeft, Dock = DockStyle.Fill, AutoSize = true };
+            buttons.Controls.Add(playButton);
+            buttons.Controls.Add(setupButton);
+            buttons.Controls.Add(fullscreen);
+            root.Controls.Add(buttons);
+
+            setupButton.Click += async (s, e) => await RunSetup();
+            playButton.Click += async (s, e) => await PlayGame();
+            mapButtons.Click += (s, e) => OpenAzaharForMapping();
+            controls.SelectedIndexChanged += (s, e) => mapButtons.Enabled = SelectedPreset() == ControlPreset.Custom;
+            AcceptButton = playButton;
+
+            LoadValues();
+        }
+
+        // --- layout ---
+
+        static ComboBox Combo(string[] items, bool editable)
+        {
+            var c = new ComboBox { DropDownStyle = editable ? ComboBoxStyle.DropDown : ComboBoxStyle.DropDownList, Width = 150 };
+            c.Items.AddRange(items);
+            return c;
+        }
+
+        static TableLayoutPanel Grid(int columns)
+        {
+            var g = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = columns };
+            return g;
+        }
+
+        static Label Caption(string text) =>
+            new Label { Text = text, AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 7, 3, 3) };
+
+        static GroupBox Group(string text, Control content)
+        {
+            var g = new GroupBox { Text = text, Dock = DockStyle.Fill, AutoSize = true, Padding = new Padding(8) };
+            g.Controls.Add(content);
+            return g;
+        }
+
+        Control GameGroup()
+        {
+            var g = Grid(3);
+            g.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            g.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            g.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            AddFileRow(g, "Ultra Sun ROM", romBox, romCheck, DumpKind.Game,
+                       "Pokémon Ultra Sun (*.3ds;*.cci;*.cxi;*.cia)|*.3ds;*.cci;*.cxi;*.cia|All files|*.*");
+            AddFileRow(g, "v1.2 update", updateBox, updateCheck, DumpKind.Update,
+                       "Ultra Sun update (*.cia)|*.cia|All files|*.*");
+            var note = new Label
+            {
+                Text = "Use your own dumps of Pokémon Ultra Sun (USA) and its v1.2 update. This app doesn't provide them.",
+                AutoSize = true, ForeColor = SystemColors.GrayText,
+            };
+            g.Controls.Add(note, 0, 4);
+            g.SetColumnSpan(note, 3);
+            return Group("Your game", g);
+        }
+
+        void AddFileRow(TableLayoutPanel g, string caption, TextBox box, Label check, DumpKind kind, string filter)
+        {
+            int row = g.RowCount;
+            g.RowCount += 2;
+            box.Dock = DockStyle.Fill;
+            box.Leave += (s, e) => ShowCheck(box, check, kind);
+            var browse = new Button { Text = "Browse…", AutoSize = true };
+            browse.Click += (s, e) =>
+            {
+                using (var d = new OpenFileDialog { Filter = filter, Title = caption })
+                {
+                    if (File.Exists(box.Text))
+                        d.InitialDirectory = Path.GetDirectoryName(box.Text);
+                    if (d.ShowDialog(this) == DialogResult.OK)
+                    {
+                        box.Text = d.FileName;
+                        ShowCheck(box, check, kind);
+                    }
+                }
+            };
+            g.Controls.Add(Caption(caption), 0, row);
+            g.Controls.Add(box, 1, row);
+            g.Controls.Add(browse, 2, row);
+            check.AutoSize = true;
+            check.MaximumSize = new Size(560, 0);
+            g.Controls.Add(check, 1, row + 1);
+            g.SetColumnSpan(check, 2);
+        }
+
+        Control EmulatorGroup()
+        {
+            var g = Grid(3);
+            g.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            g.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            g.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            azaharLabel.AutoSize = true;
+            azaharLabel.Anchor = AnchorStyles.Left;
+            var change = new Button { Text = "Use another Azahar…", AutoSize = true };
+            change.Click += (s, e) => PickAzahar();
+            g.Controls.Add(Caption("Azahar"), 0, 0);
+            g.Controls.Add(azaharLabel, 1, 0);
+            g.Controls.Add(change, 2, 0);
+            controls.Width = 300;
+            g.Controls.Add(Caption("Controls"), 0, 1);
+            g.Controls.Add(controls, 1, 1);
+            g.Controls.Add(mapButtons, 2, 1);
+            return Group("Emulator", g);
+        }
+
+        Control PluginGroup()
+        {
+            var g = Grid(4);
+            void Row(int row, string a, Control ca, string b, Control cb)
+            {
+                g.Controls.Add(Caption(a), 0, row);
+                g.Controls.Add(ca, 1, row);
+                g.Controls.Add(Caption(b), 2, row);
+                g.Controls.Add(cb, 3, row);
+            }
+            Row(0, "Bottom screen view", panelKey, "Touch", touchKey);
+            Row(1, "Map", mapKey, "Cursor moves with", cursorMove);
+            Row(2, "Cursor speed", cursorSpeed, "Panel size", size);
+            Row(3, "Panel corner", corner, "Automatic view", autoPanel);
+            return Group("Plugin (usum-onescreen.ini)", g);
+        }
+
+        // --- values ---
+
+        void LoadValues()
+        {
+            romBox.Text = home.GetState("rom", "");
+            if (romBox.Text != "")
+                ShowCheck(romBox, romCheck, DumpKind.Game);
+            int v = home.InstalledUpdateVersion();
+            if (v == Dump.UpdateVersion)
+            {
+                updateCheck.Text = "Update v1.2 is installed; you don't need to pick it again.";
+                updateCheck.ForeColor = Color.DarkGreen;
+            }
+            controls.SelectedIndex = (int)home.CurrentControls();
+            mapButtons.Enabled = SelectedPreset() == ControlPreset.Custom;
+            fullscreen.Checked = home.GetState("fullscreen") == "on";
+
+            var ini = PluginIni.Load(home.PluginIniPath);
+            panelKey.Text = ini.Get("panel_key");
+            touchKey.Text = ini.Get("touch_key");
+            mapKey.Text = ini.Get("map_key");
+            Select(cursorMove, ini.Get("cursor_move"));
+            cursorSpeed.Value = int.TryParse(ini.Get("cursor_speed"), out int n) ? Math.Max(1, Math.Min(20, n)) : 6;
+            Select(size, ini.Get("size") == "half" ? "1/2" : ini.Get("size"));
+            Select(corner, ini.Get("corner"));
+            Select(autoPanel, new[] { "on", "true", "yes", "1" }.Contains(ini.Get("auto")?.ToLowerInvariant()) ? "on" : "off");
+
+            ShowAzahar();
+            UpdateButtons();
+            string notReady = Setup.NotReady(home);
+            Log(notReady == null ? "Ready. Press Play." : "Pick your ROM and update, then press Play.");
+        }
+
+        static void Select(ComboBox c, string value)
+        {
+            int i = c.Items.Cast<string>().ToList().FindIndex(s => string.Equals(s, value, StringComparison.OrdinalIgnoreCase));
+            c.SelectedIndex = i >= 0 ? i : 0;
+        }
+
+        ControlPreset SelectedPreset() => (ControlPreset)Math.Max(0, controls.SelectedIndex);
+
+        void ShowAzahar()
+        {
+            string dir = azaharSource ?? (home.HasAzahar ? home.AzaharDir : home.AzaharCandidates().FirstOrDefault());
+            if (dir == null)
+            {
+                azaharLabel.Text = "Not found. Install Azahar, or pick its folder.";
+                azaharLabel.ForeColor = Color.DarkRed;
+                return;
+            }
+            string version = Home.AzaharVersion(dir) ?? "version unknown";
+            string where = azaharSource == null && home.HasAzahar ? "the app's copy" : dir;
+            azaharLabel.Text = $"{version}, {where}" + (version == Home.TestedAzahar ? "" : $" (tested with {Home.TestedAzahar})");
+            azaharLabel.ForeColor = version == Home.TestedAzahar ? SystemColors.ControlText : Color.DarkOrange;
+        }
+
+        void ShowCheck(TextBox box, Label check, DumpKind kind)
+        {
+            if (box.Text.Trim() == "")
+            {
+                check.Text = "";
+                return;
+            }
+            var c = Dump.Check(box.Text.Trim(), kind);
+            check.Text = (c.Ok ? "✓ " : "✗ ") + c.Message;
+            check.ForeColor = c.Ok ? Color.DarkGreen : Color.DarkRed;
+        }
+
+        void PickAzahar()
+        {
+            using (var d = new OpenFileDialog { Filter = "azahar.exe|azahar.exe", Title = "Pick azahar.exe in your Azahar folder" })
+            {
+                if (d.ShowDialog(this) != DialogResult.OK)
+                    return;
+                azaharSource = Path.GetDirectoryName(d.FileName);
+                ShowAzahar();
+                Log("Azahar will be copied from there when you press Set up or Play.");
+            }
+        }
+
+        // Writes the plugin settings; returns false (and says why) if one is bad.
+        bool SavePluginSettings()
+        {
+            var values = new[]
+            {
+                ("panel_key", panelKey.Text.Trim()), ("touch_key", touchKey.Text.Trim()), ("map_key", mapKey.Text.Trim()),
+                ("cursor_move", cursorMove.Text), ("cursor_speed", ((int)cursorSpeed.Value).ToString()),
+                ("size", size.Text), ("corner", corner.Text), ("auto", autoPanel.Text),
+            };
+            foreach (var (key, value) in values)
+            {
+                string error = PluginSettings.Validate(key, value);
+                if (error != null)
+                {
+                    Log(error);
+                    return false;
+                }
+            }
+            var ini = PluginIni.Load(home.PluginIniPath);
+            bool changed = false;
+            foreach (var (key, value) in values)
+                if (!string.Equals(ini.Get(key), value, StringComparison.OrdinalIgnoreCase))
+                {
+                    ini.Set(key, value);
+                    changed = true;
+                }
+            if (changed)
+                ini.Save(home.PluginIniPath);
+            return true;
+        }
+
+        // --- actions ---
+
+        void Log(string line)
+        {
+            if (InvokeRequired)
+            {
+                BeginInvoke(new Action<string>(Log), line);
+                return;
+            }
+            log.AppendText(line + Environment.NewLine);
+        }
+
+        void UpdateButtons()
+        {
+            bool running = home.IsRunning();
+            setupButton.Enabled = !busy && !running;
+            playButton.Enabled = !busy && !running;
+            playButton.Text = running ? "Playing" : "Play";
+        }
+
+        Setup.Options CurrentOptions() => new Setup.Options
+        {
+            Rom = romBox.Text.Trim(),
+            Update = updateBox.Text.Trim() == "" ? null : updateBox.Text.Trim(),
+            AzaharSource = azaharSource,
+            Controls = SelectedPreset(),
+        };
+
+        async Task<bool> RunSetup()
+        {
+            if (!SavePluginSettings())
+                return false;
+            busy = true;
+            UpdateButtons();
+            var o = CurrentOptions();
+            try
+            {
+                await Task.Run(() => Setup.Run(home, o, Log));
+                azaharSource = null;
+                home.SetState("fullscreen", fullscreen.Checked ? "on" : "off");
+                ShowAzahar();
+                return true;
+            }
+            catch (Exception e) when (e is SetupException || e is IOException || e is UnauthorizedAccessException)
+            {
+                Log("Stopped: " + e.Message);
+                MessageBox.Show(this, e.Message, "USUM One Screen", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
+            }
+            finally
+            {
+                busy = false;
+                UpdateButtons();
+            }
+        }
+
+        async Task PlayGame()
+        {
+            // Settings changed or never set up: run setup first (it is quick
+            // once Azahar is copied and the update is installed).
+            bool same = Setup.NotReady(home) == null && azaharSource == null &&
+                        string.Equals(romBox.Text.Trim(), home.GetState("rom"), StringComparison.OrdinalIgnoreCase) &&
+                        SelectedPreset() == home.CurrentControls();
+            if (same ? !SavePluginSettings() : !await RunSetup())
+                return;
+            home.SetState("fullscreen", fullscreen.Checked ? "on" : "off");
+            try
+            {
+                var p = home.Launch(home.GetState("game"), fullscreen.Checked);
+                Log("Starting Ultra Sun …");
+                UpdateButtons();
+                p.EnableRaisingEvents = true;
+                p.Exited += (s, e) => BeginInvoke(new Action(() => { Log("Azahar closed."); UpdateButtons(); }));
+                string boot = await Task.Run(() => home.PluginBootLine(120000, () => !p.HasExited));
+                if (boot != null)
+                {
+                    string first = boot.Split('\n').FirstOrDefault(l => l.Contains("USUM One Screen") || l.Contains("unsupported")) ?? boot.Split('\n')[0];
+                    Log("Plugin: " + first.Trim());
+                    if (!boot.Contains("hooks: all ok"))
+                        Log("The plugin's startup check didn't pass; see " + home.PluginLogPath);
+                }
+                else if (!p.HasExited)
+                    Log("The plugin hasn't written its log yet; check that the notice appears in the game.");
+            }
+            catch (Exception e) when (e is SetupException || e is IOException || e is System.ComponentModel.Win32Exception)
+            {
+                Log("Couldn't start: " + e.Message);
+            }
+        }
+
+        void OpenAzaharForMapping()
+        {
+            if (!home.HasAzahar)
+            {
+                Log("Press Set up first, so the app has its Azahar copy.");
+                return;
+            }
+            if (home.IsRunning())
+            {
+                Log("Azahar is already open.");
+                return;
+            }
+            home.WriteConfig(ControlPreset.Custom);
+            home.OpenAzahar();
+            Log("In Azahar: Emulation > Configure > Controls. Map your buttons, press OK and close Azahar. Those mappings are used from then on.");
+        }
+    }
+}

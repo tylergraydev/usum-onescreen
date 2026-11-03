@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "Party.hpp"
+#include "PartyData.hpp"
 #include "Scene.hpp"
 
 namespace OneScreen
@@ -28,6 +29,7 @@ namespace OneScreen
 
     // Battler record.
     static const u32 MonSpecies = 0x0C, MonMaxHp = 0x0E, MonHp = 0x10, MonAbility = 0x16, MonLevel = 0x18;
+    static const u32 MonPartyIndex = 0x19;
     static const u32 MonMoves = 0x1FC, MoveStride = 0x0E;   // u16 move, u8 pp, u8 max pp, ...
 
     // Command menu: highlighted button.
@@ -48,6 +50,27 @@ namespace OneScreen
     static const u32 ItemListCount = 0x10, ItemListCursor = 0x18;
     // Bag frame: u8 1 while the item list shows, 0 on an item's page (Use).
     static const u32 BagFrameListShown = 0x6E;
+    // Bag child frame (W7-1, docs/OFFSETS.md "Battle Pokémon list and Bag"):
+    // +0xA4 the pockets' item lists, +0xBC the Bag work object, +0xDD u8 1
+    // while it asks "Which Pokémon do you want to use this item on?".
+    static const u32 BagChildPockets = 0xA4, BagChildWork = 0xBC, BagChildPick = 0xDD;
+    // Pocket lists: +0x10 + pocket * 8 {u32 *items, u32 count}; items in
+    // the save's MyItem format (DecodeBagSlot).
+    static const u32 PocketsFirst = 0x10, PocketStride = 8, BattlePockets = 5, MaxBagItems = 64;
+    // Work object (vtable Bag+0x16FF0): +0x64 the party column (vtable
+    // Bag+0x16D98, u8 cursor +0x1C6, as in the field Bag), +0x240 u8 the
+    // item an item's page shows (index in the pocket).
+    static const u32 VtBagWork = 0x16FF0, VtBagParty = 0x16D98;
+    static const u32 WorkParty = 0x64, PartyCursor = 0x1C6, WorkPageIndex = 0x240;
+
+    // One Pokémon's page (Switch / Restore / Summary), after a tap on a slot
+    // of the Pokémon list.
+    static const u32 VtPokemonPage = 0x10BCD0;
+    // The battle's two-choice question ("Use next Pokémon?", learning a
+    // move): u32 cursor +0xA8, u32 entry count +0xB0. Its message: view
+    // +0x230 -> +0x104 u16 message ID.
+    static const u32 VtQuestion = 0x10B3B0, QuestionCursor = 0xA8, QuestionCount = 0xB0;
+    static const u32 ViewMessage = 0x230, MessageId = 0x104;
 
     // The busy object (always on the stack in battle) holds the battle's
     // WordSet; its loader (+0x14) keeps the message files it loaded:
@@ -89,6 +112,7 @@ namespace OneScreen
         mon.hp = Read16(address + MonHp);
         mon.ability = Read16(address + MonAbility);
         mon.level = Read8(address + MonLevel);
+        mon.partyIndex = Read8(address + MonPartyIndex);
         for (u32 i = 0; i < 4; i++)
         {
             const u32 move = address + MonMoves + i * MoveStride;
@@ -171,6 +195,17 @@ namespace OneScreen
                 state.cursor = Read8(param + ParamCursor);
             }
         }
+        else if (vtModuleName == "Battle" && state.menuVtable == VtPokemonPage)
+            state.menu = BattleMenu::PokemonPage;
+        else if (vtModuleName == "Battle" && state.menuVtable == VtQuestion && Read32(top + QuestionCount) == 2)
+        {
+            state.menu = BattleMenu::Question;
+            state.questionCursor = (u8)Read32(top + QuestionCursor);
+            state.listCount = 2;
+            const u32 work = Read32(view + ViewMessage);
+            if (work != 0 && Process::CheckAddress(work + MessageId, MEMPERM_READ))
+                state.question = Read16(work + MessageId);
+        }
         else if (vtModuleName == "Bag" && state.menuVtable == VtBagFrame)
         {
             state.menu = BattleMenu::Bag;
@@ -180,12 +215,46 @@ namespace OneScreen
             if (child != 0 && Read32(child) == vtModule + VtBagChild)
             {
                 state.bagPocket = Read8(child + BagPocket);
-                const u32 view = Read32(child + BagView);
-                const u32 list = view != 0 && Read32(view) == VtBagView ? Read32(view + BagViewList) : 0;
+                const u32 bagView = Read32(child + BagView);
+                const u32 list = bagView != 0 && Read32(bagView) == VtBagView ? Read32(bagView + BagViewList) : 0;
                 if (list != 0)
                 {
                     state.listCount = Read8(list + ItemListCount);
                     state.cursor = Read8(list + ItemListCursor);
+                }
+                state.bagPick = Read8(child + BagChildPick) != 0;
+
+                // The open pocket's own list; trusted only if it has as many
+                // entries as the game's list shows.
+                const u32 pockets = Read32(child + BagChildPockets);
+                if (state.bagPocket < BattlePockets && pockets != 0
+                    && Process::CheckAddress(pockets + PocketsFirst + BattlePockets * PocketStride, MEMPERM_READ))
+                {
+                    const u32 entry = pockets + PocketsFirst + state.bagPocket * PocketStride;
+                    const u32 items = Read32(entry), count = Read32(entry + 4);
+                    if (count <= MaxBagItems && count == state.listCount
+                        && (count == 0 || Process::CheckAddress(items + count * 4 - 1, MEMPERM_READ)))
+                    {
+                        for (u32 i = 0; i < count; i++)
+                        {
+                            const BagSlot slot = DecodeBagSlot(Read32(items + i * 4));
+                            state.bagItems[i].item = slot.item;
+                            state.bagItems[i].count = slot.count;
+                        }
+                        state.bagItemCount = (u8)count;
+                    }
+                }
+
+                const u32 work = Read32(child + BagChildWork);
+                if (work != 0 && Read32(work) == vtModule + VtBagWork)
+                {
+                    state.bagPageIndex = Read8(work + WorkPageIndex);
+                    const u32 party = Read32(work + WorkParty);
+                    if (party != 0 && Read32(party) == vtModule + VtBagParty)
+                    {
+                        const u8 cursor = Read8(party + PartyCursor);
+                        state.bagPickCursor = cursor < 6 ? cursor : 0xFF;
+                    }
                 }
             }
         }
@@ -236,13 +305,26 @@ namespace OneScreen
         if (!state.valid)
             return Utils::Format("battle: Battle module at %08lX, objects not found", state.module);
 
-        static const char *const menus[] = {"none", "command", "moves", "pokemon", "bag", "other"};
+        static const char *const menus[] = {"none", "command", "moves", "pokemon", "bag", "other", "pokemon page",
+                                            "question"};
         std::string out = Utils::Format("battle: menu %s (%08lX vt %08lX)", menus[(int)state.menu],
                                         state.menuObject, state.menuVtable);
         if (state.menu != BattleMenu::None && state.menu != BattleMenu::Other)
             out += Utils::Format(" cursor %u of %u", state.cursor, state.listCount);
         if (state.menu == BattleMenu::Bag)
+        {
             out += Utils::Format(" pocket %u%s", state.bagPocket, state.bagItemPage ? " item page" : "");
+            if (state.bagItemPage)
+                out += Utils::Format(" (item %u)", state.bagPageIndex);
+            if (state.bagPick)
+                out += Utils::Format(" pick, cursor %u", state.bagPickCursor);
+            out += " [";
+            for (u32 i = 0; i < state.bagItemCount; i++)
+                out += Utils::Format(i ? " %u x%u" : "%u x%u", state.bagItems[i].item, state.bagItems[i].count);
+            out += "]";
+        }
+        if (state.menu == BattleMenu::Question)
+            out += Utils::Format(" message 0x%X", state.question);
         if (state.menu == BattleMenu::Moves)
         {
             out += " [type/eff";
@@ -252,6 +334,10 @@ namespace OneScreen
         }
         out += "\n  " + DescribeMon("player", state.player, state.partyCount[0]);
         out += "\n  " + DescribeMon("opponent", state.opponent, state.partyCount[1]);
+        out += "\n  battle order (slot:party index/species hp):";
+        for (u32 i = 0; i < 6 && i < state.partyCount[0]; i++)
+            out += Utils::Format(" %lu:%u/%u %u/%u", i, state.party[i].partyIndex, state.party[i].species,
+                                 state.party[i].hp, state.party[i].maxHp);
         std::string names;
         for (u32 i = 0; i < 4; i++)
             if (state.player.moves[i] != 0)

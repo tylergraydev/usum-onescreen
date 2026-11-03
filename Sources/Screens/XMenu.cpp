@@ -53,6 +53,7 @@ namespace OneScreen
     static volatile bool s_scanWanted = false;
     static volatile int  s_scanPage = -1, s_scanSlot = -1;
     static volatile u32  s_scanCount = 0;
+    static const char *const Owner = "xmenu";   // UI::ScreenBuffer
 
     // --- Plugin thread ---
     static bool s_enabled = true;
@@ -81,7 +82,6 @@ namespace OneScreen
     static u32 s_drawnVersion = ~0u;
     // The layer draws in the shared screen buffer (UI/ScreenBuffer.hpp),
     // borrowed while the menu shows.
-    static const char *const BufferOwner = "xmenu";
     static bool s_drawnGameFont = false;    // the game font was loaded when last drawn
 
     // The game's cursor is a red arrow left of the pill it points at
@@ -122,11 +122,11 @@ namespace OneScreen
         }
         if (!s_shown)
         {
-            UI::ScreenBuffer::GiveBack(BufferOwner);
+            UI::ScreenBuffer::GiveBack(Owner);
             return false;
         }
         bool fresh = false;
-        u8 *const pixels = UI::ScreenBuffer::Borrow(BufferOwner, fresh);
+        u8 *const pixels = UI::ScreenBuffer::Borrow(Owner, fresh);
         if (pixels == nullptr)
             return false;   // another screen holds it: next frame
 
@@ -377,14 +377,14 @@ namespace OneScreen
             s_lastScan = s_scanCount;
             s_scanWanted = true;
             s_repeatKey = 0;
-            log.push_back(Utils::Format("xmenu: shown (game page %d), %s",
-                                        (ActionProbeFlags() & WorldXMenuPage2) ? 2 : 1,
-                                        UI::ScreenBuffer::HeapStatus().c_str()));
+            log.push_back(Utils::Format("xmenu: shown (game page %d)", (ActionProbeFlags() & WorldXMenuPage2) ? 2 : 1));
+            log.push_back(UI::ScreenBuffer::HeapLog("xmenu shown"));
         }
         else if (!shown && s_shown)
         {
             s_scanWanted = false;
-            log.push_back("xmenu: hidden, " + UI::ScreenBuffer::HeapStatus());
+            log.push_back("xmenu: hidden");
+            log.push_back(UI::ScreenBuffer::HeapLog("xmenu hidden"));
         }
         s_shown = shown;
 
