@@ -16,6 +16,7 @@
 #include "UI/Assets.hpp"
 #include "UI/Device.hpp"
 #include "UI/Layer.hpp"
+#include "UI/ScreenBuffer.hpp"
 #include "UI/Theme.hpp"
 
 namespace OneScreen
@@ -38,8 +39,7 @@ namespace OneScreen
     static volatile int   s_drawing = -1;       // screen the OSD draws (shown)
     static volatile u32   s_sampleSeq = 0;
     static Sample         s_sampleBuf[MaxScreenSamples];
-    static u8            *s_pixels = nullptr;   // the layer's buffer, allocated on first show
-    static const size_t   PixelBytes = 376 * 232 * 4;   // the largest area (passport), any format
+    static const char *const Owner = "subscreens";  // UI::ScreenBuffer
 
     // --- Plugin thread ---
     static bool s_enabled = true;
@@ -242,16 +242,23 @@ namespace OneScreen
             return false;
         }
         const int index = s_drawing;
-        if (index < 0 || s_pixels == nullptr)
+        if (index < 0)
+        {
+            UI::ScreenBuffer::GiveBack(Owner);
+            return false;
+        }
+        bool fresh = false;
+        u8 *pixels = UI::ScreenBuffer::Borrow(Owner, fresh);
+        if (pixels == nullptr)
             return false;
 
         UiInitFont();
         const UI::Surface fb = SurfaceFromScreen(screen);
         NativeScreen *ns = s_screens[index];
-        bool redraw = index != s_layerScreen;
-        if (!s_layer.Matches(fb) || index != s_layerScreen)
+        bool redraw = fresh || index != s_layerScreen;
+        if (fresh || !s_layer.Matches(fb) || index != s_layerScreen)
         {
-            if (!s_layer.Setup(fb, ns->Area(), ScreenStyle::Radius, s_pixels, PixelBytes))
+            if (!s_layer.Setup(fb, ns->Area(), ScreenStyle::Radius, pixels, UI::ScreenBuffer::Bytes))
                 return false;
             s_layerScreen = index;
             redraw = true;
@@ -351,8 +358,12 @@ namespace OneScreen
         if (s_active < 0)
             return;
         if (s_shown)
+        {
             log.push_back(std::string(s_screens[s_active]->Name()) + ": hidden");
+            log.push_back(UI::ScreenBuffer::HeapLog((std::string(s_screens[s_active]->Name()) + " hidden").c_str()));
+        }
         u32 word = 0;
+
         if (s_active == 0 && ReadSaveWord(word))
         {
             // What the game kept (Confirm / Yes) or not (back, No): in its
@@ -455,12 +466,15 @@ namespace OneScreen
         const bool shown = !s_yield && ns->Ready();
         if (shown && !s_shown)
         {
-            if (s_pixels == nullptr)
-                s_pixels = new (std::nothrow) u8[PixelBytes];
-            log.push_back(std::string(ns->Name()) + ": shown" + (s_pixels == nullptr ? ", NO MEMORY for the layer" : ""));
+            log.push_back(std::string(ns->Name()) + ": shown");
+            log.push_back(UI::ScreenBuffer::HeapLog((std::string(ns->Name()) + " shown").c_str()));
         }
         else if (!shown && s_shown)
+        {
             log.push_back(std::string(ns->Name()) + ": hidden");
+            log.push_back(UI::ScreenBuffer::HeapLog((std::string(ns->Name()) + " hidden").c_str()));
+        }
+
         s_shown = shown;
         s_drawing = shown ? s_active : -1;
 
