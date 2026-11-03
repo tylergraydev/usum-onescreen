@@ -15,6 +15,7 @@
 #include "Screens/Bag.hpp"
 #include "Screens/Map.hpp"
 #include "Screens/XMenuGrid.hpp"
+#include "UI/Assets.hpp"
 #include "UI/Device.hpp"
 #include "UI/Layer.hpp"
 #include "UI/Theme.hpp"
@@ -360,6 +361,9 @@ namespace OneScreen
         {
             if (s_pixels == nullptr)
                 s_pixels = new (std::nothrow) u8[PixelBytes];
+            // The game's font and icons (normally loaded at the first field
+            // already); the menu redraws with them once they are in.
+            UI::RequestAssets();
             s_shownAt = s_frames;
             s_synced = false;
             s_stableCount = 0;
