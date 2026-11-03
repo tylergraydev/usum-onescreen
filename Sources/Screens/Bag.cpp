@@ -18,8 +18,8 @@
 #include "Party.hpp"
 #include "Scene.hpp"
 #include "Screens/PartyScreen.hpp"
+#include "UI/Assets.hpp"
 #include "UI/Device.hpp"
-#include "UI/GameAssets.hpp"
 #include "UI/Layer.hpp"
 
 namespace OneScreen
@@ -410,9 +410,7 @@ namespace OneScreen
 
     static std::string MoveNameOr(u16 move)
     {
-        const UI::GameAssets *assets = UI::GetGameAssets();
-        const std::string name = assets != nullptr ? assets->MoveName(move) : "";
-        return name.empty() ? Utils::Format("move %u", move) : name;
+        return UI::AssetMoveName(move, Utils::Format("move %u", move));
     }
 
     static BagResult BaseResult(int countAfter)
@@ -947,6 +945,7 @@ namespace OneScreen
         AssetsUpdate(shown, log);
         if (shown && !s_shown)
         {
+            UI::RequestAssets();    // the game's font and cursor (usually loaded at the first field already)
             if (s_pixels == nullptr)
                 s_pixels = new (std::nothrow) u8[PixelBytes];
             s_prevTab = -1;
