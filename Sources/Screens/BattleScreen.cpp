@@ -1,6 +1,5 @@
 #include "Screens/BattleScreen.hpp"
 
-#include <new>
 
 #include <3ds.h>
 
@@ -17,6 +16,7 @@
 #include "UI/Assets.hpp"
 #include "UI/Device.hpp"
 #include "UI/Layer.hpp"
+#include "UI/ScreenBuffer.hpp"
 
 namespace OneScreen
 {
@@ -53,13 +53,10 @@ namespace OneScreen
     static bool s_dirty = false;
     static UI::Layer s_layer;
     static UI::Rect s_layerArea = {};
-    // The largest page (the Pokémon list and the Bag, 376x224) in RGBA8,
-    // allocated the first time one shows.
-    static const u32 PixelBytes = 376 * 224 * 4;
-    static u8 *s_pixels = nullptr;
     // A single step of the Pokémon list, Bag or question (one tap or press,
     // then a short wait); kept here while the action layer runs it.
     static ActionDef s_step = { nullptr, nullptr, {}, {} };
+    static const char *const Owner = "battle";  // UI::ScreenBuffer
 
     static const std::string &Cached(std::vector<CachedName> &cache, u16 id, std::string (*lookup)(u16, const BattleState &),
                                      const BattleState &state)
@@ -295,9 +292,9 @@ namespace OneScreen
             SetCapture(out.capture ? out.keys : learn.capture);
 
         const bool visible = s_menu.Visible();
-        if (visible && s_pixels == nullptr)
-            s_pixels = new (std::nothrow) u8[PixelBytes];
         const std::string key = visible ? s_menu.DrawKey(s_snap) : std::string();
+        if (visible != s_visible)
+            log.push_back(UI::ScreenBuffer::HeapLog(visible ? "battle shown" : "battle hidden"));
         if (key != s_drawKey || visible != s_visible)
         {
             s_drawLock.Lock();
@@ -313,8 +310,19 @@ namespace OneScreen
     bool BattleScreenOnScreen(const Screen &screen)
     {
         const bool learnDrew = MoveLearnOnScreen(screen);
-        if (!screen.IsTop || !s_visible || s_pixels == nullptr)
+        if (!screen.IsTop)
             return learnDrew;
+        if (!s_visible)
+        {
+            UI::ScreenBuffer::GiveBack(Owner);
+            return learnDrew;
+        }
+        bool fresh = false;
+        u8 *pixels = UI::ScreenBuffer::Borrow(Owner, fresh);
+        if (pixels == nullptr)
+            return learnDrew;
+        if (fresh)
+            s_layerArea = UI::Rect{};   // set up again before anything is presented
         UiInitFont();
         const UI::Surface fb = SurfaceFromScreen(screen);
 
@@ -328,7 +336,7 @@ namespace OneScreen
                 if (!s_layer.Matches(fb) || area.x != s_layerArea.x || area.y != s_layerArea.y
                     || area.w != s_layerArea.w || area.h != s_layerArea.h)
                 {
-                    s_layer.Setup(fb, area, s_drawMenu.Radius(), s_pixels, PixelBytes);
+                    s_layer.Setup(fb, area, s_drawMenu.Radius(), pixels, UI::ScreenBuffer::Bytes);
                     s_layerArea = area;
                     s_dirty = true;
                 }
