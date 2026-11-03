@@ -1,7 +1,5 @@
 #include "Screens/Boxes.hpp"
 
-#include <new>
-
 #include <CTRPluginFramework.hpp>
 
 #include "Actions.hpp"
@@ -13,6 +11,7 @@
 #include "UI/Assets.hpp"
 #include "UI/Device.hpp"
 #include "UI/Layer.hpp"
+#include "UI/ScreenBuffer.hpp"
 #include "UI/Theme.hpp"
 
 namespace OneScreen
@@ -42,10 +41,11 @@ namespace OneScreen
     static volatile u32   s_sharedVersion = 0;
     static volatile bool  s_shown = false;
     static volatile bool  s_details = false;
-    static u8            *s_pixels = nullptr;   // allocated on first show
-    static u8            *s_badgePixels = nullptr;
-    static const size_t   PixelBytes = BoxesArea.w * BoxesArea.h * 4;
+    static const char *const Owner = "boxes";   // UI::ScreenBuffer
+    // The badge (details page) lives at the buffer's tail, the box window at
+    // its head; the two never overlap.
     static const size_t   BadgeBytes = BoxesBadgeArea.w * BoxesBadgeArea.h * 4;
+    static const size_t   PixelBytes = UI::ScreenBuffer::Bytes - BadgeBytes;
 
     // --- Plugin thread ---
     static bool s_enabled = true;
@@ -73,17 +73,29 @@ namespace OneScreen
 
     static bool BoxesOnScreen(const Screen &screen)
     {
-        if (!screen.IsTop || !s_shown)
+        if (!screen.IsTop)
+            return false;
+        if (!s_shown)
+        {
+            UI::ScreenBuffer::GiveBack(Owner);
+            return false;
+        }
+        bool fresh = false;
+        u8 *pixels = UI::ScreenBuffer::Borrow(Owner, fresh);
+        if (pixels == nullptr)
             return false;
         UiInitFont();
         const UI::Surface fb = SurfaceFromScreen(screen);
+        if (fresh)
+        {
+            s_badge = UI::Layer();
+            s_layer = UI::Layer();
+        }
         if (s_details)
         {
-            if (s_badgePixels == nullptr)
-                return false;
             if (!s_badge.Matches(fb))
             {
-                if (!s_badge.Setup(fb, BoxesBadgeArea, 8, s_badgePixels, BadgeBytes))
+                if (!s_badge.Setup(fb, BoxesBadgeArea, 8, pixels + PixelBytes, BadgeBytes))
                     return false;
                 s_badgeDrawn = false;
             }
@@ -97,12 +109,10 @@ namespace OneScreen
             return true;
         }
 
-        if (s_pixels == nullptr)
-            return false;
         bool redraw = s_sharedVersion != s_drawnVersion;
         if (!s_layer.Matches(fb))
         {
-            if (!s_layer.Setup(fb, BoxesArea, BoxesRadius, s_pixels, PixelBytes))
+            if (!s_layer.Setup(fb, BoxesArea, BoxesRadius, pixels, PixelBytes))
                 return false;
             redraw = true;
         }
@@ -323,10 +333,6 @@ namespace OneScreen
         const bool shown = s_enabled && !s_yield && known;
         if (shown && !s_shown)
         {
-            if (s_pixels == nullptr)
-                s_pixels = new (std::nothrow) u8[PixelBytes];
-            if (s_badgePixels == nullptr)
-                s_badgePixels = new (std::nothrow) u8[BadgeBytes];
             s_lrKey = 0;
             s_haveView = false;
             // The game's font and icons (normally loaded at the first field
@@ -343,10 +349,12 @@ namespace OneScreen
                 Refresh();
             }
             if (!s_shown)
-                log.push_back(Utils::Format("boxes: shown (box %lu \"%s\", %s, cursor %s)%s", s_game.tray + 1,
+            {
+                log.push_back(Utils::Format("boxes: shown (box %lu \"%s\", %s, cursor %s)", s_game.tray + 1,
                                             s_view.boxName.c_str(), BoxModeName(s_game.mode),
-                                            Where(s_game.cursor).c_str(),
-                                            s_pixels == nullptr ? ", NO MEMORY for the layer" : ""));
+                                            Where(s_game.cursor).c_str()));
+                log.push_back(UI::ScreenBuffer::HeapLog("boxes shown"));
+            }
             else
             {
                 if (s_game.mode != before.mode)
@@ -357,7 +365,11 @@ namespace OneScreen
             s_haveView = true;
         }
         else if (s_shown)
+        {
             log.push_back(std::string("boxes: hidden") + (s_yield ? " (panel on by hand)" : ""));
+            log.push_back(UI::ScreenBuffer::HeapLog("boxes hidden"));
+        }
+
         s_shown = shown;
 
         // Held: set when our pick starts; gone once nothing is held (dropped,

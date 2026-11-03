@@ -10,7 +10,7 @@ OUT      := build
 PYTHON   ?= python3
 CODE_BIN ?=
 
-TESTS    := $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/ui_host_test $(OUT)/party_data_test $(OUT)/action_queue_test $(OUT)/xmenu_test $(OUT)/battle_menu_test $(OUT)/keyboard_test $(OUT)/pokedex_test $(OUT)/native_screens_test $(OUT)/bag_test $(OUT)/map_test $(OUT)/party_menu_test $(OUT)/boxes_test $(OUT)/field_settle_test $(OUT)/move_learn_test $(OUT)/rotom_prompt_test $(OUT)/theme_test
+TESTS    := $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/ui_host_test $(OUT)/party_data_test $(OUT)/action_queue_test $(OUT)/xmenu_test $(OUT)/battle_menu_test $(OUT)/keyboard_test $(OUT)/pokedex_test $(OUT)/native_screens_test $(OUT)/bag_test $(OUT)/map_test $(OUT)/party_menu_test $(OUT)/boxes_test $(OUT)/field_settle_test $(OUT)/move_learn_test $(OUT)/rotom_prompt_test $(OUT)/theme_test $(OUT)/screen_buffer_test
 
 all: run
 
@@ -48,11 +48,11 @@ $(OUT)/xmenu_test: xmenu_test.cpp ../Sources/Screens/XMenuGrid.cpp ../Includes/S
 
 $(OUT)/keyboard_test: keyboard_test.cpp ../Sources/Screens/KeyboardGrid.cpp ../Includes/Screens/KeyboardGrid.hpp                     ../Sources/ActionQueue.cpp ../Includes/ActionQueue.hpp ../Includes/Layouts.hpp $(UI_SRCS) $(UI_HDRS)
 	@mkdir -p $(OUT)
-	$(CXX) $(CXXFLAGS) keyboard_test.cpp ../Sources/Screens/KeyboardGrid.cpp ../Sources/ActionQueue.cpp $(UI_SRCS) -o $@
+	$(CXX) $(CXXFLAGS) keyboard_test.cpp ../Sources/Screens/KeyboardGrid.cpp ../Sources/ActionQueue.cpp $(THEME_SRCS) $(UI_SRCS) -o $@
 
 $(OUT)/pokedex_test: pokedex_test.cpp ../Sources/Screens/PokedexList.cpp ../Includes/Screens/PokedexList.hpp $(UI_SRCS) $(UI_HDRS)
 	@mkdir -p $(OUT)
-	$(CXX) $(CXXFLAGS) pokedex_test.cpp ../Sources/Screens/PokedexList.cpp $(UI_SRCS) -o $@
+	$(CXX) $(CXXFLAGS) pokedex_test.cpp ../Sources/Screens/PokedexList.cpp $(THEME_SRCS) $(UI_SRCS) -o $@
 
 SCREEN_SRCS := $(addprefix ../Sources/Screens/,NativeScreen.cpp Options.cpp TrainerPassport.cpp BattleVideo.cpp)
 SCREEN_HDRS := $(addprefix ../Includes/Screens/,NativeScreen.hpp Options.hpp TrainerPassport.hpp BattleVideo.hpp)
@@ -78,9 +78,10 @@ $(OUT)/map_test: map_test.cpp $(MAP_SRCS) ../Includes/Screens/MapView.hpp ../Inc
 
 PARTY_PREVIEW := ../analysis/private/party-preview.ppm ../analysis/private/summary-preview.ppm
 
-$(OUT)/party_menu_test: party_menu_test.cpp ../Sources/Screens/PartyMenu.cpp ../Includes/Screens/PartyMenu.hpp                         ../Sources/ActionQueue.cpp ../Includes/ActionQueue.hpp ../Includes/Layouts.hpp $(UI_SRCS) $(UI_HDRS)
+PARTY_THEME := ../Sources/UI/GameAssets.cpp ../Sources/UI/Theme.cpp ../Sources/RomfsText.cpp ../Sources/PartyData.cpp
+$(OUT)/party_menu_test: party_menu_test.cpp ../Sources/Screens/PartyMenu.cpp ../Includes/Screens/PartyMenu.hpp                         ../Sources/ActionQueue.cpp ../Includes/ActionQueue.hpp ../Includes/Layouts.hpp $(PARTY_THEME) $(UI_SRCS) $(UI_HDRS)
 	@mkdir -p $(OUT)
-	$(CXX) $(CXXFLAGS) party_menu_test.cpp ../Sources/Screens/PartyMenu.cpp ../Sources/ActionQueue.cpp $(UI_SRCS) -o $@
+	$(CXX) $(CXXFLAGS) party_menu_test.cpp ../Sources/Screens/PartyMenu.cpp ../Sources/ActionQueue.cpp $(PARTY_THEME) $(UI_SRCS) -o $@
 
 BOXES_PREVIEW := ../analysis/private/boxes-preview.ppm
 
@@ -96,7 +97,7 @@ MOVE_GARC     ?= ../analysis/private/romfs-base/a/0/1/1
 
 # MOVE_GARC: the user's own move data GARC (a/0/1/1), for the real move
 # check; skipped if missing (CI).
-LEARN_SRCS := ../Sources/Screens/MoveLearnMenu.cpp ../Sources/Screens/BattleMenu.cpp ../Sources/MoveData.cpp ../Sources/RomfsText.cpp ../Sources/PartyData.cpp ../Sources/ActionQueue.cpp
+LEARN_SRCS := ../Sources/Screens/MoveLearnMenu.cpp ../Sources/Screens/BattleMenu.cpp ../Sources/Screens/PartyMenu.cpp ../Sources/MoveData.cpp ../Sources/RomfsText.cpp ../Sources/PartyData.cpp ../Sources/ActionQueue.cpp ../Sources/UI/GameAssets.cpp ../Sources/UI/Theme.cpp
 LEARN_HDRS := ../Includes/Screens/MoveLearnMenu.hpp ../Includes/Screens/BattleMenu.hpp ../Includes/MoveData.hpp ../Includes/RomfsText.hpp ../Includes/ActionQueue.hpp ../Includes/Layouts.hpp
 
 $(OUT)/move_learn_test: move_learn_test.cpp $(LEARN_SRCS) $(LEARN_HDRS) $(UI_SRCS) $(UI_HDRS)
@@ -122,9 +123,17 @@ $(OUT)/ui_host_test: ui_host_test.cpp $(UI_SRCS) $(UI_HDRS)
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) ui_host_test.cpp $(UI_SRCS) -o $@
 
-$(OUT)/battle_menu_test: battle_menu_test.cpp ../Sources/Screens/BattleMenu.cpp ../Includes/Screens/BattleMenu.hpp $(UI_SRCS) $(UI_HDRS)
+BATTLE_SRCS := $(addprefix ../Sources/Screens/,BattleMenu.cpp BattleMenuDraw.cpp PartyMenu.cpp) ../Sources/ActionQueue.cpp $(THEME_SRCS)
+BATTLE_PREVIEW := ../analysis/private
+
+$(OUT)/battle_menu_test: battle_menu_test.cpp $(BATTLE_SRCS) ../Includes/Screens/BattleMenu.hpp ../Includes/Screens/PartyMenu.hpp ../Includes/Layouts.hpp $(UI_SRCS) $(UI_HDRS)
 	@mkdir -p $(OUT)
-	$(CXX) $(CXXFLAGS) battle_menu_test.cpp ../Sources/Screens/BattleMenu.cpp $(UI_SRCS) -o $@
+	$(CXX) $(CXXFLAGS) battle_menu_test.cpp $(BATTLE_SRCS) $(UI_SRCS) -o $@
+
+# glibc deprecates mallinfo (newlib on the 3DS has no mallinfo2).
+$(OUT)/screen_buffer_test: screen_buffer_test.cpp ../Sources/UI/ScreenBuffer.cpp $(UI_SRCS) $(UI_HDRS)
+	@mkdir -p $(OUT)
+	$(CXX) $(CXXFLAGS) -Wno-deprecated-declarations screen_buffer_test.cpp ../Sources/UI/ScreenBuffer.cpp $(UI_SRCS) -o $@
 
 run: $(TESTS)
 	./$(OUT)/input_capture_test
@@ -132,7 +141,9 @@ run: $(TESTS)
 	./$(OUT)/field_settle_test
 	./$(OUT)/party_data_test
 	./$(OUT)/action_queue_test
-	./$(OUT)/battle_menu_test
+	@mkdir -p $(BATTLE_PREVIEW)
+	./$(OUT)/battle_menu_test $(BATTLE_PREVIEW)
+	./$(OUT)/screen_buffer_test
 	$(PYTHON) -I ../tools/gen_layouts.py --check
 	@mkdir -p $(dir $(PREVIEW))
 	./$(OUT)/ui_host_test $(PREVIEW)

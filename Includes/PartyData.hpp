@@ -36,6 +36,7 @@ namespace OneScreen
         u16 heldItem = 0;
         u8  ability = 0;            // ability ID (0x14)
         u8  nature = 0;             // nature (0x1C)
+        u8  gender = 0;             // 0 male, 1 female, 2 genderless (0x1D bits 1-2)
         u16 nickname[13] = {};      // UTF-16, 0-terminated (12 chars max)
         u16 moves[4] = {};
         u8  pp[4] = {};
