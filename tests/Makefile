@@ -52,7 +52,7 @@ $(OUT)/keyboard_test: keyboard_test.cpp ../Sources/Screens/KeyboardGrid.cpp ../I
 
 $(OUT)/pokedex_test: pokedex_test.cpp ../Sources/Screens/PokedexList.cpp ../Includes/Screens/PokedexList.hpp $(UI_SRCS) $(UI_HDRS)
 	@mkdir -p $(OUT)
-	$(CXX) $(CXXFLAGS) pokedex_test.cpp ../Sources/Screens/PokedexList.cpp $(UI_SRCS) -o $@
+	$(CXX) $(CXXFLAGS) pokedex_test.cpp ../Sources/Screens/PokedexList.cpp $(THEME_SRCS) $(UI_SRCS) -o $@
 
 SCREEN_SRCS := $(addprefix ../Sources/Screens/,NativeScreen.cpp Options.cpp TrainerPassport.cpp BattleVideo.cpp)
 SCREEN_HDRS := $(addprefix ../Includes/Screens/,NativeScreen.hpp Options.hpp TrainerPassport.hpp BattleVideo.hpp)
