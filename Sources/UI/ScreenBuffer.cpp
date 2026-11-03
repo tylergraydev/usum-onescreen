@@ -76,20 +76,26 @@ namespace ScreenBuffer
         return lo;
     }
 
-    std::string HeapStatus(void)
+    static std::string Status(size_t largest)
     {
         const struct mallinfo m = mallinfo();
         char text[96];
         std::snprintf(text, sizeof(text), "heap %u KB used, %u KB free, largest %u KB",
-                      (unsigned)(m.uordblks / 1024), (unsigned)(m.fordblks / 1024),
-                      (unsigned)(LargestFree() / 1024));
+                      (unsigned)(m.uordblks / 1024), (unsigned)(m.fordblks / 1024), (unsigned)(largest / 1024));
         return text;
+    }
+
+    std::string HeapStatus(void)
+    {
+        return Status(LargestFree());
     }
 
     std::string HeapLog(const char *what)
     {
-        return std::string("mem: ") + what + ", " + HeapStatus();
+        const size_t largest = LargestFree();
+        return std::string("mem: ") + what + ", " + Status(largest) + (largest < LowMark ? ", LOW" : "");
     }
+
 
 }
 }
