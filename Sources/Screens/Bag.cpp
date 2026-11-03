@@ -3,7 +3,6 @@
 #include <atomic>
 #include <cstdlib>
 #include <cstring>
-#include <malloc.h>
 #include <map>
 #include <new>
 
@@ -21,6 +20,7 @@
 #include "UI/Assets.hpp"
 #include "UI/Device.hpp"
 #include "UI/Layer.hpp"
+#include "UI/ScreenBuffer.hpp"
 
 namespace OneScreen
 {
@@ -169,11 +169,6 @@ namespace OneScreen
     static volatile u32  s_viewVersion = 0; // bumped whenever s_view changes
     static volatile u32  s_drawnVersion = 0;
     static volatile bool s_shown = false;
-    static u8           *s_pixels = nullptr;
-    static size_t        s_pixelBytes = 0;
-    // Bytes per pixel of the top screen, seen by the callback (0: not yet).
-    // The game's top screen is BGR8: 288 KB for the layer instead of 384.
-    static volatile u32  s_topBpp = 0;
 
     // --- Plugin thread ---
     static const u32 MoveUp    = Key::DPadUp | Key::CPadUp;
@@ -287,12 +282,12 @@ namespace OneScreen
     // with this much free (probed, then given back).
     static const size_t AssetsHeadroom = 192 * 1024;
 
-    // Starts the load the first time the Bag shows with its layer allocated
+    // Starts the load the first time the Bag shows, if there is room
     // and room to spare; writes its log once done.
     static void AssetsUpdate(bool shown, std::vector<std::string> &log)
     {
         const int state = s_assetsState.load(std::memory_order_acquire);
-        if (state == 0 && shown && s_pixels != nullptr)
+        if (state == 0 && shown)
         {
             u8 *probe = new (std::nothrow) u8[AssetsHeadroom];
             if (probe == nullptr)
@@ -503,28 +498,29 @@ namespace OneScreen
     // --- OSD callback ---
 
     static UI::Layer s_layer;
-    static u8 *s_layerBuffer = nullptr;    // the buffer s_layer was set up with
+    static const char *const Owner = "bag";    // of the shared screen buffer
 
     static bool BagOnScreen(const Screen &screen)
     {
         if (!screen.IsTop)
             return false;
-        const UI::Surface fb = SurfaceFromScreen(screen);
-        s_topBpp = UI::BytesPerPixel(fb.format);
-        u8 *const pixels = s_pixels;
-        const size_t bytes = s_pixelBytes;
-        if (!s_shown || pixels == nullptr)
+        if (!s_shown)
+        {
+            UI::ScreenBuffer::GiveBack(Owner);
             return false;
+        }
+        bool fresh = false;
+        u8 *const pixels = UI::ScreenBuffer::Borrow(Owner, fresh);
+        if (pixels == nullptr)
+            return false;   // another screen still has it: next frame
         UiInitFont();
+        const UI::Surface fb = SurfaceFromScreen(screen);
         const u32 version = s_viewVersion;
         bool redraw = version != s_drawnVersion;
-        // A new buffer (a later shared one, say) needs a new setup.
-        if (!s_layer.Matches(fb) || s_layerBuffer != pixels)
+        if (fresh || !s_layer.Matches(fb))
         {
-            s_layerBuffer = nullptr;
-            if (!s_layer.Setup(fb, BagArea, BagRadius, pixels, bytes))
+            if (!s_layer.Setup(fb, BagArea, BagRadius, pixels, UI::ScreenBuffer::Bytes))
                 return false;
-            s_layerBuffer = pixels;
             redraw = true;
         }
         if (redraw)
@@ -960,17 +956,10 @@ namespace OneScreen
             AutoPanelSetEnabled(AutoPanelEnabled());
         }
 
-        bool shown = s_enabled && !s_yield && !s_aside && inBag && s_game.Valid();
+        const bool shown = s_enabled && !s_yield && !s_aside && inBag && s_game.Valid();
         if (shown && !s_shown)
         {
             UI::RequestAssets();    // the game's font and cursor (usually loaded at the first field already)
-            if (s_pixels == nullptr)
-            {
-                // A screen in another format than the one seen here can't
-                // be drawn (Setup fails); the next show allocates for it.
-                s_pixelBytes = (size_t)BagArea.w * BagArea.h * (s_topBpp != 0 ? s_topBpp : 4);
-                s_pixels = new (std::nothrow) u8[s_pixelBytes];
-            }
             s_prevTab = -1;
             s_prevMode = BagMode::None;
             s_wantTab = -1;
@@ -982,30 +971,16 @@ namespace OneScreen
             s_handedTo.clear();
             s_repeatKey = 0;
             ReadPartyNow(sceneManager);
-            const struct mallinfo heap = mallinfo();
-            log.push_back(Utils::Format("bag: shown (pocket %s, %u items)%s, layer %u KB, heap %u KB used",
-                                        s_game.tab >= 0 ? BagTabAt(s_game.tab).name : "?", (unsigned)s_game.items.size(),
-                                        s_pixels == nullptr ? ", NO MEMORY for the layer" : "",
-                                        (unsigned)(s_pixelBytes / 1024), (unsigned)(heap.uordblks / 1024)));
-            // Nothing to draw with: the panel, until the Bag closes.
-            if (s_pixels == nullptr)
-            {
-                s_yield = true;
-                shown = false;
-                s_driver.Stop();
-                SetPanelMode(PanelMode::Panel);
-                log.push_back("bag: no layer, the panel shows the Bag until it closes -> " + PanelStatus());
-            }
+            log.push_back(Utils::Format("bag: shown (pocket %s, %u items), ", s_game.tab >= 0 ? BagTabAt(s_game.tab).name : "?",
+                                        (unsigned)s_game.items.size())
+                          + UI::ScreenBuffer::HeapStatus());
         }
         else if (!shown && s_shown)
         {
             s_driver.Stop();
-            log.push_back("bag: hidden");
+            log.push_back("bag: hidden, " + UI::ScreenBuffer::HeapStatus());
         }
         s_shown = shown;
-        // The layer is kept once allocated: freed, the heap's small
-        // allocations split the block and it can't be had again
-        // (docs/BAG.md "Memory").
         AssetsUpdate(shown, log);
 
         if (shown)
@@ -1083,8 +1058,7 @@ namespace OneScreen
     {
         static const char *const modes[] = { "none", "list", "menu", "pick", "message", "busy" };
         const BagAssets *assets = Assets();
-        const struct mallinfo heap = mallinfo();
-        return Utils::Format("bagui: %s, %s, game %s, pocket %s, cursor %d, driver %s%s%s%s%s%s%s, icons %d, descriptions read %u, heap %u KB used, %u KB free in the arena",
+        return Utils::Format("bagui: %s, %s, game %s, pocket %s, cursor %d, driver %s%s%s%s%s%s%s, icons %d, descriptions read %u, screen buffer %s, ",
                              s_enabled ? "on" : "off", s_shown ? "shown" : "hidden", modes[(int)s_game.mode],
                              s_game.tab >= 0 ? BagTabAt(s_game.tab).name : "-", s_cursor, s_driver.Status().c_str(),
                              s_yield ? ", panel on by hand" : "", s_aside ? ", stepped aside" : "",
@@ -1092,7 +1066,8 @@ namespace OneScreen
                              s_flow.active ? (std::string(", ") + FlowName(s_flow.command) + " " + NameOr(s_flow.item)).c_str() : "",
                              s_forcedOff ? ", holding panel off" : "", s_capturing ? ", input captured" : "",
                              assets != nullptr ? assets->PocketCount() : 0,
-                             (unsigned)s_descriptions.size(), (unsigned)(heap.uordblks / 1024),
-                             (unsigned)(heap.fordblks / 1024));
+                             (unsigned)s_descriptions.size(),
+                             UI::ScreenBuffer::Holder() != nullptr ? UI::ScreenBuffer::Holder() : "free")
+               + UI::ScreenBuffer::HeapStatus();
     }
 }

@@ -97,26 +97,23 @@ the plugin ("Fatal plugin error", `abort()` in Azahar's log). Measured with
 show in `native-bag` (after the wild battles). Every native screen keeps its
 own layer once it has shown.
 
-What went wrong, and what the Bag does about it:
+What went wrong, and what the Bag does now:
 
-- With a fixed 4 bytes per pixel the full-screen layer was 384 KB; in one
-  run after the game assets loaded it got "NO MEMORY for the layer". The
-  layer is now sized for the top screen's real format, which the OSD
-  callback reports (the game's top screen is BGR8: 281 KB).
+- The Bag's own full-screen layer (first 384 KB, then 281 KB sized for the
+  BGR8 top screen) failed to allocate after the game assets and the X menu,
+  and, freed on hide, could not be had again after a TM's forget screen
+  (fragmentation). It now draws into the shared screen buffer
+  (`UI/ScreenBuffer.hpp`, W7-M): one 281 KB buffer allocated at boot, which
+  the OSD callback borrows while the Bag shows (owner `"bag"`) and gives back
+  when it hides. While another screen still holds it the Bag skips that
+  frame and asks again. The `bag: shown` / `bag: hidden` lines and `bagui
+  status` carry `ScreenBuffer::HeapStatus()`.
 - The first icon loader unpacked the whole layout archive (74 + 286 KB) and
   aborted the plugin in `bad_alloc`; then, after the battles, even
   `RomfsFind` ran out. The loader now streams the archive (about 60 KB at
-  most) and only starts once the layer is allocated and a 192 KB probe
-  allocation succeeds; otherwise it logs `bag assets: not loaded, less than
-  192 KB of heap free` and the Bag draws its own pocket dots.
-- The layer is allocated the first time the Bag shows and then kept. A
-  version that freed it on hide could not get it back: freed during a TM's
-  forget screen, the same 281 KB failed when the Bag returned (2079 KB
-  used); the Party screen saw the same (small allocations split the freed
-  block). If the layer can't be allocated at all, the Bag steps aside for
-  the panel until it closes (`bag: no layer, the panel shows the Bag until
-  it closes`). A shared screen buffer, allocated once for all screens, is
-  the proposed real fix.
+  most) and only starts if a 192 KB probe allocation succeeds; otherwise it
+  logs `bag assets: not loaded, less than 192 KB of heap free` and the Bag
+  draws its own pocket dots.
 
 ## Keys
 
