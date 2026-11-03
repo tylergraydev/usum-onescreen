@@ -4,6 +4,8 @@
 include common/boot
 # Checks the automatic view per scene, which is off by default.
 send auto on
+# The Bag's panel is checked here: turn the native Bag off.
+send bagui off
 
 # Field -> Pokédex (Rotom's face, or the X menu while Rotom chats) -> field.
 mark

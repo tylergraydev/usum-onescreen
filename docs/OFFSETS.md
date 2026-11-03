@@ -112,6 +112,14 @@ Full write-up: [RE3-party-bag.md](RE3-party-bag.md). Read by the `party` and `ba
 - Bag: MyItem = SaveData `+8` (vtable `0x64F3C4`); pocket pointer table at MyItem `+0xE2C`: Medicine `+0xB78` (60), Items `+0x4` (427), TMs `+0x9C8` (108), Berries `+0xC68` (67), Key Items `+0x6B0` (198), Z-Crystals `+0xD74` (35), Rotom Powers `+0xE00` (11). Slot u32: item bits 0-9, count 10-19, Free Space 20-29, NEW bit 30.
 - Party screen order while it is open: scene (vtable `0x647FCC`) `+0xA8` StaticWork (vtable `0x647F9C`) `+0x53` u8[6]; the party itself is reordered when the screen closes.
 
+## Field Bag screen (runtime, 2026-11-02)
+
+Full write-up: [BAG.md](BAG.md). Read by the native Bag (`Sources/Screens/Bag.cpp`, `bagui read`). Found in instance `p24` with heap dumps diffed across pocket taps, cursor moves, the item menu, a Use and two Gives; then checked live with `bagui read` against screenshots and through `scenarios/native-bag.txt`. Bag CRO offsets are module-relative (the module's name is `Bag`; it loaded at `0x6DF000` in the field).
+
+- Scene: top of the scene stack, vtable `0x6488C8` (main). `+0x88` item list window: `+0x14` rows shown (7, fewer for short pockets), `+0x18` cursor row, `+0x1C` first row as a float (animates while it scrolls; the item under the cursor is first row + cursor row). `+0x90` the Bag frame.
+- Frame (vtable Bag+`0x16F9C`): `+0x24` the open pocket as an array of pointers to MyItem slots, in screen order, `+0x28` their count; `+0x2C` the Bag param; `+0x4C` u8[4], byte 3 = 0 while a message waits; `+0x54` byte 0 = a menu or message is up, byte 1 = the party pick ("Which Pokémon...?").
+- Param (`+0x24` = MyItem, checked by its vtable): `+0x4C` item the menu / pick is about, `+0x54` u8 tab (0 Rotom Powers, 1 Medicine, 2 Items, 3 TMs, 4 Berries, 5 Key Items, 6 Free Space: left to right), `+0x64` party column (vtable Bag+`0x16D98`, u8 cursor `+0x1C6`, 6 = none), `+0x80` menu object (vtable `0x6487C0`, u16 entry count `+0x158`), `+0x84` u8 entries (Use 0x00, Give 0x03, Move to Free Space 0x04, Cancel 0x11, Yes 0x12, No 0x13), `+0xEC` u8 state (0 in the list; 2 Use, 3 Give while they run).
+
 ## Player location (runtime, 2026-11-02)
 
 Full write-up: [RE4-map.md](RE4-map.md). Read by the `where` command (`Sources/Where.cpp`).

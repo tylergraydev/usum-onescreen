@@ -185,7 +185,7 @@ A scenario is a text file, one step per line; `#` starts a comment (except in `e
 | `if-scene SCENE STEP` | runs STEP only if the scene is SCENE now |
 | `include FILE` | inlines FILE's steps (looked up next to the scenario, then in `scenarios/`; `.txt` optional) |
 | `repeat N [until-scene SCENE]` … `end` | runs the block N times; with `until-scene`, stops once that is the scene (checked before each step) and fails if it never is |
-| `repeat N until-log REGEX` … `end` | the same, until a log line since the mark matches REGEX |
+| `repeat N until-log REGEX` … `end` | the same, stopping after a round once a log line since the mark matches REGEX (one word: `\s` for spaces); fails if none did |
 
 Log guard: after every step it reads what was newly logged to the instance's `user/log/azahar_log.txt` and `usum-onescreen.log`, and fails that step on an Azahar `<Critical>`, `Assertion Failed`, `Unreachable code` or `unmapped read/write` line, or on a plugin `hooks: FAILED`, `MISMATCH at`, `unreadable at`, a `cursor:`/`buttons:` hook that returned non-zero, or `unsupported game`. Azahar's `<Error>` lines (unimplemented services) are normal and ignored. `--no-guard` turns it off.
 
