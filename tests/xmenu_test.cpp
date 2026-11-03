@@ -255,6 +255,16 @@ static void PrintLog(const std::vector<std::string> &log)
         std::printf("    %s\n", line.c_str());
 }
 
+static void TestNative(void)
+{
+    // Only the Pokédex has a native screen behind it (Screens/Pokedex.hpp).
+    for (int i = 0; i < (int)XMenuEntries().size(); i++)
+        CHECK((XMenuNativeScreen(i) != nullptr) == (i == E("pokedex")));
+    CHECK(std::string(XMenuNativeScreen(E("pokedex"))) == "pokedex");
+    CHECK(XMenuNativeScreen(-1) == nullptr);
+    CHECK(XMenuNativeScreen(99) == nullptr);
+}
+
 static void TestActions(void)
 {
     // Every grid entry from either page: one page tap only when needed.
@@ -396,6 +406,7 @@ int main(int argc, char **argv)
     TestFlipPage();
     TestCursorMemory();
     TestActions();
+    TestNative();
     TestDraw(argc > 1 ? argv[1] : nullptr);
     if (s_failures != 0)
     {

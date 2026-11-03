@@ -120,3 +120,12 @@ Full write-up: [RE4-map.md](RE4-map.md). Read by the `where` command (`Sources/W
 - Zone: `*(*(gm+0x2C)+0x88)+0x1C` (u32; 0 in battle). Zone data: `field+0x54` loader (vtable `0x64BDD0`) → `+0x14` table of 0x54-byte entries (`+0x18` size): `+0x1C` place-name line in message file 72, `+0x44/+0x48` fixed map point (interiors only).
 - Rotom map view (vtable `0x64786C`): FieldMenu frame (FieldMenu+`0x183A0`) on the scene stack → `+0xD0`; `+0x170` map index, `+0x174/+0x178` centre (world x/z), scales `0x2CF230`/`0x2CF234` (0.0270139, 0.0270536 map px per unit).
 - Verified walking the Route 2 Pokémon Center (zone 79), Route 2 (7) and Hau'oli City (13) against screenshots and the Rotom map.
+
+## Pokédex (runtime, 2026-11-02)
+
+Full write-up: [RE7-pokedex.md](RE7-pokedex.md). Read by the native Pokédex (`Sources/Screens/Pokedex.cpp`, `pokedex rows`). Zukan offsets are from the CRO's module header (loaded at `0x6DF000` here).
+
+- Flags: SaveData `+0x23DC` Savedata::ZukanData (vtable `0x64F550`, `+4` magic `0x2F120F17`): caught bits `+0x8C` (bit species-1), seen `+0xF4` / `+0x180` / `+0x20C` / `+0x298` (male, female, shiny male, shiny female; 0x8C each). Extra forms' bits follow bit 806 in the order of the form table `0x5D63DC` (123 × {u16 species, u16 forms}). Game functions: caught `0x4C7A7C`, seen `0x4C7B7C` (form count `0x4C7664`, form bit `0x4C7FD0`, test `0x4C76C8`). Verified: 22 caught / 38 seen, as the game's top level shows; Alolan Rattata / Meowth / Grimer seen through form bits 813 / 830 / 837.
+- Open dexes: event flags (SaveData `+0x15D8` event work, bits at `+0x7D4`; `0x4BCEE0`): `0x101F` + island - 1 (Melemele .. Poni), `0xFE7` Evaluation. Verified: Melemele and Evaluation set, the three later islands clear, as on screen.
+- App frame: scene manager `+0x08`; vtable Zukan `+0x34CD4` top level (`+0x134` u32 cursor row 0-5, `+0x19D` u8 state, 7 = menu), `+0x34DD8` Alola list, `+0x34F68` island grid, `+0x34C24` entry page. Verified on each screen, by screenshot.
+- App data: frame `+0xA4` (vtable Zukan `+0x34C14`): `+0x11` u8 dex (0 Alola, 1 Melemele), `+0xA0` u16 record count (403), `+0xA4` records (0x1F0 each: u16 species, u16 Alola / Melemele / Akala / Ula'ula / Poni number), `+0xAC` u32 Alola list rows (126), `+0xB4` u32 cursor index (list, grid, entry). Verified by heap dump diffs at several cursor positions and live against screenshots (`scenarios/native-pokedex.txt`).
