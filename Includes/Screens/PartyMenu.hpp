@@ -177,6 +177,8 @@ namespace OneScreen
     // D-pad step to scroll.
     void MakePartyBagRowAction(PartyAction &out, int row);
     void MakePartyBagStepAction(PartyAction &out, bool up);
+    // Tap the pocket's tab again (the first tap wasn't seen).
+    void MakePartyBagTabAction(PartyAction &out, PartyPocket pocket);
     // The Bag's menu (item menu, or a question's answers): tap the entry
     // `fromBottom` places from the bottom (1 = the last one, 1-5).
     void MakePartyBagMenuAction(PartyAction &out, int fromBottom);

@@ -1,6 +1,6 @@
 #include "Screens/PartyScreen.hpp"
 
-#include <cmath>
+#include <malloc.h>
 #include <map>
 #include <new>
 
@@ -16,7 +16,7 @@
 #include "Screens/Bag.hpp"
 #include "Screens/PartyMenu.hpp"
 #include "UI/Device.hpp"
-#include "UI/GameAssets.hpp"
+#include "UI/Assets.hpp"
 #include "UI/Layer.hpp"
 
 namespace OneScreen
@@ -68,8 +68,25 @@ namespace OneScreen
     static volatile bool s_ringWanted = false;
     static volatile int s_ringPos = -1;
     static volatile u32 s_ringCount = 0;
+    // The layer keeps the screen's own format: BGR8 on the top screen (3
+    // bytes, 246 KB), more only if the OSD callback asks for it. Allocated
+    // when the screen shows and freed FreeAfter frames after it hides (the
+    // plugin's heap is 5 MiB and every native screen has a layer; an
+    // RGBA8-sized 337 KB one failed once the game's assets were loaded).
+    // s_bufferVersion tells the OSD callback to set the layer up again on a
+    // new buffer.
     static u8 *s_pixels = nullptr;
-    static const size_t PixelBytes = PartyArea.w * PartyArea.h * 4;
+    static size_t s_pixelBytes = 0;
+    static volatile size_t s_pixelsWanted = PartyArea.w * PartyArea.h * 3;
+    static volatile u32 s_bufferVersion = 0;
+    static const u32 FreeAfter = 4;
+
+    // "heap N KB used, N KB free in the arena" (newlib's mallinfo).
+    static std::string HeapText(void)
+    {
+        const struct mallinfo heap = mallinfo();
+        return Utils::Format("heap %d KB used, %d KB free in the arena", heap.uordblks / 1024, heap.fordblks / 1024);
+    }
 
     // --- Plugin thread ---
     static bool s_enabled = true;
@@ -81,7 +98,7 @@ namespace OneScreen
     static bool s_forcedOff = false, s_yield = false;
     static u32 s_captureKeys = 0;       // keys we asked to capture, 0 = none
     static u32 s_ourRequest = 0;        // InputCaptureRequest() right after we did
-    static u32 s_frames = 0, s_expectUntil = 0, s_readAt = 0;
+    static u32 s_frames = 0, s_expectUntil = 0, s_readAt = 0, s_hiddenAt = 0;
     static u32 s_repeatKey = 0, s_repeatAt = 0;
     static std::string s_prevScene, s_lastScene;     // last frame's, and the last non-empty one
     static bool s_fromParty = false;    // the summary was opened from the Party screen
@@ -112,7 +129,8 @@ namespace OneScreen
         PartyMonView before;            // the Pokémon when it started
         std::vector<PartyBagItem> pocketBefore;
         int steps = 0;
-        u32 menuWait = 0;
+        int tabTries = 0;
+        u32 seekWait = 0, menuWait = 0;
         // Following the game.
         PartyGame game = PartyGame::Gap;
         u32 signature = 0, stable = 0, sinceProgress = 0;
@@ -173,10 +191,16 @@ namespace OneScreen
         UiInitFont();
         const UI::Surface fb = SurfaceFromScreen(screen);
         bool redraw = s_viewVersion != s_drawnVersion;
-        if (!s_layer.Matches(fb))
+        static u32 setupVersion = ~0u;
+        if (!s_layer.Matches(fb) || setupVersion != s_bufferVersion)
         {
-            if (!s_layer.Setup(fb, PartyArea, PartyRadius, s_pixels, PixelBytes))
+            setupVersion = s_bufferVersion;
+            if (!s_layer.Setup(fb, PartyArea, PartyRadius, s_pixels, s_pixelBytes))
+            {
+                // A 4-byte screen format: the plugin thread allocates more.
+                s_pixelsWanted = UI::Layer::BytesFor(fb, PartyArea);
                 return false;
+            }
             redraw = true;
         }
         if (redraw && s_viewLock.TryLock() == 0)
@@ -227,15 +251,13 @@ namespace OneScreen
     }
 
     // A move's name outside the summary: seen there before, or the game's
-    // own text (UI::GameAssets, once loaded), else its number.
+    // own text (the shared assets, once loaded), else its number.
     static std::string MoveNameOf(u16 move)
     {
         auto it = s_moveNames.find(move);
         if (it != s_moveNames.end() && !it->second.empty())
             return it->second;
-        const UI::GameAssets *assets = UI::GetGameAssets();
-        const std::string name = assets != nullptr ? assets->MoveName(move) : std::string();
-        return name.empty() ? Utils::Format("Move %u", move) : name;
+        return UI::AssetMoveName(move, Utils::Format("Move %u", move));
     }
 
     // --- Party data ---
@@ -643,31 +665,57 @@ namespace OneScreen
 
     static void Seek(u32 sceneManager, std::vector<std::string> &log)
     {
-        const BagListState list = ReadBagList(sceneManager);
-        if (!list.valid)
+        // The Bag opens on the pocket it showed last; the tab tap is
+        // sometimes not seen while it slides in: tap again.
+        const BagGame game = ReadBagGame(sceneManager);
+        if (game.Valid() && game.tab >= 0 && std::string(BagTabAt(game.tab).button) != PartyPocketButton(s_job.pocket))
         {
-            BackOut(sceneManager, "the Bag's list doesn't read", log);
+            if (++s_job.tabTries > 3)
+            {
+                BackOut(sceneManager, std::string("the Bag stays on ") + BagTabAt(game.tab).name, log);
+                return;
+            }
+            log.push_back(std::string("party-ui: the Bag shows ") + BagTabAt(game.tab).name + ", tapping "
+                          + PartyPocketName(s_job.pocket) + " again");
+            MakePartyBagTabAction(s_action, s_job.pocket);
+            Start(Stage::BagSeek, sceneManager, s_busy, log);
             return;
         }
-        if (list.count != s_job.listCount)
+        // Where the item is in the pocket as the Bag lists it (the native
+        // Bag's reader: the Held Item bag's list object at scene +0x88 kept
+        // counting 9 in a 10-item pocket, so P2-3's ReadBagList isn't used).
+        // Found by ID: a taken item goes to the end of its pocket.
+        if (!game.Valid() || game.mode != BagMode::List)
         {
-            BackOut(sceneManager, Utils::Format("the Bag lists %lu items, %s has %lu", list.count,
-                                                PartyPocketName(s_job.pocket), s_job.listCount), log);
+            if (++s_job.seekWait > 90)
+                BackOut(sceneManager, "the Bag's list doesn't read", log);
+            return;
+        }
+        int target = -1;
+        for (int i = 0; i < (int)game.items.size() && target < 0; i++)
+            if (game.items[i].id == s_job.item.id)
+                target = i;
+        if (target < 0)
+        {
+            if (++s_job.seekWait <= 60)
+                return;     // the pocket may still be changing
+            BackOut(sceneManager, Utils::Format("%s isn't in the Bag's %s list (%u items)", s_job.item.name.c_str(),
+                                                PartyPocketName(s_job.pocket), game.items.size()), log);
             return;
         }
         // The list scrolls smoothly; wait for it to settle on a row.
-        const float whole = std::floor(list.scroll + 0.5f);
-        if (std::fabs(list.scroll - whole) > 0.01f)
+        if (game.scroll < 0)
             return;
-        const PartyBagPlan plan = PlanPartyBag(s_job.index, (int)whole, (int)list.rows, (int)list.count);
+        const int count = (int)game.items.size();
+        const PartyBagPlan plan = PlanPartyBag(target, game.scroll, game.visible, count);
         if (plan.row >= 0)
         {
-            log.push_back(Utils::Format("party-ui: bag scroll %d row %lu, tapping row %d", (int)whole, list.row + 1,
-                                        plan.row + 1));
+            log.push_back(Utils::Format("party-ui: bag item %d of %d, scroll %d row %d, tapping row %d", target + 1,
+                                        count, game.scroll, game.cursorRow + 1, plan.row + 1));
             MakePartyBagRowAction(s_action, plan.row);
             Start(Stage::BagRow, sceneManager, s_busy, log);
         }
-        else if (plan.dir != 0 && ++s_job.steps <= 2 * (int)list.count)
+        else if (plan.dir != 0 && ++s_job.steps <= 2 * count)
         {
             MakePartyBagStepAction(s_action, plan.dir < 0);
             Start(Stage::BagSeek, sceneManager, s_busy, log);
@@ -1202,8 +1250,19 @@ namespace OneScreen
         const bool shown = s_enabled && !s_yield && here;
         if (shown && !s_shown)
         {
-            if (s_pixels == nullptr)
-                s_pixels = new (std::nothrow) u8[PixelBytes];
+            // The layer is hidden here, so the OSD callback isn't using the
+            // buffer: (re)allocate it if it is missing or too small.
+            const size_t want = s_pixelsWanted;
+            if (s_pixels == nullptr || s_pixelBytes < want)
+            {
+                delete[] s_pixels;
+                s_pixels = new (std::nothrow) u8[want];
+                s_pixelBytes = s_pixels != nullptr ? want : 0;
+                s_bufferVersion = s_bufferVersion + 1;
+                log.push_back(Utils::Format("party-ui: layer buffer %u KB%s; ", want / 1024,
+                                            s_pixels != nullptr ? "" : ": NO MEMORY") + HeapText());
+            }
+            UI::RequestAssets();    // the game's font, icons and move table for the drawing
             s_menu.Reset(6);
             s_note.clear();
             s_repeatKey = 0;
@@ -1219,6 +1278,7 @@ namespace OneScreen
         else if (!shown && s_shown)
         {
             log.push_back("party-ui: hidden");
+            s_hiddenAt = s_frames;
             if (s_stage != Stage::Idle && !ActionRunning())
                 s_stage = Stage::Idle;
             s_menu.EndAsk();
@@ -1229,6 +1289,15 @@ namespace OneScreen
         if (!shown)
         {
             s_showLayer = false;
+            // Give the layer's memory back once the OSD callback has seen
+            // it hidden for a few frames.
+            if (s_pixels != nullptr && s_frames - s_hiddenAt >= FreeAfter)
+            {
+                delete[] s_pixels;
+                s_pixels = nullptr;
+                s_pixelBytes = 0;
+                log.push_back("party-ui: layer freed; " + HeapText());
+            }
             s_ringWanted = false;
             SetCapture(0);
             s_prevScene = scene;
@@ -1311,9 +1380,9 @@ namespace OneScreen
         static const char *const stages[] = { "idle", "summary", "swap", "take", "bag-open", "bag-seek", "bag-row",
                                               "bag-menu", "follow", "follow-act", "asking", "bag-back" };
         static const char *const pages[] = { "list", "menu", "swap", "items", "ask" };
-        return Utils::Format("party-ui: %s, %s, page %s, cursor %d, stage %s%s%s", s_enabled ? "on" : "off",
+        return Utils::Format("party-ui: %s, %s, page %s, cursor %d, stage %s%s%s; layer %u KB, ", s_enabled ? "on" : "off",
                              s_shown ? "shown" : "hidden", pages[(int)s_menu.Page()], s_menu.Cursor() + 1,
                              stages[(int)s_stage], s_yield ? ", panel on by hand" : "",
-                             s_captureKeys ? ", input captured" : "");
+                             s_captureKeys ? ", input captured" : "", s_pixelBytes / 1024) + HeapText();
     }
 }
