@@ -24,7 +24,8 @@ The menu follows the game's bottom-screen menu (RE1 `ReadBattle`, read every 2 f
 - While the command bar or move list is up, A, B, the D-pad and the circle pad are captured (`InputCaptureBegin`); Y (the game's quick Poké Ball), L (move info) and touch still reach the game. On the game's own screens nothing is captured.
 - A move with no PP left isn't sent while another move has PP (*X has no PP left*); with none left, any move is sent and the game uses Struggle.
 - A move the game refuses (seen: Scratch under Drowzee's Disable) leaves the move list up; after the action's three taps the menu says *The game refused that move, pick another*. Disabled/Taunted moves aren't known in advance (not in RE1).
-- Any other game screen in battle (seen: *Forget an old move?* after an Exp. Share level-up, *Use Next Pokémon / Run* after a faint) gets a helper at the top right once it has stayed 1.5 s: *The game asks — the choices are below*, with its vtable in the log (`prompt, vt …`). The choices themselves are only on the bottom screen (the panel key, L+R by default).
+- Learning a fifth move (*Forget an old move?*) has its own screen, `docs/MOVE-LEARN.md`; while it is up the helper below stays away.
+- Any other game screen in battle (seen: *Use Next Pokémon / Run* after a faint) gets a helper at the top right once it has stayed 1.5 s: *The game asks — the choices are below*, with its vtable in the log (`prompt, vt …`). The choices themselves are only on the bottom screen (the panel key, L+R by default).
 - A new species' catch shows its Pokédex page before the nickname question; B goes through all of it (No to the nickname).
 - Effectiveness and type come from the game's own move list, which is up whenever the move list is shown, so no type chart is needed.
 - Move names come from the battle's own copy of the move-name file (`docs/OFFSETS.md`, "Battle state"); species and item names as in RE2/RE3.
