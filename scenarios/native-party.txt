@@ -13,6 +13,9 @@
 include common/boot
 # Checks the automatic view per scene (Party would be full), off by default.
 send auto on
+# The battle below is only there for damage and is played with taps on the
+# game's own menu: turn the native battle menu off.
+send battleui off
 
 # --- 1. Open from the native X menu ---
 mark

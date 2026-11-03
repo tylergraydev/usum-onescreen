@@ -11,6 +11,8 @@ send xmenu off
 send bagui off
 # ... and for Party (the native Party screen would hold the panel off).
 send partyui off
+# ... and for the Pokédex (the native Pokédex would hold the panel off).
+send pokedex off
 
 # Pokédex: tap Rotom's face; back is the B button at the bottom left.
 # Rotom sometimes starts a chat on the bottom screen (two answers to tap)
