@@ -60,6 +60,7 @@ namespace OneScreen
     static BoxesView s_view;            // what we show
     static bool s_dirty = false;
     static bool s_haveView = false;
+    static bool s_gameFont = false;     // the game font was loaded at the last publish
     static u32  s_lrKey = 0;            // L or R pressed, acted on when released
     static bool s_lrSpoiled = false;    // ... unless the other one joined in (L+R: panel)
 
@@ -68,8 +69,6 @@ namespace OneScreen
     static UI::Layer s_layer, s_badge;
     static u32 s_drawnVersion = ~0u;
     static bool s_badgeDrawn = false;
-    static bool s_drawnGameFont = false;    // the game font was loaded when last drawn
-    static bool s_badgeGameFont = false;
     static BoxesView s_drawView;
 
     static bool BoxesOnScreen(const Screen &screen)
@@ -88,9 +87,8 @@ namespace OneScreen
                     return false;
                 s_badgeDrawn = false;
             }
-            if (!s_badgeDrawn || UI::Theme::UsingGameFont() != s_badgeGameFont)
+            if (!s_badgeDrawn)
             {
-                s_badgeGameFont = UI::Theme::UsingGameFont();
                 UI::Canvas canvas = s_badge.Begin();
                 DrawBoxesBadge(canvas);
                 s_badgeDrawn = true;
@@ -101,10 +99,7 @@ namespace OneScreen
 
         if (s_pixels == nullptr)
             return false;
-        // Also once the game's font and icons have loaded (UI::Theme draws
-        // with them from then on).
-        const bool gameFont = UI::Theme::UsingGameFont();
-        bool redraw = s_sharedVersion != s_drawnVersion || gameFont != s_drawnGameFont;
+        bool redraw = s_sharedVersion != s_drawnVersion;
         if (!s_layer.Matches(fb))
         {
             if (!s_layer.Setup(fb, BoxesArea, BoxesRadius, s_pixels, PixelBytes))
@@ -119,7 +114,6 @@ namespace OneScreen
             s_lock.Unlock();
             UI::Canvas canvas = s_layer.Begin();
             DrawBoxes(canvas, s_drawView);
-            s_drawnGameFont = gameFont;
         }
         s_layer.Present(fb);
         return true;
@@ -333,11 +327,11 @@ namespace OneScreen
                 s_pixels = new (std::nothrow) u8[PixelBytes];
             if (s_badgePixels == nullptr)
                 s_badgePixels = new (std::nothrow) u8[BadgeBytes];
+            s_lrKey = 0;
+            s_haveView = false;
             // The game's font and icons (normally loaded at the first field
             // already); the screen redraws with them once they are in.
             UI::RequestAssets();
-            s_lrKey = 0;
-            s_haveView = false;
         }
         if (shown)
         {
@@ -402,6 +396,13 @@ namespace OneScreen
             s_lrKey = 0;
         }
 
+        // Redraw once the game's font and icons have loaded (UI::Theme draws
+        // with them from then on).
+        if (UI::Theme::UsingGameFont() != s_gameFont)
+        {
+            s_gameFont = !s_gameFont;
+            s_dirty = true;
+        }
         Publish();
     }
 
