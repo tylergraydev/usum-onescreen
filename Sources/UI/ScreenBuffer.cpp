@@ -1,8 +1,10 @@
 #include "UI/ScreenBuffer.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <malloc.h>
+#include <unistd.h>
 
 namespace OneScreen
 {
@@ -56,16 +58,51 @@ namespace ScreenBuffer
         return s_refused;
     }
 
-    // Called through these: GCC drops a malloc/free pair whose block is
-    // never used (and assumes the malloc succeeded), which made every probe
-    // "succeed".
+#ifdef __3DS__
+    // newlib's malloc (dlmalloc 2.6.4, newlib/libc/stdlib/mallocr.c): 128
+    // bins of free chunks, bin 0's fd is the top chunk. Read only, under
+    // malloc's lock, so it never takes memory another thread is about to ask
+    // for. The heap ends at fake_heap_end (libsysbase's sbrk refuses more;
+    // CTRPF sets it, ctrulibExtension/system/allocateHeaps.cpp).
+    struct Chunk
+    {
+        size_t prevSize, size;
+        Chunk *fd, *bk;
+    };
+    extern "C" Chunk *__malloc_av_[];
+    extern "C" char *fake_heap_end;
+
+    size_t LargestFree(void)
+    {
+        const size_t sizeMask = ~(size_t)3;     // PREV_INUSE, IS_MMAPPED
+        const auto bin = [](int i) { return (Chunk *)((char *)&__malloc_av_[2 * i + 2] - 2 * sizeof(size_t)); };
+        __malloc_lock(_REENT);
+        size_t largest = 0;
+        for (int i = 1; i < 128; i++)
+            for (Chunk *p = bin(i)->fd; p != bin(i); p = p->fd)
+                largest = std::max(largest, p->size & sizeMask);
+        // The top chunk and what sbrk hasn't handed out yet behind it.
+        const Chunk *top = bin(0)->fd;
+        const size_t topSize = top == bin(0) ? 0 : top->size & sizeMask;
+        const char *topEnd = (const char *)top + topSize;
+        if (top != bin(0) && topEnd <= fake_heap_end)
+            largest = std::max(largest, topSize + (size_t)(fake_heap_end - topEnd));
+        else if (top == bin(0) && fake_heap_end != nullptr)
+            largest = std::max(largest, (size_t)(fake_heap_end - (char *)sbrk(0)));
+        __malloc_unlock(_REENT);
+        // A chunk holds its size word: that much less for the caller.
+        return largest > sizeof(size_t) ? largest - sizeof(size_t) : 0;
+    }
+#else
+    // Host tests: a malloc probe. Called through these: GCC drops a
+    // malloc/free pair whose block is never used (and assumes the malloc
+    // succeeded).
     static void *(*volatile s_malloc)(size_t) = std::malloc;
     static void (*volatile s_free)(void *) = std::free;
 
     size_t LargestFree(void)
     {
-        // Binary search on what malloc gives; each probe is freed at once,
-        // so nothing is left behind.
+        // Binary search on what malloc gives; each probe is freed at once.
         size_t lo = 0, hi = 8u << 20;
         while (hi - lo > 1024)
         {
@@ -82,6 +119,8 @@ namespace ScreenBuffer
         }
         return lo;
     }
+#endif
+
 
     static std::string Status(size_t largest)
     {
