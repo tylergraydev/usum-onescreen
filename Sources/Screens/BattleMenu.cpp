@@ -670,7 +670,8 @@ namespace Screens
             // Disable; a Taunt or Encore would do the same). Elsewhere the
             // taps were lost.
             m_note = m_page == BattlePage::Moves ? "The game refused that move, pick another"
-                                                 : "No answer from the game, try again";
+                     : m_cursor == (u8)BattleCommand::Run ? "Can't escape! (trapped?)"
+                                                          : "No answer from the game, try again";
         }
         if (snap.actionRunning || m_pending)
             return out;

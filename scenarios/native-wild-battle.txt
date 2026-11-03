@@ -82,7 +82,7 @@ repeat 6 until-log ^\s+player\s\w+\ssp\s(570\sL\d+\shp\s([0-9]|[12]\d|3[0-4])/35
   sleep 10
 end
 
-# A Potion on it: the Bag (first tab after boot), Right to HP/PP Restore,
+# A Potion on it: the Bag (first tab in a new battle), Right to HP/PP Restore,
 # A on Potion; the pick starts on the hurt Pokémon.
 send bag
 expect-log ^  Medicine \d+/60: Potion\(17\) x9 5
@@ -117,7 +117,21 @@ send press up             # wraps to Run
 sleep 1
 shot command-run
 send press a
-expect-log ^action: battle-flee ok 10
+expect-log ^battle-ui: chose battle-flee 10
+# Run is refused while the foe has trapped us (seen: Ekans's Wrap); then
+# the battle is fought out with moves (any level-up move question is
+# skipped).
+repeat 12 until-scene FieldRo
+  sleep 8
+  if-scene Battle send action battle-fight
+  sleep 1.5
+  if-scene Battle send action battle-move1
+  sleep 6
+  if-scene Battle send press b
+  sleep 2
+  if-scene Battle send press b
+  if-scene Battle send action learn-skip
+end
 wait-scene FieldRo 30
 expect-mode off
 sleep 3
@@ -136,9 +150,13 @@ send press down           # Bag
 sleep 1
 send press a
 expect-log ^action: battle-bag ok 10
-# The Bag remembers its tab (HP/PP Restore); Poké Balls is two to the right.
-expect-log ^battle-ui: page bag, HP/PP Restore, cursor 0 of 4 10
+# A new battle's Bag opens on its first tab; Poké Balls is the fourth
+# (within a battle it keeps its tab).
+expect-log ^battle-ui: page bag, Rotom Powers, cursor 0 of 1 10
 sleep 1
+send press right
+expect-log ^battle-ui: step battle_bag\.pocket_hp_pp 10
+sleep 1.5
 send press right
 expect-log ^battle-ui: step battle_bag\.pocket_status 10
 sleep 1.5
@@ -203,10 +221,16 @@ repeat 8 until-scene FieldRo
   expect-log ^action: battle-move\d ok 10
   mark
   # The turn, then EXP and level-up windows (Exp. Share): B advances them.
-  # A move-learning question ("Forget an old move?") isn't answered here;
-  # if one comes, the next expect fails with the prompt helper in the log.
+  # The catch's EXP can make Buneary want a fifth move (docs/MOVE-LEARN.md):
+  # learn-skip keeps the old moves; it is refused when the question isn't up.
   repeat 7
     sleep 4
+    if-scene Battle send press b
+  end
+  if-scene Battle send action learn-skip
+  sleep 3
+  repeat 3
+    sleep 3
     if-scene Battle send press b
   end
 end
