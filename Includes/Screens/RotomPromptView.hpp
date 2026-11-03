@@ -60,7 +60,8 @@ namespace OneScreen
     std::string RotomLineText(const u16 *encrypted, u32 length, u32 line, const std::string &name);
 
     // Splits text into lines at its breaks and where a line would be wider
-    // than `width` (at spaces when it can), as the System font measures it.
+    // than `width` (at spaces when it can), as the box draws its text (the
+    // game font once it is loaded, else the System font).
     std::vector<std::string> RotomWrap(const std::string &text, int width);
 
     // What the prompt shows. Plain data (fixed-size text), so the plugin
@@ -105,10 +106,11 @@ namespace OneScreen
     std::string DescribeRotomView(const RotomView &view);
 
     // Top-screen layout: the box sits at the bottom of the top screen, as the
-    // game's own text boxes do, and is as tall as its text. The badge is a
-    // pill in the top-right corner.
+    // game's own text boxes do, and is as tall as its text; it is drawn like
+    // Rotom's own box (yellow, orange line), the answers as the game's option
+    // pills with its cursor. The badge is a pill in the top-right corner.
     static constexpr UI::Rect RotomBadge = { 196, 8, 196, 26 };
-    static constexpr int RotomRadius = 10;
+    static constexpr int RotomRadius = 6;
     static constexpr int RotomBoxW = 376;
     static constexpr int RotomBoxMaxH = 196;
     UI::Rect RotomArea(const RotomView &view);

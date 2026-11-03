@@ -3,9 +3,9 @@
 #include <cstdio>
 
 #include "Screens/BattleMenu.hpp"
-#include "UI/Icons.hpp"
+#include "UI/GameAssets.hpp"
 #include "UI/Layout.hpp"
-#include "UI/Text.hpp"
+#include "UI/Theme.hpp"
 
 namespace OneScreen
 {
@@ -16,20 +16,13 @@ namespace Screens
     // In battle the game prints its question along the bottom (y > 192) and
     // draws the opponent's HP box at the top right (y < 34) and the player's
     // at the bottom left (x < 132), so the list stays in between.
-    static constexpr Rect ChooseArea  = { 156, 36, 240, 156 };
+    static constexpr Rect ChooseArea  = { 156, 36, 240, 158 };
     static constexpr Rect ConfirmArea = { 166, 96, 230, 80 };
     static constexpr Rect DoneArea    = { 166, 128, 230, 52 };
-    static constexpr s32  Radius      = 10;
+    static constexpr s32  RowH        = 21;     // a move button (the game's are taller; six rows fit here)
+    static constexpr s32  SkipH       = 22;
 
-    static constexpr Color PanelBg   = Rgb(22, 30, 52);
-    static constexpr Color Border    = Rgb(120, 150, 220);
-    static constexpr Color Divider   = Rgb(120, 150, 220, 90);
-    static constexpr Color Highlight = Rgb(70, 110, 200, 220);
-    static constexpr Color TextMain  = Rgb(240, 244, 255);
-    static constexpr Color TextDim   = Rgb(150, 165, 200);
-    static constexpr Color NewMove   = Rgb(255, 236, 120);
-    static constexpr Color Good      = Rgb(110, 220, 140);
-    static constexpr Color Danger    = Rgb(235, 110, 110);
+    static constexpr Color NoteText = Rgb(0xFF, 0x8A, 0x80);    // "try again" on the dark window
 
     static std::string Number(const char *fmt, unsigned a, unsigned b = 0)
     {
@@ -234,131 +227,136 @@ namespace Screens
         }
     }
 
-    static TextStyle Style(Font font, Color color, Align align = Align::Left)
+    static Theme::TextStyle Style(Theme::TextSize size, Color color, Align align = Align::Left)
     {
-        TextStyle style;
-        style.font = font;
+        Theme::TextStyle style;
+        style.size = size;
         style.color = color;
         style.align = align;
         return style;
     }
 
-    static void DrawPanel(Canvas &canvas, const Rect &area)
+    static std::string TypeLabel(u8 type)
     {
-        canvas.FillRoundRect(area, Radius, PanelBg);
-        canvas.StrokeRoundRect(area, Radius, Border, 2);
+        const GameAssets *assets = GetGameAssets();
+        const std::string name = assets != nullptr ? assets->TypeName(type) : std::string();
+        return Theme::Upper(name.empty() ? std::string(TypeName(type)) : name);
     }
 
-    static s32 DrawPill(Canvas &canvas, s32 x, s32 y, u8 type)
+    // One move as the game's move list shows it: a button in the move's
+    // type colours, the name in white, then the type plate and the PP.
+    static void DrawMoveRow(Canvas &canvas, const Rect &r, const LearnMove &move, bool selected)
     {
-        std::string name = TypeName(type);
-        for (char &c : name)
-            c = (char)(c >= 'a' && c <= 'z' ? c - 32 : c);
-        const TextStyle style = Style(Font::Small, Rgb(255, 255, 255), Align::Center);
-        const s32 w = MeasureText(name, style) + 8;
-        const Rect pill = { x, y, w, 11 };
-        canvas.FillRoundRect(pill, 5, TypeColor(type));
-        DrawText(canvas, name, Rect{ pill.x, pill.y + 1, pill.w, pill.h }, style);
-        return w;
-    }
+        const u8 type = move.type == 0xFF ? 0 : move.type;
+        const Theme::TypeColors c = Theme::TypeColor(type);
+        Theme::DrawMoveButton(canvas, r, type, selected);
 
-    // One row: name on the left, type and PP on the right.
-    static void DrawMoveRow(Canvas &canvas, const Rect &line, const LearnMove &move, Color nameColor)
-    {
-        const Rect inner = Inset(line, 6, 0, 6, 0);
-        const TextStyle pp = Style(Font::Small, move.pp == 0 && move.maxPp != 0 ? Danger : TextDim, Align::Right);
-        const std::string ppText = Number("PP %u/%u", move.pp, move.maxPp);
-        const s32 ppWidth = 52;
-        DrawText(canvas, ppText, Rect{ inner.Right() - ppWidth, inner.y + 6, ppWidth, 8 }, pp);
-        s32 right = inner.Right() - ppWidth - 4;
+        Theme::TextStyle pp = Style(Theme::TextSize::Small, Theme::PpTextColor(move.pp, move.maxPp), Align::Right);
+        pp.outline = c.lineDark;
+        const s32 ppW = 50;
+        Theme::DrawText(canvas, Number("PP %u/%u", move.pp, move.maxPp), Rect{ r.Right() - 4 - ppW, r.y, ppW, r.h }, pp);
+        s32 right = r.Right() - 4 - ppW - 4;
         if (move.type != 0xFF)
         {
-            std::string name = TypeName(move.type);
-            const s32 w = MeasureText(name, Style(Font::Small, TextMain)) + 8;
-            DrawPill(canvas, right - w, inner.y + 4, move.type);
-            right -= w + 4;
+            right -= Theme::TypePlateW;
+            Theme::DrawTypePlate(canvas, Rect{ right, r.y + (r.h - Theme::TypePlateH) / 2, Theme::TypePlateW, Theme::TypePlateH },
+                                 move.type, TypeLabel(move.type));
+            right -= 4;
         }
-        DrawText(canvas, MoveLabel(move), Rect{ inner.x, inner.y, right - inner.x, inner.h }, Style(Font::System, nameColor));
+        Theme::TextStyle name = Style(Theme::TextSize::Body, Theme::WindowText);
+        name.outline = c.lineDark;
+        Theme::DrawText(canvas, MoveLabel(move), Rect{ r.x + 18, r.y, right - r.x - 18, r.h }, name);
+        if (selected)
+            Theme::DrawCursor(canvas, r.x + 12, r.y + r.h / 2);
+    }
+
+    // Category icon, power and accuracy of a move, on one line.
+    static void DrawMoveInfo(Canvas &canvas, const Rect &line, const LearnMove &move)
+    {
+        s32 x = line.x;
+        if (move.category <= 2)
+        {
+            Theme::DrawCategoryIcon(canvas, x, line.y + (line.h - 20) / 2, move.category);
+            x += 42 + 6;
+        }
+        const std::string info = "Power " + LearnPowerText(move.power) + "   Accuracy " + LearnAccuracyText(move.accuracy);
+        Theme::DrawText(canvas, info, Rect{ x, line.y, line.Right() - x, line.h }, Style(Theme::TextSize::Small, Theme::WindowText));
     }
 
     static void DrawChoose(Canvas &canvas, const MoveLearnMenu &menu, const LearnSnapshot &snap)
     {
-        DrawPanel(canvas, ChooseArea);
-        Stack body(Inset(ChooseArea, 6, 5, 6, 5), Stack::Column, 1);
-        const std::string who = snap.monName.empty() ? std::string("Your Pok\xC3\xA9mon") : snap.monName;
-        DrawText(canvas, who + " wants to learn:", Inset(body.Next(9), 6, 0, 6, 0), Style(Font::Small, TextDim));
-        DrawMoveRow(canvas, body.Next(18), snap.newMove, NewMove);
-        const Rect rule = body.Next(1);
-        canvas.HLine(rule.x, rule.y, rule.w, Divider);
+        // The game's own question ("Should an old move be forgotten and
+        // replaced with ...?") stays readable below, so this only shows the
+        // moves: the highlighted one's details, the new move, the four old
+        // ones and "Don't learn".
+        Theme::DrawWindow(canvas, ChooseArea);
+        Stack body(Inset(ChooseArea, 6, 5, 6, 3), Stack::Column, 0);
 
-        const Rect hints = body.NextFromEnd(8);
-        const Rect detail = body.NextFromEnd(8);
+        const Rect info = body.Next(18);
         if (!menu.Note().empty())
-            DrawText(canvas, menu.Note(), Inset(hints, 6, 0, 6, 0), Style(Font::Small, Danger));
+            Theme::DrawText(canvas, menu.Note(), info, Style(Theme::TextSize::Small, NoteText));
         else
-        {
-            DrawText(canvas, "Up/Down, A: choose", Inset(hints, 6, 0, 6, 0), Style(Font::Small, TextDim));
-            DrawText(canvas, "B: skip", Inset(hints, 6, 0, 6, 0), Style(Font::Small, TextDim, Align::Right));
-        }
+            DrawMoveInfo(canvas, info, menu.Cursor() < snap.moveCount ? snap.moves[menu.Cursor()] : snap.newMove);
+        body.Next(1);
+        DrawMoveRow(canvas, body.Next(RowH), snap.newMove, false);
+        body.Next(3);
 
-        for (u8 row = 0; row <= LearnSkipRow; row++)
+        for (u8 row = 0; row < LearnSkipRow; row++)
         {
-            const Rect line = body.Next(18);
-            if (row < LearnSkipRow && row >= snap.moveCount)
-                continue;
-            const bool on = row == menu.Cursor();
-            if (on)
-                canvas.FillRoundRect(line, 5, Highlight);
-            if (row == LearnSkipRow)
-            {
-                DrawText(canvas, "Don't learn " + MoveLabel(snap.newMove), Inset(line, 6, 0, 6, 0),
-                         Style(Font::System, on ? TextMain : TextDim));
-                continue;
-            }
-            DrawMoveRow(canvas, line, snap.moves[row], on ? TextMain : TextDim);
+            const Rect line = body.Next(RowH);
+            if (row < snap.moveCount)
+                DrawMoveRow(canvas, line, snap.moves[row], row == menu.Cursor());
         }
-
-        // The highlighted move's category, power and accuracy (the new
-        // move's on the "don't learn" row).
-        const LearnMove &move = menu.Cursor() < snap.moveCount ? snap.moves[menu.Cursor()] : snap.newMove;
-        const std::string info = std::string(move.category == 0 ? "Status" : move.category == 1 ? "Physical"
-                                             : move.category == 2 ? "Special" : "?")
-                                 + "  Power " + LearnPowerText(move.power) + "  Accuracy " + LearnAccuracyText(move.accuracy);
-        DrawText(canvas, info, Inset(detail, 6, 0, 6, 0), Style(Font::Small, TextMain));
+        body.Next(1);
+        Theme::DrawRow(canvas, body.Next(SkipH), Theme::RowKind::Option, "Don't learn " + MoveLabel(snap.newMove),
+                       menu.Cursor() == LearnSkipRow);
     }
 
     static void DrawConfirm(Canvas &canvas, const MoveLearnMenu &menu, const LearnSnapshot &snap)
     {
-        DrawPanel(canvas, ConfirmArea);
-        Stack body(Inset(ConfirmArea, 10, 6, 10, 6), Stack::Column, 3);
+        Theme::DrawWindow(canvas, ConfirmArea);
+        const Rect inner = Inset(ConfirmArea, Theme::WindowPad + 2, 6, Theme::WindowPad + 2, 6);
+        const s32 line = Theme::LineHeight(Theme::TextSize::Body);
         const bool skip = menu.Cursor() >= snap.moveCount;
-        const std::string title = skip ? "Don't learn it?" : "Forget " + MoveLabel(snap.moves[menu.Cursor()]) + "?";
-        DrawText(canvas, title, body.Next(18), Style(Font::System, TextMain));
-        const std::string line = skip ? (snap.monName.empty() ? std::string("It") : snap.monName) + " keeps its moves"
-                                      : (snap.monName.empty() ? std::string("It") : snap.monName) + " learns " + MoveLabel(snap.newMove);
-        DrawText(canvas, line, body.Next(18), Style(Font::System, skip ? TextDim : NewMove));
-        const Rect hints = body.NextFromEnd(8);
+        const std::string who = snap.monName.empty() ? std::string("It") : snap.monName;
+        const std::string title = skip ? "Don't learn " + MoveLabel(snap.newMove) + "?"
+                                       : "Forget " + MoveLabel(snap.moves[menu.Cursor()]) + "?";
+        Theme::DrawText(canvas, title, Rect{ inner.x, inner.y, inner.w, line }, Style(Theme::TextSize::Body, Theme::WindowText));
+        const std::string sub = skip ? who + " keeps its moves." : who + " learns " + MoveLabel(snap.newMove) + ".";
+        Theme::DrawText(canvas, sub, Rect{ inner.x, inner.y + line, inner.w, line },
+                        Style(Theme::TextSize::Body, skip ? Theme::WindowText : Theme::AccentText));
+
+        const s32 y = inner.Bottom() - Theme::OptionHeight;
         if (menu.Page() == LearnPage::Working)
-            DrawText(canvas, "Telling the game...", hints, Style(Font::Small, Good));
-        else
         {
-            DrawText(canvas, "A: yes", hints, Style(Font::Small, TextDim));
-            DrawText(canvas, "B: back", hints, Style(Font::Small, TextDim, Align::Right));
+            Theme::DrawText(canvas, "Telling the game...", Rect{ inner.x, y, inner.w, Theme::OptionHeight },
+                            Style(Theme::TextSize::Small, Theme::WindowText));
+            return;
         }
+        // A takes the answer the cursor is on, B goes back to the list.
+        const s32 back = Theme::PromptWidth(Theme::Button::B, "Back");
+        Theme::DrawRow(canvas, Rect{ inner.x, y, inner.w - back - 8, Theme::OptionHeight }, Theme::RowKind::Option,
+                       skip ? "Don't learn it" : "Forget it", true);
+        Theme::DrawButtonPrompt(canvas, inner.Right() - back, y + (Theme::OptionHeight - Theme::PromptHeight) / 2,
+                                Theme::Button::B, "Back");
     }
 
     static void DrawDone(Canvas &canvas, const MoveLearnMenu &menu)
     {
-        DrawPanel(canvas, DoneArea);
-        Stack body(Inset(DoneArea, 10, 6, 10, 6), Stack::Column, 2);
-        DrawText(canvas, "Done", body.Next(18), Style(Font::System, Good));
-        // "X forgot Y" / "and learned Z" on two lines (one is too long).
+        Theme::DrawWindow(canvas, DoneArea);
+        const Rect inner = Inset(DoneArea, Theme::WindowPad + 2, 7, Theme::WindowPad + 2, 7);
+        const s32 line = Theme::LineHeight(Theme::TextSize::Body);
+        // "X forgot Y" / "and learned Z!" on two lines (one is too long).
         const std::string &result = menu.Result();
         const size_t cut = result.find(" and learned ");
-        const TextStyle style = Style(Font::Small, TextMain);
-        DrawText(canvas, result.substr(0, cut), body.Next(9), style);
-        if (cut != std::string::npos)
-            DrawText(canvas, result.substr(cut + 1), body.Next(9), style);
+        const Theme::TextStyle style = Style(Theme::TextSize::Body, Theme::WindowText);
+        if (cut == std::string::npos)
+        {
+            Theme::DrawText(canvas, result + ".", inner, style);
+            return;
+        }
+        Theme::DrawText(canvas, result.substr(0, cut), Rect{ inner.x, inner.y, inner.w, line }, style);
+        Theme::DrawText(canvas, result.substr(cut + 1) + "!", Rect{ inner.x, inner.y + line, inner.w, line }, style);
     }
 
     void MoveLearnMenu::Draw(Canvas &canvas, const LearnSnapshot &snap) const

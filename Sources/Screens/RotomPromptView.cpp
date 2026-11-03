@@ -3,9 +3,11 @@
 #include <cstdio>
 #include <cstring>
 
+#include "UI/GameAssets.hpp"
 #include "UI/Icons.hpp"
 #include "UI/Layout.hpp"
 #include "UI/Text.hpp"
+#include "UI/Theme.hpp"
 
 namespace OneScreen
 {
@@ -106,9 +108,27 @@ namespace OneScreen
         return style;
     }
 
+    // Width of text as the box draws it (UI::Theme's Body size: the game's
+    // font at 1:1 once it is loaded, else the system font). Reads the font's
+    // width table directly: this runs on the plugin thread, and the theme's
+    // glyph cache belongs to the OSD callback.
+    static int MeasureBody(const std::string &text)
+    {
+        const UI::GameAssets *assets = UI::GetGameAssets();
+        if (assets == nullptr || !assets->font.Ready())
+            return UI::MeasureText(text, BodyStyle());
+        int w = 0;
+        for (size_t i = 0; i < text.size();)
+        {
+            UI::s32 left = 0, glyphW = 0, advance = 0;
+            assets->font.Widths(assets->font.IndexOf(UI::NextCodePoint(text.data(), text.size(), i)), left, glyphW, advance);
+            w += advance;
+        }
+        return w;
+    }
+
     std::vector<std::string> RotomWrap(const std::string &text, int width)
     {
-        const UI::TextStyle style = BodyStyle();
         std::vector<std::string> lines;
         size_t start = 0;
         while (start <= text.size())
@@ -117,7 +137,7 @@ namespace OneScreen
             if (end == std::string::npos)
                 end = text.size();
             std::string rest = text.substr(start, end - start);
-            while (!rest.empty() && UI::MeasureText(rest, style) > width)
+            while (!rest.empty() && MeasureBody(rest) > width)
             {
                 // The longest head that fits, cut at a space if there is one.
                 size_t fit = 0, space = std::string::npos;
@@ -125,7 +145,7 @@ namespace OneScreen
                 {
                     if (i < rest.size() && (((u8)rest[i]) & 0xC0) == 0x80)
                         continue;
-                    if (UI::MeasureText(rest.substr(0, i), style) > width)
+                    if (MeasureBody(rest.substr(0, i)) > width)
                         break;
                     fit = i;
                     if (i < rest.size() && rest[i] == ' ')
@@ -162,11 +182,12 @@ namespace OneScreen
     }
 
     // Inner width of the box's text.
-    static const int Pad = 12;
+    static const int Pad = 10;
     static const int TextW = RotomBoxW - 2 * Pad;
-    static const int LineH = 18;
-    static const int AnswerH = 26, AnswerGap = 4;
-    static const int HintH = 18;
+    static const int LabelH = 14;
+    static const int LineH = 19;        // the game font's line
+    static const int AnswerW = 260, AnswerH = 26, AnswerGap = 4;
+    static const int HintH = 20;
 
     void RotomSetText(RotomView &view, const std::string &text)
     {
@@ -243,9 +264,9 @@ namespace OneScreen
 
     static int BoxHeight(const RotomView &view)
     {
-        int h = Pad + 14 + view.lines * LineH + 6;    // "Rotom" label, then the text
+        int h = Pad + LabelH + view.lines * LineH + 4;    // "Rotom" label, then the text
         if (view.mode == RotomMode::Choice)
-            h += 2 * AnswerH + AnswerGap + 6;
+            h += 2 * AnswerH + AnswerGap + 4;
         h += HintH + Pad - 4;
         return h > RotomBoxMaxH ? RotomBoxMaxH : h;
     }
@@ -262,45 +283,75 @@ namespace OneScreen
 
     UI::Rect RotomAnswerRect(const RotomView &view, int i)
     {
+        // Right-aligned, as the game lines up its answers over Rotom's box.
         const UI::Rect area = RotomArea(view);
-        const int top = area.y + Pad + 14 + view.lines * LineH + 6;
-        return UI::Rect{ area.x + Pad + 8, top + i * (AnswerH + AnswerGap), area.w - 2 * Pad - 8, AnswerH };
+        const int top = area.y + Pad + LabelH + view.lines * LineH + 4;
+        return UI::Rect{ area.Right() - Pad - AnswerW, top + i * (AnswerH + AnswerGap), AnswerW, AnswerH };
     }
 
-    static constexpr UI::Color PanelBg  = Rgb(22, 30, 52);
-    static constexpr UI::Color Border   = Rgb(120, 150, 220);
-    static constexpr UI::Color RotomRed = Rgb(222, 60, 52);
-    static constexpr UI::Color TextMain = Rgb(250, 252, 255);
-    static constexpr UI::Color TextDim  = Rgb(150, 165, 200);
-    static constexpr UI::Color Pill     = Rgb(40, 58, 96);
-    static constexpr UI::Color Selected = Rgb(255, 236, 120);
+    // Rotom's text box as the game draws it on the bottom screen (measured
+    // on its chat): orange line, pale yellow fill getting lighter downwards,
+    // dark grey text.
+    static constexpr UI::Color BoxLine  = Rgb(0xFA, 0xB3, 0x00);
+    static constexpr UI::Color BoxTop   = Rgb(0xFD, 0xE1, 0x66);
+    static constexpr UI::Color BoxMid   = Rgb(0xFF, 0xFA, 0xA0);
+    static constexpr UI::Color BoxFill  = Rgb(0xFF, 0xFF, 0xAA);
+    static constexpr UI::Color BoxText  = Rgb(0x32, 0x32, 0x32);
+    static constexpr UI::Color RotomRed = Rgb(0xDE, 0x3C, 0x34);
+
+    static UI::Color Mix(UI::Color a, UI::Color b, int num, int den)
+    {
+        return Rgb((u8)(a.r + (b.r - a.r) * num / den), (u8)(a.g + (b.g - a.g) * num / den),
+                   (u8)(a.b + (b.b - a.b) * num / den));
+    }
+
+    static void DrawBox(UI::Canvas &canvas, const UI::Rect &r, int radius)
+    {
+        canvas.FillRoundRect(r, radius, BoxLine);
+        const UI::Rect inner = UI::Inset(r, 2);
+        canvas.FillRoundRect(inner, radius - 2, BoxFill);
+        // The game's box is a little deeper yellow along its top edge.
+        const int fade = inner.h < 14 ? inner.h / 2 : 7;
+        for (int dy = 0; dy < fade; dy++)
+        {
+            const UI::Color c = dy < 3 ? Mix(BoxTop, BoxMid, dy, 3) : Mix(BoxMid, BoxFill, dy - 3, fade - 3);
+            const int in = dy < radius - 2 ? radius - 2 - dy : 0;
+            canvas.FillRect(UI::Rect{ inner.x + in, inner.y + dy, inner.w - 2 * in, 1 }, c);
+        }
+    }
+
+    static UI::Theme::TextStyle Style(UI::Theme::TextSize size, UI::Color color, UI::Align align = UI::Align::Left)
+    {
+        UI::Theme::TextStyle style;
+        style.size = size;
+        style.color = color;
+        style.align = align;
+        return style;
+    }
 
     static void DrawBadge(UI::Canvas &canvas, const RotomView &view)
     {
-        canvas.FillRoundRect(RotomBadge, RotomBadge.h / 2, PanelBg);
-        canvas.StrokeRoundRect(RotomBadge, RotomBadge.h / 2, RotomRed, 2);
-        UI::TextStyle style;
-        style.color = TextMain;
+        DrawBox(canvas, RotomBadge, RotomBadge.h / 2);
         const UI::Rect inner = UI::Inset(RotomBadge, 12, 0, 10, 0);
-        UI::DrawText(canvas, "Rotom wants to talk", UI::Rect{ inner.x, inner.y, inner.w - 22, inner.h }, style);
-        UI::DrawIcon(canvas, UI::Icon::ArrowUp, UI::Rect{ inner.Right() - 16, inner.y + 6, 14, 14 }, Selected);
+        UI::Theme::DrawText(canvas, "Rotom wants to talk", UI::Rect{ inner.x, inner.y, inner.w - 22, inner.h },
+                            Style(UI::Theme::TextSize::Body, BoxText));
+        UI::DrawIcon(canvas, UI::Icon::ArrowUp, UI::Rect{ inner.Right() - 16, inner.y + 6, 14, 14 }, RotomRed);
         (void)view;
     }
 
+    // The A prompt's label, or "" for none.
     static const char *Hint(const RotomView &view)
     {
         switch (view.mode)
         {
         case RotomMode::Choice:
-            return view.busy ? "Answering..." : "Up/Down Choose    A Answer";
-        case RotomMode::Reply:
-            return "";
+            return "Answer";
         case RotomMode::Loto:
             switch (view.loto)
             {
-            case RotoLotoStep::Spinning: return view.busy ? "..." : "A Stop the reel";
+            case RotoLotoStep::Spinning: return "Stop the reel";
             case RotoLotoStep::Fading:   return "";
-            default:                     return view.busy ? "..." : "A Next";
+            default:                     return "Next";
             }
         default:
             return "";
@@ -317,41 +368,31 @@ namespace OneScreen
             return;
         }
         const UI::Rect area = RotomArea(view);
-        canvas.FillRoundRect(area, RotomRadius, PanelBg);
-        canvas.StrokeRoundRect(area, RotomRadius, Border, 2);
+        DrawBox(canvas, area, RotomRadius);
 
-        UI::TextStyle label;
-        label.font = UI::Font::Small;
-        label.color = RotomRed;
-        UI::DrawText(canvas, view.mode == RotomMode::Loto ? "ROTOM - ROTO LOTO" : "ROTOM",
-                     UI::Rect{ area.x + Pad, area.y + Pad - 2, TextW, 12 }, label);
+        UI::Theme::DrawText(canvas, view.mode == RotomMode::Loto ? "ROTOM - ROTO LOTO" : "ROTOM",
+                            UI::Rect{ area.x + Pad, area.y + Pad - 4, TextW, LabelH }, Style(UI::Theme::TextSize::Small, RotomRed));
 
-        UI::TextStyle body;
-        body.color = TextMain;
-        int y = area.y + Pad + 14;
+        const UI::Theme::TextStyle body = Style(UI::Theme::TextSize::Body, BoxText);
+        int y = area.y + Pad + LabelH;
         for (int i = 0; i < view.lines; i++, y += LineH)
-            UI::DrawText(canvas, view.text[i], UI::Rect{ area.x + Pad, y, TextW, LineH }, body);
+            UI::Theme::DrawText(canvas, view.text[i], UI::Rect{ area.x + Pad, y, TextW, LineH }, body);
 
         if (view.mode == RotomMode::Choice)
             for (int i = 0; i < 2; i++)
-            {
-                const UI::Rect r = RotomAnswerRect(view, i);
-                const bool selected = i == view.cursor;
-                canvas.FillRoundRect(r, 12, Pill);
-                if (selected)
-                {
-                    canvas.StrokeRoundRect(UI::Inset(r, -2), 13, Selected, 2);
-                    UI::DrawIcon(canvas, UI::Icon::ArrowRight, UI::Rect{ r.x + 6, r.y + r.h / 2 - 6, 12, 12 },
-                                 Selected);
-                }
-                UI::TextStyle a;
-                a.color = selected ? TextMain : TextDim;
-                UI::DrawText(canvas, view.answer[i], UI::Inset(r, 24, 0, 8, 0), a);
-            }
+                UI::Theme::DrawRow(canvas, RotomAnswerRect(view, i), UI::Theme::RowKind::Option, view.answer[i],
+                                   i == view.cursor);
 
-        UI::TextStyle hint;
-        hint.color = TextDim;
-        hint.align = UI::Align::Right;
-        UI::DrawText(canvas, Hint(view), UI::Rect{ area.x + Pad, area.Bottom() - Pad + 4 - HintH, TextW, HintH }, hint);
+        const int hintY = area.Bottom() - Pad + 4 - HintH;
+        const std::string hint = Hint(view);
+        if (view.busy)
+            UI::Theme::DrawText(canvas, view.mode == RotomMode::Choice ? "Answering..." : "...",
+                                UI::Rect{ area.x + Pad, hintY, TextW, HintH }, Style(UI::Theme::TextSize::Small, BoxText, UI::Align::Right));
+        else if (!hint.empty())
+        {
+            const int w = UI::Theme::PromptWidth(UI::Theme::Button::A, hint);
+            UI::Theme::DrawButtonPrompt(canvas, area.Right() - Pad - w, hintY + (HintH - UI::Theme::PromptHeight) / 2,
+                                        UI::Theme::Button::A, hint);
+        }
     }
 }

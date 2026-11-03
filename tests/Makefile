@@ -105,7 +105,7 @@ $(OUT)/move_learn_test: move_learn_test.cpp $(LEARN_SRCS) $(LEARN_HDRS) $(UI_SRC
 	$(CXX) $(CXXFLAGS) move_learn_test.cpp $(LEARN_SRCS) $(UI_SRCS) -o $@
 
 ROTOM_PREVIEW := ../analysis/private/rotom-preview.ppm
-ROTOM_SRCS := ../Sources/Screens/RotomPromptView.cpp ../Sources/RomfsText.cpp ../Sources/PartyData.cpp
+ROTOM_SRCS := ../Sources/Screens/RotomPromptView.cpp ../Sources/UI/GameAssets.cpp ../Sources/UI/Theme.cpp ../Sources/RomfsText.cpp ../Sources/PartyData.cpp
 
 $(OUT)/rotom_prompt_test: rotom_prompt_test.cpp $(ROTOM_SRCS) ../Includes/Screens/RotomPromptView.hpp ../Includes/RomfsText.hpp ../Includes/PartyData.hpp $(UI_SRCS) $(UI_HDRS)
 	@mkdir -p $(OUT)
