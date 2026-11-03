@@ -69,23 +69,45 @@ namespace OneScreen
     static volatile int s_ringPos = -1;
     static volatile u32 s_ringCount = 0;
     // The layer keeps the screen's own format: BGR8 on the top screen (3
-    // bytes, 246 KB), more only if the OSD callback asks for it. Allocated
-    // when the screen shows and freed FreeAfter frames after it hides (the
-    // plugin's heap is 5 MiB and every native screen has a layer; an
+    // bytes, 246 KB), more only if the OSD callback asks for it (an
     // RGBA8-sized 337 KB one failed once the game's assets were loaded).
+    // Allocated the first time the screen shows and kept: freed when hidden
+    // (`partyui freelayer on`), the block was split by small allocations
+    // before the screen opened again, and 246 KB no longer fitted with 328 KB
+    // free in the arena, in every try (instance w72). If it can't be had,
+    // the screen tries again for NoMemoryFrames, then steps aside for the
+    // panel.
     // s_bufferVersion tells the OSD callback to set the layer up again on a
     // new buffer.
     static u8 *s_pixels = nullptr;
     static size_t s_pixelBytes = 0;
     static volatile size_t s_pixelsWanted = PartyArea.w * PartyArea.h * 3;
     static volatile u32 s_bufferVersion = 0;
-    static const u32 FreeAfter = 4;
+    static const u32 FreeAfter = 600, NoMemoryFrames = 60;
+    static bool s_freeWhenHidden = false;
+    static u32 s_noMemorySince = 0;
 
     // "heap N KB used, N KB free in the arena" (newlib's mallinfo).
     static std::string HeapText(void)
     {
         const struct mallinfo heap = mallinfo();
         return Utils::Format("heap %d KB used, %d KB free in the arena", heap.uordblks / 1024, heap.fordblks / 1024);
+    }
+
+    // (Re)allocates the layer buffer if it is missing or too small. Only
+    // while the layer is hidden or has no buffer, so the OSD callback isn't
+    // using it.
+    static void AllocLayer(std::vector<std::string> &log)
+    {
+        const size_t want = s_pixelsWanted;
+        if (s_pixels != nullptr && s_pixelBytes >= want)
+            return;
+        delete[] s_pixels;
+        s_pixels = new (std::nothrow) u8[want];
+        s_pixelBytes = s_pixels != nullptr ? want : 0;
+        s_bufferVersion = s_bufferVersion + 1;
+        log.push_back(Utils::Format("party-ui: layer buffer %u KB%s; ", want / 1024, s_pixels != nullptr ? "" : ": NO MEMORY")
+                      + HeapText());
     }
 
     // --- Plugin thread ---
@@ -1252,16 +1274,8 @@ namespace OneScreen
         {
             // The layer is hidden here, so the OSD callback isn't using the
             // buffer: (re)allocate it if it is missing or too small.
-            const size_t want = s_pixelsWanted;
-            if (s_pixels == nullptr || s_pixelBytes < want)
-            {
-                delete[] s_pixels;
-                s_pixels = new (std::nothrow) u8[want];
-                s_pixelBytes = s_pixels != nullptr ? want : 0;
-                s_bufferVersion = s_bufferVersion + 1;
-                log.push_back(Utils::Format("party-ui: layer buffer %u KB%s; ", want / 1024,
-                                            s_pixels != nullptr ? "" : ": NO MEMORY") + HeapText());
-            }
+            AllocLayer(log);
+            s_noMemorySince = s_frames;
             UI::RequestAssets();    // the game's font, icons and move table for the drawing
             s_menu.Reset(6);
             s_note.clear();
@@ -1289,9 +1303,9 @@ namespace OneScreen
         if (!shown)
         {
             s_showLayer = false;
-            // Give the layer's memory back once the OSD callback has seen
-            // it hidden for a few frames.
-            if (s_pixels != nullptr && s_frames - s_hiddenAt >= FreeAfter)
+            // Off by default (see s_pixels): give the layer's memory back
+            // once the screen has been hidden a while.
+            if (s_freeWhenHidden && s_pixels != nullptr && s_frames - s_hiddenAt >= FreeAfter)
             {
                 delete[] s_pixels;
                 s_pixels = nullptr;
@@ -1302,6 +1316,18 @@ namespace OneScreen
             SetCapture(0);
             s_prevScene = scene;
             return;
+        }
+
+        // No layer memory: try again now and then; give up to the panel.
+        if (s_pixels == nullptr)
+        {
+            if ((s_frames - s_noMemorySince) % 15 == 14)
+                AllocLayer(log);
+            if (s_pixels == nullptr && s_frames - s_noMemorySince >= NoMemoryFrames)
+            {
+                log.push_back("party-ui: no memory for the layer; the native screen steps aside (panel)");
+                s_yield = true;
+            }
         }
 
         if (s_frames - s_readAt >= ReadEvery)
@@ -1370,6 +1396,11 @@ namespace OneScreen
         }
         else if (args == "status")
             log.push_back(PartyScreenStatus());
+        else if (args == "freelayer on" || args == "freelayer off")
+        {
+            s_freeWhenHidden = args == "freelayer on";
+            log.push_back(std::string("party-ui: free the layer when hidden: ") + (s_freeWhenHidden ? "on" : "off"));
+        }
         else
             return false;
         return true;
