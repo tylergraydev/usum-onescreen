@@ -204,6 +204,15 @@ static void TestCommand(void)
     Idle(lost, snap, BattleMenu::PendingFrames + 1);
     CHECK(!lost.Pending() && lost.Note() == "No answer from the game, try again");
     CHECK(lost.Update(snap, BattleKeys::A).action != nullptr);
+
+    // Run the game ignores (trapped by Wrap, seen with Ekans): said so.
+    BattleMenu trapped;
+    trapped.Update(snap, 0);
+    Idle(trapped, snap, BattleMenu::CommandSettleFrames);
+    trapped.Update(snap, BattleKeys::DUp);
+    CHECK(trapped.Update(snap, BattleKeys::A).action != nullptr);
+    Idle(trapped, snap, BattleMenu::PendingFrames + 1);
+    CHECK(trapped.Note() == "Can't escape! (trapped?)");
 }
 
 static void TestMoves(void)
