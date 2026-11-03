@@ -6,8 +6,9 @@
 //
 // The decoders are pure code on byte buffers (no CTRPF), so tests/ builds
 // them on the PC with synthetic data. LoadGameAssets() does the reading
-// through a RomfsRead callback: Screens/ThemeScreen.cpp gives it the game's
-// RomFS (ARCHIVE_ROMFS), on the plugin thread. Everything has a fallback:
+// through a RomfsRead callback: the shared service (UI/Assets.hpp) gives it
+// the game's RomFS (ARCHIVE_ROMFS), in its own Task. Screens read the result
+// through UI/Assets.hpp. Everything has a fallback:
 // if a piece doesn't load, the theme draws with the system font and its own
 // shapes.
 
