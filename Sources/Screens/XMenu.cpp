@@ -1,5 +1,6 @@
 #include "Screens/XMenu.hpp"
 
+#include <malloc.h>
 #include <new>
 
 #include <CTRPluginFramework.hpp>
@@ -45,6 +46,10 @@ namespace OneScreen
     // The probe drops for a frame or two while the game slides its page in;
     // the menu only counts as gone after this many frames without it.
     static const u32 GoneFrames = 6;
+    // The layer's buffer goes back to the heap this many frames after the
+    // menu hides, once the OSD callback can't be drawing with it any more
+    // (it checks s_shown first). The plugin heap is 5 MiB.
+    static const u32 FreeAfter = 4;
 
     // --- Shared with the OSD callback (game thread) ---
     static volatile bool s_shown = false;
@@ -77,11 +82,13 @@ namespace OneScreen
     static int  s_stablePage = -1, s_stableSlot = -1;
     static u32  s_stableCount = 0;
     static u32  s_probeMissing = GoneFrames;    // frames in a row the X menu probe was off
+    static u32  s_freeAt = 0;
 
     // --- OSD callback ---
 
     static UI::Layer s_layer;
     static u32 s_drawnVersion = ~0u;
+    static u8 *s_layerBuffer = nullptr;     // the buffer s_layer was set up with
     static bool s_drawnGameFont = false;    // the game font was loaded when last drawn
 
     // The game's cursor is a red arrow left of the pill it points at
@@ -120,7 +127,8 @@ namespace OneScreen
                 ScanGameCursor(screen);
             return false;
         }
-        if (!s_shown || s_pixels == nullptr)
+        u8 *const pixels = s_pixels;
+        if (!s_shown || pixels == nullptr)
             return false;
 
         UiInitFont();
@@ -130,10 +138,14 @@ namespace OneScreen
         // with them from then on).
         const bool gameFont = UI::Theme::UsingGameFont();
         bool redraw = version != s_drawnVersion || gameFont != s_drawnGameFont;
-        if (!s_layer.Matches(fb))
+        // The buffer is freed while the menu is hidden, so a new one needs
+        // a new setup.
+        if (!s_layer.Matches(fb) || s_layerBuffer != pixels)
         {
-            if (!s_layer.Setup(fb, XMenuArea, XMenuRadius, s_pixels, PixelBytes))
+            s_layerBuffer = nullptr;
+            if (!s_layer.Setup(fb, XMenuArea, XMenuRadius, pixels, PixelBytes))
                 return false;
+            s_layerBuffer = pixels;
             redraw = true;
         }
         if (redraw)
@@ -160,6 +172,11 @@ namespace OneScreen
     }
 
     // --- Plugin thread ---
+
+    static unsigned HeapUsedKb(void)
+    {
+        return (unsigned)(mallinfo().uordblks / 1024);
+    }
 
     static const char *EntryName(int index)
     {
@@ -371,16 +388,23 @@ namespace OneScreen
             s_lastScan = s_scanCount;
             s_scanWanted = true;
             s_repeatKey = 0;
-            log.push_back(Utils::Format("xmenu: shown (game page %d)%s",
+            log.push_back(Utils::Format("xmenu: shown (game page %d)%s, heap %u KB used",
                                         (ActionProbeFlags() & WorldXMenuPage2) ? 2 : 1,
-                                        s_pixels == nullptr ? ", NO MEMORY for the layer" : ""));
+                                        s_pixels == nullptr ? ", NO MEMORY for the layer" : "", HeapUsedKb()));
         }
         else if (!shown && s_shown)
         {
             s_scanWanted = false;
+            s_freeAt = s_frames + FreeAfter;
             log.push_back("xmenu: hidden");
         }
         s_shown = shown;
+        if (!shown && s_pixels != nullptr && s_frames >= s_freeAt)
+        {
+            delete[] s_pixels;
+            s_pixels = nullptr;
+            log.push_back(Utils::Format("xmenu: layer freed, heap %u KB used", HeapUsedKb()));
+        }
 
         // Not while an entry opens: the game turns its page then, and its
         // cursor is the entry being tapped anyway (Chosen).
