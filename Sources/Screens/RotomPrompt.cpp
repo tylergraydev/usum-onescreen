@@ -14,6 +14,7 @@
 #include "Screens/RotomPromptView.hpp"
 #include "UI/Device.hpp"
 #include "UI/Layer.hpp"
+#include "UI/ScreenBuffer.hpp"
 
 namespace OneScreen
 {
@@ -60,8 +61,10 @@ namespace OneScreen
     static RotomView     s_views[2];
     static volatile u32  s_viewSlot = 0;
     static volatile u32  s_viewVersion = 0;
-    static u8           *s_pixels = nullptr;
-    static const size_t  PixelBytes = RotomBoxW * RotomBoxMaxH * 4;
+    // The boxes borrow UI::ScreenBuffer. The badge has its own small buffer:
+    // it shows on the field next to other screens (over the map).
+    static const char *const Owner = "rotom";
+    static u8            s_badgePixels[RotomBadge.w * RotomBadge.h * 4];
 
     // --- Plugin thread ---
     static bool s_enabled = true;
@@ -95,21 +98,40 @@ namespace OneScreen
 
     static bool RotomOnScreen(const Screen &screen)
     {
-        if (!screen.IsTop || !s_shown || s_pixels == nullptr)
+        if (!screen.IsTop)
             return false;
+        const RotomView view = s_views[s_viewSlot];
+        const bool badge = view.mode == RotomMode::Ready;
+        if (!s_shown || badge)
+            UI::ScreenBuffer::GiveBack(Owner);
+        if (!s_shown)
+            return false;
+        u8 *pixels = s_badgePixels;
+        size_t bytes = sizeof(s_badgePixels);
+        if (!badge)
+        {
+            bool fresh = false;
+            pixels = UI::ScreenBuffer::Borrow(Owner, fresh);
+            bytes = UI::ScreenBuffer::Bytes;
+            if (pixels == nullptr)
+                return false;
+            if (fresh)
+                s_drawnArea = UI::Rect{ 0, 0, 0, 0 };
+        }
         UiInitFont();
         const UI::Surface fb = SurfaceFromScreen(screen);
         const u32 version = s_viewVersion;
-        const RotomView view = s_views[s_viewSlot];
         const UI::Rect area = RotomArea(view);
         if (area.Empty())
             return false;
         bool redraw = version != s_drawnVersion;
+        // The badge and the boxes have different areas, so a switch between
+        // them always sets up again (onto the other buffer).
         if (!s_layer.Matches(fb) || area.x != s_drawnArea.x || area.y != s_drawnArea.y || area.w != s_drawnArea.w
             || area.h != s_drawnArea.h)
         {
-            const int radius = view.mode == RotomMode::Ready ? area.h / 2 : RotomRadius;
-            if (!s_layer.Setup(fb, area, radius, s_pixels, PixelBytes))
+            const int radius = badge ? area.h / 2 : RotomRadius;
+            if (!s_layer.Setup(fb, area, radius, pixels, bytes))
                 return false;
             s_drawnArea = area;
             redraw = true;
@@ -549,12 +571,13 @@ namespace OneScreen
             Publish();
         }
         const bool shown = view.mode != RotomMode::None;
-        if (shown && s_pixels == nullptr)
-            s_pixels = new (std::nothrow) u8[PixelBytes];
         if (shown != s_shown)
-            log.push_back(shown ? std::string("rotom: drawing") + (s_pixels == nullptr ? ", NO MEMORY for the layer" : "")
-                                : "rotom: hidden");
-        s_shown = shown && s_pixels != nullptr;
+        {
+            log.push_back(shown ? "rotom: drawing" : "rotom: hidden");
+            log.push_back(UI::ScreenBuffer::HeapLog(shown ? "rotom shown" : "rotom hidden"));
+        }
+        s_shown = shown;
+
     }
 
     bool RotomPromptCommand(const std::string &args, u32 sceneManager, std::vector<std::string> &log)

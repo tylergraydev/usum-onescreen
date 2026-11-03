@@ -137,6 +137,8 @@ py -3 -I tools/instance.py stop a
 py -3 -I tools/instance.py status
 ```
 
+At most 4 instance emulators run at once on the PC, counted across every checkout and worktree: `start` waits for a free slot (set `USUM_EMU_SLOTS` to change the limit, `start --no-queue` to skip the wait). `status` lists every running instance emulator. Your own Azahar is never counted.
+
 `start --no-plugin` turns the 3GX plugin loader off for that run. `start --movie FILE` plays an Azahar input movie, for input without the plugin: `tools/movie.py FILE SECONDS:KEYS ...` writes one (e.g. `25:- 5:l+r+start 300:-`). `docs/SOFT-RESET.md` uses both.
 
 Azahar 2126.2 has no command-line flag or environment variable for its user folder; on Windows it uses a folder named `user` next to `azahar.exe` if there is one (`SetUserPath` in `src/common/file_util.cpp`), else `%APPDATA%\Azahar`. So an instance is `analysis/private/instances/<name>/azahar/`: a copy of `C:\Program Files\Azahar` (~100 MB) plus its own `user\` folder holding:

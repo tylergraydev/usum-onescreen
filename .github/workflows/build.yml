@@ -58,3 +58,24 @@ jobs:
         run: make -C tests
       - name: Scenario files parse
         run: python3 -I tools/scenario.py --check scenarios/*.txt
+
+  # The player app (player/, docs/PLAYER-APP.md). Builds it and checks that
+  # `check` refuses a file that isn't a 3DS dump; no game files are used.
+  launcher:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: dotnet build player/UsumOneScreen.csproj -c Release
+      - name: Refuses a non-ROM file
+        shell: bash
+        run: |
+          set +e
+          out=$(player/bin/Release/net48/UsumOneScreen.exe check player/README.md)
+          code=$?
+          echo "$out"
+          [ "$code" = 1 ] && echo "$out" | grep -q "^refused: README.md: not a 3DS ROM"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: usum-onescreen-app
+          path: player/bin/Release/net48/UsumOneScreen.exe

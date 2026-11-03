@@ -22,6 +22,7 @@ expect-log / reject-log lines, where # is part of the regex). Steps:
                                trailing number is always read as the timeout)
   reject-log REGEX             no log line since the mark matches REGEX
   guard-ignore REGEX            the log guard (below) skips log lines matching REGEX from here on
+  guard-reject REGEX            the log guard also fails on plugin log lines matching REGEX from here on
   check-save                   the real save is unchanged since the run began (also done at the end)
   if-scene SCENE STEP          run the one STEP only if the scene is SCENE now
   include FILE                 the steps of FILE (next to this one, or in scenarios/; .txt optional)
@@ -85,7 +86,8 @@ class Step:
 # op -> (min args, max args); None = the rest of the line is one argument
 ARITY = {"start": (0, 1), "stop": (0, 0), "send": None, "sleep": (1, 1), "shot": (1, 1),
          "wait-scene": (1, 2), "expect-scene": (1, 1), "expect-mode": (1, 2), "mark": (0, 0),
-         "expect-log": None, "reject-log": None, "guard-ignore": None, "check-save": (0, 0), "repeat": (1, 3),
+         "expect-log": None, "reject-log": None, "guard-ignore": None, "guard-reject": None, "check-save": (0, 0),
+         "repeat": (1, 3),
          "include": (1, 1), "if-scene": None, "restore": (1, 1)}
 
 
@@ -133,7 +135,7 @@ def parse_step(text, where):
     elif op == "expect-log":
         m = re.fullmatch(r"(.*?)\s+(\d+(?:\.\d+)?)", rest)
         step.args = [m.group(1), m.group(2)] if m else [rest]
-    if op in ("expect-log", "reject-log", "guard-ignore"):
+    if op in ("expect-log", "reject-log", "guard-ignore", "guard-reject"):
         try:
             re.compile(step.args[0])
         except re.error as e:
@@ -151,7 +153,7 @@ def parse(path, seen=()):
     for lineno, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         # Comments: a line starting with #, or " # ..." after a step (not in a regex step).
         text = raw.strip()
-        if not text.startswith(("expect-log", "reject-log", "guard-ignore")):
+        if not text.startswith(("expect-log", "reject-log", "guard-ignore", "guard-reject")):
             text = re.split(r"(?:^|\s)#", text, maxsplit=1)[0].strip()
         if not text:
             continue
@@ -205,6 +207,7 @@ class Runner:
         self.save = save_fingerprint()
         self.guard = guard
         self.guard_ignore = []
+        self.guard_reject = []
         self.azahar_log = emu.REPO / "analysis" / "private" / "instances" / instance / "azahar" / "user" / "log" / "azahar_log.txt"
         # Only what is logged from here on counts; a start step rewinds both.
         self.azahar_seen = self.azahar_log.stat().st_size if self.azahar_log.is_file() else 0
@@ -259,6 +262,8 @@ class Runner:
         bad = [f"azahar log: {line.strip()}" for line in new.decode(errors="replace").splitlines()
                if AZAHAR_BAD.search(line)]
         bad += [f"plugin log: {m.group(0).strip()}" for m in PLUGIN_BAD.finditer(plugin_new)]
+        for r in self.guard_reject:
+            bad += [f"plugin log: {m.group(0).strip()}" for m in re.finditer(r"^.*(?:" + r + r").*$", plugin_new, re.M)]
         bad = [b for b in bad if not any(re.search(r, b) for r in self.guard_ignore)]
         if bad:
             more = f" (+{len(bad) - 1} more)" if len(bad) > 1 else ""
@@ -335,6 +340,9 @@ class Runner:
                     self.run_step(step.body[0], quiet)
             elif op == "guard-ignore":
                 self.guard_ignore.append(args[0])
+            elif op == "guard-reject":
+                self.guard_reject.append(args[0])
+
             elif op == "check-save":
                 self.check_save()
             elif op == "repeat":
