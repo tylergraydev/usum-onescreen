@@ -38,13 +38,14 @@ Found by static analysis of the local `code.bin` (`tools/extract_code.py`, `tool
 | Quick Link, save dialog | `FieldRo` (field state 4) | X menu → Quick Link; X menu → Y |
 | Festival Plaza | `FieldRo` (field state 4) | X menu → Festival Plaza; a second FieldRo scene object, `JoinFesta` CRO loaded |
 | Poké Mart (Buy list), talking to people | `FieldRo` (field state 0x11) | the clerk in the Route 2 Pokémon Center; `Shop` CRO loaded |
+| Nickname question and keyboard after a catch | `Zukan` (no scene change; the keyboard is the `StrInput` CRO, loaded with Zukan) | wild catches on Route 2; see "Keyboard" below |
 | Loading / transition | (none) | between every scene |
 
 Found by: `vtscan` (plugin: every global heap pointer → first 64 words → objects with a rodata vtable), diffed with `tools/vtdiff.py` across scenes, then `peek` on the manager showed vtables outside the main image, and Azahar's log (`CRO "…" loaded at …`) named the modules.
 
 Default views (`Includes/Settings.hpp`): full where the bottom screen is the whole scene and the top shows little (Party, Box, TownMap, Config, Kawaigari); panel where the top still says something (Status: stats on top, moves below; TrainerPass; BattleVideoPlayer; Zukan; Bag; Battle) and for the X menu; off where the bottom screen is unused (TitleMenu, FieldRo walking, talking, shopping).
 
-Not reached on this save: the nickname keyboard (`StrInput`; no rename without a permanent change), trainer and double battles, Rotom's own menus (Roto Loto, Rotom chat: they only come up when Rotom offers them; not reached), the QR Scanner's screen (Azahar hangs).
+Not reached on this save: other uses of the keyboard (Box names, Name Rater, the player's name), trainer and double battles, Rotom's own menus (Roto Loto, Rotom chat: they only come up when Rotom offers them; not reached), the QR Scanner's screen (Azahar hangs).
 
 **Field state** (`Sources/Scene.cpp` `FieldState()`): the FieldRo scene object (`*(*(0x6A599C))`, vtable `0x7B4F44`) holds an object whose vtable is FieldRo `+0xD735C` (`0x7B635C` with FieldRo at `0x6DF000`). Its offset depends on the map: `+0x618` in the Route 2 Pokémon Center, `+0x3DC` on Route 2 (same scene class; the members before it differ), so the plugin finds it by that vtable in the scene object's first `0x800` bytes (one match in both dumps). Its word at `+4` is 0 while walking, 4 while a bottom-screen menu is up (X menu, Quick Link, save dialog, Festival Plaza's menu; also for a moment while an app Rotom opened starts or closes) and 0x11 while talking or in a shop. Found with `dump` of the scene object, X menu open ×3 vs closed ×3 (only `+0x61C` and `+0x720` differed; `+0x720` stayed 0 after returning from Party with the menu open); checked with the menu closed by B and by touch, after Party/Summary/Options/Pokémon Refresh, in Festival Plaza and after leaving it, at the Poké Mart, and at the PC. Auto panel uses it for `FieldRo.xmenu` and falls back to X/B presses only if it never reads (scenarios `xmenu-touch-close`, and `wild-battle-run` for Route 2). After entering the field it waits until the state holds for 30 frames: coming back from the Town Map it reads 4 for about 20 frames before 0. If the state stops reading, it waits at most 60 frames before falling back to keys. During a wild encounter the state is 30 (0x1E).
 
@@ -92,6 +93,15 @@ Added for the native battle menu (P2-1, `Sources/Battle.cpp`), runtime 2026-11-0
 - **Bag item page.** Bag frame (Bag+`0x16E24`) `+0x6E` u8: 1 while the item list shows, 0 on an item's page (the one with Use). Found by diffing the frame and its child in both states (child `+0x72` flips the same way); checked on the Poké Balls and Status Restore tabs, list → page → list.
 - **Battle party.** `party[0].record[0..count-1]` (same container as above) is the battle's party in battle order, which is what the battle Pokémon list shows; its cursor (`p+0x52`) indexes it.
 - Seen, not an address: the battle Bag's Poké Balls tab lists the Items pocket's balls in pocket order, skipping count-0 slots (Poké Ball, Great Ball, Heal Ball with Premier Ball ×0 left out). The menu names the highlighted ball from that only when the counts agree.
+
+## Keyboard (StrInput, runtime, 2026-11-02)
+
+Full write-up: [KEYBOARD.md](KEYBOARD.md). Read by `Sources/Screens/Keyboard.cpp` (native keyboard) and the `keyboard read` command. StrInput offsets are relative to its module header (loaded at `0x73A000` in these runs, after Zukan `0x6DF000` and TownMapParts `0x72F000`).
+
+- Path after a catch: scene manager stack (`*(0x6A599C) + 0..0x1C`) entry 4 or 5 (Zukan+`0x35114` / Zukan+`0x34E34`) → `+0xB0` Zukan object (Zukan+`0x351F4`) → `+0xB4` keyboard object (StrInput+`0xBFE4`; 0 at the Yes/No question) → `+0x1C` text object (StrInput+`0xBFC0`). The plugin finds it by scanning two levels from the stack entries, not by these offsets.
+- Text object: u16[16] text `+0x30` (♂ `U+E08E`, ♀ `U+E08F`), page `+0x54` (1 QWERTY, 0 grid), shift `+0x5C`, length `+0x60`, limit `+0x64` (12), active `+0x90` (1 up, 0 after OK).
+- Found by searching a heap dump for typed text (UTF-16) and walking pointers back; fields by `peek` after typing, Delete, Shift, the page arrow and OK; the path checked on two catches (the same heap addresses both times). Every QWERTY key tapped with shift off and on and the typed character read back.
+- CRO module links checked: header `+0x88` next, `+0x8C` previous (Zukan → TownMapParts → StrInput; the head's previous is the tail, the tail's next is 0).
 
 ## Party and bag (runtime, 2026-11-02)
 
