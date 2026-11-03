@@ -971,14 +971,15 @@ namespace OneScreen
             s_handedTo.clear();
             s_repeatKey = 0;
             ReadPartyNow(sceneManager);
-            log.push_back(Utils::Format("bag: shown (pocket %s, %u items), ", s_game.tab >= 0 ? BagTabAt(s_game.tab).name : "?",
-                                        (unsigned)s_game.items.size())
-                          + UI::ScreenBuffer::HeapStatus());
+            log.push_back(Utils::Format("bag: shown (pocket %s, %u items)", s_game.tab >= 0 ? BagTabAt(s_game.tab).name : "?",
+                                        (unsigned)s_game.items.size()));
+            log.push_back(UI::ScreenBuffer::HeapLog("bag shown"));
         }
         else if (!shown && s_shown)
         {
             s_driver.Stop();
-            log.push_back("bag: hidden, " + UI::ScreenBuffer::HeapStatus());
+            log.push_back("bag: hidden");
+            log.push_back(UI::ScreenBuffer::HeapLog("bag hidden"));
         }
         s_shown = shown;
         AssetsUpdate(shown, log);

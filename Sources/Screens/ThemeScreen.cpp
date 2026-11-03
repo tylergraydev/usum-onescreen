@@ -9,6 +9,7 @@
 #include "UI/Assets.hpp"
 #include "UI/Device.hpp"
 #include "UI/Layer.hpp"
+#include "UI/ScreenBuffer.hpp"
 #include "UI/ThemeDemo.hpp"
 
 namespace OneScreen
@@ -34,20 +35,29 @@ namespace OneScreen
     // --- OSD callback ---
 
     static UI::Layer s_layer;
-    static std::vector<u8> s_pixels;
+    static const char *const Owner = "theme";   // UI::ScreenBuffer
     static u32 s_drawnVersion = ~0u;
 
     static bool ThemeOnScreen(const Screen &screen)
     {
-        if (!screen.IsTop || !s_shown)
+        if (!screen.IsTop)
+            return false;
+        if (!s_shown)
+        {
+            UI::ScreenBuffer::GiveBack(Owner);
+            return false;
+        }
+        bool fresh = false;
+        u8 *pixels = UI::ScreenBuffer::Borrow(Owner, fresh);
+        if (pixels == nullptr)
             return false;
         UiInitFont();
         const UI::Surface fb = SurfaceFromScreen(screen);
         bool redraw = s_version != s_drawnVersion;
-        if (!s_layer.Matches(fb))
+        if (fresh || !s_layer.Matches(fb))
         {
-            s_pixels.resize(UI::Layer::BytesFor(fb, UI::ThemeDemoArea));
-            if (!s_layer.Setup(fb, UI::ThemeDemoArea, 0, s_pixels.data(), s_pixels.size()))
+            if (!s_layer.Setup(fb, UI::ThemeDemoArea, 0, pixels, UI::ScreenBuffer::Bytes))
+
                 return false;
             redraw = true;
         }
