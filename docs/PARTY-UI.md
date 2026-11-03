@@ -189,7 +189,7 @@ game's does.
 
 `partyui on|off|status` (default on; `status` also says whether it holds
 the shared screen buffer and prints the heap). Log lines:
-`party-ui: shown (SCENE, cursor N); heap ...`,
+`party-ui: shown (SCENE, cursor N)` and `mem: party shown, heap ...`,
 `party-ui: party N: Name L12 27/27 PSN Item, ...` (whenever it changes),
 `party-ui: cursor N (Name)`, `party-ui: page menu|swap|items|ask ...`,
 `party-ui: summary N (Name)` (opening), `party-ui: summary N of M: ...
@@ -202,7 +202,7 @@ tapping row T`, `party-ui: item menu 06 07 11, Use is 3 from the bottom`,
 `party-ui: answer N (label)`, `party-ui: used|no effect:|FAILED ...`,
 `party-ui: gave|kept:|give FAILED: ...`, `party-ui: take ...` / `took ...`,
 `party-ui: ... FAILED: why; back to the Party screen`, `party-ui: follow
-FAILED: ...`, `party-ui: hidden; heap ...`; the actions' own `action: party-... ok` /
+FAILED: ...`, `party-ui: hidden` and `mem: party hidden, heap ...`; the actions' own `action: party-... ok` /
 `FAILED`.
 
 ## Drawing
@@ -242,8 +242,8 @@ gives it back when it doesn't, so the Party screen allocates nothing for its
 drawing. Before that its own 246 KB buffer, kept or freed, ran the heap out
 (freed, it could not be had again with 328 KB free; with Rotom's prompt and
 the X menu's layer also kept, the game stopped with a PANIC as the Party
-screen opened). `party-ui: shown` / `hidden` log the heap
-(`ScreenBuffer::HeapStatus`). The OSD callback is registered
+screen opened). Showing and hiding log the heap
+(`mem: party shown, heap ...`, `ScreenBuffer::HeapLog`). The OSD callback is registered
 before the panel's, so screenshots include it.
 
 ## Tests

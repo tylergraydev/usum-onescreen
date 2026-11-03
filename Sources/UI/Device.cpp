@@ -6,6 +6,7 @@
 #include "UI/Demo.hpp"
 #include "UI/Font.hpp"
 #include "UI/Layer.hpp"
+#include "UI/ScreenBuffer.hpp"
 #include "UI/Text.hpp"
 
 // libctru's shared system font; CTRPF maps it at startup (font.h declares it
@@ -97,9 +98,8 @@ namespace OneScreen
 
     // The demo panel, drawn off-screen when the highlight moves.
     static UI::Layer s_demoLayer;
-    // Allocated by the OSD thread the first time the demo is shown (~215 KB),
-    // so the plugin doesn't carry it when the demo isn't used.
-    static std::vector<u8> s_demoPixels;
+    // Its pixels are UI::ScreenBuffer's while the demo shows.
+    static const char *const DemoOwner = "uidemo";
     static s32 s_demoDrawn = -1;
 
     // Emulated ticks per demo frame, and how many frames re-rendered the
@@ -122,8 +122,13 @@ namespace OneScreen
     bool UiDemoOnScreen(const Screen &screen)
     {
         const UiDemoMode mode = s_demo;
-        if (mode == UiDemoMode::Off || !screen.IsTop)
+        if (!screen.IsTop)
             return false;
+        if (mode == UiDemoMode::Off)
+        {
+            UI::ScreenBuffer::GiveBack(DemoOwner);
+            return false;
+        }
 
         const u64 start = svcGetSystemTick();
         UiInitFont();
@@ -145,12 +150,16 @@ namespace OneScreen
                 UI::Canvas canvas(fb);
                 UI::DrawDemoShade(canvas);
             }
-            if (!s_demoLayer.Matches(fb))
+            bool fresh = false;
+            u8 *pixels = UI::ScreenBuffer::Borrow(DemoOwner, fresh);
+            if (pixels == nullptr)
+                return false;
+            if (fresh || !s_demoLayer.Matches(fb))
             {
-                s_demoPixels.resize(UI::Layer::BytesFor(fb, UI::DemoPanel));
-                s_demoLayer.Setup(fb, UI::DemoPanel, UI::DemoRadius, s_demoPixels.data(), s_demoPixels.size());
+                s_demoLayer.Setup(fb, UI::DemoPanel, UI::DemoRadius, pixels, UI::ScreenBuffer::Bytes);
                 s_demoDrawn = -1;
             }
+
             if (selected != s_demoDrawn)
             {
                 const u64 redraw = svcGetSystemTick();
