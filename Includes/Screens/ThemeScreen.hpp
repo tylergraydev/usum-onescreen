@@ -7,12 +7,12 @@
 
 namespace OneScreen
 {
-    // The USUM theme demo (W6-3): `uitheme on` loads the game's own font,
-    // icons, move table and type names from its RomFS (UI/GameAssets.hpp)
-    // and draws a sample screen with the theme (UI/ThemeDemo.hpp) over the
-    // top screen, filled with the lead Pokémon's real moves and the party.
-    // Nothing else uses the loaded assets yet. See docs/VISUAL-STYLE.md and
-    // docs/GAME-ASSETS.md.
+    // The USUM theme demo (W6-3): `uitheme on` draws a sample screen with
+    // the theme (UI/ThemeDemo.hpp) over the top screen, filled with the lead
+    // Pokémon's real moves and the party. The game's font, icons, move table
+    // and type names come from the shared asset service (UI/Assets.hpp);
+    // `uitheme on` starts its load if the field hasn't yet. See
+    // docs/VISUAL-STYLE.md and docs/GAME-ASSETS.md.
 
     // Registers the OSD callback. Call before StartPanel (screenshots are
     // taken in the panel's callback).
