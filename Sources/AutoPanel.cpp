@@ -2,6 +2,7 @@
 
 #include <CTRPluginFramework.hpp>
 
+#include "FieldSettle.hpp"
 #include "Panel.hpp"
 #include "Scene.hpp"
 #include "Settings.hpp"
@@ -22,12 +23,9 @@ namespace OneScreen
     static bool s_override = false;
     static bool s_menuOpen = false;     // X menu, an overlay inside FieldRo
     static int s_fieldState = -1;       // last FieldState() that worked, -1 if none yet
-    static int s_settle = 0;            // frames the field state must hold before it counts
+    static FieldSettle s_settle;        // the field state must hold before it counts
     static int s_unread = 0;            // frames in a row the field state couldn't be read
 
-    // Coming back to the field from an app Rotom opened (Town Map, Pokédex),
-    // the field state still says 4 for about 20 frames before it drops to 0.
-    static const int FieldSettleFrames = 30;
     // It can't be read for a few frames while the field loads; past this,
     // assume it can't be read here and use keys.
     static const int FieldWaitFrames = 60;
@@ -48,11 +46,11 @@ namespace OneScreen
             if (scene == SceneTitle)
                 s_menuOpen = false;
             if (scene == SceneField)
-                s_settle = FieldSettleFrames;
+                s_settle.Enter();
         }
 
         // The field state says whether the X menu is open. After entering the
-        // field it must hold for FieldSettleFrames first. While the field
+        // field it must hold for FieldSettle::Frames first. While the field
         // loads it can't be read; once it has worked, wait up to
         // FieldWaitFrames for it. Otherwise fall back to keys: X opens and
         // closes the menu, B backs out of it, and closing it by touch isn't
@@ -64,11 +62,9 @@ namespace OneScreen
             if (fieldState >= 0)
             {
                 s_unread = 0;
-                if (s_settle > 0)
-                    s_settle = fieldState == s_fieldState ? s_settle - 1 : FieldSettleFrames;
+                waiting = s_settle.Read(fieldState);
                 s_fieldState = fieldState;
                 s_menuOpen = fieldState == FieldStateMenu;
-                waiting = s_settle > 0;
             }
             else if (s_fieldState >= 0 && s_unread < FieldWaitFrames)
             {

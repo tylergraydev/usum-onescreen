@@ -10,13 +10,17 @@ OUT      := build
 PYTHON   ?= python3
 CODE_BIN ?=
 
-TESTS    := $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/ui_host_test $(OUT)/party_data_test $(OUT)/action_queue_test $(OUT)/xmenu_test $(OUT)/battle_menu_test $(OUT)/keyboard_test $(OUT)/pokedex_test $(OUT)/native_screens_test $(OUT)/bag_test $(OUT)/map_test $(OUT)/party_menu_test $(OUT)/boxes_test
+TESTS    := $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/ui_host_test $(OUT)/party_data_test $(OUT)/action_queue_test $(OUT)/xmenu_test $(OUT)/battle_menu_test $(OUT)/keyboard_test $(OUT)/pokedex_test $(OUT)/native_screens_test $(OUT)/bag_test $(OUT)/map_test $(OUT)/party_menu_test $(OUT)/boxes_test $(OUT)/field_settle_test
 
 all: run
 
 $(OUT)/input_capture_test: input_capture_test.cpp ../Sources/InputCapture.cpp ../Includes/InputCapture.hpp
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) input_capture_test.cpp ../Sources/InputCapture.cpp -o $@
+
+$(OUT)/field_settle_test: field_settle_test.cpp ../Includes/FieldSettle.hpp
+	@mkdir -p $(OUT)
+	$(CXX) $(CXXFLAGS) field_settle_test.cpp -o $@
 
 $(OUT)/settings_test: settings_test.cpp ../Sources/Settings.cpp ../Includes/Settings.hpp
 	@mkdir -p $(OUT)
@@ -98,6 +102,7 @@ $(OUT)/battle_menu_test: battle_menu_test.cpp ../Sources/Screens/BattleMenu.cpp 
 run: $(TESTS)
 	./$(OUT)/input_capture_test
 	./$(OUT)/settings_test
+	./$(OUT)/field_settle_test
 	./$(OUT)/party_data_test
 	./$(OUT)/action_queue_test
 	./$(OUT)/battle_menu_test
