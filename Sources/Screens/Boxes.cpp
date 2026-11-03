@@ -1,7 +1,5 @@
 #include "Screens/Boxes.hpp"
 
-#include <new>
-
 #include <CTRPluginFramework.hpp>
 
 #include "Actions.hpp"
@@ -10,9 +8,11 @@
 #include "Buttons.hpp"
 #include "Panel.hpp"
 #include "Screens/BoxesGrid.hpp"
+#include "UI/Assets.hpp"
 #include "UI/Device.hpp"
 #include "UI/Layer.hpp"
 #include "UI/ScreenBuffer.hpp"
+#include "UI/Theme.hpp"
 
 namespace OneScreen
 {
@@ -60,6 +60,7 @@ namespace OneScreen
     static BoxesView s_view;            // what we show
     static bool s_dirty = false;
     static bool s_haveView = false;
+    static bool s_gameFont = false;     // the game font was loaded at the last publish
     static u32  s_lrKey = 0;            // L or R pressed, acted on when released
     static bool s_lrSpoiled = false;    // ... unless the other one joined in (L+R: panel)
 
@@ -156,6 +157,15 @@ namespace OneScreen
         return none;
     }
 
+    static u8 BallAt(u32 cursor)
+    {
+        if (cursor < BoxSlots)
+            return s_view.slotBalls[cursor];
+        if (cursor < BoxSlots + BoxPartySlots)
+            return s_view.partyBalls[cursor - BoxSlots];
+        return 0;
+    }
+
     // Reads the box on screen and the screen's party.
     static void Refresh(void)
     {
@@ -164,9 +174,17 @@ namespace OneScreen
         s_view.unlocked = storage.valid ? storage.unlocked : 1;
         s_view.boxName = BoxName(storage, s_game.tray);
         for (u32 i = 0; i < BoxSlots; i++)
-            s_view.slots[i] = BoxMonLabel(ReadBoxMon(storage, s_game.tray, i));
+        {
+            const Pk7 mon = ReadBoxMon(storage, s_game.tray, i);
+            s_view.slots[i] = BoxMonLabel(mon);
+            s_view.slotBalls[i] = mon.ball;
+        }
         for (u32 i = 0; i < BoxPartySlots; i++)
-            s_view.party[i] = s_game.partyValid ? BoxMonLabel(ReadParam(s_game.party[i])) : "";
+        {
+            const Pk7 mon = s_game.partyValid ? ReadParam(s_game.party[i]) : Pk7();
+            s_view.party[i] = s_game.partyValid ? BoxMonLabel(mon) : "";
+            s_view.partyBalls[i] = mon.ball;
+        }
         s_refreshedAt = s_frames;
         s_dirty = true;
     }
@@ -220,6 +238,7 @@ namespace OneScreen
         if (command == BoxesCommand::Pick)
         {
             s_view.held = LabelAt(cursor);
+            s_view.heldBall = BallAt(cursor);
             s_view.heldTray = (int)s_game.tray;
             s_view.heldIndex = (int)cursor;
         }
@@ -316,6 +335,9 @@ namespace OneScreen
         {
             s_lrKey = 0;
             s_haveView = false;
+            // The game's font and icons (normally loaded at the first field
+            // already); the screen redraws with them once they are in.
+            UI::RequestAssets();
         }
         if (shown)
         {
@@ -355,6 +377,7 @@ namespace OneScreen
         if (s_game.mode != BoxMode::Carrying && !s_ourAction && s_view.heldIndex >= 0)
         {
             s_view.held.clear();
+            s_view.heldBall = 0;
             s_view.heldTray = s_view.heldIndex = -1;
         }
         if (s_view.cursor != s_game.cursor || s_view.mode != s_game.mode)
@@ -385,6 +408,13 @@ namespace OneScreen
             s_lrKey = 0;
         }
 
+        // Redraw once the game's font and icons have loaded (UI::Theme draws
+        // with them from then on).
+        if (UI::Theme::UsingGameFont() != s_gameFont)
+        {
+            s_gameFont = !s_gameFont;
+            s_dirty = true;
+        }
         Publish();
     }
 

@@ -104,6 +104,7 @@ namespace OneScreen
             mon.pp[i] = plain[0x62 + i];
         }
         mon.isEgg = (Get32(plain, 0x74) >> 30) & 1;
+        mon.ball = plain[0xDC];
 
         if (calc != nullptr)
         {
