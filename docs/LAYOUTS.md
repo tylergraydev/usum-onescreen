@@ -162,6 +162,20 @@ No Z-move or Mega button: this save has no Z-Crystal pocket and the move list ha
 - **Bag**: same item-row layout as the field Bag (row 1 at 235,16 verified: opens the item page). Five pockets, 42 px wide from x 106, y 216-239, tap x 127+42k, y 228: Rotom Powers, HP/PP Restore, status restore, Poké Balls, battle items (all verified). Back 15,224 (verified).
 - **Item page**: Use 182,222 (~65,208-300,236; verified on the Poké Balls pocket only, where it throws the ball: W5-1's catches. Other items are still never used); ◀ 18,81 and ▶ 301,81 switch between items in the pocket (verified; 306,95 misses); back 15,224 (verified).
 
+## Move learning (`Battle`)
+
+After a level-up with four moves known (W6-1, docs/MOVE-LEARN.md). Seen with Buneary in instance `w61`.
+
+| Screen | Button | Rect | Tap | Does | Verified |
+|---|---|---|---|---|---|
+| question | Forget an old move | 8,74-306,102 | 160,88 | opens the forget screen | tap (the native screen's action) |
+| question | Keep old moves! | 8,139-306,167 | 160,153 | gives up the new move | measured (screenshot) |
+| forget screen | move 1-4 | 165,3-318,40 / 47-83 / 90-126 / 133-169 | 245, 22 / 70 / 108 / 151 | opens that move's page (doesn't forget yet) | tap, all four (pages of Defense Curl, Splash, Pound, Foresight) |
+| forget screen | new move | 165,186-318,226 | 245,208 | opens its page: *Give up on learning the move* | tap |
+| forget screen | back | 0,210-32,239 | 16,222 | back | none |
+| move page | Forget this move / Give up on learning the move | 12,150-306,180 | 160,165 | forgets the move (or gives up the new one) | tap, both (*Buneary forgot how to use Splash*; *Buneary did not learn Baby-Doll Eyes*) |
+| move page | Return to the move-selection screen | 12,184-306,212 | 160,197 | back to the list, cursor on that row | tap |
+
 ## Keyboard (`StrInput`, any scene; seen over `Zukan`)
 
 Reached by Yes to the nickname question after a catch (W5-1, [KEYBOARD.md](KEYBOARD.md)). The QWERTY page it opens on, every key verified by a tap with shift off and on (the typed character read back from the game's text object):
