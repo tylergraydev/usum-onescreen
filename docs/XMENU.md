@@ -161,9 +161,12 @@ native menu has both pages and Map side by side, so labels sit inside the
 pills. The game's page dots and "NEW" badges are not shown.
 
 One `UI::Layer` over `XMenuArea` (376x224 at 12,8), redrawn only when the
-cursor or state changes and copied every frame (`docs/UI.md`). Its buffer
-(337 KB at most) is allocated the first time the menu shows. The OSD callback
-is registered before the panel's, so screenshots (`tools/shot.py`) include it.
+cursor or state changes (or the game font arrives) and copied every frame
+(`docs/UI.md`). It draws in the shared screen buffer
+(`UI/ScreenBuffer.hpp`): borrowed in the OSD callback while the menu shows,
+given back when it hides; if another screen holds it, the menu waits a
+frame. `xmenu: shown` and `xmenu: hidden` log the heap. The OSD callback is
+registered before the panel's, so screenshots (`tools/shot.py`) include it.
 
 ## Tests
 
