@@ -14,6 +14,7 @@
 #include "Panel.hpp"
 #include "Party.hpp"
 #include "Scene.hpp"
+#include "Screens/BattleScreen.hpp"
 #include "Screens/XMenu.hpp"
 #include "Settings.hpp"
 #include "Shot.hpp"
@@ -114,6 +115,8 @@ namespace CTRPluginFramework
     //     menu would; on adds, off removes; no list = everything)
     //   action NAME | action status | action cancel | action list   (drive the bottom
     //     screen: open-pokedex, open-party, open-bag, battle-run, close; Actions.hpp)
+    //   battleui on | battleui off | battleui   (native battle menu on the top screen,
+    //     Screens/BattleScreen.hpp; on by default)
     //   xmenu on|off|status | xmenu select NAME | xmenu open NAME   (native X menu,
     //     Screens/XMenu.hpp; NAME as in XMenuGrid.cpp: pokemon, pokedex, ..., map, save)
     static const char *CommandPath = "/usum-cmd.txt";
@@ -259,6 +262,10 @@ namespace CTRPluginFramework
         }
         else if (line == "uifont")
             WriteLog(OneScreen::UiFontInfo(), false);
+        else if (line == "battleui on" || line == "battleui off")
+            OneScreen::BattleScreenSetEnabled(line == "battleui on");
+        else if (line == "battleui")
+            WriteLog(OneScreen::BattleScreenStatus(), false);
         else if (line == "auto on" || line == "auto off")
             OneScreen::AutoPanelSetEnabled(line == "auto on");
         else if (line == "perf on" || line == "perf off")
@@ -434,6 +441,11 @@ namespace CTRPluginFramework
             }
         }
 
+        std::vector<std::string> battleLog;
+        OneScreen::BattleScreenUpdate(s_game->offsets.sceneManager, scene, battleLog);
+        for (const std::string &line : battleLog)
+            WriteLog(line, false);
+
         const int fieldState = scene == "FieldRo" ? OneScreen::FieldState(s_game->offsets.sceneManager) : -1;
         if (OneScreen::AutoPanelUpdate(scene, OneScreen::ButtonsGameHeld(), fieldState))
             WriteLog(OneScreen::AutoPanelStatus() + " -> " + OneScreen::PanelStatus(), false);
@@ -536,6 +548,7 @@ namespace CTRPluginFramework
 
         LoadSettings();
 
+        OneScreen::BattleScreenSetEnabled(true);
         // Before the panel: its callback takes the screenshots, so it must
         // run after the native menus have drawn.
         OneScreen::StartXMenu();
