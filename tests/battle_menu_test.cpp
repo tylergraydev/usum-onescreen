@@ -596,7 +596,9 @@ static void TestBag(void)
     CHECK(game.snap.bagPick && !menu.Busy());
     CHECK(game.taps.size() == 4 && game.taps[0] == "bag.item_row1" && game.taps[1] == "battle_bag_item_page.next_item"
           && game.taps[3] == "battle_bag_item_page.use");
-    CHECK(menu.Status(game.snap).find("pick 0 of 6 (Torracat)") != std::string::npos);
+    // The cursor starts on the first Pokémon it would help (Zorua).
+    CHECK(menu.Status(game.snap).find("pick 1 of 6 (Zorua 20/37)") != std::string::npos);
+    game.Frame(menu, BattleKeys::DUp);
     game.Frame(menu, BattleKeys::A);
     CHECK(menu.Note() == "It won't have any effect." && !menu.Busy());
     game.Frame(menu, BattleKeys::DDown);
@@ -704,6 +706,49 @@ static void TestQuestion(void)
     CHECK(run.answer == 1);
 }
 
+// The target choice (never seen in the game: no double or SOS battle in
+// the save): a game screen right after a move is the target screen; its
+// buttons are only measured, so a choice says to use the bottom screen.
+static void TestTarget(void)
+{
+    BattleSnapshot snap = MovesSnap();
+    BattleMenu menu;
+    menu.Update(snap, 0);
+    Idle(menu, snap, BattleMenu::MovesSettleFrames);
+    CHECK(menu.Update(snap, BattleKeys::A).action != nullptr);
+    BattleSnapshot gap = snap;
+    gap.menu = GameMenu::None;
+    Idle(menu, gap, 20);
+    BattleSnapshot target = snap;
+    target.menu = GameMenu::Other;
+    target.otherVtable = 0x10C000;
+    const BattleMenuOutput out = menu.Update(target, 0);
+    CHECK(menu.Page() == BattlePage::Target && out.capture && menu.Visible());
+    CHECK(menu.Area().y >= 36 && menu.Area().x >= 166);
+    menu.Update(target, BattleKeys::DRight);
+    CHECK(menu.Cursor() == 1);
+    menu.Update(target, BattleKeys::DDown);
+    CHECK(menu.Cursor() == 3);
+    CHECK(menu.Status(target).find("Bottom right") != std::string::npos);
+    Idle(menu, target, BattleMenu::ListSettleFrames + BattleMenu::StepSettleFrames);
+    menu.Update(target, BattleKeys::A);
+    BattleMenuOutput step;
+    for (u32 i = 0; i < 60 && step.tap == nullptr; i++)
+        step = menu.Update(target, 0);
+    CHECK(step.tap == nullptr && !menu.Busy());
+    CHECK(menu.Note() == "Not tried in the game yet: use the bottom screen");
+    for (u8 i = 0; i < TargetCount; i++)
+        CHECK(FindLayoutButton(TargetButton(i)) != nullptr);
+    CHECK(FindLayoutButton("battle_target.back") != nullptr);
+
+    // The same screen with no move sent lately (an intro object, a prompt):
+    // the helper, as before.
+    BattleMenu other;
+    other.Update(target, 0);
+    CHECK(other.Page() == BattlePage::Game);
+    Idle(menu, snap, 1);
+}
+
 // Every step the menu can send is a known, verified button (one, Run,
 // is measured only: docs/LAYOUTS.md).
 static void TestButtons(void)
@@ -801,6 +846,7 @@ int main(int argc, char **argv)
     TestParty();
     TestBag();
     TestQuestion();
+    TestTarget();
     TestButtons();
     TestDrawing();
     if (s_failures != 0)
