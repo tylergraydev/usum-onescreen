@@ -146,6 +146,18 @@ namespace OneScreen
         }
     }
 
+    bool XMenuOpensNative(int index)
+    {
+        static const char *const native[] = { "options", "trainer_passport", "battle_video" };
+        const std::vector<XMenuEntry> &entries = XMenuEntries();
+        if (index < 0 || index >= (int)entries.size())
+            return false;
+        for (const char *name : native)
+            if (std::string(entries[index].name) == name)
+                return true;
+        return false;
+    }
+
     static std::vector<ActionDef> MakeXMenuActions(void)
     {
         const std::vector<XMenuEntry> &entries = XMenuEntries();
@@ -215,6 +227,19 @@ namespace OneScreen
     {
         static const std::vector<ActionDef> actions = MakeXMenuActions();
         return actions[index < 0 || index >= (int)actions.size() ? 0 : index];
+    }
+
+    const char *XMenuNativeScreen(int index)
+    {
+        return index >= 0 && index == XMenuFind("pokedex") ? "pokedex" : nullptr;
+    }
+
+    const ActionDef &XMenuCloseAction(void)
+    {
+        static const ActionDef def = {
+            "xmenu-close", "X menu: B (close)", InScene(SceneField).With(WorldXMenu),
+            { StepPress(ActionKeyB), StepWaitFor(InScene(SceneField).Without(WorldXMenu), 60) } };
+        return def;
     }
 
     // --- Drawing ---
@@ -319,6 +344,9 @@ namespace OneScreen
         }
         else if (view.cursor >= 0 && view.cursor < (int)entries.size() && !Enabled(view.enabled, view.cursor))
             text = "Not available here: use the bottom screen (panel)";
+        else if (view.cursor >= 0 && view.cursor < (int)entries.size() && entries[view.cursor].opens != nullptr
+                 && !XMenuOpensNative(view.cursor))
+            text = "A Open (bottom screen: L+R)    B Close    Y Save";
         UI::DrawText(canvas, text, footer, hint);
     }
 }

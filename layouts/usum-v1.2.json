@@ -46,6 +46,66 @@
       },
       "notes": ["row colour is fixed per row, not a selection highlight; the red arrow is the cursor", "rows 2-4 are locked (blank) in this save"]
     },
+    "box": {
+      "scene": "Box",
+      "reach": "field: A at a Pokemon Center PC (start point pc). Box view, nothing held, no menu (docs/RE6-boxes.md)",
+      "buttons": {
+        "slot_0": {"rect": [8, 58, 39, 86], "tap": [24, 72], "does": "box slot 0 (row 0, column 0): cursor 0; opens box_menu if a Pokemon is there; while holding one, drops it here (swaps with one already there)", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 tap1, tapdrop, sw1"},
+        "slot_1": {"rect": [40, 58, 71, 86], "tap": [56, 72], "does": "box slot 1 (row 0, column 1): cursor 1; opens box_menu if a Pokemon is there; while holding one, drops it here (swaps with one already there)", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 tap1, tapdrop, sw1"},
+        "slot_2": {"rect": [72, 58, 103, 86], "tap": [88, 72], "does": "box slot 2 (row 0, column 2): cursor 2; opens box_menu if a Pokemon is there; while holding one, drops it here (swaps with one already there)", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 tap1, tapdrop, sw1"},
+        "slot_3": {"rect": [104, 58, 135, 86], "tap": [120, 72], "does": "box slot 3 (row 0, column 3): cursor 3; opens box_menu if a Pokemon is there; while holding one, drops it here (swaps with one already there)", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 tap1, tapdrop, sw1"},
+        "slot_4": {"rect": [136, 58, 167, 86], "tap": [152, 72], "does": "box slot 4 (row 0, column 4): cursor 4; opens box_menu if a Pokemon is there; while holding one, drops it here (swaps with one already there)", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 tap1, tapdrop, sw1"},
+        "slot_5": {"rect": [168, 58, 199, 86], "tap": [184, 72], "does": "box slot 5 (row 0, column 5): cursor 5; opens box_menu if a Pokemon is there; while holding one, drops it here (swaps with one already there)", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 tap1, tapdrop, sw1"},
+        "slot_6": {"rect": [8, 87, 39, 115], "tap": [24, 101], "does": "box slot 6 (row 1, column 0): cursor 6; opens box_menu if a Pokemon is there; while holding one, drops it here (swaps with one already there)", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 tap1, tapdrop, sw1"},
+        "slot_7": {"rect": [40, 87, 71, 115], "tap": [56, 101], "does": "box slot 7 (row 1, column 1): cursor 7; opens box_menu if a Pokemon is there; while holding one, drops it here (swaps with one already there)", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 tap1, tapdrop, sw1"},
+        "slot_8": {"rect": [72, 87, 103, 115], "tap": [88, 101], "does": "box slot 8 (row 1, column 2): cursor 8; opens box_menu if a Pokemon is there; while holding one, drops it here (swaps with one already there)", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 tap1, tapdrop, sw1"},
+        "slot_9": {"rect": [104, 87, 135, 115], "tap": [120, 101], "does": "box slot 9 (row 1, column 3): cursor 9; opens box_menu if a Pokemon is there; while holding one, drops it here (swaps with one already there)", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 tap1, tapdrop, sw1"},
+        "slot_10": {"rect": [136, 87, 167, 115], "tap": [152, 101], "does": "box slot 10 (row 1, column 4): cursor 10; opens box_menu if a Pokemon is there; while holding one, drops it here (swaps with one already there)", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 tap1, tapdrop, sw1"},
+        "slot_11": {"rect": [168, 87, 199, 115], "tap": [184, 101], "does": "box slot 11 (row 1, column 5): cursor 11; opens box_menu if a Pokemon is there; while holding one, drops it here (swaps with one already there)", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 tap1, tapdrop, sw1"},
+        "slot_12": {"rect": [8, 116, 39, 144], "tap": [24, 130], "does": "box slot 12 (row 2, column 0): cursor 12; opens box_menu if a Pokemon is there; while holding one, drops it here (swaps with one already there)", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 tap1, tapdrop, sw1"},
+        "slot_13": {"rect": [40, 116, 71, 144], "tap": [56, 130], "does": "box slot 13 (row 2, column 1): cursor 13; opens box_menu if a Pokemon is there; while holding one, drops it here (swaps with one already there)", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 tap1, tapdrop, sw1"},
+        "slot_14": {"rect": [72, 116, 103, 144], "tap": [88, 130], "does": "box slot 14 (row 2, column 2): cursor 14; opens box_menu if a Pokemon is there; while holding one, drops it here (swaps with one already there)", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 tap1, tapdrop, sw1"},
+        "slot_15": {"rect": [104, 116, 135, 144], "tap": [120, 130], "does": "box slot 15 (row 2, column 3): cursor 15; opens box_menu if a Pokemon is there; while holding one, drops it here (swaps with one already there)", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 tap1, tapdrop, sw1"},
+        "slot_16": {"rect": [136, 116, 167, 144], "tap": [152, 130], "does": "box slot 16 (row 2, column 4): cursor 16; opens box_menu if a Pokemon is there; while holding one, drops it here (swaps with one already there)", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 tap1, tapdrop, sw1"},
+        "slot_17": {"rect": [168, 116, 199, 144], "tap": [184, 130], "does": "box slot 17 (row 2, column 5): cursor 17; opens box_menu if a Pokemon is there; while holding one, drops it here (swaps with one already there)", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 tap1, tapdrop, sw1"},
+        "slot_18": {"rect": [8, 145, 39, 173], "tap": [24, 159], "does": "box slot 18 (row 3, column 0): cursor 18; opens box_menu if a Pokemon is there; while holding one, drops it here (swaps with one already there)", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 tap1, tapdrop, sw1"},
+        "slot_19": {"rect": [40, 145, 71, 173], "tap": [56, 159], "does": "box slot 19 (row 3, column 1): cursor 19; opens box_menu if a Pokemon is there; while holding one, drops it here (swaps with one already there)", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 tap1, tapdrop, sw1"},
+        "slot_20": {"rect": [72, 145, 103, 173], "tap": [88, 159], "does": "box slot 20 (row 3, column 2): cursor 20; opens box_menu if a Pokemon is there; while holding one, drops it here (swaps with one already there)", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 tap1, tapdrop, sw1"},
+        "slot_21": {"rect": [104, 145, 135, 173], "tap": [120, 159], "does": "box slot 21 (row 3, column 3): cursor 21; opens box_menu if a Pokemon is there; while holding one, drops it here (swaps with one already there)", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 tap1, tapdrop, sw1"},
+        "slot_22": {"rect": [136, 145, 167, 173], "tap": [152, 159], "does": "box slot 22 (row 3, column 4): cursor 22; opens box_menu if a Pokemon is there; while holding one, drops it here (swaps with one already there)", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 tap1, tapdrop, sw1"},
+        "slot_23": {"rect": [168, 145, 199, 173], "tap": [184, 159], "does": "box slot 23 (row 3, column 5): cursor 23; opens box_menu if a Pokemon is there; while holding one, drops it here (swaps with one already there)", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 tap1, tapdrop, sw1"},
+        "slot_24": {"rect": [8, 174, 39, 202], "tap": [24, 188], "does": "box slot 24 (row 4, column 0): cursor 24; opens box_menu if a Pokemon is there; while holding one, drops it here (swaps with one already there)", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 tap1, tapdrop, sw1"},
+        "slot_25": {"rect": [40, 174, 71, 202], "tap": [56, 188], "does": "box slot 25 (row 4, column 1): cursor 25; opens box_menu if a Pokemon is there; while holding one, drops it here (swaps with one already there)", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 tap1, tapdrop, sw1"},
+        "slot_26": {"rect": [72, 174, 103, 202], "tap": [88, 188], "does": "box slot 26 (row 4, column 2): cursor 26; opens box_menu if a Pokemon is there; while holding one, drops it here (swaps with one already there)", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 tap1, tapdrop, sw1"},
+        "slot_27": {"rect": [104, 174, 135, 202], "tap": [120, 188], "does": "box slot 27 (row 4, column 3): cursor 27; opens box_menu if a Pokemon is there; while holding one, drops it here (swaps with one already there)", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 tap1, tapdrop, sw1"},
+        "slot_28": {"rect": [136, 174, 167, 202], "tap": [152, 188], "does": "box slot 28 (row 4, column 4): cursor 28; opens box_menu if a Pokemon is there; while holding one, drops it here (swaps with one already there)", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 tap1, tapdrop, sw1"},
+        "slot_29": {"rect": [168, 174, 199, 202], "tap": [184, 188], "does": "box slot 29 (row 4, column 5): cursor 29; opens box_menu if a Pokemon is there; while holding one, drops it here (swaps with one already there)", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 tap1, tapdrop, sw1"},
+        "party_0": {"rect": [216, 57, 261, 96], "tap": [238, 76], "does": "party slot 0 (cursor 30; the game compacts the party, so empty slots are at the end); as box slots", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 pmenu, pdrop"},
+        "party_1": {"rect": [266, 77, 311, 116], "tap": [288, 96], "does": "party slot 1 (cursor 31; the game compacts the party, so empty slots are at the end); as box slots", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 pmenu, pdrop"},
+        "party_2": {"rect": [216, 102, 261, 141], "tap": [238, 121], "does": "party slot 2 (cursor 32; the game compacts the party, so empty slots are at the end); as box slots", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 pmenu, pdrop"},
+        "party_3": {"rect": [266, 122, 311, 161], "tap": [288, 141], "does": "party slot 3 (cursor 33; the game compacts the party, so empty slots are at the end); as box slots", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 pmenu, pdrop"},
+        "party_4": {"rect": [216, 147, 261, 186], "tap": [238, 166], "does": "party slot 4 (cursor 34; the game compacts the party, so empty slots are at the end); as box slots", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 pmenu, pdrop"},
+        "party_5": {"rect": [266, 167, 311, 206], "tap": [288, 186], "does": "party slot 5 (cursor 35; the game compacts the party, so empty slots are at the end); as box slots", "verified": "tap", "evidence": "p26 taptest: a tap moved the game cursor (BoxLowBgDraw +0xDC) to this index; an occupied slot also opened box_menu; re6 pmenu, pdrop"},
+        "prev_box": {"rect": [6, 33, 20, 49], "tap": [13, 41], "does": "previous box (Box 1 wraps to the last unlocked box)", "verified": "tap", "evidence": "re6 boxl (Box 1 -> Box 8, tray 0 -> 7)"},
+        "next_box": {"rect": [184, 33, 198, 49], "tap": [191, 41], "does": "next box", "verified": "tap", "evidence": "re6 box2t (Box 1 -> Box 2, tray 0 -> 1); L/R do not change boxes"},
+        "box_list": {"rect": [56, 206, 140, 239], "tap": [95, 222], "does": "all-boxes view (cursor 38)", "verified": "measured", "why": "not needed by the native screen; not tapped"},
+        "back": {"rect": [0, 214, 31, 239], "tap": [16, 226], "does": "leaves the PC (as B: straight to the field, no save question on this save)", "verified": "measured", "why": "B is used instead; not tapped"}
+      },
+      "notes": ["slot rects are the 32x29 grid cells around the icons, measured from screenshots; taps at the cell centres were verified for all 36 slots", "cursor indices: 0-29 box slots, 30-35 party, 36 box name, 38 the box list button (docs/RE6-boxes.md)"]
+    },
+    "box_menu": {
+      "scene": "Box",
+      "reach": "box: tap (or A on) an occupied slot",
+      "buttons": {
+        "move": {"rect": [212, 32, 310, 56], "tap": [265, 44], "does": "picks the Pokemon up (BoxNormalState::DInnerPokeMoveListener); tap a slot to drop it", "verified": "tap", "evidence": "re6 tapmove, pheld"},
+        "summary": {"rect": [212, 60, 310, 84], "tap": [265, 72], "does": "the Summary", "verified": "measured", "why": "not needed: the top screen already shows the Pokemon"},
+        "held_item": {"rect": [212, 88, 310, 112], "tap": [265, 100], "does": "held item menu", "verified": "measured", "why": "would change the game"},
+        "marking": {"rect": [212, 116, 310, 140], "tap": [265, 128], "does": "markings", "verified": "measured", "why": "would change the game"},
+        "release": {"rect": [212, 144, 310, 168], "tap": [265, 156], "does": "release", "verified": "measured", "why": "never: would delete a Pokemon"},
+        "cancel": {"rect": [212, 172, 310, 196], "tap": [265, 184], "does": "closes the menu (as B)", "verified": "tap", "evidence": "re6 cancel test: listener back to DInnerNormalListener"}
+      },
+      "notes": ["entry rects measured from the screenshot s0a (row pitch 28); the red arrow cursor starts on Move"]
+    },
     "xmenu": {
       "scene": "FieldRo (overlay)",
       "reach": "field: press X. The cursor remembers its last entry.",
@@ -99,7 +159,7 @@
       "reach": "Party: tap a slot",
       "buttons": {
         "summary": {"rect": [215, 123, 315, 145], "tap": [266, 134], "does": "Summary (scene Status); back (15,223) returns to Party", "verified": "tap", "evidence": "re5-party-summary, re5-summary-back"},
-        "restore": {"rect": [215, 151, 315, 173], "tap": [266, 162], "does": "Restore (label on the button; not tried)", "verified": "measured", "why": "not needed; avoided game-state actions"},
+        "restore": {"rect": [215, 151, 315, 173], "tap": [266, 162], "does": "Restore: the Bag (scene main:006488C8) for this Pokemon, on the pocket it showed last; back (15,224) returns to Party", "verified": "tap", "evidence": "p23-restore (Zorua, Medicine), p23-r1 (Pichu)"},
         "held_item": {"rect": [215, 179, 315, 201], "tap": [266, 190], "does": "Held Item submenu", "verified": "measured", "why": "avoided item changes"},
         "back": {"rect": [215, 207, 315, 229], "tap": [266, 218], "does": "closes the slot menu", "verified": "tap", "evidence": "re5-party-sub-back"}
       },
@@ -111,10 +171,10 @@
       "buttons": {
         "item_row1": {"rect": [157, 4, 315, 29], "tap": [235, 16], "does": "opens the item menu for the 1st visible row", "verified": "tap", "evidence": "re5-bag-row-y16 (Awakening, list scrolled)"},
         "item_row2": {"rect": [157, 32, 315, 57], "tap": [235, 44], "does": "item menu, row 2", "verified": "tap", "evidence": "re5-bag-row2 (Paralyze Heal)"},
-        "item_row3": {"rect": [157, 60, 315, 85], "tap": [235, 72], "does": "item menu, row 3", "verified": "measured", "why": "same 28 px pitch as the tapped rows 1, 2, 4, 7"},
+        "item_row3": {"rect": [157, 60, 315, 85], "tap": [235, 72], "does": "item menu, row 3", "verified": "tap", "evidence": "p24 pball (Items: Poke Ball menu); p23-row72 (Awakening, Restore bag)"},
         "item_row4": {"rect": [157, 88, 315, 113], "tap": [235, 100], "does": "item menu, row 4", "verified": "tap", "evidence": "re5-bag-row-y100 (Ice Heal)"},
-        "item_row5": {"rect": [157, 116, 315, 141], "tap": [235, 128], "does": "item menu, row 5", "verified": "measured", "why": "same pitch"},
-        "item_row6": {"rect": [157, 144, 315, 169], "tap": [235, 156], "does": "item menu, row 6", "verified": "measured", "why": "same pitch"},
+        "item_row5": {"rect": [157, 116, 315, 141], "tap": [235, 128], "does": "item menu, row 5", "verified": "tap", "evidence": "p24 row5 (Medicine: Burn Heal menu, item 19); p23-row128 (Burn Heal, Restore bag)"},
+        "item_row6": {"rect": [157, 144, 315, 169], "tap": [235, 156], "does": "item menu, row 6", "verified": "tap", "evidence": "p24 row6 (Medicine: Ice Heal menu, item 20); p23-row156 (Ice Heal, Restore bag)"},
         "item_row7": {"rect": [157, 172, 315, 197], "tap": [235, 184], "does": "item menu, row 7", "verified": "tap", "evidence": "re5-bag-row-y184 (Fresh Water)"},
         "item_row8_partial": {"rect": [157, 200, 315, 212], "tap": [235, 210], "does": "nothing (half-visible row)", "verified": "none", "evidence": "re5-bag-partial"},
         "pocket_rotom_powers": {"rect": [122, 216, 145, 239], "tap": [134, 230], "does": "Rotom Powers pocket", "verified": "tap", "evidence": "re5-bag-tab0 (top: Rotom Powers)"},
@@ -138,12 +198,48 @@
       "scene": "main:006488C8",
       "reach": "Bag: tap an item row",
       "buttons": {
-        "use": {"rect": [161, 125, 316, 150], "tap": [236, 138], "does": "Use this item", "verified": "measured", "why": "rules: never confirm item use"},
-        "give": {"rect": [161, 153, 316, 178], "tap": [236, 166], "does": "Give to Pokemon", "verified": "measured", "why": "changes held items"},
-        "move_to_free_space": {"rect": [161, 181, 316, 206], "tap": [236, 194], "does": "Move to Free Space", "verified": "measured", "why": "changes the bag"},
-        "cancel": {"rect": [161, 209, 316, 236], "tap": [236, 222], "does": "closes the item menu", "verified": "tap", "evidence": "re5-bag-cancel"}
+        "from_bottom1": {"rect": [161, 209, 316, 236], "tap": [236, 222], "does": "last entry: Cancel (closes the item menu)", "verified": "tap", "evidence": "re5-bag-cancel; p24 menu1 -> list (frame +0x54 back to 0)"},
+        "from_bottom2": {"rect": [161, 181, 316, 206], "tap": [236, 194], "does": "2nd from the bottom: Move to Free Space in every menu seen", "verified": "measured", "why": "changes the bag (Free Space); not needed by the native Bag"},
+        "from_bottom3": {"rect": [161, 153, 316, 178], "tap": [236, 166], "does": "3rd from the bottom: Give (Potion, Escape Rope, Quick Claw, Oran Berry), Use (TMs)", "verified": "tap", "evidence": "p24 g1 (Quick Claw, 3 entries: Give -> Which Pokemon), p24 Escape Rope (4 entries: Give)"},
+        "from_bottom4": {"rect": [161, 125, 316, 150], "tap": [236, 138], "does": "4th from the bottom: Use in 4-entry menus (Medicine, Escape Rope, Oran Berry)", "verified": "tap", "evidence": "p24 use1 (Potion: Use -> 'Which Pokemon do you want to use this item on?')"},
+        "from_bottom5": {"rect": [161, 97, 316, 122], "tap": [236, 110], "does": "5th from the bottom: no 5-entry menu seen", "verified": "measured", "why": "same 28 px pitch; never seen"}
       },
-      "notes": ["entries depend on the item (this is the Medicine list); 28 px pitch"]
+      "notes": [
+        "The menu grows upwards from Cancel, so entries are named by position from the bottom. Its entries are in the Bag param (docs/BAG.md): Use 0x00, Give 0x03, Move to Free Space 0x04, Cancel 0x11.",
+        "Seen: Medicine/Escape Rope/Oran Berry Use, Give, Free Space, Cancel; Poke Ball/Quick Claw/Roto Boost Give, Free Space, Cancel; TM Use, Free Space, Cancel; Z-Power Ring Free Space, Cancel."
+      ]
+    },
+    "bag_yes_no": {
+      "scene": "main:006488C8",
+      "reach": "Bag: Give to a Pokemon that holds an item, A on 'X is already holding Y.'",
+      "buttons": {
+        "yes": {"rect": [206, 94, 310, 120], "tap": [258, 107], "does": "Yes: switches the items ('You took the Pokemon's Quick Claw and gave it the Escape Rope.')", "verified": "tap", "evidence": "p24 g5 -> g6"},
+        "no": {"rect": [206, 122, 310, 148], "tap": [258, 135], "does": "No: back to the list, the held item stays (no message)", "verified": "tap", "evidence": "p24 q1 -> q2 (Poke Ball to Pichu holding Quick Claw)"}
+      },
+      "notes": ["'Would you like to switch the two items?' Same menu object as the item menu, entries 0x12 Yes, 0x13 No."]
+    },
+    "bag_party": {
+      "scene": "main:006488C8",
+      "reach": "Bag: Use or Give ('Which Pokemon do you want to use this item on?')",
+      "buttons": {
+        "slot1": {"rect": [0, 4, 150, 33], "tap": [70, 18], "does": "party slot 1: the first tap moves the cursor there, a tap on the slot under the cursor chooses it", "verified": "tap", "evidence": "p24 s6 run (party cursor 3 -> 0)"},
+        "slot2": {"rect": [0, 36, 150, 65], "tap": [70, 50], "does": "party slot 2 (cursor, then choose)", "verified": "tap", "evidence": "p24 use2 (cursor to Zorua), use3 (Potion on Zorua: 'It won't have any effect.')"},
+        "slot3": {"rect": [0, 68, 150, 97], "tap": [70, 82], "does": "party slot 3", "verified": "tap", "evidence": "p24 k2 (cursor to Pikipek, party cursor 2)"},
+        "slot4": {"rect": [0, 100, 150, 129], "tap": [70, 114], "does": "party slot 4", "verified": "tap", "evidence": "p24 pk3, g2 (Quick Claw given to Pichu)"},
+        "slot5": {"rect": [0, 132, 150, 161], "tap": [70, 146], "does": "party slot 5", "verified": "tap", "evidence": "p24 s6 run (party cursor 0 -> 4)"},
+        "slot6": {"rect": [0, 164, 150, 193], "tap": [70, 178], "does": "party slot 6", "verified": "tap", "evidence": "p24 s6 (Buneary under the cursor, party cursor 5)"}
+      },
+      "notes": ["The party column is in party order. The cursor starts on slot 1 each time; the slot under it is drawn larger."]
+    },
+    "restore_item_menu": {
+      "scene": "main:006488C8",
+      "reach": "Party: slot -> Restore -> tap an item row (\"What would you like to do with the Potion and Pichu?\")",
+      "buttons": {
+        "use": {"rect": [177, 155, 313, 178], "tap": [245, 166], "does": "uses the item on that Pokemon; a message (\"Pichu's HP was restored by 9 points.\" / \"It won't have any effect.\") stays until A or B, then the item list", "verified": "tap", "evidence": "p23-use (no effect), p23-r31 (Potion 18 -> 27 HP)"},
+        "give": {"rect": [178, 183, 313, 206], "tap": [245, 194], "does": "Give to Pokemon", "verified": "measured", "why": "changes held items"},
+        "cancel": {"rect": [178, 211, 313, 236], "tap": [245, 222], "does": "closes the item menu", "verified": "measured", "why": "B was used instead"}
+      },
+      "notes": ["3 entries (the field Bag's item menu has 4); 28 px pitch; B closes it"]
     },
     "battle_command": {
       "scene": "Battle",
@@ -217,11 +313,76 @@
       "scene": "Battle",
       "reach": "battle_bag: tap an item row",
       "buttons": {
-        "use": {"rect": [65, 208, 300, 236], "tap": [182, 222], "does": "Use; rect approximate (inner fill measured 72-291 x 225-230, column scan 208-235)", "verified": "measured", "why": "rules: never confirm item use"},
+        "use": {"rect": [65, 208, 300, 236], "tap": [182, 222], "does": "Use; rect approximate (inner fill measured 72-291 x 225-230, column scan 208-235). On a Poke Ball's page it throws the ball", "verified": "tap", "evidence": "w51-ball -> Use threw the Poke Ball (W5-1 catches, scenarios/native-nickname.txt); other items still never used"},
         "prev_item": {"rect": [14, 76, 22, 86], "tap": [18, 81], "does": "previous item in the pocket", "verified": "tap", "evidence": "re5-b3-itemprev"},
         "next_item": {"rect": [297, 76, 305, 86], "tap": [301, 81], "does": "next item in the pocket", "verified": "tap", "evidence": "re5-b3-itemnext2 (Super Potions); (306,95) missed"},
         "back": {"rect": [0, 214, 31, 234], "tap": [15, 224], "does": "back to the item list", "verified": "tap", "evidence": "re5-b3-itemback"}
       }
+    },
+    "strinput": {
+      "scene": "any (StrInput CRO; seen over Zukan)",
+      "reach": "after a catch: 'Would you like to give X a nickname?' -> Yes",
+      "buttons": {
+        "excl": {"rect": [21, 60, 38, 88], "tap": [30, 74], "does": "types ! (shift off) / ! (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "1": {"rect": [41, 60, 58, 88], "tap": [50, 74], "does": "types 1 (shift off) / ♂ (game code U+E08E) (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "2": {"rect": [61, 60, 78, 88], "tap": [70, 74], "does": "types 2 (shift off) / ♀ (game code U+E08F) (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "3": {"rect": [81, 60, 98, 88], "tap": [90, 74], "does": "types 3 (shift off) / + (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "4": {"rect": [101, 60, 118, 88], "tap": [110, 74], "does": "types 4 (shift off) / - (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "5": {"rect": [121, 60, 138, 88], "tap": [130, 74], "does": "types 5 (shift off) / * (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "6": {"rect": [141, 60, 158, 88], "tap": [150, 74], "does": "types 6 (shift off) / / (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "7": {"rect": [161, 60, 178, 88], "tap": [170, 74], "does": "types 7 (shift off) / = (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "8": {"rect": [181, 60, 198, 88], "tap": [190, 74], "does": "types 8 (shift off) / % (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "9": {"rect": [201, 60, 218, 88], "tap": [210, 74], "does": "types 9 (shift off) / ( (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "0": {"rect": [221, 60, 238, 88], "tap": [230, 74], "does": "types 0 (shift off) / ) (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "q": {"rect": [31, 95, 48, 123], "tap": [40, 109], "does": "types q (shift off) / Q (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "w": {"rect": [51, 95, 68, 123], "tap": [60, 109], "does": "types w (shift off) / W (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "e": {"rect": [71, 95, 88, 123], "tap": [80, 109], "does": "types e (shift off) / E (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "r": {"rect": [91, 95, 108, 123], "tap": [100, 109], "does": "types r (shift off) / R (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "t": {"rect": [111, 95, 128, 123], "tap": [120, 109], "does": "types t (shift off) / T (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "y": {"rect": [131, 95, 148, 123], "tap": [140, 109], "does": "types y (shift off) / Y (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "u": {"rect": [151, 95, 168, 123], "tap": [160, 109], "does": "types u (shift off) / U (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "i": {"rect": [171, 95, 188, 123], "tap": [180, 109], "does": "types i (shift off) / I (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "o": {"rect": [191, 95, 208, 123], "tap": [200, 109], "does": "types o (shift off) / O (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "p": {"rect": [211, 95, 228, 123], "tap": [220, 109], "does": "types p (shift off) / P (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "a": {"rect": [41, 130, 58, 158], "tap": [50, 144], "does": "types a (shift off) / A (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "s": {"rect": [61, 130, 78, 158], "tap": [70, 144], "does": "types s (shift off) / S (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "d": {"rect": [81, 130, 98, 158], "tap": [90, 144], "does": "types d (shift off) / D (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "f": {"rect": [101, 130, 118, 158], "tap": [110, 144], "does": "types f (shift off) / F (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "g": {"rect": [121, 130, 138, 158], "tap": [130, 144], "does": "types g (shift off) / G (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "h": {"rect": [141, 130, 158, 158], "tap": [150, 144], "does": "types h (shift off) / H (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "j": {"rect": [161, 130, 178, 158], "tap": [170, 144], "does": "types j (shift off) / J (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "k": {"rect": [181, 130, 198, 158], "tap": [190, 144], "does": "types k (shift off) / K (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "l": {"rect": [201, 130, 218, 158], "tap": [210, 144], "does": "types l (shift off) / L (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "apostrophe": {"rect": [221, 130, 238, 158], "tap": [230, 144], "does": "types ’ (shift off) / ’ (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "colon": {"rect": [241, 130, 258, 158], "tap": [250, 144], "does": "types : (shift off) / : (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "e_acute": {"rect": [261, 130, 278, 158], "tap": [270, 144], "does": "types é (shift off) / É (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "z": {"rect": [51, 165, 68, 193], "tap": [60, 179], "does": "types z (shift off) / Z (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "x": {"rect": [71, 165, 88, 193], "tap": [80, 179], "does": "types x (shift off) / X (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "c": {"rect": [91, 165, 108, 193], "tap": [100, 179], "does": "types c (shift off) / C (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "v": {"rect": [111, 165, 128, 193], "tap": [120, 179], "does": "types v (shift off) / V (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "b": {"rect": [131, 165, 148, 193], "tap": [140, 179], "does": "types b (shift off) / B (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "n": {"rect": [151, 165, 168, 193], "tap": [160, 179], "does": "types n (shift off) / N (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "m": {"rect": [171, 165, 188, 193], "tap": [180, 179], "does": "types m (shift off) / M (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "comma": {"rect": [191, 165, 208, 193], "tap": [200, 179], "does": "types , (shift off) / , (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "period": {"rect": [211, 165, 228, 193], "tap": [220, 179], "does": "types . (shift off) / . (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "question": {"rect": [231, 165, 248, 193], "tap": [240, 179], "does": "types ? (shift off) / ? (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "quote_open": {"rect": [251, 165, 268, 193], "tap": [260, 179], "does": "types “ (shift off) / “ (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "quote_close": {"rect": [271, 165, 288, 193], "tap": [280, 179], "does": "types ” (shift off) / ” (shift on)", "verified": "tap", "evidence": "w51 key sweep: tapped with shift off and on, typed character read back from the text object (docs/KEYBOARD.md)"},
+        "delete": {"rect": [240, 60, 289, 88], "tap": [265, 74], "does": "deletes the last character", "verified": "tap", "evidence": "w51-del (length 5 -> 4)"},
+        "ok": {"rect": [230, 95, 289, 123], "tap": [260, 109], "does": "confirms the name; the keyboard closes", "verified": "tap", "evidence": "w51-confirm: 'Bobo has been sent to a Box!'"},
+        "space": {"rect": [20, 200, 218, 228], "tap": [119, 214], "does": "types a space", "verified": "tap", "evidence": "w51 key sweep"},
+        "shift": {"rect": [221, 200, 289, 228], "tap": [255, 214], "does": "toggles shift (one-shot: off again after one character); orange while on", "verified": "tap", "evidence": "w51-shift"},
+        "to_grid": {"rect": [10, 132, 24, 148], "tap": [16, 140], "does": "switches to the alphabetical grid page (strinput_grid)", "verified": "tap", "evidence": "w51-page2"}
+      },
+      "notes": ["the page the keyboard opens on; key rects are 18 x 29 at a 20 px pitch, rows staggered by 10 px", "names are the unshifted key; row 0 is ! 1-0 with shift off and ! ♂ ♀ + - * / = % ( ) with shift on", "the game's own D-pad cursor (yellow box) follows the last tapped key", "past the length limit (12 for a nickname) a key does nothing"]
+    },
+    "strinput_grid": {
+      "scene": "any (StrInput CRO)",
+      "reach": "strinput: to_grid",
+      "buttons": {
+        "to_qwerty": {"rect": [296, 132, 312, 148], "tap": [304, 140], "does": "switches back to the QWERTY page", "verified": "tap", "evidence": "w51-back"}
+      },
+      "notes": ["alphabetical grid with CAPS / lower / Sym. tabs, Delete and OK along the bottom; only the way back is recorded (the native keyboard drives the QWERTY page)"]
     }
   },
   "not_reached": {

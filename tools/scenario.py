@@ -8,6 +8,8 @@ line; # starts a comment (at the start of a line, or after a space; not in
 expect-log / reject-log lines, where # is part of the regex). Steps:
 
   start [WAIT]                 tools/instance.py start NAME --wait WAIT (default 90)
+  restore POINT                stop the instance (if running) and put start point POINT's save in
+                               (tools/startpoint.py restore NAME POINT); `start` then boots into it
   stop                         tools/instance.py stop NAME
   send CMD [; CMD ...]         plugin test commands, as tools/cmd.py takes them
   sleep SECONDS
@@ -26,6 +28,8 @@ expect-log / reject-log lines, where # is part of the regex). Steps:
   repeat N [until-scene SCENE] the steps up to the matching `end`, N times; with until-scene,
   ...                          stop as soon as that is the scene (checked before each step)
   end                          and fail if it never was
+  repeat N until-log REGEX     the same, stopping after a round once a log line since the mark
+                               matches REGEX (one word: use \\s for spaces); fails if none did
 
 "The scene" is the last `scene:` line in the plugin log (an empty one counts
 as (none), the loading gap between scenes); "the mode" is the last
@@ -58,6 +62,7 @@ import emu  # noqa: E402
 
 SCENARIOS = emu.REPO / "scenarios"
 INSTANCE_PY = Path(__file__).resolve().parent / "instance.py"
+STARTPOINT_PY = Path(__file__).resolve().parent / "startpoint.py"
 # Log guard: Azahar log lines that mean the emulator or the game broke. Plain
 # <Error> lines are not here: unimplemented services log them on every boot.
 AZAHAR_BAD = re.compile(r"<Critical>|Assertion Failed|Unreachable code|unmapped (?:read|write)", re.I)
@@ -81,7 +86,7 @@ class Step:
 ARITY = {"start": (0, 1), "stop": (0, 0), "send": None, "sleep": (1, 1), "shot": (1, 1),
          "wait-scene": (1, 2), "expect-scene": (1, 1), "expect-mode": (1, 2), "mark": (0, 0),
          "expect-log": None, "reject-log": None, "guard-ignore": None, "check-save": (0, 0), "repeat": (1, 3),
-         "include": (1, 1), "if-scene": None}
+         "include": (1, 1), "if-scene": None, "restore": (1, 1)}
 
 
 def include_path(name, base):
@@ -104,12 +109,20 @@ def parse_step(text, where):
     else:
         args = rest.split()
         lo, hi = ARITY[op]
-        if not lo <= len(args) <= hi:
+        if not lo <= len(args) <= hi and not (op == "repeat" and args[1:2] == ["until-log"]):
             raise SyntaxError(f"{where}: {op} takes {lo}-{hi} arguments")
     step = Step(where, text, op, args)
+    if op == "repeat" and len(args) > 2 and args[1] == "until-log":
+        # The regex is the rest of the line (it may hold spaces).
+        step.args = args = [args[0], "until-log", rest.split(None, 2)[2]]
     if op == "repeat":
-        if not args[0].isdigit() or (len(args) > 1 and (args[1] != "until-scene" or len(args) != 3)):
-            raise SyntaxError(f"{where}: use 'repeat N' or 'repeat N until-scene SCENE'")
+        if not args[0].isdigit() or (len(args) > 1 and (args[1] not in ("until-scene", "until-log") or len(args) != 3)):
+            raise SyntaxError(f"{where}: use 'repeat N', 'repeat N until-scene SCENE' or 'repeat N until-log REGEX'")
+        if len(args) == 3 and args[1] == "until-log":
+            try:
+                re.compile(args[2])
+            except re.error as e:
+                raise SyntaxError(f"{where}: bad regex: {e}")
         step.body = []
     elif op == "if-scene":
         scene, _, inner = rest.partition(" ")
@@ -272,6 +285,16 @@ class Runner:
             elif op == "stop":
                 self.instance_py("stop", self.instance)
                 self.started = False
+            elif op == "restore":
+                self.instance_py("stop", self.instance)
+                self.started = False
+                proc = subprocess.run([sys.executable, "-I", str(STARTPOINT_PY), "restore", self.instance, args[0]],
+                                      capture_output=True, text=True)
+                out = (proc.stdout + proc.stderr).strip()
+                if self.verbose and out:
+                    print("      " + out.replace("\n", "\n      "))
+                if proc.returncode != 0:
+                    raise StepFailed(out.splitlines()[-1] if out else "startpoint.py restore failed")
             elif op == "send":
                 out = emu.send([c.strip() for c in args[0].split(";") if c.strip()], self.sdmc)
                 if self.verbose:
@@ -316,20 +339,24 @@ class Runner:
                 self.check_save()
             elif op == "repeat":
                 # Steps print in the first round only (all rounds with -v).
-                until = args[2] if len(args) == 3 else None
+                until = args[2] if len(args) == 3 and args[1] == "until-scene" else None
+                log_re = args[2] if len(args) == 3 and args[1] == "until-log" else None
+                logged = lambda: re.search(log_re, self.log()[self.mark:], re.M) is not None  # noqa: E731
                 rounds = 0
                 for rounds in range(1, int(args[0]) + 1):
                     for sub in step.body:
                         if until and self.scene() == until:
                             break
                         self.run_step(sub, quiet=quiet or rounds > 1)
-                    if until and self.scene() == until:
+                    if (until and self.scene() == until) or (log_re and logged()):
                         break
                 if until and self.scene() != until:
                     raise StepFailed(f"scene is {self.scene()}, not {until}, after {args[0]} rounds")
+                if log_re and not logged():
+                    raise StepFailed(f"no log line matching /{log_re}/ after {args[0]} rounds")
                 if not quiet:
                     print(f"  {step.where}  end of repeat after {rounds} round(s)"
-                          + (f", scene {until}" if until else ""), flush=True)
+                          + (f", scene {until}" if until else "") + (", log matched" if log_re else ""), flush=True)
             if op not in ("repeat", "if-scene"):  # their inner steps were checked
                 self.check_logs()
         except emu.PluginTimeout as e:

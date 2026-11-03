@@ -81,7 +81,7 @@ Slot menu (right side, 28 px pitch; inner highlight measured at x 223-308, outer
 | Button | Rect | Tap | Does | Verified |
 |---|---|---|---|---|
 | Summary | 215,123-315,145 | 266,134 | summary (`Status`); back 15,223 returns to Party | tap |
-| Restore | 215,151-315,173 | 266,162 | label on the button; not tried | measured |
+| Restore | 215,151-315,173 | 266,162 | the Bag (`main:006488C8`) for this Pokémon, on the pocket it showed last; back 15,224 returns to Party | tap (P2-3) |
 | Held Item | 215,179-315,201 | 266,190 | held-item submenu | measured: avoided item changes |
 | Back | 215,207-315,229 | 266,218 | closes the slot menu | tap |
 
@@ -89,23 +89,41 @@ Slot menu (right side, 28 px pitch; inner highlight measured at x 223-308, outer
 
 | Button | Rect | Tap | Does | Verified |
 |---|---|---|---|---|
-| Item row 1-7 | x 157-315, y 4+28k to 29+28k (k = 0-6) | 235, 16+28k (16, 44, 72, 100, 128, 156, 184) | item menu for that row | tap: rows 1, 2, 4, 7 (names match); rows 3, 5, 6 measured (same pitch) |
+| Item row 1-7 | x 157-315, y 4+28k to 29+28k (k = 0-6) | 235, 16+28k (16, 44, 72, 100, 128, 156, 184) | item menu for that row | tap: all 7 (rows 3, 5, 6 in P2-4: Poké Ball, Burn Heal, Ice Heal menus; and by P2-3 in the Restore bag: Awakening, Burn Heal, Ice Heal) |
 | Half-visible row 8 | 157,200-315,212 | 235,210 | nothing | none |
 | Pocket tabs | 24 px wide from x 122, y 216-239 | x 134+24k, y 230 | k = 0 Rotom Powers, 1 Medicine, 2 Items, 3 TMs, 4 Berries, 5 Key Items, 6 Free Space | tap, all 7 (pocket name read on the top screen) |
 | Scroll bar | 316,10-318,210 | 317,190 | display only: tap and drag did nothing | none |
 | Back | 0,214-31,234 | 15,224 | back to the X menu | tap |
 
 - **Scrolling**: no touch scrolling found (scroll bar tap/drag and the half-visible row do nothing; dragging a row reorders items). D-pad Up/Down scrolls once the cursor passes row 7, and wraps (Up on row 1 jumps to the last item).
-- The party column on the left (x 0-150) was not tapped.
+- The party column on the left (x 0-150) only takes taps while the Bag asks "Which Pokémon...?" (below).
 
-Item menu (Medicine shown; entries depend on the item; 28 px pitch):
+Item menu (`bag_item_menu`): it grows upwards from Cancel, so its buttons are named by position from the bottom; which entries it has depends on the item (they are in the Bag param, docs/BAG.md). 28 px pitch:
 
 | Button | Rect | Tap | Does | Verified |
 |---|---|---|---|---|
-| Use this item | 161,125-316,150 | 236,138 | use | measured: rules forbid item use |
-| Give to Pokémon | 161,153-316,178 | 236,166 | give | measured: changes held items |
-| Move to Free Space | 161,181-316,206 | 236,194 | move | measured: changes the bag |
-| Cancel | 161,209-316,236 | 236,222 | closes the menu | tap |
+| from_bottom5 | 161,97-316,122 | 236,110 | no 5-entry menu seen | measured |
+| from_bottom4 | 161,125-316,150 | 236,138 | Use in 4-entry menus (Medicine, Escape Rope, Oran Berry) | tap (Potion: Use) |
+| from_bottom3 | 161,153-316,178 | 236,166 | Give in 3- and 4-entry menus; Use for TMs | tap (Quick Claw, Escape Rope: Give) |
+| from_bottom2 | 161,181-316,206 | 236,194 | Move to Free Space in every menu seen | measured: changes the bag |
+| from_bottom1 | 161,209-316,236 | 236,222 | Cancel | tap |
+
+Party pick (`bag_party`, after Use or Give: "Which Pokémon do you want to use this item on?"): slots in party order, 32 px pitch, x 0-150; tap x 70, y 18+32k. A tap on a slot moves the cursor there; a tap on the slot under the cursor chooses it. All six tapped (cursor moves; slots 2 and 4 also chosen).
+
+Yes / No (`bag_yes_no`, Give to a Pokémon that holds an item: "Would you like to switch the two items?"): Yes 206,94-310,120 tap 258,107 (tap: switched); No 206,122-310,148 tap 258,135 (tap: back to the list, nothing switched).
+
+Restore item menu (Party → slot → Restore → tap a row: "What would you like to do with the Potion and Pichu?"; 3 entries, 28 px pitch; B closes it):
+
+| Button | Rect | Tap | Does | Verified |
+|---|---|---|---|---|
+| Use this item | 177,155-313,178 | 245,166 | uses it on that Pokémon; a message ("Pichu's HP was restored by 9 points." / "It won't have any effect.") stays until A or B, then the item list | tap (P2-3) |
+| Give to Pokémon | 178,183-313,206 | 245,194 | give | measured: changes held items |
+| Cancel | 178,211-313,236 | 245,222 | closes the menu | measured (B used instead) |
+
+- The Restore bag keeps the field Bag's tabs, rows and back button. It remembers cursor and scroll per pocket, also across tab taps; read them from memory (`docs/OFFSETS.md`, Bag item list).
+- Party move mode (the Y button): a tap on a slot only moves the game's cursor; A picks that Pokémon ("Where do you want to move it to?"); a tap on another slot swaps them at once and returns to "Which Pokémon do you want to move?"; B leaves move mode (B with a Pokémon picked un-picks it first).
+- Party screen, plain list: the bottom bar's Y and X buttons are blue at 120,226 and 310,226 with white at 205,226; a slot menu dims them, move mode and messages cover them (`WorldPartyList`, `Sources/Actions.cpp`).
+- Summary (`Status`): the party balls run down the left edge; the one shown has a green ring (x 5, centre y 16 + 32·position). Up/Down change Pokémon (wrapping), Left/Right change page, A checks moves, B returns to Party with its cursor on the Pokémon shown last.
 
 ## Battle command (`Battle`)
 
@@ -142,14 +160,47 @@ No Z-move or Mega button: this save has no Z-Crystal pocket and the move list ha
 - **Party list**: same slot layout as Party; tapping a slot opens that Pokémon's page (verified slot 5 at 35,165). Back 15,224 (verified). The bottom bar says "Choose a Pokémon." instead of the Y/X buttons.
 - **Pokémon page**: Switch 182,194 (rect ~57,181-310,207) and Restore 118,226 (~57,213-178,238) measured only (not tapped, to avoid spending a turn); Summary 248,226 (186,213-310,238) verified; party icon strip at x 0-40, about 34 px pitch, centres y 18, 52, 87, 120, 155, 189 (52 verified: shows slot 2); back 15,224 verified (summary → page → list).
 - **Bag**: same item-row layout as the field Bag (row 1 at 235,16 verified: opens the item page). Five pockets, 42 px wide from x 106, y 216-239, tap x 127+42k, y 228: Rotom Powers, HP/PP Restore, status restore, Poké Balls, battle items (all verified). Back 15,224 (verified).
-- **Item page**: Use 182,222 (~65,208-300,236; measured only: item use is forbidden); ◀ 18,81 and ▶ 301,81 switch between items in the pocket (verified; 306,95 misses); back 15,224 (verified).
+- **Item page**: Use 182,222 (~65,208-300,236; verified on the Poké Balls pocket only, where it throws the ball: W5-1's catches. Other items are still never used); ◀ 18,81 and ▶ 301,81 switch between items in the pocket (verified; 306,95 misses); back 15,224 (verified).
+
+## Keyboard (`StrInput`, any scene; seen over `Zukan`)
+
+Reached by Yes to the nickname question after a catch (W5-1, [KEYBOARD.md](KEYBOARD.md)). The QWERTY page it opens on, every key verified by a tap with shift off and on (the typed character read back from the game's text object):
+
+| Keys | Rects | Taps |
+|---|---|---|
+| Row 0: `! 1 2 3 4 5 6 7 8 9 0` (shift: `! ♂ ♀ + - * / = % ( )`) | 21+20i,60-38+20i,88 | 30+20i, 74 |
+| Row 1: `q w e r t y u i o p` | 31+20i,95-48+20i,123 | 40+20i, 109 |
+| Row 2: `a s d f g h j k l ’ : é` | 41+20i,130-58+20i,158 | 50+20i, 144 |
+| Row 3: `z x c v b n m , . ? “ ”` | 51+20i,165-68+20i,193 | 60+20i, 179 |
+| Delete / OK (↵) | 240,60-289,88 / 230,95-289,123 | 265,74 / 260,109 |
+| Space / Shift (⇧, orange while on) | 20,200-218,228 / 221,200-289,228 | 119,214 / 255,214 |
+| ◀ to the grid page / ▶ back to QWERTY (grid page) | 10,132-24,148 / 296,132-312,148 | 16,140 / 304,140 |
+
+Shift is one-shot and on when the keyboard opens; Delete turns it off. The game's own D-pad cursor (a yellow box) follows the last tapped key. Past the limit (12 for a nickname) a key does nothing. The grid page (CAPS / lower / Sym. tabs, Delete, OK) isn't recorded beyond its ▶.
+
+## PC boxes (`Box`)
+
+Added by P2-6 (docs/RE6-boxes.md), instance `p26`, start point `pc`. Every slot tap was checked by reading the game's cursor back (`BoxLowBgDraw +0xDC`) after it: all 36 landed on their own index.
+
+| Button | Rect | Tap | Does | Verified |
+|---|---|---|---|---|
+| `box.slot_0` … `slot_29` | 8+32·col,58+29·row (32x29 cells) | 24+32·col, 72+29·row | cursor there; a Pokémon: opens the slot menu; holding one: drops it there (swaps with a Pokémon already there) | tap (all 30) |
+| `box.party_0` … `party_5` | 45x40 around the tap | 238,76 288,96 238,121 288,141 238,166 288,186 | the same for the party (cursor 30-35); the game compacts the party, empty slots are at the end | tap (all 6) |
+| ◀ `box.prev_box` | 6,33-20,49 | 13,41 | previous box (Box 1 → the last unlocked box) | tap |
+| ▶ `box.next_box` | 184,33-198,49 | 191,41 | next box; also while holding a Pokémon | tap |
+| `box.box_list` | 56,206-140,239 | 95,222 | all-boxes view (cursor 38) | measured |
+| `box.back` | 0,214-31,239 | 16,226 | leaves the PC (B does the same) | measured |
+
+Slot menu (`box_menu`, after a tap on a Pokémon; row pitch 28, entries 212-310 wide): Move 265,44 (tap: picks it up), Summary 265,72, Held Item 265,100, Marking 265,128, Release 265,156 (all measured, not tapped; Release never), Cancel 265,184 (tap: closes the menu).
+
+L and R do not turn the box. The cursor is a red arrow above the slot it points at.
 
 ## Not reached
 
 - Z-move button, Mega Evolution: not in this save.
 - Target selection: not shown in single battles; no double battle available.
 - Save confirmation: Save is never tapped.
-- Not tapped by choice (listed above as measured): item Use/Give/Move, Party Restore/Held Item, battle Switch/Restore, the Y Poké Ball, X menu page 2 entries other than Options.
+- Not tapped by choice (listed above as measured): field Bag item Use (except Poké Balls in battle)/Give/Move, Party Held Item, Restore Give, battle Switch/Restore, the Y Poké Ball, X menu page 2 entries other than Options.
 
 ## Side observations
 

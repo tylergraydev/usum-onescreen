@@ -654,6 +654,25 @@ namespace OneScreen
         return !gpu || (s_mode == PanelMode::Panel && !twoThirds);
     }
 
+    bool PanelCopyBottomRect(const Screen &top, u32 x, u32 y, u32 w, u32 h, u32 dx, u32 dy)
+    {
+        if (!top.IsTop || s_bottomFb == 0 || w == 0 || x + w > BottomWidth || dx + w > TopWidth
+            || y + h > ScreenHeight || dy + h > ScreenHeight || !GpuReady(top))
+            return false;
+        const FbLayout fb = GetLayout(top);
+        const u32 run = h * 3;
+        // The run starts at the rect's lowest pixel in memory: its bottom row
+        // when lines run toward smaller y.
+        const u32 first = fb.stepY < 0 ? ScreenHeight - (y + h) : y;
+        const u32 in = s_bottomFb + x * s_bottomStride + first * 3;
+        const u32 out = BoxLineStart(fb, { dx, dy, w, h, 0, 1, 1 }, dx);
+        if (run % 16 != 0 || in % 8 != 0 || out % 8 != 0 || (u32)fb.stepX != s_bottomStride)
+            return false;
+        s_textureCopy(in, out, run * w, run / 16, (s_bottomStride - run) / 16, run / 16,
+                      ((u32)fb.stepX - run) / 16, FlagTextureCopy);
+        return true;
+    }
+
     static bool PanelCallback(const Screen &screen)
     {
         bool drew = DrawPanel(screen);

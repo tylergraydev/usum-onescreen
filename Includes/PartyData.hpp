@@ -34,6 +34,8 @@ namespace OneScreen
         u32 encryptionConstant = 0;
         u16 species = 0;            // national dex number
         u16 heldItem = 0;
+        u8  ability = 0;            // ability ID (0x14)
+        u8  nature = 0;             // nature (0x1C)
         u16 nickname[13] = {};      // UTF-16, 0-terminated (12 chars max)
         u16 moves[4] = {};
         u8  pp[4] = {};
