@@ -26,6 +26,7 @@
 #include "Screens/Boxes.hpp"
 #include "Screens/XMenu.hpp"
 #include "Screens/ThemeScreen.hpp"
+#include "UI/Assets.hpp"
 #include "Settings.hpp"
 #include "Shot.hpp"
 #include "UI/Device.hpp"
@@ -629,6 +630,11 @@ namespace CTRPluginFramework
         std::vector<std::string> boxesLog;
         OneScreen::BoxesUpdate(s_game->offsets.sceneManager, scene, boxesLog);
         for (const std::string &line : boxesLog)
+            WriteLog(line, false);
+
+        std::vector<std::string> assetsLog;
+        OneScreen::UI::AssetsUpdate(scene, assetsLog);
+        for (const std::string &line : assetsLog)
             WriteLog(line, false);
 
         std::vector<std::string> themeLog;
