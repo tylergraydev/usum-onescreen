@@ -25,6 +25,7 @@
 #include "Screens/RotomPrompt.hpp"
 #include "Screens/Boxes.hpp"
 #include "Screens/XMenu.hpp"
+#include "Screens/ThemeScreen.hpp"
 #include "Settings.hpp"
 #include "Shot.hpp"
 #include "UI/Device.hpp"
@@ -142,6 +143,8 @@ namespace CTRPluginFramework
     //   partyui on|off|status   (native Party screen and summary, Screens/PartyScreen.hpp)
     //   boxes on|off|status|details|pick|drop|prev|next   (native PC boxes, Screens/Boxes.hpp;
     //     pick/drop/prev/next as A / L / R)
+    //   uitheme on|off|load|status|page N|select N   (USUM theme demo with the game's own
+    //     font and icons, Screens/ThemeScreen.hpp)
     static const char *CommandPath = "/usum-cmd.txt";
 
     // Global data + bss of USUM v1.2 (from the exheader): 0x669000 .. 0x6D5F44.
@@ -430,6 +433,18 @@ namespace CTRPluginFramework
                 return;
             }
         }
+        else if (line.compare(0, 8, "uitheme ") == 0)
+        {
+            std::vector<std::string> log;
+            const bool known = OneScreen::ThemeScreenCommand(line.substr(8), log);
+            for (const std::string &l : log)
+                WriteLog(l, false);
+            if (!known)
+            {
+                WriteLog("cmd: unknown uitheme command in '" + line + "'", false);
+                return;
+            }
+        }
         else if ((fields = std::sscanf(line.c_str(), "peek %x %u", &a, &b)) >= 1)
         {
             // Logs COUNT words (default 4) at ADDR, if readable.
@@ -616,6 +631,11 @@ namespace CTRPluginFramework
         for (const std::string &line : boxesLog)
             WriteLog(line, false);
 
+        std::vector<std::string> themeLog;
+        OneScreen::ThemeScreenUpdate(s_game->offsets.sceneManager, themeLog);
+        for (const std::string &line : themeLog)
+            WriteLog(line, false);
+
         OneScreen::ShotPoll();
         PollCommands();
     }
@@ -721,6 +741,7 @@ namespace CTRPluginFramework
         OneScreen::StartRotomPrompt();
         OneScreen::StartPartyScreen();
         OneScreen::StartBoxes();
+        OneScreen::StartThemeScreen();
         OneScreen::StartPanel(OneScreen::PanelMode::Off, s_game->offsets.gxDisplayTransfer.address,
                               s_game->offsets.gxTextureCopy.address);
         OneScreen::StartActions();
