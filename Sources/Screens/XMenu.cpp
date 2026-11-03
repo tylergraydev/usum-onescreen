@@ -1,7 +1,5 @@
 #include "Screens/XMenu.hpp"
 
-#include <new>
-
 #include <CTRPluginFramework.hpp>
 
 #include "Actions.hpp"
@@ -15,9 +13,11 @@
 #include "Screens/Bag.hpp"
 #include "Screens/Map.hpp"
 #include "Screens/XMenuGrid.hpp"
+#include "UI/Assets.hpp"
 #include "UI/Device.hpp"
-#include "UI/Layer.hpp"
 #include "UI/ScreenBuffer.hpp"
+#include "UI/Layer.hpp"
+#include "UI/Theme.hpp"
 
 namespace OneScreen
 {
@@ -80,6 +80,9 @@ namespace OneScreen
 
     static UI::Layer s_layer;
     static u32 s_drawnVersion = ~0u;
+    // The layer draws in the shared screen buffer (UI/ScreenBuffer.hpp),
+    // borrowed while the menu shows.
+    static bool s_drawnGameFont = false;    // the game font was loaded when last drawn
 
     // The game's cursor is a red arrow left of the pill it points at
     // (docs/LAYOUTS.md); it bobs a few pixels, so scan two rows across the gutter.
@@ -123,14 +126,18 @@ namespace OneScreen
             return false;
         }
         bool fresh = false;
-        u8 *pixels = UI::ScreenBuffer::Borrow(Owner, fresh);
+        u8 *const pixels = UI::ScreenBuffer::Borrow(Owner, fresh);
         if (pixels == nullptr)
-            return false;
+            return false;   // another screen holds it: next frame
 
         UiInitFont();
         const UI::Surface fb = SurfaceFromScreen(screen);
         const u32 version = s_viewVersion;
-        bool redraw = version != s_drawnVersion;
+        // Also once the game's font and icons have loaded (UI::Theme draws
+        // with them from then on).
+        const bool gameFont = UI::Theme::UsingGameFont();
+        bool redraw = version != s_drawnVersion || gameFont != s_drawnGameFont;
+        // fresh: another screen drew in the buffer since we last held it.
         if (fresh || !s_layer.Matches(fb))
         {
             if (!s_layer.Setup(fb, XMenuArea, XMenuRadius, pixels, UI::ScreenBuffer::Bytes))
@@ -146,6 +153,7 @@ namespace OneScreen
             UI::Canvas canvas = s_layer.Begin();
             DrawXMenu(canvas, view);
             s_drawnVersion = version;
+            s_drawnGameFont = gameFont;
         }
         s_layer.Present(fb);
         return true;
@@ -359,6 +367,9 @@ namespace OneScreen
         const bool shown = s_enabled && !s_yield && menuUp;
         if (shown && !s_shown)
         {
+            // The game's font and icons (normally loaded at the first field
+            // already); the menu redraws with them once they are in.
+            UI::RequestAssets();
             s_shownAt = s_frames;
             s_synced = false;
             s_stableCount = 0;
@@ -374,8 +385,6 @@ namespace OneScreen
             s_scanWanted = false;
             log.push_back("xmenu: hidden");
             log.push_back(UI::ScreenBuffer::HeapLog("xmenu hidden"));
-
-
         }
         s_shown = shown;
 

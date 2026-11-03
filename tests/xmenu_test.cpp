@@ -388,13 +388,13 @@ static void TestDraw(const char *preview)
     const UI::Color outside = At(canvas, XMenuArea.x - 1, XMenuArea.y + 50);
     CHECK(outside.r == 10 && outside.g == 200 && outside.b == 10);
     CHECK(At(canvas, 2, 2).g == 200);
-    // The selected cell has the yellow ring just outside it; the others not.
+    // As in the game, the selected cell is marked by the red cursor at its
+    // left end; the others not.
+    const auto red = [](UI::Color c) { return c.r > 200 && c.g < 60 && c.b < 60; };
     const UI::Rect sel = XMenuCellRect(view.cursor);
-    const UI::Color ring = At(canvas, sel.x + sel.w / 2, sel.y - 2);
-    CHECK(ring.r > 200 && ring.g > 200 && ring.b < 160);
+    CHECK(red(At(canvas, sel.x + 2, sel.y + sel.h / 2)));
     const UI::Rect other = XMenuCellRect(E("pokemon"));
-    const UI::Color noRing = At(canvas, other.x + other.w / 2, other.y - 2);
-    CHECK(!(noRing.r > 200 && noRing.g > 200 && noRing.b < 160));
+    CHECK(!red(At(canvas, other.x + 2, other.y + other.h / 2)));
 
     if (preview != nullptr)
     {
