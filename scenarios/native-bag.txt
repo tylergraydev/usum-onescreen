@@ -6,6 +6,8 @@
 # and back out to the field. Every choice is made with buttons; the
 # native Bag carries it out on the bottom screen. A screenshot is taken
 # before every A that changes the game. Nothing is ever saved.
+# Start in the Pokémon Center whatever ran before (native-move-learn leaves the grass).
+restore pokecenter
 include common/boot
 # The automatic view would put the panel up in the Bag; the native Bag
 # must hold it off.

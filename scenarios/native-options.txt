@@ -7,6 +7,8 @@
 # Automatic). Changes only reach the game's memory: nothing is saved, and
 # check-save proves the save file is untouched. A screenshot is taken before
 # every A.
+# Start in the Pokémon Center whatever ran before (native-move-learn leaves the grass).
+restore pokecenter
 include common/boot
 # Config's automatic view is full: the native screen must hold it off.
 send auto on
