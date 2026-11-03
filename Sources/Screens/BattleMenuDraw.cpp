@@ -312,6 +312,28 @@ namespace Screens
             Prompts(canvas, area.x + 8, foot.y + 1, { { Theme::Button::A, "Choose" } });
     }
 
+    // --- The target choice ---
+
+    static void DrawTarget(Canvas &canvas, const BattleMenu &menu, const BattleSnapshot &snap)
+    {
+        const Rect area = MovesArea;
+        Theme::DrawWindow(canvas, area);
+        const Rect head = { area.x, area.y + 2, area.w, 26 };
+        Theme::DrawText(canvas, "Choose a target", Inset(head, Theme::WindowPad, 2, Theme::WindowPad, 2), White());
+        Theme::DrawText(canvas, "As on the bottom screen (" + snap.panelKey + ")",
+                        Rect{ area.x + Theme::WindowPad, head.Bottom(), area.w - 2 * Theme::WindowPad, 16 },
+                        White(Theme::TextSize::Small));
+        const s32 cellW = (area.w - 24) / 2;
+        for (u8 i = 0; i < TargetCount; i++)
+        {
+            const Rect cell = { area.x + 8 + (i % 2) * (cellW + 8), head.Bottom() + 22 + (i / 2) * 56, cellW, 48 };
+            Theme::DrawRow(canvas, cell, Theme::RowKind::Option, TargetLabel(i), i == menu.Cursor());
+        }
+        const Rect foot = { area.x + 4, area.Bottom() - Theme::PromptHeight - 6, area.w - 8, Theme::PromptHeight + 2 };
+        if (!Notice(canvas, foot, Footer(menu)))
+            Prompts(canvas, foot.x, foot.y + 1, { { Theme::Button::A, "Choose" }, { Theme::Button::B, "Back" } });
+    }
+
     // --- Helpers for the game's own screens ---
 
     static void DrawGame(Canvas &canvas, const BattleMenu &menu, const BattleSnapshot &snap)
@@ -360,6 +382,7 @@ namespace Screens
         case BattlePage::Party:    return PartyArea;
         case BattlePage::Bag:      return BagArea;
         case BattlePage::Question: return QuestionArea;
+        case BattlePage::Target:   return MovesArea;
         case BattlePage::Game:     return m_afterCatch || Prompt() ? CatchArea : GameArea;
         default:                   return Rect{ 0, 0, 0, 0 };
         }
@@ -379,6 +402,7 @@ namespace Screens
         case BattlePage::Party:    DrawPartyPage(canvas, *this, snap); break;
         case BattlePage::Bag:      DrawBagPage(canvas, *this, snap); break;
         case BattlePage::Question: DrawQuestion(canvas, *this, snap); break;
+        case BattlePage::Target:   DrawTarget(canvas, *this, snap); break;
         case BattlePage::Game:     DrawGame(canvas, *this, snap); break;
         default: break;
         }

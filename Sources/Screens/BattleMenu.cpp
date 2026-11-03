@@ -2,6 +2,7 @@
 
 #include <cstdio>
 
+#include "ActionQueue.hpp"
 #include "Screens/PartyMenu.hpp"
 
 namespace OneScreen
@@ -56,6 +57,19 @@ namespace Screens
             "battle_bag.pocket_balls", "battle_bag.pocket_battle_items",
         };
         return pocket < BattlePocketCount ? buttons[pocket] : nullptr;
+    }
+
+    const char *TargetButton(u8 slot)
+    {
+        static const char *const buttons[] = { "battle_target.top_left", "battle_target.top_right",
+                                               "battle_target.bottom_left", "battle_target.bottom_right" };
+        return slot < TargetCount ? buttons[slot] : nullptr;
+    }
+
+    const char *TargetLabel(u8 slot)
+    {
+        static const char *const labels[] = { "Top left", "Top right", "Bottom left", "Bottom right" };
+        return slot < TargetCount ? labels[slot] : "?";
     }
 
     bool IsBallItem(u16 item)
@@ -124,6 +138,7 @@ namespace Screens
 
     static const char *const CommandActions[] = { "battle-fight", "battle-bag", "battle-pokemon", "battle-flee" };
     static const char *const MoveActions[] = { "battle-move1", "battle-move2", "battle-move3", "battle-move4" };
+    static const char *const MoveBack = "battle-moves-back";
     static const char *const PartySlots[] = { "party.slot1", "party.slot2", "party.slot3",
                                               "party.slot4", "party.slot5", "party.slot6" };
     static const char *const PickSlots[] = { "bag_party.slot1", "bag_party.slot2", "bag_party.slot3",
@@ -233,6 +248,14 @@ namespace Screens
 
     void BattleMenu::Tap(BattleMenuOutput &out, const char *button, u32 limit)
     {
+        // The action layer refuses a button nobody has tapped yet; say so
+        // instead of waiting for it.
+        const LayoutButton *known = button != nullptr ? FindLayoutButton(button) : nullptr;
+        if (known == nullptr || known->verified != LayoutVerified::Tap)
+        {
+            EndGoal("Not tried in the game yet: use the bottom screen");
+            return;
+        }
         m_tries = button == m_lastTap ? m_tries + 1 : 1;
         m_lastTap = button;
         if (m_tries > limit)
@@ -374,6 +397,16 @@ namespace Screens
             }
             else
                 EndGoal("");
+            break;
+        case Goal::Target:
+        case Goal::TargetBack:
+            if (snap.menu != GameMenu::Other)
+                EndGoal("");
+            else
+            {
+                Tap(out, m_goal == Goal::Target ? TargetButton((u8)m_goalArg) : "battle_target.back", 2);
+                m_used = true;
+            }
             break;
         case Goal::Answer:
             if (snap.menu != GameMenu::Question)
@@ -545,14 +578,38 @@ namespace Screens
             StartGoal(Goal::Answer, m_cursor, "");
     }
 
+    void BattleMenu::UpdateTarget(const BattleSnapshot &, u32 pressed)
+    {
+        // Two rows of two, as the game lays them out.
+        if (pressed & (BattleKeys::Left | BattleKeys::Right))
+            m_cursor ^= 1;
+        else if (pressed & (BattleKeys::Up | BattleKeys::Down))
+            m_cursor ^= 2;
+        else if (pressed & BattleKeys::A)
+            StartGoal(Goal::Target, m_cursor, "");
+        else if (pressed & BattleKeys::B)
+            StartGoal(Goal::TargetBack, 0, "");
+        if (pressed & (BattleKeys::Left | BattleKeys::Right | BattleKeys::Up | BattleKeys::Down))
+            m_note.clear();
+    }
+
     BattleMenuOutput BattleMenu::Update(const BattleSnapshot &snap, u32 pressed)
     {
         BattleMenuOutput out;
         BattlePage page = PageFor(snap);
+        if (m_moveAge < 0xFFFF)
+            m_moveAge++;
+        if (page == BattlePage::Command || !snap.inBattle)
+            m_moveAge = 0xFFFF;
+        else if (page == BattlePage::Game && snap.menu == GameMenu::Other && m_moveAge < TargetWindowFrames)
+            page = BattlePage::Target;
+        if (m_page == BattlePage::Target && page == BattlePage::Game && snap.menu == GameMenu::Other)
+            page = BattlePage::Target;  // stays the target screen while it is up
         // Between the Pokémon list and a Pokémon's page the game shows no
         // screen, then its command menu, for a few frames: until a goal's
         // last tap is sent, the page stays through that.
-        const bool steps = m_page == BattlePage::Party || m_page == BattlePage::Bag || m_page == BattlePage::Question;
+        const bool steps = m_page == BattlePage::Party || m_page == BattlePage::Bag || m_page == BattlePage::Question
+                           || m_page == BattlePage::Target;
         if ((page == BattlePage::Hidden || page == BattlePage::Command) && steps && Busy() && !m_used && snap.inBattle
             && m_gapFrames < GapFrames)
         {
@@ -580,6 +637,7 @@ namespace Screens
         case BattlePage::Party:
         case BattlePage::Bag:
         case BattlePage::Question:
+        case BattlePage::Target:
             out.capture = true;
             out.keys = m_page == BattlePage::Bag ? BattleBagKeys : BattleMenuKeys;
             if (!Busy() && !snap.actionRunning)
@@ -588,6 +646,8 @@ namespace Screens
                     UpdateParty(snap, pressed);
                 else if (m_page == BattlePage::Question)
                     UpdateQuestion(snap, pressed);
+                else if (m_page == BattlePage::Target)
+                    UpdateTarget(snap, pressed);
             }
             if (m_page == BattlePage::Bag)
                 UpdateBag(snap, pressed);
@@ -636,7 +696,7 @@ namespace Screens
                 else if (pressed & BattleKeys::Down)
                     m_cursor = StepCursor(m_cursor, snap.moveCount, 1);
                 else if (pressed & BattleKeys::B)
-                    m_queued = "battle-moves-back";
+                    m_queued = MoveBack;
                 else if ((pressed & BattleKeys::A) && m_cursor < snap.moveCount)
                 {
                     // A move without PP isn't sent while another has some;
@@ -659,6 +719,8 @@ namespace Screens
             out.action = m_queued;
             if (m_queued == CommandActions[(int)BattleCommand::Pokemon])
                 m_sentPokemon = true;
+            if (m_page == BattlePage::Moves && m_queued != MoveBack)
+                m_moveAge = 0;
             m_queued = nullptr;
             m_pending = true;
             m_pendingFrames = 0;
@@ -681,7 +743,7 @@ namespace Screens
 
     std::string BattleMenu::Status(const BattleSnapshot &snap) const
     {
-        static const char *const pages[] = { "hidden", "command", "moves", "game", "party", "bag", "question" };
+        static const char *const pages[] = { "hidden", "command", "moves", "game", "party", "bag", "question", "target" };
         std::string out = std::string("battle-ui: page ") + pages[(int)m_page];
         if (m_page == BattlePage::Command)
             out += Format(", cursor %u of %u (", m_cursor, (unsigned)BattleCommand::Count)
@@ -726,6 +788,8 @@ namespace Screens
         }
         else if (m_page == BattlePage::Question)
             out += Format(", cursor %u (", m_cursor) + (m_cursor == 0 ? "Use next Pok\xC3\xA9mon)" : "Run)");
+        else if (m_page == BattlePage::Target)
+            out += Format(", cursor %u (", m_cursor) + TargetLabel(m_cursor) + Format("), vt %08X", snap.otherVtable);
         else if (m_page == BattlePage::Game)
         {
             static const char *const menus[] = { "none", "command", "moves", "pokemon", "bag", "other",

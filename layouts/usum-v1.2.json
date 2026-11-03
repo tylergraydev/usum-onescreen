@@ -346,6 +346,18 @@
       },
       "notes": ["The same object and places as learn_ask; the message (battle view +0x230 -> +0x104) tells them apart (docs/OFFSETS.md)"]
     },
+    "battle_target": {
+      "scene": "Battle",
+      "reach": "a move with one target when more than one Pokemon could take it (double battles, SOS battles); not reached in this save",
+      "buttons": {
+        "top_left": {"rect": [8, 39, 158, 117], "tap": [83, 78], "does": "target top left", "verified": "measured", "evidence": "Battle_TRG_LOW_000.bflyt (a/0/6/7 entry 10, W7-1): pane BtnTrgt_00, 150x78 at layout (-77,42) from the centre; never seen in a battle (no double battle or SOS call reached)"},
+        "top_right": {"rect": [161, 39, 311, 117], "tap": [236, 78], "does": "target top right", "verified": "measured", "evidence": "Battle_TRG_LOW_000.bflyt (a/0/6/7 entry 10, W7-1): pane BtnTrgt_01, 150x78 at layout (76,42) from the centre; never seen in a battle (no double battle or SOS call reached)"},
+        "bottom_left": {"rect": [8, 123, 158, 201], "tap": [83, 162], "does": "target bottom left", "verified": "measured", "evidence": "Battle_TRG_LOW_000.bflyt (a/0/6/7 entry 10, W7-1): pane BtnTrgt_02, 150x78 at layout (-77,-42) from the centre; never seen in a battle (no double battle or SOS call reached)"},
+        "bottom_right": {"rect": [161, 123, 311, 201], "tap": [236, 162], "does": "target bottom right", "verified": "measured", "evidence": "Battle_TRG_LOW_000.bflyt (a/0/6/7 entry 10, W7-1): pane BtnTrgt_03, 150x78 at layout (76,-42) from the centre; never seen in a battle (no double battle or SOS call reached)"},
+        "back": {"rect": [0, 205, 49, 239], "tap": [22, 224], "does": "back to the move list", "verified": "measured", "evidence": "Battle_TRG_LOW_000.bflyt pane BG_Back, 54x38 at layout (-138,-104)"}
+      },
+      "notes": ["Layout coordinates are from the screen centre, y up: screen = (160 + x, 120 - y). Which row is which side is not known (the game's double battle screen is usually foes on top)", "Each button also has a name plate Br_Base_0N (128x24) and a Globe (Poke Ball) part"]
+    },
     "learn_ask": {
       "scene": "Battle",
       "reach": "a level-up in battle when the Pokemon already knows four moves ('Should an old move be forgotten and replaced with X?')",

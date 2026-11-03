@@ -111,6 +111,7 @@ namespace Screens
         Party,      // the Pokémon list (switch)
         Bag,        // the Bag: pockets, items, "Which Pokémon...?"
         Question,   // "Use next Pokémon?": Use next Pokémon / Run
+        Target,     // a game screen right after a move: the target choice (double / SOS battles)
     };
 
     // Command bar entries, in the order the menu lists them.
@@ -144,6 +145,18 @@ namespace Screens
     const u32 BattleMenuKeys = BattleKeys::A | BattleKeys::B | BattleKeys::DRight | BattleKeys::DLeft
                                | BattleKeys::DUp | BattleKeys::DDown;
     const u32 BattleBagKeys = BattleMenuKeys | BattleKeys::L | BattleKeys::R;
+
+    // The target screen (Battle_TRG_LOW_000, never seen in a battle: no
+    // double battle or SOS call was reached): four buttons in two rows,
+    // and back. Seen only in the game's layout file, so its taps are
+    // "measured" and the action layer won't send them until someone
+    // verifies them (docs/LAYOUTS.md).
+    static const u8 TargetCount = 4;
+    const char *TargetButton(u8 slot);          // battle_target.top_left ... bottom_right
+    const char *TargetLabel(u8 slot);           // "Top left" ...
+    // A game screen that comes up this soon after a move was sent is taken
+    // for the target choice (single battles go straight to the turn).
+    static const u32 TargetWindowFrames = 120;
 
     // Item IDs that only restore HP (Potion ... Sitrus Berry): the menu
     // won't use one on a Pokémon at full HP or fainted ("It won't have any
@@ -231,6 +244,8 @@ namespace Screens
             BagList,    // back to the Bag's list (from an item page or the pick)
             BagBack,    // leave the Bag (from an item page or the pick: back to the list first)
             Answer,     // the question: entry m_goalArg
+            Target,     // the target screen: button m_goalArg
+            TargetBack, // the target screen: back to the move list
         };
 
         void Enter(BattlePage page, const BattleSnapshot &snap);
@@ -239,6 +254,7 @@ namespace Screens
         void UpdateParty(const BattleSnapshot &snap, u32 pressed);
         void UpdateBag(const BattleSnapshot &snap, u32 pressed);
         void UpdateQuestion(const BattleSnapshot &snap, u32 pressed);
+        void UpdateTarget(const BattleSnapshot &snap, u32 pressed);
         // The next step of the goal, or done / failed (m_goal None).
         void Drive(const BattleSnapshot &snap, BattleMenuOutput &out);
         // Sends one step; the same button more than `limit` times in a row
@@ -258,6 +274,8 @@ namespace Screens
         const char *m_queued = nullptr; // chosen before the menu settled
         std::string m_note;         // one-line message (e.g. no PP left)
 
+        // A move was sent this many frames ago (0xFFFF: not lately).
+        u32 m_moveAge = 0xFFFF;
         // Party page.
         bool m_sentPokemon = false; // the Pokémon command was sent (not a faint)
         bool m_forced = false;
