@@ -23,7 +23,7 @@ expect-log ^screen buffer: 281 KB; heap 5
 
 # --- Rotom first (two prompts drawn, then Party, was the W7-2 crash) ---
 expect-log ^rotom: applet [0-9A-F]+, FieldMenu at [0-9A-F]+, chat table ok 30
-mark
+# No mark here: the first question can come before the applet line is read.
 repeat 72 until-log ^rotom:\s(ready\s\(talk\skey\sUp\)|choice\s)
   sleep 10
 end
