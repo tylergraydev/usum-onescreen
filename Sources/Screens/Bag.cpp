@@ -17,6 +17,7 @@
 #include "Screens/PartyScreen.hpp"
 #include "UI/Device.hpp"
 #include "UI/Layer.hpp"
+#include "UI/ScreenBuffer.hpp"
 
 namespace OneScreen
 {
@@ -165,8 +166,7 @@ namespace OneScreen
     static volatile u32  s_viewVersion = 0; // bumped whenever s_view changes
     static volatile u32  s_drawnVersion = 0;
     static volatile bool s_shown = false;
-    static u8           *s_pixels = nullptr;
-    static const size_t  PixelBytes = BagArea.w * BagArea.h * 4;
+    static const char *const Owner = "bag";     // UI::ScreenBuffer
 
     // --- Plugin thread ---
     static const u32 MoveUp    = Key::DPadUp | Key::CPadUp;
@@ -327,15 +327,24 @@ namespace OneScreen
 
     static bool BagOnScreen(const Screen &screen)
     {
-        if (!screen.IsTop || !s_shown || s_pixels == nullptr)
+        if (!screen.IsTop)
+            return false;
+        if (!s_shown)
+        {
+            UI::ScreenBuffer::GiveBack(Owner);
+            return false;
+        }
+        bool fresh = false;
+        u8 *pixels = UI::ScreenBuffer::Borrow(Owner, fresh);
+        if (pixels == nullptr)
             return false;
         UiInitFont();
         const UI::Surface fb = SurfaceFromScreen(screen);
         const u32 version = s_viewVersion;
         bool redraw = version != s_drawnVersion;
-        if (!s_layer.Matches(fb))
+        if (fresh || !s_layer.Matches(fb))
         {
-            if (!s_layer.Setup(fb, BagArea, BagRadius, s_pixels, PixelBytes))
+            if (!s_layer.Setup(fb, BagArea, BagRadius, pixels, UI::ScreenBuffer::Bytes))
                 return false;
             redraw = true;
         }
@@ -728,8 +737,6 @@ namespace OneScreen
         const bool shown = s_enabled && !s_yield && inBag && s_game.Valid();
         if (shown && !s_shown)
         {
-            if (s_pixels == nullptr)
-                s_pixels = new (std::nothrow) u8[PixelBytes];
             s_prevTab = -1;
             s_prevMode = BagMode::None;
             s_wantTab = -1;
@@ -737,13 +744,17 @@ namespace OneScreen
             s_statusUntil = 0;
             s_repeatKey = 0;
             ReadPartyNow(sceneManager);
-            log.push_back(Utils::Format("bag: shown (pocket %s, %u items)%s", s_game.tab >= 0 ? BagTabAt(s_game.tab).name : "?",
-                                        (unsigned)s_game.items.size(), s_pixels == nullptr ? ", NO MEMORY for the layer" : ""));
+            log.push_back(Utils::Format("bag: shown (pocket %s, %u items)", s_game.tab >= 0 ? BagTabAt(s_game.tab).name : "?",
+                                        (unsigned)s_game.items.size()));
+            log.push_back(UI::ScreenBuffer::HeapLog("bag shown"));
         }
         else if (!shown && s_shown)
         {
             s_driver.Stop();
             log.push_back("bag: hidden");
+            log.push_back(UI::ScreenBuffer::HeapLog("bag hidden"));
+
+
         }
         s_shown = shown;
 
