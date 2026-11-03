@@ -39,6 +39,8 @@ If you use an HD texture pack, turn off **Emulation → Configure… → Graphic
 | **ZL** | Touch the bottom screen at the cursor, for as long as you hold it. The crosshair turns red while touching. |
 | **ZR** | In the overworld: show the map on the top screen (place name, island, your position and Rotom's map around you). **ZR** or **B** closes it. You can keep walking with it open. The X menu's **Map** opens it too. See [MAP.md](MAP.md). |
 
+| **Up** (D-pad) | In the overworld, when the corner badge says *Rotom wants to talk*: start Rotom's chat. Rotom's question and its two answers then show at the bottom of the top screen: **Up/Down** choose, **A** answers. The Roto Loto shows there too (**A** goes on and stops the reel). See [ROTOM-FIELD.md](ROTOM-FIELD.md). |
+
 Every other button works as normal.
 
 ### Naming a Pokémon
