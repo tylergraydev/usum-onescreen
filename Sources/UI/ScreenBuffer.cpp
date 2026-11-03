@@ -15,6 +15,31 @@ namespace ScreenBuffer
     static u8 *s_buffer = nullptr;
     static const char *volatile s_holder = nullptr;
     static volatile unsigned s_refused = 0;
+    // Screens a newer one took the buffer from: they wait until it is free.
+    static const char *s_displaced[8] = {};
+
+    static bool Displaced(const char *owner)
+    {
+        for (const char *d : s_displaced)
+            if (d == owner)
+                return true;
+        return false;
+    }
+
+    static void SetDisplaced(const char *owner, bool displaced)
+    {
+        for (const char *&d : s_displaced)
+            if (d == owner)
+                d = nullptr;
+        if (!displaced)
+            return;
+        for (const char *&d : s_displaced)
+            if (d == nullptr)
+            {
+                d = owner;
+                return;
+            }
+    }
 
     bool Init(void)
     {
@@ -30,11 +55,16 @@ namespace ScreenBuffer
             return nullptr;
         if (s_holder == owner)
             return s_buffer;
-        if (s_holder != nullptr)
+        if (s_holder != nullptr && Displaced(owner))
         {
             s_refused = s_refused + 1;
             return nullptr;
         }
+        // Free, or a newer screen opened over the holder: the newer one takes
+        // it, and the holder waits until it is free again.
+        if (s_holder != nullptr)
+            SetDisplaced(s_holder, true);
+        SetDisplaced(owner, false);
         // Always fresh, even if nobody borrowed it in between: the owner may
         // have drawn something else into its layer since (a redraw is cheap).
         s_holder = owner;
@@ -44,9 +74,13 @@ namespace ScreenBuffer
 
     void GiveBack(const char *owner)
     {
-        if (owner != nullptr && s_holder == owner)
+        if (owner == nullptr)
+            return;
+        if (s_holder == owner)
             s_holder = nullptr;
+        SetDisplaced(owner, false);
     }
+
 
     const char *Holder(void)
     {

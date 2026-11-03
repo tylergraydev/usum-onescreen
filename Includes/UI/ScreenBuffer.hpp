@@ -10,11 +10,15 @@
 // whose framebuffer needs more bytes than that (RGBA8) fails Layer::Setup and
 // stays hidden.
 //
-// Only one native screen shows at a time, so they take turns. Borrow and
-// Give back from the OSD callbacks only (the game thread: they run one after
-// another, so two screens never race for it). The first to borrow keeps it
-// until it gives it back; anyone else gets nullptr and asks again next frame
-// (on a hand-over, the next screen shows a frame later).
+// Screens take turns. Borrow and GiveBack from the OSD callbacks only (the
+// game thread: they run one after another, so two screens never race for
+// it). Usually one gives it back before the next asks (on a hand-over the
+// next screen shows a frame later). When two are up at once, the newer one
+// wins: a Borrow by a screen that doesn't hold it takes it from the holder
+// (the keyboard opens over the battle's after-catch box). The screen it was
+// taken from gets nullptr until the buffer is free again, then gets it back
+// (fresh) and shows again.
+
 //
 // Usage in a screen's OSD callback:
 //
@@ -54,7 +58,8 @@ namespace ScreenBuffer
     void GiveBack(const char *owner);
 
     // Any thread, for logs: who holds it now (nullptr: nobody), and how many
-    // borrows were refused since boot because someone else held it.
+    // borrows were refused since boot (a screen waiting for a newer one).
+
     const char *Holder(void);
     unsigned    Refused(void);
 

@@ -158,9 +158,16 @@ No Z-move or Mega button: this save has no Z-Crystal pocket and the move list ha
 ## Battle party and bag (`Battle`)
 
 - **Party list**: same slot layout as Party; tapping a slot opens that Pokémon's page (verified slot 5 at 35,165). Back 15,224 (verified). The bottom bar says "Choose a Pokémon." instead of the Y/X buttons.
-- **Pokémon page**: Switch 182,194 (rect ~57,181-310,207) and Restore 118,226 (~57,213-178,238) measured only (not tapped, to avoid spending a turn); Summary 248,226 (186,213-310,238) verified; party icon strip at x 0-40, about 34 px pitch, centres y 18, 52, 87, 120, 155, 189 (52 verified: shows slot 2); back 15,224 verified (summary → page → list).
+- **Pokémon page**: Switch 182,194 (rect ~57,181-310,207; tapped in W7-1: switches at once, also from the list after a faint) and Restore 118,226 (~57,213-178,238, measured only); Summary 248,226 (186,213-310,238) verified; party icon strip at x 0-40, about 34 px pitch, centres y 18, 52, 87, 120, 155, 189 (52 verified: shows slot 2); back 15,224 verified (summary → page → list).
 - **Bag**: same item-row layout as the field Bag (row 1 at 235,16 verified: opens the item page). Five pockets, 42 px wide from x 106, y 216-239, tap x 127+42k, y 228: Rotom Powers, HP/PP Restore, status restore, Poké Balls, battle items (all verified). Back 15,224 (verified).
 - **Item page**: Use 182,222 (~65,208-300,236; verified on the Poké Balls pocket only, where it throws the ball: W5-1's catches. Other items are still never used); ◀ 18,81 and ▶ 301,81 switch between items in the pocket (verified; 306,95 misses); back 15,224 (verified).
+
+- **Which Pokémon...?** (after Use on an item that needs a Pokémon, W7-1): the party column at the left uses the field Bag's `bag_party.slot1..6` places (battle order); a tap on a slot off the game's cursor only moves the cursor, a tap on the cursor's slot uses the item (Potion on Pikipek and on Zorua).
+
+## Battle question and target (`Battle`, W7-1)
+
+- *Use next Pokémon?* (after a faint in a wild battle): the same two-entry object as move learning's question. `battle_ask.first` 160,88 (Use Next Pokémon, tapped twice: opens the Pokémon list without a back button), `battle_ask.second` 160,153 (Run; marked tap because the same object's second entry took the tap as *Keep old moves!*; Run's own outcome not seen).
+- Target screen (`battle_target`, measured from the game's layout file `Battle_TRG_LOW_000`, never seen): top left 83,78, top right 236,78, bottom left 83,162, bottom right 236,162 (150x78 each), back 22,224. See `docs/OFFSETS.md`.
 
 ## Move learning (`Battle`)
 
@@ -169,7 +176,7 @@ After a level-up with four moves known (W6-1, docs/MOVE-LEARN.md). Seen with Bun
 | Screen | Button | Rect | Tap | Does | Verified |
 |---|---|---|---|---|---|
 | question | Forget an old move | 8,74-306,102 | 160,88 | opens the forget screen | tap (the native screen's action) |
-| question | Keep old moves! | 8,139-306,167 | 160,153 | gives up the new move | measured (screenshot) |
+| question | Keep old moves! | 8,139-306,167 | 160,153 | gives up the new move | tap (W7-1: *Buneary did not learn Baby-Doll Eyes*) |
 | forget screen | move 1-4 | 165,3-318,40 / 47-83 / 90-126 / 133-169 | 245, 22 / 70 / 108 / 151 | opens that move's page (doesn't forget yet) | tap, all four (pages of Defense Curl, Splash, Pound, Foresight) |
 | forget screen | new move | 165,186-318,226 | 245,208 | opens its page: *Give up on learning the move* | tap |
 | forget screen | back | 0,210-32,239 | 16,222 | back | none |
@@ -212,9 +219,9 @@ L and R do not turn the box. The cursor is a red arrow above the slot it points 
 ## Not reached
 
 - Z-move button, Mega Evolution: not in this save.
-- Target selection: not shown in single battles; no double battle available.
+- Target selection: not shown in single battles; no double battle available, no SOS call came (layout known from the game's files, see above).
 - Save confirmation: Save is never tapped.
-- Not tapped by choice (listed above as measured): field Bag item Use (except Poké Balls in battle)/Give/Move, Party Held Item, Restore Give, battle Switch/Restore, the Y Poké Ball, X menu page 2 entries other than Options.
+- Not tapped by choice (listed above as measured): field Bag item Use (except Poké Balls in battle)/Give/Move, Party Held Item, Restore Give, battle Restore, the Y Poké Ball, X menu page 2 entries other than Options.
 
 ## Side observations
 

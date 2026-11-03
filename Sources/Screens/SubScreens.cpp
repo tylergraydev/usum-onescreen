@@ -351,8 +351,12 @@ namespace OneScreen
         if (s_active < 0)
             return;
         if (s_shown)
+        {
             log.push_back(std::string(s_screens[s_active]->Name()) + ": hidden");
+            log.push_back(UI::ScreenBuffer::HeapLog((std::string(s_screens[s_active]->Name()) + " hidden").c_str()));
+        }
         u32 word = 0;
+
         if (s_active == 0 && ReadSaveWord(word))
         {
             // What the game kept (Confirm / Yes) or not (back, No): in its

@@ -50,12 +50,15 @@ end
 expect-mode off
 
 # A new species shows its Pokédex page first; A goes on to the nickname
-# question, where the game's cursor is on Yes.
+# question, where the game's cursor is on Yes. The keyboard slides in a few
+# seconds after the A on Yes: wait for it before the round ends, or the
+# next round's A types "!".
 mark
 repeat 6 until-log ^keyboard: shown$
   sleep 5
   shot before-a
   send press a
+  sleep 4
 end
 expect-log ^keyboard: game keyboard found \(stack \d \+[0-9A-F]+ \+[0-9A-F]+\), 0 of 12: ""$
 expect-mode off

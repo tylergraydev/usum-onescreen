@@ -16,10 +16,21 @@ namespace OneScreen
         u16 ability = 0;
         u16 moves[4] = {};
         u8  pp[4] = {}, maxPp[4] = {};
+        u8  partyIndex = 0xFF;  // record +0x19: the party slot it came from
     };
 
     // Which sub-screen the battle UI shows (top of the scene manager's stack).
-    enum class BattleMenu { None, Command, Moves, Pokemon, Bag, Other };
+    // PokemonPage: one Pokémon's page from the Pokémon list (Switch /
+    // Restore / Summary). Question: the battle's two-choice question (Use
+    // next Pokémon? / learning a move); `question` says which.
+    enum class BattleMenu { None, Command, Moves, Pokemon, Bag, Other, PokemonPage, Question };
+
+    // One entry of the battle Bag's open pocket, as the game lists it.
+    struct BattleBagEntry
+    {
+        u16 item = 0;
+        u16 count = 0;
+    };
 
     struct BattleState
     {
@@ -44,6 +55,19 @@ namespace OneScreen
         // Move list (menu == Moves): per move its type and effectiveness
         // against the target, as the list shows them.
         u8  moveType[4] = {}, moveEffect[4] = {};
+        // Bag: the open pocket's items (the game's own copy, in its order;
+        // up to 64), "Which Pokémon do you want to use this item on?" and
+        // its cursor (a slot of the battle party), and the item an item's
+        // page shows (index in the pocket).
+        BattleBagEntry bagItems[64];
+        u8  bagItemCount = 0;
+        bool bagPick = false;
+        u8  bagPickCursor = 0xFF;
+        u8  bagPageIndex = 0xFF;
+        // Question: its message (0x4E "Use next Pokémon?", 0x2F learning a
+        // move) and cursor.
+        u16 question = 0;
+        u8  questionCursor = 0;
     };
 
     BattleState ReadBattle(u32 sceneManager);

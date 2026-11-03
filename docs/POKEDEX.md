@@ -9,7 +9,7 @@ With the panel off, the Pokédex shows on the top screen. The game's own Pokéde
 
 | Game screen | Native screen | Where (top screen) | Left uncovered |
 |---|---|---|---|
-| Top level | Alola and the four island Pokédexes with caught / seen counts (locked ones as "Locked"), Pokédex Evaluation if the game has it; the game's cursor | 12,8 304×224 | the completion % (bottom right); the rest is a title card |
+| Top level | Alola and the four island Pokédexes with caught / seen counts (locked ones as empty brown rows, as the game), Pokédex Evaluation if the game has it; the game's cursor | 12,8 304×224 | the completion % (bottom right); the rest is a title card |
 | Alola list | 8 rows around the cursor: number, name (seen ones; `?????` otherwise, as the game), caught / seen mark; dex counts; scroll bar | 196,8 196×224 | the selected Pokémon's model and name plate (left) |
 | Island grid | the cursor's entry with the one before and after, and the dex's counts | 236,4 158×88 | the island map, habitat and model (the game shows the number and name itself) |
 | Entry page | dex, number, name, seen / caught | 8,8 150×124 | the 3D model (middle) |
@@ -40,7 +40,9 @@ The native X menu's Pokédex entry taps the game's (`xmenu-pokedex`), and the na
 
 ## Drawing
 
-One `UI::Layer` over the current screen's area, redrawn only when what it shows changes and copied every frame (`docs/UI.md`). The buffer (272 KB) is allocated the first time it shows. The view is handed to the OSD callback under a mutex the callback only tries to take. The callback is registered before the panel's, so screenshots include it.
+One `UI::Layer` over the current screen's area, redrawn only when what it shows changes (and once more when the game's font has loaded) and copied every frame (`docs/UI.md`). The buffer (272 KB) is allocated the first time it shows.
+
+The look is the game's own Pokédex (W7-5, `UI::Theme`, measured on the game's bottom screens; `docs/VISUAL-STYLE.md`): a light blue background with lighter squares; rows are bars leaning right with a 2 px dark line, a darker band, a shadow and a dark notch at the left. Top level: the selected dex row red (`DexSelected`) and bigger, the others orange (`DexRow`), locked ones brown (`DexEmpty`), Evaluation yellow and indented; caught and seen counts in dark pills after a ball and a grey dot. List and grid: the game's list colours (seen light red `#FF5544`, unseen dark red `#963228` with a pink `?????`), the ball for caught, the dot for seen. Entry page: a white name bar like the game's entry header. The red arrow cursor marks the selection; the game font and button icons come from W7-0's assets (`UI::RequestAssets` when it shows); prompts are theme chips (B Back, A Open, Up/Down). The view is handed to the OSD callback under a mutex the callback only tries to take. The callback is registered before the panel's, so screenshots include it.
 
 ## Tests
 
