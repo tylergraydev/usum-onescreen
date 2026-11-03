@@ -97,7 +97,7 @@ MOVE_GARC     ?= ../analysis/private/romfs-base/a/0/1/1
 
 # MOVE_GARC: the user's own move data GARC (a/0/1/1), for the real move
 # check; skipped if missing (CI).
-LEARN_SRCS := ../Sources/Screens/MoveLearnMenu.cpp ../Sources/Screens/BattleMenu.cpp ../Sources/Screens/PartyMenu.cpp ../Sources/UI/GameAssets.cpp ../Sources/UI/Theme.cpp ../Sources/MoveData.cpp ../Sources/RomfsText.cpp ../Sources/PartyData.cpp ../Sources/ActionQueue.cpp
+LEARN_SRCS := ../Sources/Screens/MoveLearnMenu.cpp ../Sources/Screens/BattleMenu.cpp ../Sources/Screens/PartyMenu.cpp ../Sources/MoveData.cpp ../Sources/RomfsText.cpp ../Sources/PartyData.cpp ../Sources/ActionQueue.cpp ../Sources/UI/GameAssets.cpp ../Sources/UI/Theme.cpp
 LEARN_HDRS := ../Includes/Screens/MoveLearnMenu.hpp ../Includes/Screens/BattleMenu.hpp ../Includes/MoveData.hpp ../Includes/RomfsText.hpp ../Includes/ActionQueue.hpp ../Includes/Layouts.hpp
 
 $(OUT)/move_learn_test: move_learn_test.cpp $(LEARN_SRCS) $(LEARN_HDRS) $(UI_SRCS) $(UI_HDRS)
@@ -105,7 +105,7 @@ $(OUT)/move_learn_test: move_learn_test.cpp $(LEARN_SRCS) $(LEARN_HDRS) $(UI_SRC
 	$(CXX) $(CXXFLAGS) move_learn_test.cpp $(LEARN_SRCS) $(UI_SRCS) -o $@
 
 ROTOM_PREVIEW := ../analysis/private/rotom-preview.ppm
-ROTOM_SRCS := ../Sources/Screens/RotomPromptView.cpp ../Sources/UI/GameAssets.cpp ../Sources/UI/Theme.cpp ../Sources/RomfsText.cpp ../Sources/PartyData.cpp
+ROTOM_SRCS := ../Sources/Screens/RotomPromptView.cpp ../Sources/RomfsText.cpp ../Sources/PartyData.cpp
 
 $(OUT)/rotom_prompt_test: rotom_prompt_test.cpp $(ROTOM_SRCS) ../Includes/Screens/RotomPromptView.hpp ../Includes/RomfsText.hpp ../Includes/PartyData.hpp $(UI_SRCS) $(UI_HDRS)
 	@mkdir -p $(OUT)
