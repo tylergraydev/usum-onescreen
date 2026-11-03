@@ -7,6 +7,8 @@
 # comes. The chat's question and answers show on the top screen; Down moves
 # to the second answer and A taps it. The native map, opened while Rotom
 # asks, steps aside and comes back after. Screenshots before every A.
+# Start in the Pokémon Center whatever ran before (native-move-learn leaves the grass).
+restore pokecenter
 include common/boot
 expect-log ^rotom: applet [0-9A-F]+, FieldMenu at [0-9A-F]+, chat table ok 30
 

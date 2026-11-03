@@ -2,6 +2,8 @@
 # checking the mode auto panel sets for each (settings defaults).
 # Entries are tapped, not picked with the cursor, so the X menu's
 # remembered cursor position doesn't matter.
+# Start in the Pokémon Center whatever ran before (native-move-learn leaves the grass).
+restore pokecenter
 include common/boot
 # Checks the automatic view per scene, which is off by default.
 send auto on

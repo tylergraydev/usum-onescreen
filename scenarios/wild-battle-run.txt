@@ -1,5 +1,7 @@
 # Walk from the Pokémon Center to the tall grass south of it, wait for a
 # wild battle, Run, and get back to the overworld.
+# Start in the Pokémon Center whatever ran before (native-move-learn leaves the grass).
+restore pokecenter
 include common/boot
 # Checks the automatic view per scene, which is off by default.
 send auto on
