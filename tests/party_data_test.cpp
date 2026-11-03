@@ -36,6 +36,8 @@ static void MakeMon(u8 *core, u8 *calc, u32 ec)
         core[i] = (u8)(i * 7);
     Put16(core, 0x08, 726);         // species
     Put16(core, 0x0A, 217);         // held item
+    core[0x14] = 92;                // ability (Skill Link)
+    core[0x1C] = 10;                // nature (Timid)
     const char *nick = "Torracat";
     for (u32 i = 0; i < 13; i++)
         Put16(core, 0x40 + i * 2, i < std::strlen(nick) ? (u16)nick[i] : 0);
@@ -57,6 +59,8 @@ static void CheckMon(const Pk7 &mon)
 {
     CHECK(mon.species == 726);
     CHECK(mon.heldItem == 217);
+    CHECK(mon.ability == 92);
+    CHECK(mon.nature == 10);
     CHECK(mon.nickname[0] == 'T' && mon.nickname[7] == 't' && mon.nickname[8] == 0);
     CHECK(mon.moves[1] == 424 && mon.moves[3] == 122);
     CHECK(mon.pp[0] == 35 && mon.pp[3] == 29);

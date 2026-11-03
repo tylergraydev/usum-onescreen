@@ -8,6 +8,7 @@
 #include "Actions.hpp"
 #include "AutoPanel.hpp"
 #include "Battle.hpp"
+#include "Box.hpp"
 #include "Buttons.hpp"
 #include "Cursor.hpp"
 #include "InputCapture.hpp"
@@ -15,6 +16,13 @@
 #include "Party.hpp"
 #include "Scene.hpp"
 #include "Screens/BattleScreen.hpp"
+#include "Screens/Keyboard.hpp"
+#include "Screens/Pokedex.hpp"
+#include "Screens/SubScreens.hpp"
+#include "Screens/Bag.hpp"
+#include "Screens/Map.hpp"
+#include "Screens/PartyScreen.hpp"
+#include "Screens/Boxes.hpp"
 #include "Screens/XMenu.hpp"
 #include "Settings.hpp"
 #include "Shot.hpp"
@@ -107,6 +115,7 @@ namespace CTRPluginFramework
     //   battle   (log the battle state, docs/RE1-battle.md; also logged on change)
     //   where   (log the zone, position and facing, docs/RE4-map.md)
     //   party | bag   (log the party / the bag pockets, docs/RE3-party-bag.md)
+    //   box [N]   (log PC box N, default the one on screen, and the Box screen, docs/RE6-boxes.md)
     //   memmap | dump ADDR SIZE NAME   (readable blocks; raw memory to /usum-dump-NAME.bin)
     //   auto on | auto off   (panel follows the scene, or stays as set)
     //   perf on | perf off | perf   (panel and uidemo timing; perf logs and restarts the window)
@@ -119,6 +128,18 @@ namespace CTRPluginFramework
     //     Screens/BattleScreen.hpp; on by default)
     //   xmenu on|off|status | xmenu select NAME | xmenu open NAME   (native X menu,
     //     Screens/XMenu.hpp; NAME as in XMenuGrid.cpp: pokemon, pokedex, ..., map, save)
+    //   keyboard on|off|status|read   (native keyboard, Screens/Keyboard.hpp; read
+    //     looks for the game's keyboard now and logs its text)
+    //   pokedex on|off|status|rows   (native Pokedex, Screens/Pokedex.hpp; rows logs
+    //     the seen entries of each dex)
+    //   screens on|off|status   (native Options, Trainer Passport, Battle Video;
+    //     Screens/SubScreens.hpp)
+    //   bagui on|off|status|read | bagui select N   (native Bag, Screens/Bag.hpp;
+    //     read logs what the plugin reads of the game's Bag; select moves the list cursor)
+    //   map on|off|open|close|status   (native top-screen map, Screens/Map.hpp)
+    //   partyui on|off|status   (native Party screen and summary, Screens/PartyScreen.hpp)
+    //   boxes on|off|status|details|pick|drop|prev|next   (native PC boxes, Screens/Boxes.hpp;
+    //     pick/drop/prev/next as A / L / R)
     static const char *CommandPath = "/usum-cmd.txt";
 
     // Global data + bss of USUM v1.2 (from the exheader): 0x669000 .. 0x6D5F44.
@@ -240,6 +261,8 @@ namespace CTRPluginFramework
             WriteLog(OneScreen::DescribeParty(OneScreen::ReadParty(s_game->offsets.sceneManager)), false);
         else if (line == "bag")
             WriteLog(OneScreen::DescribeBag(OneScreen::ReadBag()), false);
+        else if (line == "box" || std::sscanf(line.c_str(), "box %u", &a) == 1)
+            WriteLog(OneScreen::DescribeBox(s_game->offsets.sceneManager, line == "box" ? 0 : (int)a), false);
         else if (line == "memmap")
             WriteLog(OneScreen::MemoryMap(), false);
         else if (std::sscanf(line.c_str(), "dump %x %x %15s", &a, &b, word) == 3)
@@ -306,6 +329,90 @@ namespace CTRPluginFramework
             if (!known)
             {
                 WriteLog("cmd: unknown xmenu command in '" + line + "'", false);
+                return;
+            }
+        }
+        else if (line.compare(0, 9, "keyboard ") == 0)
+        {
+            std::vector<std::string> log;
+            const bool known = OneScreen::KeyboardCommand(line.substr(9), s_game->offsets.sceneManager, log);
+            for (const std::string &l : log)
+                WriteLog(l, false);
+            if (!known)
+            {
+                WriteLog("cmd: unknown keyboard command in '" + line + "'", false);
+                return;
+            }
+        }
+        else if (line.compare(0, 8, "pokedex ") == 0)
+        {
+            std::vector<std::string> log;
+            const bool known = OneScreen::PokedexCommand(line.substr(8), s_game->offsets.sceneManager, log);
+            for (const std::string &l : log)
+                WriteLog(l, false);
+            if (!known)
+            {
+                WriteLog("cmd: unknown pokedex command in '" + line + "'", false);
+                return;
+            }
+        }
+        else if (line.compare(0, 8, "screens ") == 0)
+        {
+            std::vector<std::string> log;
+            const bool known = OneScreen::SubScreensCommand(line.substr(8), log);
+            for (const std::string &l : log)
+                WriteLog(l, false);
+            if (!known)
+            {
+                WriteLog("cmd: unknown screens command in '" + line + "'", false);
+                return;
+            }
+        }
+        else if (line.compare(0, 6, "bagui ") == 0)
+        {
+            std::vector<std::string> log;
+            const bool known = OneScreen::BagCommandLine(line.substr(6), s_game->offsets.sceneManager, log);
+            for (const std::string &l : log)
+                WriteLog(l, false);
+            if (!known)
+            {
+                WriteLog("cmd: unknown bagui command in '" + line + "'", false);
+                return;
+            }
+        }
+        else if (line.compare(0, 4, "map ") == 0)
+        {
+            std::vector<std::string> log;
+            const bool known = OneScreen::MapCommand(line.substr(4), log);
+            for (const std::string &l : log)
+                WriteLog(l, false);
+            if (!known)
+            {
+                WriteLog("cmd: unknown map command in '" + line + "'", false);
+                return;
+            }
+        }
+        else if (line.compare(0, 8, "partyui ") == 0)
+        {
+            std::vector<std::string> log;
+            const bool known = OneScreen::PartyScreenCommand(line.substr(8), log);
+            for (const std::string &l : log)
+                WriteLog(l, false);
+            if (!known)
+            {
+                WriteLog("cmd: unknown partyui command in '" + line + "'", false);
+                return;
+            }
+        }
+        else if (line.compare(0, 6, "boxes ") == 0)
+        {
+            std::vector<std::string> log;
+            const bool known = OneScreen::BoxesRunCommand(line.substr(6), s_game->offsets.sceneManager, log);
+            for (const std::string &l : log)
+                WriteLog(l, false);
+            if (!known)
+            {
+                WriteLog("cmd: unknown boxes command in '" + line + "'", false);
                 return;
             }
         }
@@ -455,6 +562,41 @@ namespace CTRPluginFramework
         for (const std::string &line : xmenuLog)
             WriteLog(line, false);
 
+        std::vector<std::string> keyboardLog;
+        OneScreen::KeyboardUpdate(s_game->offsets.sceneManager, keyboardLog);
+        for (const std::string &line : keyboardLog)
+            WriteLog(line, false);
+
+        std::vector<std::string> dexLog;
+        OneScreen::PokedexUpdate(s_game->offsets.sceneManager, scene, dexLog);
+        for (const std::string &line : dexLog)
+            WriteLog(line, false);
+
+        std::vector<std::string> screensLog;
+        OneScreen::SubScreensUpdate(s_game->offsets.sceneManager, scene, screensLog);
+        for (const std::string &line : screensLog)
+            WriteLog(line, false);
+
+        std::vector<std::string> bagLog;
+        OneScreen::BagUpdate(s_game->offsets.sceneManager, scene, bagLog);
+        for (const std::string &line : bagLog)
+            WriteLog(line, false);
+
+        std::vector<std::string> mapLog;
+        OneScreen::MapUpdate(s_game->offsets.sceneManager, scene, fieldState, mapLog);
+        for (const std::string &line : mapLog)
+            WriteLog(line, false);
+
+        std::vector<std::string> partyLog;
+        OneScreen::PartyScreenUpdate(s_game->offsets.sceneManager, scene, partyLog);
+        for (const std::string &line : partyLog)
+            WriteLog(line, false);
+
+        std::vector<std::string> boxesLog;
+        OneScreen::BoxesUpdate(s_game->offsets.sceneManager, scene, boxesLog);
+        for (const std::string &line : boxesLog)
+            WriteLog(line, false);
+
         OneScreen::ShotPoll();
         PollCommands();
     }
@@ -552,6 +694,13 @@ namespace CTRPluginFramework
         // Before the panel: its callback takes the screenshots, so it must
         // run after the native menus have drawn.
         OneScreen::StartXMenu();
+        OneScreen::StartKeyboard();
+        OneScreen::StartPokedex();
+        OneScreen::StartSubScreens();
+        OneScreen::StartBag();
+        OneScreen::StartMap();
+        OneScreen::StartPartyScreen();
+        OneScreen::StartBoxes();
         OneScreen::StartPanel(OneScreen::PanelMode::Off, s_game->offsets.gxDisplayTransfer.address,
                               s_game->offsets.gxTextureCopy.address);
         OneScreen::StartActions();

@@ -25,7 +25,7 @@ static int s_checks = 0;
 
 static bool SameSettings(const Settings &a, const Settings &b)
 {
-    return a.panelKey == b.panelKey && a.touchKey == b.touchKey && a.cursorSource == b.cursorSource
+    return a.panelKey == b.panelKey && a.touchKey == b.touchKey && a.mapKey == b.mapKey && a.cursorSource == b.cursorSource
         && a.cursorSpeed == b.cursorSpeed && a.panelSize == b.panelSize && a.panelCorner == b.panelCorner
         && a.autoPanel == b.autoPanel && a.scenes == b.scenes;
 }
@@ -45,6 +45,7 @@ static void TestDefaultsMatchOldBehaviour(void)
     const Settings s;
     CHECK(s.panelKey == (KeyBits::L | KeyBits::R));
     CHECK(s.touchKey == KeyBits::ZL);
+    CHECK(s.mapKey == KeyBits::ZR);
     CHECK(s.cursorSource == CursorSource::CStick);
     CHECK(s.cursorSpeed == 6);
     CHECK(s.panelSize == PanelSize::Half);

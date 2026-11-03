@@ -26,6 +26,23 @@ static unsigned AllBut(const char *name)
     return ~(1u << E(name));
 }
 
+static void TestCloseAction(void)
+{
+    // The Map entry's hand-over to the native map: B, then the field without
+    // the X menu; allowed only from the open X menu.
+    const ActionDef &def = XMenuCloseAction();
+    CHECK(CheckAction(def).empty());
+    CHECK(std::string(def.name) == "xmenu-close");
+    CHECK(def.steps.size() == 2);
+    CHECK(def.steps.size() == 2 && def.steps[0].kind == StepKind::Press && def.steps[0].keys == ActionKeyB);
+    CHECK(def.steps.size() == 2 && def.steps[1].kind == StepKind::WaitFor);
+    ActionWorld menu, field;
+    menu.scene = field.scene = SceneField;
+    menu.flags = WorldXMenu;
+    CHECK(def.needs.Matches(menu) && !def.needs.Matches(field));
+    CHECK(def.steps.size() == 2 && def.steps[1].until.Matches(field) && !def.steps[1].until.Matches(menu));
+}
+
 static void TestTable(void)
 {
     const std::vector<XMenuEntry> &entries = XMenuEntries();
@@ -54,6 +71,9 @@ static void TestTable(void)
             CHECK(bad.empty());
         }
         CHECK(std::string(XMenuAction(i).name) == std::string("xmenu-") + e.name);
+        // Entries with a native screen (Screens/SubScreens.hpp).
+        const std::string n = e.name;
+        CHECK(XMenuOpensNative(i) == (n == "options" || n == "trainer_passport" || n == "battle_video"));
 
         // Cells sit inside the menu and don't overlap.
         const UI::Rect r = XMenuCellRect(i);
@@ -255,6 +275,16 @@ static void PrintLog(const std::vector<std::string> &log)
         std::printf("    %s\n", line.c_str());
 }
 
+static void TestNative(void)
+{
+    // Only the Pokédex has a native screen behind it (Screens/Pokedex.hpp).
+    for (int i = 0; i < (int)XMenuEntries().size(); i++)
+        CHECK((XMenuNativeScreen(i) != nullptr) == (i == E("pokedex")));
+    CHECK(std::string(XMenuNativeScreen(E("pokedex"))) == "pokedex");
+    CHECK(XMenuNativeScreen(-1) == nullptr);
+    CHECK(XMenuNativeScreen(99) == nullptr);
+}
+
 static void TestActions(void)
 {
     // Every grid entry from either page: one page tap only when needed.
@@ -392,10 +422,12 @@ static void TestDraw(const char *preview)
 int main(int argc, char **argv)
 {
     TestTable();
+    TestCloseAction();
     TestMove();
     TestFlipPage();
     TestCursorMemory();
     TestActions();
+    TestNative();
     TestDraw(argc > 1 ? argv[1] : nullptr);
     if (s_failures != 0)
     {
