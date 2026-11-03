@@ -265,6 +265,6 @@ Bag's first frame.
   TM01 on Torracat through the game's move-forget screen (on the panel) and
   back, not learned; Exp. Share off and on; Lens Case to the Free Space and
   back; a menu cancelled with B; B closes the Bag to the native X menu.
-  `check-save` at the end. Passed in 187 s (instance `p24`, 2026-11-02).
+  `check-save` at the end. Passed in 485 s (instance `w73`, 2026-11-02, with the W7-0 assets and the W7-M screen buffer merged; earlier runs also failed on the scenario's random wild battles: no encounter in 8 walks, or no escape in 6 tries).
 - `actions.txt` and `open-each-app.txt` check the Bag's panel: they send
   `bagui off` first.
