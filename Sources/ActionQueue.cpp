@@ -45,6 +45,7 @@ namespace OneScreen
             { WorldXMenu, "x-menu" }, { WorldBattleCommand, "battle-command" }, { WorldXMenuPage2, "x-menu-page-2" },
             { WorldBattleMoves, "battle-moves" }, { WorldPartyList, "party-list" },
             { WorldBoxIdle, "box-idle" }, { WorldBoxModal, "box-modal" }, { WorldBoxCarrying, "box-carrying" },
+            { WorldLearnAsk, "learn-ask" }, { WorldLearnList, "learn-list" }, { WorldLearnConfirm, "learn-confirm" },
         };
         std::string out = scene == nullptr ? "any scene" : std::string(sceneNot ? "not " : "") + SceneName(scene);
         for (const auto &f : flags)
