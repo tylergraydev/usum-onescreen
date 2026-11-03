@@ -10,7 +10,7 @@ OUT      := build
 PYTHON   ?= python3
 CODE_BIN ?=
 
-TESTS    := $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/ui_host_test $(OUT)/party_data_test $(OUT)/action_queue_test $(OUT)/xmenu_test $(OUT)/battle_menu_test $(OUT)/keyboard_test $(OUT)/pokedex_test $(OUT)/native_screens_test $(OUT)/bag_test $(OUT)/map_test $(OUT)/party_menu_test $(OUT)/boxes_test $(OUT)/field_settle_test $(OUT)/move_learn_test $(OUT)/rotom_prompt_test $(OUT)/theme_test
+TESTS    := $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/ui_host_test $(OUT)/party_data_test $(OUT)/action_queue_test $(OUT)/xmenu_test $(OUT)/battle_menu_test $(OUT)/keyboard_test $(OUT)/pokedex_test $(OUT)/native_screens_test $(OUT)/bag_test $(OUT)/map_test $(OUT)/party_menu_test $(OUT)/boxes_test $(OUT)/field_settle_test $(OUT)/move_learn_test $(OUT)/rotom_prompt_test $(OUT)/theme_test $(OUT)/screen_buffer_test
 
 all: run
 
@@ -129,6 +129,11 @@ $(OUT)/battle_menu_test: battle_menu_test.cpp $(BATTLE_SRCS) ../Includes/Screens
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) battle_menu_test.cpp $(BATTLE_SRCS) $(UI_SRCS) -o $@
 
+# glibc deprecates mallinfo (newlib on the 3DS has no mallinfo2).
+$(OUT)/screen_buffer_test: screen_buffer_test.cpp ../Sources/UI/ScreenBuffer.cpp $(UI_SRCS) $(UI_HDRS)
+	@mkdir -p $(OUT)
+	$(CXX) $(CXXFLAGS) -Wno-deprecated-declarations screen_buffer_test.cpp ../Sources/UI/ScreenBuffer.cpp $(UI_SRCS) -o $@
+
 run: $(TESTS)
 	./$(OUT)/input_capture_test
 	./$(OUT)/settings_test
@@ -137,6 +142,7 @@ run: $(TESTS)
 	./$(OUT)/action_queue_test
 	@mkdir -p $(BATTLE_PREVIEW)
 	./$(OUT)/battle_menu_test $(BATTLE_PREVIEW)
+	./$(OUT)/screen_buffer_test
 	$(PYTHON) -I ../tools/gen_layouts.py --check
 	@mkdir -p $(dir $(PREVIEW))
 	./$(OUT)/ui_host_test $(PREVIEW)
