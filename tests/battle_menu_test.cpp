@@ -1,18 +1,37 @@
 // Host tests for the native battle menu's pure logic (Sources/Screens/
-// BattleMenu.cpp): pages follow the game's menu, input, settling, PP checks,
-// move rows, effectiveness labels, the Poké Balls tab, and drawing inside
+// BattleMenu.cpp, BattleMenuDraw.cpp): pages follow the game's menu, input,
+// settling, PP checks, move rows, effectiveness labels, the native Pokémon
+// list, Bag and "Use next Pokémon?" against a fake game, and drawing inside
 // each page's area. Build and run: make -C tests.
 
 #include "Screens/BattleMenu.hpp"
 
 #include <cstdio>
 #include <cstring>
+#include <string>
 #include <vector>
+
+#include "ActionQueue.hpp"
 
 using namespace OneScreen;
 using namespace OneScreen::Screens;
 
 static int s_failures = 0;
+static const char *s_previewDir = nullptr;    // argv[1]: write PPM previews there
+
+static void WritePreview(const std::vector<u8> &bgr, const std::string &path)
+{
+    FILE *f = std::fopen(path.c_str(), "wb");
+    if (f == nullptr)
+        return;
+    std::fprintf(f, "P6\n%d %d\n255\n", UI::ScreenW, UI::ScreenH);
+    for (size_t i = 0; i + 2 < bgr.size(); i += 3)
+    {
+        const u8 rgb[3] = { bgr[i + 2], bgr[i + 1], bgr[i] };
+        std::fwrite(rgb, 1, 3, f);
+    }
+    std::fclose(f);
+}
 
 #define CHECK(cond) \
     do { if (!(cond)) { std::printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond); s_failures++; } } while (0)
@@ -69,18 +88,18 @@ static void TestPages(void)
     CHECK(menu.Update(snap, 0).capture);
     CHECK(menu.Page() == BattlePage::Command && menu.Cursor() == 0);
 
-    snap.menu = GameMenu::Bag;  // the game's own screen: buttons go to it
-    CHECK(!menu.Update(snap, BattleKeys::A).capture);
-    CHECK(menu.Page() == BattlePage::Game);
+    snap.menu = GameMenu::Bag;  // native pages, with their keys
+    CHECK(menu.Update(snap, 0).capture && menu.Page() == BattlePage::Bag);
     snap.menu = GameMenu::Pokemon;
+    CHECK(menu.Update(snap, 0).capture && menu.Page() == BattlePage::Party);
+    snap.menu = GameMenu::PokemonPage;  // same page
+    CHECK(menu.Page() == BattlePage::Party);
+    snap.menu = GameMenu::Question;
+    snap.question = QuestionNextPokemon;
+    CHECK(menu.Update(snap, 0).capture && menu.Page() == BattlePage::Question);
+    snap.question = 0x99;   // a question the menu doesn't know: the helper
     CHECK(!menu.Update(snap, 0).capture && menu.Page() == BattlePage::Game);
-    snap.gameCursor = 9;    // not set yet as the game's list opens
-    snap.listCount = 6;
-    CHECK(menu.Status(snap).find("no slot yet") != std::string::npos);
-    snap.gameCursor = 1;
-    CHECK(menu.Status(snap).find("slot 2 of 6") != std::string::npos);
-    snap.gameCursor = 0;
-    snap.listCount = 0;
+    snap.question = 0;
     snap.menu = GameMenu::Other;
     CHECK(!menu.Update(snap, 0).capture && menu.Page() == BattlePage::Game);
 
@@ -100,7 +119,7 @@ static void TestPages(void)
     Idle(intro, snap, BattleMenu::PromptShowFrames);
     CHECK(intro.Visible() && intro.Area().Bottom() <= 120);
     CHECK(intro.Status(snap).find("prompt") != std::string::npos);
-    // From the game's Pokémon list (its Switch / Summary screen): at once.
+    // From the Pokémon list (a game screen it opened): at once.
     BattleMenu fromList;
     BattleSnapshot list = snap;
     list.menu = GameMenu::Pokemon;
@@ -272,17 +291,434 @@ static void TestLabels(void)
     CHECK(StepCursor(0, 4, -1) == 3 && StepCursor(3, 4, 1) == 0 && StepCursor(0, 0, 1) == 0);
 }
 
-static void TestBalls(void)
+static void TestItems(void)
 {
-    // The Items pocket of the test save, in order (docs/RE3-party-bag.md).
-    const u16 items[] = { 217, 78, 4, 3, 86, 58, 57, 14, 87, 245, 12 };
-    const u16 counts[] = { 1, 3, 37, 5, 1, 1, 1, 1, 1, 1, 0 };
-    u16 outItems[8], outCounts[8];
-    const u8 n = BallsInPocket(items, counts, 11, outItems, outCounts, 8);
-    CHECK(n == 3);
-    CHECK(outItems[0] == 4 && outCounts[0] == 37);
-    CHECK(outItems[1] == 3 && outItems[2] == 14);
-    CHECK(IsBallItem(851) && IsBallItem(492) && !IsBallItem(17) && !IsBallItem(0));
+    CHECK(IsBallItem(4) && IsBallItem(851) && IsBallItem(492) && !IsBallItem(17) && !IsBallItem(0));
+    CHECK(IsHpOnlyItem(17) && IsHpOnlyItem(155) && !IsHpOnlyItem(28) && !IsHpOnlyItem(4));
+    for (u8 p = 0; p < BattlePocketCount; p++)
+        CHECK(BattlePocketButton(p) != nullptr && FindLayoutButton(BattlePocketButton(p)) != nullptr);
+    CHECK(BattlePocketButton(BattlePocketCount) == nullptr);
+}
+
+// --- A fake game for the Pokémon list, Bag and question ---
+
+// The game as the menu sees it: taps land after the action (18 frames)
+// and change the screen as the real one did in instance w71 (docs/BATTLE-UI.md).
+struct FakeGame
+{
+    BattleSnapshot snap;
+    u32 busy = 0;               // frames left of the running step
+    std::vector<std::string> taps;
+    int switchedTo = -1;        // slot sent in
+    int usedOn = -1;            // pick slot an item was used on
+    u16 usedItem = 0;
+    bool thrown = false, left = false, answered = false;
+    int answer = -1;
+    u32 gap = 0;                // frames of "no screen" then the command menu between list and page
+    int pageFor = -1;
+    bool ignoreTaps = false;
+
+    FakeGame()
+    {
+        snap.inBattle = true;
+        snap.activeName = "Torracat";
+        const char *names[6] = { "Torracat", "Zorua", "Pikipek", "Pichu", "Ledyba", "Buneary" };
+        const u16 hp[6] = { 51, 20, 35, 0, 37, 37 };
+        snap.partyCount = 6;
+        for (u8 i = 0; i < 6; i++)
+        {
+            snap.party[i].name = names[i];
+            snap.party[i].species = names[i];
+            snap.party[i].level = 12;
+            snap.party[i].hp = hp[i];
+            snap.party[i].maxHp = i == 0 ? 51 : 37;
+        }
+    }
+
+    void Pocket(u8 pocket)
+    {
+        snap.bagPocket = pocket;
+        static const BattleBagItem pockets[5][4] = {
+            { { 958, 2, "Roto Boost" } },
+            { { 17, 9, "Potion" }, { 26, 2, "Super Potion" }, { 30, 1, "Fresh Water" }, { 155, 7, "Oran Berry" } },
+            { { 22, 5, "Paralyze Heal" }, { 28, 8, "Revive" } },
+            { { 4, 37, "Pok\xC3\xA9 Ball" }, { 3, 5, "Great Ball" }, { 14, 1, "Heal Ball" } },
+            {},
+        };
+        static const u8 counts[5] = { 1, 4, 2, 3, 0 };
+        snap.bagItemCount = counts[pocket];
+        for (u8 i = 0; i < counts[pocket]; i++)
+            snap.bagItems[i] = pockets[pocket][i];
+    }
+
+    void Apply(const BattleMenuOutput &out)
+    {
+        if (out.tap == nullptr && out.press == 0)
+            return;
+        CHECK(busy == 0);
+        busy = 18;
+        const std::string tap = out.tap ? out.tap : "press";
+        if (out.tap != nullptr)
+        {
+            const LayoutButton *button = FindLayoutButton(out.tap);
+            CHECK(button != nullptr);
+            taps.push_back(tap);
+        }
+        else
+            taps.push_back("press B");
+        if (ignoreTaps)
+            return;
+        BattleSnapshot &s = snap;
+        if (s.menu == GameMenu::Pokemon)
+        {
+            if (tap.compare(0, 10, "party.slot") == 0)
+            {
+                pageFor = tap[10] - '1';
+                gap = 6;
+                s.menu = GameMenu::None;
+            }
+            else if (tap == "battle_party.back")
+            {
+                s.menu = GameMenu::Command;
+                left = true;
+            }
+        }
+        else if (s.menu == GameMenu::PokemonPage)
+        {
+            if (tap == "battle_party_page.switch")
+            {
+                switchedTo = pageFor;
+                s.menu = GameMenu::None;
+            }
+            else if (tap == "battle_party_page.back")
+                s.menu = GameMenu::Pokemon;
+        }
+        else if (s.menu == GameMenu::Bag)
+        {
+            for (u8 p = 0; p < BattlePocketCount; p++)
+                if (tap == BattlePocketButton(p))
+                    Pocket(p);
+            if (s.bagPick)
+            {
+                if (tap == "press")
+                    s.bagPick = false;
+                else if (tap.compare(0, 14, "bag_party.slot") == 0)
+                {
+                    const u8 slot = (u8)(tap[14] - '1');
+                    if (s.bagPickCursor != slot)
+                        s.bagPickCursor = slot;     // a tap off the cursor only moves it
+                    else
+                    {
+                        usedOn = slot;
+                        usedItem = s.bagItems[s.bagPageIndex].id;
+                        s.bagPick = false;
+                        s.menu = GameMenu::None;
+                    }
+                }
+            }
+            else if (s.bagItemPage)
+            {
+                if (tap == "battle_bag_item_page.next_item")
+                    s.bagPageIndex = (u8)((s.bagPageIndex + 1) % s.bagItemCount);
+                else if (tap == "battle_bag_item_page.prev_item")
+                    s.bagPageIndex = (u8)((s.bagPageIndex + s.bagItemCount - 1) % s.bagItemCount);
+                else if (tap == "battle_bag_item_page.back")
+                    s.bagItemPage = false;
+                else if (tap == "battle_bag_item_page.use")
+                {
+                    s.bagItemPage = false;
+                    if (IsBallItem(s.bagItems[s.bagPageIndex].id))
+                    {
+                        thrown = true;
+                        usedItem = s.bagItems[s.bagPageIndex].id;
+                        s.menu = GameMenu::None;
+                    }
+                    else
+                    {
+                        s.bagPick = true;
+                        s.bagPickCursor = 0;
+                    }
+                }
+            }
+            else if (tap == "bag.item_row1" && s.bagItemCount > 0)
+            {
+                s.bagItemPage = true;
+                s.bagPageIndex = 0;
+            }
+            else if (tap == "battle_bag.back")
+            {
+                s.menu = GameMenu::Command;
+                left = true;
+            }
+        }
+        else if (s.menu == GameMenu::Question)
+        {
+            answered = true;
+            answer = tap == "battle_ask.first" ? 0 : tap == "battle_ask.second" ? 1 : -1;
+            s.menu = answer == 0 ? GameMenu::Pokemon : GameMenu::None;
+        }
+    }
+
+    // One frame: the menu, then the game.
+    void Frame(BattleMenu &menu, u32 pressed = 0)
+    {
+        snap.actionRunning = busy > 0;
+        const BattleMenuOutput out = menu.Update(snap, pressed);
+        if (busy > 0)
+            busy--;
+        if (gap > 0 && --gap == 0)
+            snap.menu = GameMenu::PokemonPage;
+        else if (gap == 3)
+            snap.menu = GameMenu::Command;  // the game's command menu, for a moment
+        Apply(out);
+    }
+
+    void Run(BattleMenu &menu, u32 frames)
+    {
+        for (u32 i = 0; i < frames; i++)
+            Frame(menu);
+    }
+};
+
+static void TestParty(void)
+{
+    // Pokémon from the command bar: the list, cursor on the first that could
+    // come in; A, Switch: tap the slot, then Switch on its page, through the
+    // game's gap between them.
+    FakeGame game;
+    BattleMenu menu;
+    game.snap.menu = GameMenu::Command;
+    game.Run(menu, BattleMenu::CommandSettleFrames);
+    menu.Update(game.snap, BattleKeys::DDown);
+    menu.Update(game.snap, BattleKeys::DDown);
+    const BattleMenuOutput out = menu.Update(game.snap, BattleKeys::A);
+    CHECK(out.action != nullptr && std::strcmp(out.action, "battle-pokemon") == 0);
+    game.snap.menu = GameMenu::None;
+    game.Run(menu, 3);
+    game.snap.menu = GameMenu::Pokemon;
+    game.Frame(menu);
+    CHECK(menu.Page() == BattlePage::Party && !menu.Forced() && menu.Cursor() == 1);
+    CHECK(menu.Status(game.snap).find("Zorua") != std::string::npos);
+
+    // In battle, fainted, and moves: Right/Left in the row, Down a row.
+    game.Frame(menu, BattleKeys::DLeft);
+    game.Frame(menu, BattleKeys::A);
+    CHECK(menu.Note() == "Torracat is already in battle!" && !menu.PopupOpen());
+    game.Frame(menu, BattleKeys::DDown);
+    game.Frame(menu, BattleKeys::DRight);
+    CHECK(menu.Cursor() == 3);
+    game.Frame(menu, BattleKeys::A);
+    CHECK(menu.Note() == "Pichu has no energy left to battle!");
+    game.Frame(menu, BattleKeys::DUp);
+    CHECK(menu.Cursor() == 1 && menu.Note().empty());
+    game.Frame(menu, BattleKeys::A);
+    CHECK(menu.PopupOpen() && menu.PopupCursor() == 0);
+    game.Frame(menu, BattleKeys::DDown);
+    game.Frame(menu, BattleKeys::A);   // Cancel
+    CHECK(!menu.PopupOpen() && !menu.Busy());
+    game.Frame(menu, BattleKeys::A);
+    game.Frame(menu, BattleKeys::A);   // Switch
+    CHECK(menu.Busy());
+    game.Run(menu, 200);
+    CHECK(game.switchedTo == 1);
+    CHECK(game.taps.size() == 2 && game.taps[0] == "party.slot2" && game.taps[1] == "battle_party_page.switch");
+    CHECK(menu.Page() == BattlePage::Hidden && !menu.Busy());
+
+    // B goes back (the list's back button).
+    FakeGame back;
+    BattleMenu backMenu;
+    back.snap.menu = GameMenu::Command;
+    back.Run(backMenu, BattleMenu::CommandSettleFrames);
+    backMenu.Update(back.snap, BattleKeys::DDown);
+    backMenu.Update(back.snap, BattleKeys::DDown);
+    backMenu.Update(back.snap, BattleKeys::A);
+    back.snap.menu = GameMenu::Pokemon;
+    back.Frame(backMenu, BattleKeys::B);
+    back.Run(backMenu, 100);
+    CHECK(back.left && back.taps.size() == 1 && back.taps[0] == "battle_party.back");
+
+    // After a faint (no Pokémon command): no way back, B says so.
+    FakeGame forced;
+    BattleMenu forcedMenu;
+    forced.snap.party[0].hp = 0;
+    forced.snap.menu = GameMenu::Pokemon;
+    forced.Frame(forcedMenu);
+    CHECK(forcedMenu.Forced());
+    forced.Frame(forcedMenu, BattleKeys::B);
+    CHECK(!forcedMenu.Busy() && forcedMenu.Note() == "Choose a Pok\xC3\xA9mon to send out");
+    CHECK(forcedMenu.Status(forced.snap).find("forced") != std::string::npos);
+
+    // A game that never answers: the goal gives up with a note.
+    FakeGame deaf;
+    BattleMenu deafMenu;
+    deaf.ignoreTaps = true;
+    deaf.snap.menu = GameMenu::Pokemon;
+    deaf.Frame(deafMenu);
+    deaf.Frame(deafMenu, BattleKeys::A);
+    deaf.Frame(deafMenu, BattleKeys::A);
+    deaf.Run(deafMenu, BattleMenu::GoalFrames + 10);
+    CHECK(!deafMenu.Busy() && deafMenu.Note() == "The game didn't answer, try again");
+    CHECK(deaf.taps.size() <= 3);
+}
+
+static void TestBag(void)
+{
+    FakeGame game;
+    BattleMenu menu;
+    game.snap.menu = GameMenu::Bag;
+    game.Pocket(0);
+    game.Frame(menu);
+    CHECK(menu.Page() == BattlePage::Bag && menu.BagCursor() == 0);
+
+    // Right: the HP/PP tab (a tap on it).
+    game.Frame(menu, BattleKeys::DRight);
+    CHECK(menu.WantPocket() == 1);
+    game.Run(menu, 120);
+    CHECK(game.snap.bagPocket == 1 && !menu.Busy() && menu.WantPocket() == -1);
+    CHECK(game.taps.back() == "battle_bag.pocket_hp_pp");
+    // L wraps to the left of it: Rotom Powers; R back.
+    game.Frame(menu, BattleKeys::L);
+    game.Run(menu, 120);
+    CHECK(game.snap.bagPocket == 0);
+    game.Frame(menu, BattleKeys::R);
+    game.Run(menu, 120);
+    CHECK(game.snap.bagPocket == 1);
+
+    // Fresh Water (the third): its page through the arrows, Use, then
+    // "Which Pokémon...?": native pick; full HP and fainted are refused,
+    // Zorua (20/37) gets it with two taps (the first only moves the cursor).
+    game.Frame(menu, BattleKeys::DDown);
+    game.Frame(menu, BattleKeys::DDown);
+    CHECK(menu.BagCursor() == 2);
+    game.taps.clear();
+    game.Frame(menu, BattleKeys::A);
+    game.Run(menu, 300);
+    CHECK(game.snap.bagPick && !menu.Busy());
+    CHECK(game.taps.size() == 4 && game.taps[0] == "bag.item_row1" && game.taps[1] == "battle_bag_item_page.next_item"
+          && game.taps[3] == "battle_bag_item_page.use");
+    CHECK(menu.Status(game.snap).find("pick 0 of 6 (Torracat)") != std::string::npos);
+    game.Frame(menu, BattleKeys::A);
+    CHECK(menu.Note() == "It won't have any effect." && !menu.Busy());
+    game.Frame(menu, BattleKeys::DDown);
+    game.Frame(menu, BattleKeys::DDown);
+    game.Frame(menu, BattleKeys::DDown);
+    game.Frame(menu, BattleKeys::A);   // Pichu, fainted
+    CHECK(menu.Note() == "It won't have any effect.");
+    game.Frame(menu, BattleKeys::DUp);
+    game.Frame(menu, BattleKeys::DUp);
+    CHECK(menu.PickCursor() == 1);
+    game.taps.clear();
+    game.Frame(menu, BattleKeys::A);
+    CHECK(menu.Busy() && menu.BusyText() == "Using Fresh Water on Zorua...");
+    game.Run(menu, 200);
+    CHECK(game.usedOn == 1 && game.usedItem == 30);
+    CHECK(game.taps.size() == 2 && game.taps[0] == "bag_party.slot2" && game.taps[1] == "bag_party.slot2");
+    CHECK(menu.Page() == BattlePage::Hidden);
+
+    // A ball: the Poké Balls tab, Great Ball (second), thrown.
+    FakeGame ball;
+    BattleMenu ballMenu;
+    ball.snap.menu = GameMenu::Bag;
+    ball.Pocket(1);
+    ball.Frame(ballMenu);
+    ball.Frame(ballMenu, BattleKeys::DRight);
+    ball.Run(ballMenu, 100);
+    ball.Frame(ballMenu, BattleKeys::DRight);
+    ball.Run(ballMenu, 100);
+    CHECK(ball.snap.bagPocket == BattlePocketBalls);
+    ball.Frame(ballMenu, BattleKeys::CPadDown);
+    ball.Frame(ballMenu, BattleKeys::A);
+    CHECK(ballMenu.BusyText() == "Throwing Great Ball...");
+    ball.Run(ballMenu, 300);
+    CHECK(ball.thrown && ball.usedItem == 3);
+
+    // B from the pick goes back to the list; B there leaves the Bag.
+    FakeGame out;
+    BattleMenu outMenu;
+    out.snap.menu = GameMenu::Bag;
+    out.Pocket(1);
+    out.snap.bagPick = true;
+    out.snap.bagPickCursor = 0;
+    out.snap.bagPageIndex = 0;
+    out.Frame(outMenu);
+    out.Run(outMenu, BattleMenu::ListSettleFrames);
+    out.Frame(outMenu, BattleKeys::B);
+    out.Run(outMenu, 100);
+    CHECK(!out.snap.bagPick && out.snap.menu == GameMenu::Bag && out.taps.back() == "press B");
+    out.Frame(outMenu, BattleKeys::B);
+    out.Run(outMenu, 100);
+    CHECK(out.left && out.taps.back() == "battle_bag.back");
+
+    // The Bag changing under a choice: nothing is used.
+    FakeGame changed;
+    BattleMenu changedMenu;
+    changed.snap.menu = GameMenu::Bag;
+    changed.Pocket(3);
+    changed.Frame(changedMenu);
+    changed.Frame(changedMenu, BattleKeys::A);
+    changed.snap.bagItems[0].id = 3;
+    changed.Run(changedMenu, 200);
+    CHECK(!changed.thrown && changedMenu.Note() == "The Bag changed, choose again");
+
+    // Scrolling: the window follows the cursor, BagRows at a time.
+    FakeGame many;
+    BattleMenu manyMenu;
+    many.snap.menu = GameMenu::Bag;
+    many.snap.bagItemCount = 9;
+    for (u8 i = 0; i < 9; i++)
+        many.snap.bagItems[i] = { (u16)(17 + i), 1, "Item" };
+    many.Frame(manyMenu);
+    for (int i = 0; i < 7; i++)
+        many.Frame(manyMenu, BattleKeys::DDown);
+    CHECK(manyMenu.BagCursor() == 7 && manyMenu.BagTop() == 7 - BattleMenu::BagRows + 1);
+    many.Frame(manyMenu, BattleKeys::DUp);
+    many.Frame(manyMenu, BattleKeys::DDown);
+    many.Frame(manyMenu, BattleKeys::DDown);
+    many.Frame(manyMenu, BattleKeys::DDown);   // wraps to the top
+    CHECK(manyMenu.BagCursor() == 0 && manyMenu.BagTop() == 0);
+}
+
+static void TestQuestion(void)
+{
+    // "Use next Pokémon?": Use Next Pokémon opens the (forced) list.
+    FakeGame game;
+    BattleMenu menu;
+    game.snap.menu = GameMenu::Question;
+    game.snap.question = QuestionNextPokemon;
+    game.Frame(menu);
+    CHECK(menu.Page() == BattlePage::Question && menu.Visible());
+    game.Frame(menu, BattleKeys::A);
+    game.Run(menu, 100);
+    CHECK(game.answered && game.answer == 0 && menu.Page() == BattlePage::Party && menu.Forced());
+
+    // Run: the second entry.
+    FakeGame run;
+    BattleMenu runMenu;
+    run.snap.menu = GameMenu::Question;
+    run.snap.question = QuestionNextPokemon;
+    run.Frame(runMenu);
+    run.Frame(runMenu, BattleKeys::DDown);
+    CHECK(runMenu.Status(run.snap).find("(Run)") != std::string::npos);
+    run.Frame(runMenu, BattleKeys::A);
+    run.Run(runMenu, 100);
+    CHECK(run.answer == 1);
+}
+
+// Every step the menu can send is a known, verified button (one, Run,
+// is measured only: docs/LAYOUTS.md).
+static void TestButtons(void)
+{
+    const char *buttons[] = { "party.slot1", "party.slot6", "battle_party.back", "battle_party_page.switch",
+                              "battle_party_page.back", "bag.item_row1", "battle_bag_item_page.use",
+                              "battle_bag_item_page.next_item", "battle_bag_item_page.prev_item",
+                              "battle_bag_item_page.back", "battle_bag.back", "bag_party.slot1", "bag_party.slot6",
+                              "battle_ask.first" };
+    for (const char *name : buttons)
+    {
+        const LayoutButton *b = FindLayoutButton(name);
+        CHECK(b != nullptr && b->verified == LayoutVerified::Tap);
+    }
+    CHECK(FindLayoutButton("battle_ask.second") != nullptr);
 }
 
 // Every page draws inside its own area and nowhere else.
@@ -297,19 +733,34 @@ static void TestDrawing(void)
     surface.width = UI::ScreenW;
     surface.height = UI::ScreenH;
 
-    BattleSnapshot snaps[3] = { CommandSnap(), MovesSnap(), CommandSnap() };
+    FakeGame fake;
+    BattleSnapshot snaps[6] = { CommandSnap(), MovesSnap(), fake.snap, fake.snap, fake.snap, fake.snap };
     snaps[2].menu = GameMenu::Bag;
+    fake.Pocket(BattlePocketBalls);
     snaps[2].bagPocket = BattlePocketBalls;
-    snaps[2].bagItem = "Pok\xC3\xA9 Ball";
-    snaps[2].bagItemCount = 37;
-    for (const BattleSnapshot &snap : snaps)
+    snaps[2].bagItemCount = fake.snap.bagItemCount;
+    for (u8 i = 0; i < fake.snap.bagItemCount; i++)
+        snaps[2].bagItems[i] = fake.snap.bagItems[i];
+    snaps[3].menu = GameMenu::Bag;
+    snaps[3].bagPick = true;
+    snaps[3].bagPickCursor = 2;
+    snaps[4].menu = GameMenu::Pokemon;
+    snaps[5].menu = GameMenu::Question;
+    snaps[5].question = QuestionNextPokemon;
+    const char *previews[6] = { "battle-command", "battle-moves", "battle-bag", "battle-pick", "battle-party",
+                                "battle-question" };
+    for (int n = 0; n < 6; n++)
     {
+        const BattleSnapshot &snap = snaps[n];
         std::fill(pixels.begin(), pixels.end(), 0);
         BattleMenu menu;
         menu.Update(snap, 0);
         const UI::Rect area = menu.Area();
         CHECK(!area.Empty());
-        CHECK(area.y >= 36 && area.x >= 166 && area.Right() <= UI::ScreenW && area.Bottom() <= UI::ScreenH);
+        CHECK(area.Right() <= UI::ScreenW && area.Bottom() <= UI::ScreenH);
+        // The command bar, moves and question leave the HP boxes clear.
+        if (n == 0 || n == 1 || n == 5)
+            CHECK(area.y >= 36 && area.x >= 166);
         UI::Canvas canvas(surface);
         menu.Draw(canvas, snap);
         u32 inside = 0, outside = 0;
@@ -323,6 +774,8 @@ static void TestDrawing(void)
             }
         CHECK(inside > 1000);
         CHECK(outside == 0);
+        if (s_previewDir != nullptr)
+            WritePreview(pixels, std::string(s_previewDir) + "/" + previews[n] + ".ppm");
     }
 
     // The draw key changes with what is shown, and only then.
@@ -335,14 +788,20 @@ static void TestDrawing(void)
     CHECK(menu.DrawKey(snap) != key);
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
+    if (argc > 1)
+        s_previewDir = argv[1];
     TestPages();
     TestCommand();
     TestMoves();
     TestMoveRows();
     TestLabels();
-    TestBalls();
+    TestItems();
+    TestParty();
+    TestBag();
+    TestQuestion();
+    TestButtons();
     TestDrawing();
     if (s_failures != 0)
     {
