@@ -41,7 +41,19 @@ namespace OneScreen
     // background). Colours from screenshots of both pages (p2-2 x1, x2).
     static const PixelProbe XMenuPage2Probe = { 16, 12, 119, 187, 255 };
 
+    // The Party screen's plain list: the bottom bar's Y and X buttons (blue,
+    // the white edge between them). A slot menu dims them, move mode and
+    // messages cover them with a text box. Colours from screenshots of the
+    // Party screen in each state (p2-3, docs/PARTY-UI.md).
+    static const PixelProbe PartyListProbe[] =
+    {
+        { 120, 226, 90, 182, 255 },
+        { 205, 226, 255, 255, 255 },
+        { 310, 226, 90, 182, 255 },
+    };
+
     static volatile bool s_xmenuSeen = false;   // written by the OSD callback
+    static volatile bool s_partyListSeen = false;
     static volatile bool s_page2Seen = false;
 
     static ActionRunner s_runner;
@@ -74,6 +86,10 @@ namespace OneScreen
             all = all && Matches(fb, p);
         s_xmenuSeen = all;
         s_page2Seen = all && Matches(fb, XMenuPage2Probe);
+        bool party = true;
+        for (const PixelProbe &p : PartyListProbe)
+            party = party && Matches(fb, p);
+        s_partyListSeen = party;
         return false;
     }
 
@@ -89,29 +105,35 @@ namespace OneScreen
         if (now || s_frames % 5 == 0)
         {
             s_world.scene = SceneModule(sceneManager);
-            s_world.flags &= ~WorldBattleCommand;
-            if (s_world.scene == SceneBattle && ReadBattle(sceneManager).menu == BattleMenu::Command)
+            s_world.flags &= ~(WorldBattleCommand | WorldBattleMoves);
+            const BattleMenu menu = s_world.scene == SceneBattle ? ReadBattle(sceneManager).menu : BattleMenu::None;
+            if (menu == BattleMenu::Command)
                 s_world.flags |= WorldBattleCommand;
+            if (menu == BattleMenu::Moves)
+                s_world.flags |= WorldBattleMoves;
         }
-        s_world.flags = (s_world.flags & ~(WorldXMenu | WorldXMenuPage2)) | ActionProbeFlags();
+        s_world.flags = (s_world.flags & ~(WorldXMenu | WorldXMenuPage2 | WorldPartyList)) | ActionProbeFlags();
         const u32 box = WorldBoxIdle | WorldBoxModal | WorldBoxCarrying;
         s_world.flags = (s_world.flags & ~box) | (s_world.scene == SceneBox ? BoxWorldFlags(sceneManager) : 0);
     }
 
     u32 ActionProbeFlags(void)
     {
-        return (s_xmenuSeen ? WorldXMenu : 0) | (s_page2Seen ? WorldXMenuPage2 : 0);
+        return (s_xmenuSeen ? WorldXMenu : 0) | (s_page2Seen ? WorldXMenuPage2 : 0)
+               | (s_partyListSeen ? WorldPartyList : 0);
     }
 
     static std::string DescribeWorld(const ActionWorld &world)
     {
-        return Utils::Format("scene %s%s%s%s%s", world.scene.empty() ? "(none)" : world.scene.c_str(),
+        return Utils::Format("scene %s%s%s%s%s%s", world.scene.empty() ? "(none)" : world.scene.c_str(),
                              (world.flags & WorldXMenu) ? ", x menu" : "",
                              (world.flags & WorldXMenuPage2) ? " page 2" : "",
                              (world.flags & WorldBattleCommand) ? ", battle command" : "",
+                             (world.flags & WorldBattleMoves) ? ", battle moves" : "",
                              (world.flags & WorldBoxIdle) ? ", box idle"
                              : (world.flags & WorldBoxModal) ? ", box modal"
-                             : (world.flags & WorldBoxCarrying) ? ", box carrying" : "");
+                             : (world.flags & WorldBoxCarrying) ? ", box carrying" : "")
+               + ((world.flags & WorldPartyList) ? ", party list" : "");
     }
 
     static void BeginCapture(void)

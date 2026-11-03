@@ -12,6 +12,7 @@ namespace OneScreen
     const char *const SceneBag     = "main:006488C8";
     const char *const SceneTownMap = "TownMap";
     const char *const SceneBattle  = "Battle";
+    const char *const SceneStatus  = "Status";
     const char *const SceneBox     = "Box";
 
     static std::string Format(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
@@ -42,6 +43,7 @@ namespace OneScreen
         static const struct { u32 flag; const char *name; } flags[] =
         {
             { WorldXMenu, "x-menu" }, { WorldBattleCommand, "battle-command" }, { WorldXMenuPage2, "x-menu-page-2" },
+            { WorldBattleMoves, "battle-moves" }, { WorldPartyList, "party-list" },
             { WorldBoxIdle, "box-idle" }, { WorldBoxModal, "box-modal" }, { WorldBoxCarrying, "box-carrying" },
         };
         std::string out = scene == nullptr ? "any scene" : std::string(sceneNot ? "not " : "") + SceneName(scene);
@@ -188,6 +190,34 @@ namespace OneScreen
         } });
         list.push_back({ "close", "back out to the field", NotInScene(SceneBattle), {
             StepBackOut(1200),
+        } });
+
+        // The native battle menu (Screens/BattleMenu.hpp): one tap per choice.
+        // The menu waits until the game's menu has settled before it starts
+        // one (a tap as the command menu slid in only moved its cursor); if
+        // the game's menu is still up after the tap, tap again. They end as
+        // soon as the menu goes, wherever the game goes next (a trainer
+        // battle refuses Run with a message, then shows the commands again).
+        const ActionCond command = InScene(SceneBattle).With(WorldBattleCommand);
+        const ActionCond moves = InScene(SceneBattle).With(WorldBattleMoves);
+        const auto pick = [&](const char *name, const char *summary, const char *button, bool fromMoves) {
+            return ActionDef{ name, summary, fromMoves ? moves : command, {
+                StepTap(button),
+                StepWaitFor(AnyScene().Without(fromMoves ? WorldBattleMoves : WorldBattleCommand), 90).Retry(0, 2),
+            } };
+        };
+        list.push_back(pick("battle-fight", "battle: tap Fight", "battle_command.fight", false));
+        list.push_back(pick("battle-bag", "battle: tap Bag", "battle_command.bag", false));
+        list.push_back(pick("battle-pokemon", "battle: tap Pokemon", "battle_command.pokemon", false));
+        list.push_back(pick("battle-flee", "battle: tap Run (stays in the battle if it can't run)",
+                            "battle_command.run", false));
+        list.push_back(pick("battle-move1", "battle: use move 1", "battle_moves.move1", true));
+        list.push_back(pick("battle-move2", "battle: use move 2", "battle_moves.move2", true));
+        list.push_back(pick("battle-move3", "battle: use move 3", "battle_moves.move3", true));
+        list.push_back(pick("battle-move4", "battle: use move 4", "battle_moves.move4", true));
+        list.push_back({ "battle-moves-back", "battle: move list back to the commands", moves, {
+            StepTap("battle_moves.back"),
+            StepWaitFor(command, 90).Retry(0, 2),
         } });
         return list;
     }

@@ -4,6 +4,8 @@
 
 #include <3ds/types.h>
 
+namespace CTRPluginFramework { class Screen; }
+
 namespace OneScreen
 {
     // How the bottom screen is shown on the top screen.
@@ -18,6 +20,17 @@ namespace OneScreen
     // `displayTransfer` and `textureCopy` are the game's gx library calls
     // (Offsets::gxDisplayTransfer / gxTextureCopy) used for the copy.
     void StartPanel(PanelMode initial, u32 displayTransfer, u32 textureCopy);
+
+    // Copies the rect (x, y, w, h) of the bottom screen's last frame to
+    // (dx, dy) on the top screen with one TextureCopy on the GPU, for a native
+    // screen to show part of the hidden bottom screen (Screens/Map.cpp). Call
+    // from an OSD callback on the top screen. Framebuffer lines are screen
+    // columns, so each column's run must be whole 16-byte units at 8-byte
+    // aligned addresses: h a multiple of 16, and y and dy multiples of 8 from
+    // the end of the line (with 240-px lines: y + h and dy + h multiples of
+    // 8). False, with nothing copied, if that doesn't hold or the GPU path
+    // isn't available.
+    bool PanelCopyBottomRect(const CTRPluginFramework::Screen &top, u32 x, u32 y, u32 w, u32 h, u32 dx, u32 dy);
 
     PanelMode GetPanelMode(void);
     void      SetPanelMode(PanelMode mode);

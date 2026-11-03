@@ -92,6 +92,8 @@ namespace OneScreen
         mon.encryptionConstant = ec;
         mon.species = Get16(plain, 0x08);
         mon.heldItem = Get16(plain, 0x0A);
+        mon.ability = plain[0x14];
+        mon.nature = plain[0x1C];
         for (u32 i = 0; i < 12; i++)
             mon.nickname[i] = Get16(plain, 0x40 + i * 2);
         mon.nickname[12] = 0;

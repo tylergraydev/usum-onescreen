@@ -33,16 +33,19 @@ namespace OneScreen
     extern const char *const SceneBag;       // "main:006488C8"
     extern const char *const SceneTownMap;   // "TownMap"
     extern const char *const SceneBattle;    // "Battle"
+    extern const char *const SceneStatus;    // "Status" (Pokémon summary)
     extern const char *const SceneBox;       // "Box": the PC boxes
 
     // What the action layer sees of the game, once per frame.
     const u32 WorldXMenu         = 1u << 0;  // the X menu is on the bottom screen (pixel probe)
     const u32 WorldBattleCommand = 1u << 1;  // battle: Fight / Pokémon / Bag / Run is up
     const u32 WorldXMenuPage2    = 1u << 2;  // with WorldXMenu: its second page is showing
+    const u32 WorldBattleMoves   = 1u << 3;  // battle: the move list is up
+    const u32 WorldPartyList     = 1u << 8;  // Party screen: the plain list (no menu, message or move mode; pixel probe)
     // The PC Box screen's mode (Box.hpp, docs/RE6-boxes.md); at most one is set.
-    const u32 WorldBoxIdle       = 1u << 8;  // browsing
-    const u32 WorldBoxModal      = 1u << 9;  // the slot menu or a message is up
-    const u32 WorldBoxCarrying   = 1u << 10; // a Pokémon is held
+    const u32 WorldBoxIdle       = 1u << 9;  // browsing
+    const u32 WorldBoxModal      = 1u << 10; // the slot menu or a message is up
+    const u32 WorldBoxCarrying   = 1u << 11; // a Pokémon is held
 
     struct ActionWorld
     {
@@ -118,7 +121,8 @@ namespace OneScreen
         std::vector<ActionStep> steps;
     };
 
-    // The built-in actions (open-pokedex, open-party, open-bag, battle-run, close).
+    // The built-in actions (open-pokedex, open-party, open-bag, battle-run,
+    // close, and the native battle menu's battle-fight ... battle-moves-back).
     const std::vector<ActionDef> &Actions(void);
     const ActionDef *FindAction(const std::string &name);
 
