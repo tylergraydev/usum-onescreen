@@ -56,6 +56,12 @@ namespace ScreenBuffer
         return s_refused;
     }
 
+    // Called through these: GCC drops a malloc/free pair whose block is
+    // never used (and assumes the malloc succeeded), which made every probe
+    // "succeed".
+    static void *(*volatile s_malloc)(size_t) = std::malloc;
+    static void (*volatile s_free)(void *) = std::free;
+
     size_t LargestFree(void)
     {
         // Binary search on what malloc gives; each probe is freed at once,
@@ -64,10 +70,11 @@ namespace ScreenBuffer
         while (hi - lo > 1024)
         {
             const size_t mid = lo + (hi - lo) / 2;
-            void *p = std::malloc(mid);
+            void *p = s_malloc(mid);
             if (p != nullptr)
             {
-                std::free(p);
+                s_free(p);
+
                 lo = mid;
             }
             else
