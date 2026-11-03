@@ -5,14 +5,18 @@
 
 #include <3ds/types.h>
 
+#include "Screens/PartyMenu.hpp"
+
 namespace OneScreen
 {
     // The native Party screen and summary (P2-3): while the game's Party
     // screen (X menu -> Pokémon) is up on the hidden bottom screen, the top
     // screen shows the party (Screens/PartyMenu.hpp). D-pad / circle pad move,
-    // A opens Summary / Use item / Move / Cancel, Y starts a move, B is left
-    // to the game (it closes its Party screen). Choices are carried out on
-    // the game's own screen through the action layer. In the summary (Status
+    // A opens Summary / Use item / Give item / Take item / Move / Cancel, Y
+    // starts a move, B is left to the game (it closes its Party screen).
+    // Choices are carried out on the game's own screen through the action
+    // layer, and a question the game asks on the way (switch items, which
+    // move to forget for a TM) is asked natively too. In the summary (Status
     // scene, opened from here) the top screen shows that Pokémon's details;
     // the game keeps its own keys there (Up/Down change Pokémon, B back), Y
     // shows the game's own top page instead. The panel is held off meanwhile;
@@ -31,9 +35,17 @@ namespace OneScreen
     // through the transition, so it doesn't flash on before the list shows.
     void PartyScreenExpect(void);
 
-    // A Use item is driving the game's Bag (the Party screen's Restore): the
-    // native Bag stays out of the way meanwhile.
+    // A Use / Give item is driving the game's Bag (the Party screen's Restore
+    // or Held Item bag), or following what the item does: the native Bag
+    // stays out of the way meanwhile.
     bool PartyScreenUsingBag(void);
+
+    // For other screens that show the party (the battle's Pokémon command,
+    // W7-1): the party in party order, as the native list shows it (name,
+    // level, gender, HP, status, held item, moves). Draw it with DrawParty
+    // (Screens/PartyMenu.hpp: a PartyView on the List page, its cursor) and
+    // move the cursor with PartyMove; nothing here touches the game.
+    std::vector<PartyMonView> PartyScreenMons(u32 sceneManager);
 
     // "partyui on|off|status" (the part after "partyui "). False if it isn't one.
     bool PartyScreenCommand(const std::string &args, std::vector<std::string> &log);

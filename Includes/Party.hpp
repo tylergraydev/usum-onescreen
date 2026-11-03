@@ -80,6 +80,19 @@ namespace OneScreen
 
     BagListState ReadBagList(u32 sceneManager);
 
+    // The move-teaching screen (WazaOshie CRO, the same as the battle's
+    // forget screen, docs/MOVE-LEARN.md) as a TM used from the Party
+    // screen's Bag opens it: its scene is WazaOshie. See docs/OFFSETS.md.
+    struct TeachScreenState
+    {
+        bool valid = false;
+        bool confirm = false;   // one move's page ("Forget this move") is up
+        u8  pokeId = 0;         // param +1 as the game keeps it (logged; not used)
+        u16 newMove = 0;
+    };
+
+    TeachScreenState ReadTeachScreen(u32 sceneManager);
+
     // The summary (Status scene) keeps a WordSet loader with the move (dat
     // 118), ability (101) and nature (92) names. 0 if the current scene is
     // not the summary or the loader doesn't check out.
