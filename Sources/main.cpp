@@ -22,6 +22,7 @@
 #include "Screens/Bag.hpp"
 #include "Screens/Map.hpp"
 #include "Screens/PartyScreen.hpp"
+#include "Screens/RotomPrompt.hpp"
 #include "Screens/Boxes.hpp"
 #include "Screens/XMenu.hpp"
 #include "Settings.hpp"
@@ -137,6 +138,7 @@ namespace CTRPluginFramework
     //   bagui on|off|status|read | bagui select N   (native Bag, Screens/Bag.hpp;
     //     read logs what the plugin reads of the game's Bag; select moves the list cursor)
     //   map on|off|open|close|status   (native top-screen map, Screens/Map.hpp)
+    //   rotom on|off|status|read|select N|answer [N]|talk|next   (Rotom's field prompts, Screens/RotomPrompt.hpp)
     //   partyui on|off|status   (native Party screen and summary, Screens/PartyScreen.hpp)
     //   boxes on|off|status|details|pick|drop|prev|next   (native PC boxes, Screens/Boxes.hpp;
     //     pick/drop/prev/next as A / L / R)
@@ -392,6 +394,18 @@ namespace CTRPluginFramework
                 return;
             }
         }
+        else if (line.compare(0, 6, "rotom ") == 0)
+        {
+            std::vector<std::string> log;
+            const bool known = OneScreen::RotomPromptCommand(line.substr(6), s_game->offsets.sceneManager, log);
+            for (const std::string &l : log)
+                WriteLog(l, false);
+            if (!known)
+            {
+                WriteLog("cmd: unknown rotom command in '" + line + "'", false);
+                return;
+            }
+        }
         else if (line.compare(0, 8, "partyui ") == 0)
         {
             std::vector<std::string> log;
@@ -587,6 +601,11 @@ namespace CTRPluginFramework
         for (const std::string &line : mapLog)
             WriteLog(line, false);
 
+        std::vector<std::string> rotomLog;
+        OneScreen::RotomPromptUpdate(s_game->offsets.sceneManager, scene, fieldState, rotomLog);
+        for (const std::string &line : rotomLog)
+            WriteLog(line, false);
+
         std::vector<std::string> partyLog;
         OneScreen::PartyScreenUpdate(s_game->offsets.sceneManager, scene, partyLog);
         for (const std::string &line : partyLog)
@@ -699,6 +718,7 @@ namespace CTRPluginFramework
         OneScreen::StartSubScreens();
         OneScreen::StartBag();
         OneScreen::StartMap();
+        OneScreen::StartRotomPrompt();
         OneScreen::StartPartyScreen();
         OneScreen::StartBoxes();
         OneScreen::StartPanel(OneScreen::PanelMode::Off, s_game->offsets.gxDisplayTransfer.address,
