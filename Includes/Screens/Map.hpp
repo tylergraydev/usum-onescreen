@@ -24,9 +24,15 @@ namespace OneScreen
     void MapUpdate(u32 sceneManager, const std::string &scene, int fieldState, std::vector<std::string> &log);
 
     // Opens the map once the field allows it (within about a second), as
-    // map_key would. For the native X menu's Map entry.
-    void MapRequestOpen(void);
+    // map_key would. For the native X menu's Map entry; `how` goes in the
+    // log line ("map: open (X menu)").
+    void MapRequestOpen(const char *how = "X menu");
     bool MapEnabled(void);
+
+    // Whether the map is open, and closing it from another screen (the
+    // Rotom prompt, Screens/RotomPrompt.hpp); `why` goes in the log line.
+    bool MapIsOpen(void);
+    void MapClose(const char *why, std::vector<std::string> &log);
 
     // "map on|off|open|close|status" (the part after "map "). False if it
     // isn't one of those.

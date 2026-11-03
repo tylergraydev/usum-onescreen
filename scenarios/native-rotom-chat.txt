@@ -1,0 +1,79 @@
+# Rotom's field prompts on the top screen (Screens/RotomPrompt.cpp,
+# docs/ROTOM-FIELD.md), with the panel off throughout. About 5 minutes after
+# Continue, Rotom wants to talk: the badge shows and Up (the D-pad) taps
+# Rotom's eye on the hidden bottom screen. Rotom then starts a chat or the
+# Roto Loto (its choice). A Roto Loto is played through with the prompt
+# (rotom next = A) and Rotom asked again when it is ready, until a chat
+# comes. The chat's question and answers show on the top screen; Down moves
+# to the second answer and A taps it. The native map, opened while Rotom
+# asks, steps aside and comes back after. Screenshots before every A.
+# Start in the Pokémon Center whatever ran before (native-move-learn leaves the grass).
+restore pokecenter
+include common/boot
+expect-log ^rotom: applet [0-9A-F]+, FieldMenu at [0-9A-F]+, chat table ok 30
+
+# --- Rotom wants to talk (the badge), or starts a chat by itself ---
+# Both came within about 5 minutes of Continue in the runs; allow 12.
+mark
+repeat 72 until-log ^rotom:\s(ready\s\(talk\skey\sUp\)|choice\s)
+  sleep 10
+end
+expect-log ^rotom: drawing 5
+expect-mode off
+sleep 1
+shot first
+
+# --- Up: on the badge it starts the chat (a tap on Rotom's eye); on a
+# question that is already up it is the first answer, where the cursor is ---
+send press up
+sleep 2
+
+# --- A chat, or the Roto Loto first: play that through and ask again ---
+# `rotom next` is A on a Roto Loto step and `rotom talk` is Up on the
+# badge; each is refused (logged) when there's nothing for it.
+repeat 120 until-log ^rotom:\schoice\s
+  sleep 3
+  send rotom next
+  send rotom talk
+end
+# Each Roto Loto line, if one came, was read from the game's text.
+reject-log ^rotom: roto loto (intro|result|power) ""$
+reject-log ^rotom: .* not available
+expect-scene FieldRo
+expect-mode off
+sleep 2
+shot choice
+
+# --- The map steps aside while Rotom asks, and opens again after ---
+mark
+send press zr
+expect-log ^map: closed \(Rotom\) 5
+expect-mode off
+
+# --- Down: the second answer; A taps it on the bottom screen ---
+mark
+send press down
+expect-log ^rotom: cursor 2 5
+sleep 1
+shot pre-answer
+send press a
+expect-log ^rotom: answer 2 "[^"]+" 5
+expect-log ^action: rotom-answer-2 ok 5
+expect-log ^rotom: answered 2 10
+expect-log ^rotom: reply "[^"]+" 5
+reject-log ^rotom: answer 2 not taken
+reject-log ^rotom: the chat ended without the native prompt
+sleep 1
+shot reply
+expect-log ^rotom: none 15
+expect-log ^map: open \(Rotom\) 10
+expect-log ^map: drawing 10
+expect-scene FieldRo
+expect-mode off
+sleep 1
+shot after
+send press zr
+expect-log ^map: closed \(ZR\) 5
+
+check-save
+stop

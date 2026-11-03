@@ -22,8 +22,10 @@
 #include "Screens/Bag.hpp"
 #include "Screens/Map.hpp"
 #include "Screens/PartyScreen.hpp"
+#include "Screens/RotomPrompt.hpp"
 #include "Screens/Boxes.hpp"
 #include "Screens/XMenu.hpp"
+#include "Screens/ThemeScreen.hpp"
 #include "Settings.hpp"
 #include "Shot.hpp"
 #include "UI/Device.hpp"
@@ -137,9 +139,12 @@ namespace CTRPluginFramework
     //   bagui on|off|status|read | bagui select N   (native Bag, Screens/Bag.hpp;
     //     read logs what the plugin reads of the game's Bag; select moves the list cursor)
     //   map on|off|open|close|status   (native top-screen map, Screens/Map.hpp)
+    //   rotom on|off|status|read|select N|answer [N]|talk|next   (Rotom's field prompts, Screens/RotomPrompt.hpp)
     //   partyui on|off|status   (native Party screen and summary, Screens/PartyScreen.hpp)
     //   boxes on|off|status|details|pick|drop|prev|next   (native PC boxes, Screens/Boxes.hpp;
     //     pick/drop/prev/next as A / L / R)
+    //   uitheme on|off|load|status|page N|select N   (USUM theme demo with the game's own
+    //     font and icons, Screens/ThemeScreen.hpp)
     static const char *CommandPath = "/usum-cmd.txt";
 
     // Global data + bss of USUM v1.2 (from the exheader): 0x669000 .. 0x6D5F44.
@@ -392,6 +397,18 @@ namespace CTRPluginFramework
                 return;
             }
         }
+        else if (line.compare(0, 6, "rotom ") == 0)
+        {
+            std::vector<std::string> log;
+            const bool known = OneScreen::RotomPromptCommand(line.substr(6), s_game->offsets.sceneManager, log);
+            for (const std::string &l : log)
+                WriteLog(l, false);
+            if (!known)
+            {
+                WriteLog("cmd: unknown rotom command in '" + line + "'", false);
+                return;
+            }
+        }
         else if (line.compare(0, 8, "partyui ") == 0)
         {
             std::vector<std::string> log;
@@ -413,6 +430,18 @@ namespace CTRPluginFramework
             if (!known)
             {
                 WriteLog("cmd: unknown boxes command in '" + line + "'", false);
+                return;
+            }
+        }
+        else if (line.compare(0, 8, "uitheme ") == 0)
+        {
+            std::vector<std::string> log;
+            const bool known = OneScreen::ThemeScreenCommand(line.substr(8), log);
+            for (const std::string &l : log)
+                WriteLog(l, false);
+            if (!known)
+            {
+                WriteLog("cmd: unknown uitheme command in '" + line + "'", false);
                 return;
             }
         }
@@ -587,6 +616,11 @@ namespace CTRPluginFramework
         for (const std::string &line : mapLog)
             WriteLog(line, false);
 
+        std::vector<std::string> rotomLog;
+        OneScreen::RotomPromptUpdate(s_game->offsets.sceneManager, scene, fieldState, rotomLog);
+        for (const std::string &line : rotomLog)
+            WriteLog(line, false);
+
         std::vector<std::string> partyLog;
         OneScreen::PartyScreenUpdate(s_game->offsets.sceneManager, scene, partyLog);
         for (const std::string &line : partyLog)
@@ -595,6 +629,11 @@ namespace CTRPluginFramework
         std::vector<std::string> boxesLog;
         OneScreen::BoxesUpdate(s_game->offsets.sceneManager, scene, boxesLog);
         for (const std::string &line : boxesLog)
+            WriteLog(line, false);
+
+        std::vector<std::string> themeLog;
+        OneScreen::ThemeScreenUpdate(s_game->offsets.sceneManager, themeLog);
+        for (const std::string &line : themeLog)
             WriteLog(line, false);
 
         OneScreen::ShotPoll();
@@ -699,8 +738,10 @@ namespace CTRPluginFramework
         OneScreen::StartSubScreens();
         OneScreen::StartBag();
         OneScreen::StartMap();
+        OneScreen::StartRotomPrompt();
         OneScreen::StartPartyScreen();
         OneScreen::StartBoxes();
+        OneScreen::StartThemeScreen();
         OneScreen::StartPanel(OneScreen::PanelMode::Off, s_game->offsets.gxDisplayTransfer.address,
                               s_game->offsets.gxTextureCopy.address);
         OneScreen::StartActions();

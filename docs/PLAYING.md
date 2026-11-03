@@ -39,6 +39,8 @@ If you use an HD texture pack, turn off **Emulation → Configure… → Graphic
 | **ZL** | Touch the bottom screen at the cursor, for as long as you hold it. The crosshair turns red while touching. |
 | **ZR** | In the overworld: show the map on the top screen (place name, island, your position and Rotom's map around you). **ZR** or **B** closes it. You can keep walking with it open. The X menu's **Map** opens it too. See [MAP.md](MAP.md). |
 
+| **Up** (D-pad) | In the overworld, when the corner badge says *Rotom wants to talk*: start Rotom's chat. Rotom's question and its two answers then show at the bottom of the top screen: **Up/Down** choose, **A** answers. The Roto Loto shows there too (**A** goes on and stops the reel). See [ROTOM-FIELD.md](ROTOM-FIELD.md). |
+
 Every other button works as normal.
 
 ### Naming a Pokémon
@@ -72,7 +74,8 @@ Battles are played with buttons, no panel: when it is your turn a menu appears o
 - **Fight** lists your moves with their type, PP, and how effective each is against the opponent. **A** uses one, **B** goes back.
 - **Bag** and **Pokémon** open the game's own screens; a small box on the top screen says what is highlighted (on the Poké Balls tab, which ball). Use **Left/Right** for the Bag's tabs, **Up/Down**, **A** and **B** as on the bottom screen. To catch: Bag → Poké Balls → a ball → A → A (Use).
 - After a catch, **B** goes through the Pokédex page and the nickname question (No). Yes opens a keyboard on the bottom screen: use **L+R** to see it.
-- When the game asks something else in battle (learning a move, sending in the next Pokémon), a box at the top says so; the choices are on the bottom screen (**L+R**).
+- When a Pokémon wants to learn a fifth move, the top screen lists its four moves and the new one (type, PP; power and accuracy of the highlighted one). **Up/Down** and **A** pick the move to forget, or **Don't learn**; **B** jumps to Don't learn. **A** again confirms, **B** goes back.
+- When the game asks something else in battle (sending in the next Pokémon), a box at the top says so; the choices are on the bottom screen (**L+R**).
 
 If something in a battle isn't covered (a double battle's target screen, for example), **L+R** still shows the bottom screen.
 
