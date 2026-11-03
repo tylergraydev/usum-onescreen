@@ -187,11 +187,9 @@ game's does.
 
 ## Commands and log
 
-`partyui on|off|status` (default on; `status` also prints the layer's
-buffer and the heap in use / free in newlib's arena), `partyui freelayer
-on|off` (default off, see Drawing). Log lines:
-`party-ui: shown (SCENE, cursor N)`, `party-ui: layer buffer N KB; heap ...`,
-`party-ui: layer freed; heap ...`,
+`partyui on|off|status` (default on; `status` also says whether it holds
+the shared screen buffer and prints the heap). Log lines:
+`party-ui: shown (SCENE, cursor N); heap ...`,
 `party-ui: party N: Name L12 27/27 PSN Item, ...` (whenever it changes),
 `party-ui: cursor N (Name)`, `party-ui: page menu|swap|items|ask ...`,
 `party-ui: summary N (Name)` (opening), `party-ui: summary N of M: ...
@@ -204,7 +202,7 @@ tapping row T`, `party-ui: item menu 06 07 11, Use is 3 from the bottom`,
 `party-ui: answer N (label)`, `party-ui: used|no effect:|FAILED ...`,
 `party-ui: gave|kept:|give FAILED: ...`, `party-ui: take ...` / `took ...`,
 `party-ui: ... FAILED: why; back to the Party screen`, `party-ui: follow
-FAILED: ...`, `party-ui: hidden`; the actions' own `action: party-... ok` /
+FAILED: ...`, `party-ui: hidden; heap ...`; the actions' own `action: party-... ok` /
 `FAILED`.
 
 ## Drawing
@@ -237,19 +235,15 @@ The game's look (`UI::Theme`, `docs/VISUAL-STYLE.md`, PR #38's plan):
 One `UI::Layer` over `PartyArea` (376x224 at 12,8, the X menu's area), redrawn
 only when what it shows changes (`PartyViewKey` / `SummaryViewKey`) and copied
 every frame. The plugin thread hands the view to the OSD callback under a mutex
-(the callback only `TryLock`s). The buffer is in the screen's own format
-(BGR8 on the top screen: 246 KB). An RGBA8-sized buffer (337 KB) no longer
-fitted once the game's assets (about 250 KB) were loaded (`party-ui: shown
-..., NO MEMORY for the layer`). It is allocated the first time the screen
-shows and kept. Freeing it when the screen hides (`partyui freelayer on`,
-600 frames after) was tried: heap 2160 KB used / 87 KB free in the arena
-with the screen up, 2042 / 329 after the free, and the next `new` of 246 KB
-failed with 328 KB free (the block had been split by small allocations, in
-two runs: back to the X menu at once, and after a wild battle), so the
-screen could not show again. Without memory the screen tries again for 60
-frames, then steps aside for the panel. A layer buffer shared by the native
-screens would fix both. In `native-party`, with Rotom's field prompt drawn twice before the Party screen opened, the heap stood at 2448 KB used / 87 KB free when the layer was allocated and the game then stopped with a PANIC (twice in a row; most likely an allocation failing in the drawing that followed, not checked); the scenario now turns Rotom's prompts off (`send rotom off`), and the same point reads 2160 KB. If the OSD callback finds a 4-byte screen format it asks for more, and the
-buffer grows the next time the screen opens. The OSD callback is registered
+(the callback only `TryLock`s). The layer draws into the native screens'
+shared buffer (`UI/ScreenBuffer.hpp`, W7-M: one 400x240 BGR8 buffer
+allocated at boot): the OSD callback borrows it while the layer shows and
+gives it back when it doesn't, so the Party screen allocates nothing for its
+drawing. Before that its own 246 KB buffer, kept or freed, ran the heap out
+(freed, it could not be had again with 328 KB free; with Rotom's prompt and
+the X menu's layer also kept, the game stopped with a PANIC as the Party
+screen opened). `party-ui: shown` / `hidden` log the heap
+(`ScreenBuffer::HeapStatus`). The OSD callback is registered
 before the panel's, so screenshots include it.
 
 ## Tests
@@ -276,7 +270,7 @@ before the panel's, so screenshots include it.
   Buneary (HP up, Potion ×9 → ×8); Give item → Quick Claw to Buneary, Take
   item back; Use item → TM01 on Torracat, the native teaching question,
   forget Lick (Work Up learned); B to the X menu, B to the field;
-  `check-save` twice; Rotom's field prompts are off (memory, see Drawing). The battle is random: if the foe never hits, the
+  `check-save` twice. The battle is random: if the foe never hits, the
   scenario fails at the HP check after the battle and says so (rerun).
 
 ## Not done
