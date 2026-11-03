@@ -14,9 +14,11 @@
 #include "Scene.hpp"
 #include "Screens/MapView.hpp"
 #include "Settings.hpp"
+#include "UI/Assets.hpp"
 #include "UI/Device.hpp"
 #include "UI/Layer.hpp"
 #include "UI/ScreenBuffer.hpp"
+#include "UI/Theme.hpp"
 #include "Where.hpp"
 
 namespace OneScreen
@@ -66,6 +68,7 @@ namespace OneScreen
 
     static UI::Layer s_layer;
     static u32 s_drawnVersion = ~0u;
+    static bool s_drawnGameFont = false;    // the game font was loaded when last drawn
 
     static bool MapOnScreen(const Screen &screen)
     {
@@ -83,7 +86,10 @@ namespace OneScreen
         UiInitFont();
         const UI::Surface fb = SurfaceFromScreen(screen);
         const u32 version = s_viewVersion;
-        bool redraw = version != s_drawnVersion;
+        // Also once the game's font and icons have loaded (UI::Theme draws
+        // with them from then on).
+        const bool gameFont = UI::Theme::UsingGameFont();
+        bool redraw = version != s_drawnVersion || gameFont != s_drawnGameFont;
         if (fresh || !s_layer.Matches(fb))
         {
             if (!s_layer.Setup(fb, MapArea, MapRadius, pixels, UI::ScreenBuffer::Bytes))
@@ -99,6 +105,7 @@ namespace OneScreen
             UI::Canvas canvas = s_layer.Begin();
             DrawMap(canvas, drawn);
             s_drawnVersion = version;
+            s_drawnGameFont = gameFont;
         }
         if (!picture)
         {
@@ -211,6 +218,9 @@ namespace OneScreen
     static void Open(const char *how, std::vector<std::string> &log)
     {
         LoadNames(log);
+        // The game's font and icons (normally loaded at the first field
+        // already); the map redraws with them once they are in.
+        UI::RequestAssets();
         s_open = true;
         s_logged = false;
         s_copyFailed = false;
