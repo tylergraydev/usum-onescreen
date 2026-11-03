@@ -13,7 +13,9 @@
 #include "Screens/Map.hpp"
 #include "Screens/RotomPromptView.hpp"
 #include "UI/Device.hpp"
+#include "UI/Assets.hpp"
 #include "UI/Layer.hpp"
+#include "UI/Theme.hpp"
 
 namespace OneScreen
 {
@@ -92,6 +94,7 @@ namespace OneScreen
     static UI::Layer s_layer;
     static u32 s_drawnVersion = ~0u;
     static UI::Rect s_drawnArea = { 0, 0, 0, 0 };
+    static bool s_drawnGameFont = false;    // the game font was loaded when last drawn
 
     static bool RotomOnScreen(const Screen &screen)
     {
@@ -104,7 +107,9 @@ namespace OneScreen
         const UI::Rect area = RotomArea(view);
         if (area.Empty())
             return false;
-        bool redraw = version != s_drawnVersion;
+        // Also once the game's font and icons have loaded.
+        const bool gameFont = UI::Theme::UsingGameFont();
+        bool redraw = version != s_drawnVersion || gameFont != s_drawnGameFont;
         if (!s_layer.Matches(fb) || area.x != s_drawnArea.x || area.y != s_drawnArea.y || area.w != s_drawnArea.w
             || area.h != s_drawnArea.h)
         {
@@ -119,6 +124,7 @@ namespace OneScreen
             UI::Canvas canvas = s_layer.Begin();
             DrawRotomPrompt(canvas, view);
             s_drawnVersion = version;
+            s_drawnGameFont = gameFont;
         }
         s_layer.Present(fb);
         return true;
@@ -551,6 +557,8 @@ namespace OneScreen
         const bool shown = view.mode != RotomMode::None;
         if (shown && s_pixels == nullptr)
             s_pixels = new (std::nothrow) u8[PixelBytes];
+        if (shown && !s_shown)
+            UI::RequestAssets();   // the game's font and icons; normally loaded at the first field already
         if (shown != s_shown)
             log.push_back(shown ? std::string("rotom: drawing") + (s_pixels == nullptr ? ", NO MEMORY for the layer" : "")
                                 : "rotom: hidden");
