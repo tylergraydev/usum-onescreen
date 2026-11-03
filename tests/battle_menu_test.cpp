@@ -833,6 +833,8 @@ static void TestDrawing(void)
                 (in ? inside : outside) += lit ? 1 : 0;
             }
         CHECK(inside > 1000);
+        if (outside != 0)
+            std::printf("%s: %u pixels outside Area()\n", previews[n], outside);
         CHECK(outside == 0);
         if (s_previewDir != nullptr)
             WritePreview(pixels, std::string(s_previewDir) + "/" + previews[n] + ".ppm");

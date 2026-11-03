@@ -602,9 +602,13 @@ namespace OneScreen
             canvas.HLine(in.x + inset, in.y + y, in.w - 2 * inset, c);
         }
         // A few soft diagonal bands for the game's waves.
+        // Their round ends extend past the endpoints; keep them inside the backdrop.
+        const UI::Rect clip = canvas.GetClip();
+        canvas.SetClip(UI::Intersect(clip, in));
         for (int k = 0; k < 6; k++)
             canvas.Line((float)(in.x + k * 70), (float)in.Bottom(), (float)(in.x + k * 70 + 90), (float)in.y, 10.0f,
                         Rgb(0xFF, 0xFF, 0xFF, 0x14));
+        canvas.SetClip(clip);
     }
 
     static Theme::TextStyle Style(Theme::TextSize size, UI::Color color, UI::Align align = UI::Align::Left)
