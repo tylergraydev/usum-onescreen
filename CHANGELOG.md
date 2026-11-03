@@ -10,9 +10,11 @@ Supports Pokémon Ultra Sun (USA) v1.2 (`00040000001B5000`, title version `0x080
 
 #### Added
 
+- **Windows launcher** (`player/`): checks your own Ultra Sun dump and v1.2 update, sets up its own portable copy of your Azahar (plugin loader on, top screen only, custom textures off), installs the plugin and update, and starts the game. Controller presets and plugin settings are in its window. A new game with no save does not start on the tested v1.2 setup; see [docs/PLAYER-APP.md](docs/PLAYER-APP.md).
+
 Native top-screen menus (the panel is off while they show; the game's own screen keeps running on the hidden bottom screen and the plugin drives it). Details and controls per screen are in [docs/PLAYING.md](docs/PLAYING.md).
 
-- **Battle** (single battles): command bar (Fight / Bag / Pokémon / Run) and move list with type, PP and how effective each move is. **Up/Down** and **A**, **B** goes back. Bag and Pokémon open the game's own screens with a helper box saying what is highlighted. Catching works: Bag → Poké Balls → a ball, then the Pokédex page and the nickname question.
+- **Battle** (single battles): command bar (Fight / Bag / Pokémon / Run) and move list with type, PP and how effective each move is. **Up/Down** and **A**, **B** goes back. Pokémon opens the native party list (**D-pad**, **A** for Switch / Cancel); after a faint, *Use next Pokémon?* opens it without a back option. Bag opens native pockets (**Left/Right** or **L/R**, **Up/Down**, **A** use); a Potion asks for a Pokémon, starting on one it would help. HP-only items refuse full-HP or fainted targets. Catching: Bag → Poké Balls → a ball → **A**, then the Pokédex page and nickname question.
 - **Move learning**: when a Pokémon wants a fifth move, the four moves and the new one are listed (type, PP; category, power and accuracy of the highlighted one). **Up/Down** and **A** pick the move to forget or *Don't learn*, **A** confirms, **B** goes back.
 - **X menu**: **X** in the field shows Pokémon, Pokédex, Bag, Quick Link, Festival Plaza, Trainer Passport, Pokémon Refresh, Battle Video, Options, the map and Save as a grid (D-pad and L/R move, **A** opens, **B** closes). It starts on the entry the game's own X menu remembers. QR Scanner is shown but not available yet.
 - **Keyboard**: the nickname keyboard after a catch (D-pad moves, **A** types, **B** deletes, **Y** Shift, **X** space, **START** jumps to OK).
@@ -21,7 +23,7 @@ Native top-screen menus (the panel is off while they show; the game's own screen
 - **Bag**: the pockets and their items (counts, NEW marks), the party with HP, the item menu. **Use** (Medicine and Berries) and **Give** are native; other Use entries are greyed out and say to use the bottom screen. D-pad up/down move, **L/R** or left/right change pocket, **A** opens an item, **B** goes back or closes.
 - **Map**: **ZR** in the overworld (or the X menu's **Map**) shows the place name, the island, inside/outside, the player's position and facing, and the game's Rotom Dex map around the player, live while walking. **ZR** or **B** closes it (`map_key` in the settings file). Place names are read from the game's own files at runtime; nothing of the game is shipped.
 - **Rotom's prompts**: when Rotom wants to talk, a corner badge says so and **Up** starts the chat. Rotom's question and its two answers show at the bottom of the top screen (**Up/Down** choose, **A** answers, then Rotom's reply); the Roto Loto's steps show there too (**A** goes on and stops the reel).
-- **Party and summary** (X menu → Pokémon): name, level, HP, status, held item. **A** opens Summary / Use item / Move, **Y** moves a Pokémon, **B** closes. The summary shows name, level, HP, item, ability, nature and moves with PP (Up/Down change Pokémon, **Y** shows the game's own page). Use item uses Medicine or Berries.
+- **Party and summary** (X menu → Pokémon): name, gender, level, HP, status, held item. **A** opens Summary / Use item / Give item / Take item / Move / Cancel, **Y** moves a Pokémon, **B** closes. The summary adds species, ability, nature and moves with type, category and PP (Up/Down change Pokémon, **Y** toggles the game's own page). Use item offers Medicine, Items, TMs and Berries; Give excludes TMs, asks before replacing a held item, and Take returns it to the Bag. TM teaching shows the four moves and Don't learn (**Up/Down**, **A**; **B** does nothing on that list).
 - **PC boxes**: at a Pokémon Center PC, the box (name and each slot's Pokémon) and the party. The D-pad moves the game's cursor, **A** picks up / puts down (swapping with one already there; box ↔ party and across boxes), **L/R** turn the box, **Y** shows the game's own details, **B** puts a held Pokémon back or leaves.
 - **Bottom-screen fallback**: **L+R** cycles the bottom screen on the top screen off / corner panel (1/2 or 2/3 size, `size` in the settings file) / full view (`panel_key`). The copy runs on the emulated GPU, so the half panel and the full view cost Azahar a few percent of speed at most; 2/3 costs ~8% (docs/PERF.md). Screens without a native view, or parts of one (an item that asks a follow-up question, say), use it.
 - **Touch cursor**: **C-stick** moves it, **ZL** touches the bottom screen at the cursor.
@@ -30,13 +32,19 @@ Native top-screen menus (the panel is off while they show; the game's own screen
 - Startup check of the game, its version and every patched function; the plugin does nothing on an unsupported game or if the check fails, and shows an on-screen notice either way.
 - `usum-onescreen.log` at the emulated SD root with the startup check, scene changes and view changes, for bug reports.
 - Developer test harness (command file, headless screenshots, memory tools, scenarios) and analysis tools; see `README.md` and `docs/OFFSETS.md`.
+- Native screens share a buffer allocated at startup instead of allocating a separate drawing layer for each screen. The documented memory tour passed on Azahar with the 5 MiB build and left the real save unchanged; see [docs/MEMORY.md](docs/MEMORY.md). Emulator test instances queue across checkouts and worktrees (four at once by default); the player's own Azahar is not counted.
+
+#### Fixed
+
+- Host-test linking after Party's theme changes, and Party drawing outside the battle page's bounds (#55). That change records host tests and a plugin build run in WSL/MSYS2; release-commit CI and scenario checks are still required.
 
 #### Known gaps
 
 - Ultra Moon is not supported yet (its addresses have not been found; the startup check fails and the plugin does nothing).
 - No native screen for the Ride Pager (**Y** in the field), Poké Pelago, Festival Plaza, Quick Link and Pokémon Refresh: use the bottom-screen panel (**L+R**). The Ride Pager and Pelago need a later save than the one used for testing, so they have not been looked at.
-- Double battles: the target screen was never found, so it needs the panel (**L+R**). Trainer battles were not played.
-- Not native yet: Pokémon summary from the PC, Held Item / Release / Marking in the boxes, Habitat and Appearance in the Pokédex, TM and evolution-stone follow-ups in the Bag and Party, QR Scanner, Battle Video lists (the test save has none).
-- Moves learned outside battle (TMs, Rare Candy) use the game's own screen on the bottom screen.
+- SOS / double targeting has a host-tested native page, but its taps are unverified and refused; use the panel (**L+R**). No SOS call was reached during the documented search. Trainer battles were not played.
+- Not native yet: Pokémon summary from the PC, Held Item / Release / Marking in the boxes, Habitat / Appearance / search / Evaluation in the Pokédex, follow-up uses in the field Bag, QR Scanner, Battle Video lists (the test save has none). Party TM teaching is native; Party Ether / Elixir, evolution stones and Rare Candy follow-ups are host-tested only, with unverified taps falling back to the panel.
+- Battle Ether move selection, Pokémon Restore / Summary and Y quick ball are not handled natively; Status Restore, Rotom Powers and Battle Items were not used in the documented testing. Z-moves and Mega Evolution were unavailable. Illusion names the real Pokémon rather than its disguise. Run from the post-faint question was not observed.
+- The launcher stalls on a brand-new game's language screen in the tested v1.2 setup, also with the plugin loader off. Both launcher and plugin refuse update version `0x0820`; whether genuine v1.2 dumps report it is unchecked. Launcher gamepad input, mapping in Azahar, fullscreen and decrypted base-game CIA installation remain untested; see docs/PLAYER-APP.md.
 - Game controller input has not been tested on a real pad yet.
 - Only tested in Azahar 2126.2 on Windows; real 3DS hardware has not been tried.

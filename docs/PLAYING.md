@@ -12,7 +12,13 @@ This is a beta. It has only been tested on Windows.
 
 Ultra Moon is **not supported yet**: its addresses have not been found, so the plugin's startup check fails and it does nothing.
 
-## Install
+## Windows launcher (optional)
+
+The app in [`player/`](../player/README.md) checks your own Ultra Sun dump and v1.2 update, copies your installed Azahar into its own portable folder, enables the plugin loader, selects the top screen only, turns custom textures off, installs the plugin and update, and starts the game. Its window offers Keyboard / Gamepad presets, mapping in Azahar, plugin settings and windowed / fullscreen play. It does not modify your existing Azahar profile or provide game files. See [PLAYER-APP.md](PLAYER-APP.md) for setup, recorded tests and open issues; the manual install below remains available.
+
+**Before using it:** a brand-new game with no save currently stalls at the first language screen on the tested v1.2 setup, including with the plugin loader off. The launcher and plugin accept only version `0x0800`; an update reporting `0x0820` is refused, and whether genuine v1.2 dumps report that version remains unchecked. The recorded launch test reached the field using an existing test save; it does not prove a new game works. Real gamepad input, mapping in Azahar, fullscreen, decrypted base-game CIA installation and Azahar versions other than 2126.2 were not tested.
+
+## Manual install
 
 1. In Azahar, open **Emulation → Configure… → System**, and on the **System** tab tick **Enable 3GX plugin loader** (under "3GX Plugin Loader"). This is a global setting; it does not appear in the per-game configuration.
 2. Open Azahar's emulated SD card with **File → Open Azahar Folder → SDMC Folder**. On Windows with default settings it is `%APPDATA%\Azahar\sdmc\`.
@@ -63,7 +69,9 @@ D-pad and **L/R** move, **A** opens, **B** closes. It lists Pokémon, Pokédex, 
 
 ### Party and summary (X menu → Pokémon)
 
-Shows name, level, HP, status and held item. **A** opens Summary / Use item / Move, **Y** moves a Pokémon (swap), **B** closes. The summary shows ability, nature and moves with PP; **Up/Down** change Pokémon and **Y** shows the game's own page. Use item works with Medicine and Berries. See [PARTY-UI.md](PARTY-UI.md).
+Shows name, gender, level, HP, status and held item. D-pad or circle pad moves between Pokémon. **A** opens Summary / Use item / Give item / Take item / Move / Cancel (Take appears only with an item held; Move needs two Pokémon), **Y** moves a Pokémon (swap), **B** closes. The summary also shows species, ability, nature and moves with type, category and PP; **Up/Down** change Pokémon, **Left/Right** change pages, **A** checks moves and **Y** toggles the game's own top page.
+
+Use item offers Medicine, Items, TMs and Berries; Give item leaves out TMs. **L/R** or **Left/Right** change pocket, **Up/Down** pick an item, **A** uses or gives it, **B** goes back. Giving over a held item asks Yes / No (**B** is No); Take returns the held item to the Bag. TM teaching lists the four moves and *Don't learn*: **Up/Down**, **A** chooses; **B** does nothing on that list. Medicine, Give/Take and TM teaching were exercised in-game. Ether / Elixir, evolution stones and Rare Candy follow-ups are host-tested only and may need **L+R**; some unverified menu taps are refused. See [PARTY-UI.md](PARTY-UI.md).
 
 ### Bag (X menu → Bag)
 
@@ -87,7 +95,7 @@ Shows the box and your party. The D-pad moves the game's cursor, **A** picks a P
 
 ### Naming a Pokémon
 
-When the game asks for a nickname (Yes to *Would you like to give X a nickname?* after a catch), its keyboard appears on the top screen. D-pad or circle pad moves, **A** types the key, **B** deletes, **Y** is Shift, **X** types a space, **START** jumps to OK and **A** on OK confirms. The first letter is a capital; Shift only lasts for one character, as in the game. See [KEYBOARD.md](KEYBOARD.md).
+When the game asks for a nickname (Yes to *Would you like to give X a nickname?* after a catch), its QWERTY keyboard and the name typed so far appear on the top screen. D-pad or circle pad moves, **A** types the key, **B** deletes, **Y** is Shift, **X** types a space, **START** jumps to OK and **A** on OK confirms. The first letter is a capital; Shift only lasts for one character, as in the game. The game's name limit applies (12 characters for a nickname); the grid page is not mirrored. **L+R** hides the native keyboard in favour of the panel until the keyboard closes. See [KEYBOARD.md](KEYBOARD.md).
 
 ### Battles
 
@@ -95,12 +103,14 @@ Battles are played with buttons, no panel: when it is your turn a menu appears o
 
 - **Up/Down** pick Fight, Bag, Pokémon or Run, **A** chooses.
 - **Fight** lists your moves with their type, PP, and how effective each is against the opponent. **A** uses one, **B** goes back.
-- **Bag** and **Pokémon** open the game's own screens; a small box on the top screen says what is highlighted (on the Poké Balls tab, which ball). Use **Left/Right** for the Bag's tabs, **Up/Down**, **A** and **B** as on the bottom screen. To catch: Bag → Poké Balls → a ball → A → A (Use).
+- **Pokémon** shows your party on the top screen. Move with the **D-pad**, **A** opens *Switch* / *Cancel*, **B** goes back (after a faint you must pick one). Switching to the active Pokémon, a fainted one or an Egg is refused.
+- **Bag** shows the battle Bag's pockets and item counts on the top screen. **Left/Right** (or **L/R**) change pocket, **Up/Down** pick an item, **A** uses it: a ball is thrown; a Potion asks which Pokémon (it starts on the first one it would help), **A** again uses it. HP-only items are refused on a full-HP or fainted Pokémon. **B** goes back. To catch: Bag → Poké Balls → a ball → A.
 - After a catch, **B** goes through the Pokédex page and the nickname question (No). **A** (Yes) opens the native keyboard above.
 - When a Pokémon wants to learn a fifth move, the top screen lists its four moves and the new one (type, PP; category, power and accuracy of the highlighted one). **Up/Down** and **A** pick the move to forget, or **Don't learn**; **B** jumps to Don't learn. **A** again confirms, **B** goes back.
-- When the game asks something else in battle (sending in the next Pokémon), a box at the top says so; the choices are on the bottom screen (**L+R**).
+- When your Pokémon faints in a wild battle, *Use next Pokémon?* shows on the top screen: **Up/Down**, **A** (Use Next Pokémon opens the party). The Run outcome from this question was not seen in-game.
+- When the game asks something else in battle, a box at the top says so; the choices are on the bottom screen (**L+R**).
 
-If something in a battle isn't covered (a double battle's target screen, for example), **L+R** still shows the bottom screen. See [BATTLE-UI.md](BATTLE-UI.md) and [MOVE-LEARN.md](MOVE-LEARN.md).
+For SOS / double battles, a target page is built and host-tested, but its target taps have not been verified in-game: **A** and **B** say to use the bottom screen. Use **L+R** to choose the target. See [BATTLE-UI.md](BATTLE-UI.md) and [MOVE-LEARN.md](MOVE-LEARN.md).
 
 ## The bottom-screen view (fallback)
 
@@ -122,9 +132,10 @@ On the first run the plugin writes a commented `usum-onescreen.ini` in the root 
 
 - Ultra Moon isn't supported yet (see Requirements).
 - No native screen yet for the Ride Pager, Poké Pelago, Festival Plaza, Quick Link, Pokémon Refresh or Save. The Ride Pager and Pelago need a later save than the one the plugin was tested with, so they are untested. Use **L+R**.
-- Double battles: the target screen hasn't been found; use **L+R** to pick a target. Trainer battles haven't been played.
-- Not native yet: the PC's Summary / Held Item / Release, the Pokédex's Habitat and Appearance, items with a follow-up question (TMs, Ether, evolution stones, Rare Candy), QR Scanner, saved Battle Video lists.
-- Teaching a move outside battle uses the game's own screen on the bottom screen (**L+R**).
+- SOS / double targeting is host-tested only; use **L+R** to pick a target. Trainer battles haven't been played; no SOS call was reached during the documented search.
+- Not native yet: the PC's Summary / Held Item / Release / Marking, the Pokédex's Habitat / Appearance / search / Evaluation, QR Scanner, saved Battle Video lists. The field Bag's TM and other follow-up uses still need the panel; Party TM teaching is native.
+- Party Ether / Elixir, evolution stones and Rare Candy (including move learning after a level-up) have not been tried in-game; their follow-up logic is host-tested only. Battle Ether move selection, Pokémon Restore / Summary and the Y quick ball are not handled natively; battle Status Restore, Rotom Powers and Battle Items were not used in the documented testing. Z-moves and Mega Evolution were unavailable in the test save. Illusion names the real Pokémon rather than its disguise.
+- The launcher's new-game and update-version blockers are described above; do not treat its existing-save launch test as a fresh-game pass.
 - Controller input hasn't been tested on a real pad.
 - The panel covers part of the top screen while it's shown.
 - Only tested in Azahar 2126.2 on Windows. Real 3DS hardware has not been tried.
