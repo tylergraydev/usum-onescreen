@@ -182,7 +182,7 @@ namespace OneScreen
         const float dx = std::sin(a), dy = std::cos(a);
         const float tipX = cx + dx * r, tipY = cy + dy * r;
         const float baseX = cx - dx * r * 0.6f, baseY = cy - dy * r * 0.6f;
-        const float w = r * 0.6f, e = w + 1.5f;
+        const float w = r * 0.4f, e = w + 1.5f;
         canvas.FillTriangle(tipX + dx * 1.5f, tipY + dy * 1.5f, baseX - dy * e - dx, baseY + dx * e - dy,
                             baseX + dy * e - dx, baseY - dx * e - dy, T::CursorEdge);
         canvas.FillTriangle(tipX, tipY, baseX - dy * w, baseY + dx * w, baseX + dy * w, baseY - dx * w, T::CursorRed);
