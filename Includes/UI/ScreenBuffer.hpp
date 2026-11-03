@@ -61,6 +61,13 @@ namespace ScreenBuffer
     // "heap 1148 KB used, 3700 KB free, largest 3650 KB" (mallinfo plus a
     // malloc probe for the largest block). Plugin thread, for show/hide logs.
     std::string HeapStatus(void);
+    // "mem: <what>, " + HeapStatus(), plus ", LOW" when the largest block
+    // is under LowMark: the line each screen logs when it shows and hides
+    // (what = "xmenu shown"). scenarios/memory-tour.txt fails on LOW.
+    static constexpr size_t LowMark = 256 * 1024;
+    std::string HeapLog(const char *what);
+
+
     // The largest block malloc can hand out now, in bytes (to 1 KB).
     size_t      LargestFree(void);
 }

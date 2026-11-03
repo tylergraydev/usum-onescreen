@@ -71,7 +71,7 @@ namespace OneScreen
     // The layer draws into the native screens' shared buffer (W7-M,
     // UI/ScreenBuffer.hpp), borrowed while the layer shows and given back
     // when it doesn't; nothing is allocated for it here.
-    static const char *const BufferOwner = "party";
+    static const char *const Owner = "party";
 
     // --- Plugin thread ---
     static bool s_enabled = true;
@@ -172,11 +172,11 @@ namespace OneScreen
         }
         if (!s_showLayer)
         {
-            UI::ScreenBuffer::GiveBack(BufferOwner);
+            UI::ScreenBuffer::GiveBack(Owner);
             return false;
         }
         bool fresh = false;
-        u8 *pixels = UI::ScreenBuffer::Borrow(BufferOwner, fresh);
+        u8 *pixels = UI::ScreenBuffer::Borrow(Owner, fresh);
         if (pixels == nullptr)
             return false;       // another screen holds it: next frame
 
@@ -1237,8 +1237,6 @@ namespace OneScreen
         const bool shown = s_enabled && !s_yield && here;
         if (shown && !s_shown)
         {
-            // The layer is hidden here, so the OSD callback isn't using the
-            // buffer: (re)allocate it if it is missing or too small.
             UI::RequestAssets();    // the game's font, icons and move table for the drawing
             s_menu.Reset(6);
             s_note.clear();
@@ -1249,12 +1247,14 @@ namespace OneScreen
             ReadPartyNow(sceneManager, log);
             if (s_party.screenCursor >= 0)
                 s_menu.SetCursor(s_party.screenCursor, Count());
-            log.push_back(Utils::Format("party-ui: shown (%s, cursor %d); ", scene.empty() ? "(none)" : scene.c_str(),
-                                        s_menu.Cursor() + 1) + UI::ScreenBuffer::HeapStatus());
+            log.push_back(Utils::Format("party-ui: shown (%s, cursor %d)", scene.empty() ? "(none)" : scene.c_str(),
+                                        s_menu.Cursor() + 1));
+            log.push_back(UI::ScreenBuffer::HeapLog("party shown"));
         }
         else if (!shown && s_shown)
         {
-            log.push_back("party-ui: hidden; " + UI::ScreenBuffer::HeapStatus());
+            log.push_back("party-ui: hidden");
+            log.push_back(UI::ScreenBuffer::HeapLog("party hidden"));
             if (s_stage != Stage::Idle && !ActionRunning())
                 s_stage = Stage::Idle;
             s_menu.EndAsk();
@@ -1351,6 +1351,6 @@ namespace OneScreen
                              s_shown ? "shown" : "hidden", pages[(int)s_menu.Page()], s_menu.Cursor() + 1,
                              stages[(int)s_stage], s_yield ? ", panel on by hand" : "",
                              s_captureKeys ? ", input captured" : "",
-                             UI::ScreenBuffer::Holder() == BufferOwner ? "held" : "not held") + UI::ScreenBuffer::HeapStatus();
+                             UI::ScreenBuffer::Holder() == Owner ? "held" : "not held") + UI::ScreenBuffer::HeapStatus();
     }
 }
