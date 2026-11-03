@@ -48,7 +48,7 @@ $(OUT)/xmenu_test: xmenu_test.cpp ../Sources/Screens/XMenuGrid.cpp ../Includes/S
 
 $(OUT)/keyboard_test: keyboard_test.cpp ../Sources/Screens/KeyboardGrid.cpp ../Includes/Screens/KeyboardGrid.hpp                     ../Sources/ActionQueue.cpp ../Includes/ActionQueue.hpp ../Includes/Layouts.hpp $(UI_SRCS) $(UI_HDRS)
 	@mkdir -p $(OUT)
-	$(CXX) $(CXXFLAGS) keyboard_test.cpp ../Sources/Screens/KeyboardGrid.cpp ../Sources/ActionQueue.cpp $(UI_SRCS) -o $@
+	$(CXX) $(CXXFLAGS) keyboard_test.cpp ../Sources/Screens/KeyboardGrid.cpp ../Sources/ActionQueue.cpp $(THEME_SRCS) $(UI_SRCS) -o $@
 
 $(OUT)/pokedex_test: pokedex_test.cpp ../Sources/Screens/PokedexList.cpp ../Includes/Screens/PokedexList.hpp $(UI_SRCS) $(UI_HDRS)
 	@mkdir -p $(OUT)
