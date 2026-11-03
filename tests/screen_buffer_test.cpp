@@ -48,18 +48,46 @@ static void TestBorrowing(void)
     CHECK(ScreenBuffer::Borrow(A, fresh) == a && !fresh);   // still A's: no redraw
     CHECK(ScreenBuffer::Holder() == A);
 
-    // B asks while A holds it: refused, counted, A keeps it.
+    // B opens over A: B takes it; A waits (refused, counted) until it's free.
     const unsigned refused = ScreenBuffer::Refused();
-    CHECK(ScreenBuffer::Borrow(B, fresh) == nullptr && !fresh);
-    CHECK(ScreenBuffer::Refused() == refused + 1);
-    ScreenBuffer::GiveBack(B);                          // not B's: no effect
-    CHECK(ScreenBuffer::Holder() == A);
+    CHECK(ScreenBuffer::Borrow(B, fresh) == a && fresh);
+    CHECK(ScreenBuffer::Holder() == B);
+    CHECK(ScreenBuffer::Borrow(A, fresh) == nullptr && !fresh);
+    CHECK(ScreenBuffer::Borrow(A, fresh) == nullptr);
+    CHECK(ScreenBuffer::Refused() == refused + 2);
+    CHECK(ScreenBuffer::Borrow(B, fresh) == a && !fresh);   // B stays on top
+    ScreenBuffer::GiveBack(A);                          // A hides while waiting: no effect on B
+    CHECK(ScreenBuffer::Holder() == B);
 
-    // A gives it back; B gets the same buffer, fresh.
+    // A shows again while B is up: A is no longer "waiting", so it is the
+    // newer one now and takes it back.
+    CHECK(ScreenBuffer::Borrow(A, fresh) == a && fresh);
+    CHECK(ScreenBuffer::Borrow(B, fresh) == nullptr);
+    // A gives it back; the waiting B gets it again, fresh.
     ScreenBuffer::GiveBack(A);
     CHECK(ScreenBuffer::Holder() == nullptr);
     CHECK(ScreenBuffer::Borrow(B, fresh) == a && fresh);
+    CHECK(ScreenBuffer::Borrow(A, fresh) == a && fresh);    // A is new again: takes it
+    ScreenBuffer::GiveBack(A);
     ScreenBuffer::GiveBack(B);
+
+    // Three up at once: each newer one wins, and the older two both wait
+    // (no ping-pong between them).
+    static const char *const C = "c";
+    CHECK(ScreenBuffer::Borrow(A, fresh) == a);
+    CHECK(ScreenBuffer::Borrow(B, fresh) == a);
+    CHECK(ScreenBuffer::Borrow(C, fresh) == a);
+    for (int frame = 0; frame < 3; frame++)
+    {
+        CHECK(ScreenBuffer::Borrow(A, fresh) == nullptr);
+        CHECK(ScreenBuffer::Borrow(B, fresh) == nullptr);
+        CHECK(ScreenBuffer::Borrow(C, fresh) == a && !fresh);
+    }
+    ScreenBuffer::GiveBack(C);
+    ScreenBuffer::GiveBack(B);
+    ScreenBuffer::GiveBack(A);
+    CHECK(ScreenBuffer::Holder() == nullptr);
+
 
     // A again: fresh even with nobody in between.
     CHECK(ScreenBuffer::Borrow(A, fresh) == a && fresh);
