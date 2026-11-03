@@ -12,6 +12,7 @@
 #include "Screens/MoveLearnMenu.hpp"
 #include "UI/Device.hpp"
 #include "UI/Layer.hpp"
+#include "UI/ScreenBuffer.hpp"
 
 namespace OneScreen
 {
@@ -174,7 +175,7 @@ namespace OneScreen
     static bool s_dirty = false;
     static UI::Layer s_layer;
     static UI::Rect s_layerArea = {};
-    static u8 s_pixels[240 * 156 * 4];  // the largest page (the move list) in RGBA8
+    static const char *const Owner = "movelearn";   // UI::ScreenBuffer
 
     static Screens::LearnMove MakeMove(const BattleState &state, u16 move, u8 pp, u8 maxPp)
     {
@@ -283,7 +284,10 @@ namespace OneScreen
 
         const bool visible = s_menu.Visible();
         const std::string key = visible ? s_menu.DrawKey(s_snap) : std::string();
+        if (visible != s_visible)
+            log.push_back(UI::ScreenBuffer::HeapLog(visible ? "movelearn shown" : "movelearn hidden"));
         if (key != s_drawKey || visible != s_visible)
+
         {
             s_drawLock.Lock();
             s_drawMenu = s_menu;
@@ -298,8 +302,19 @@ namespace OneScreen
 
     bool MoveLearnOnScreen(const Screen &screen)
     {
-        if (!screen.IsTop || !s_visible)
+        if (!screen.IsTop)
             return false;
+        if (!s_visible)
+        {
+            UI::ScreenBuffer::GiveBack(Owner);
+            return false;
+        }
+        bool fresh = false;
+        u8 *pixels = UI::ScreenBuffer::Borrow(Owner, fresh);
+        if (pixels == nullptr)
+            return false;
+        if (fresh)
+            s_layerArea = UI::Rect{};   // set up again before anything is presented
         UiInitFont();
         const UI::Surface fb = SurfaceFromScreen(screen);
         // Never wait for the plugin thread here (this is the game's frame).
@@ -312,7 +327,8 @@ namespace OneScreen
                 if (!s_layer.Matches(fb) || area.x != s_layerArea.x || area.y != s_layerArea.y
                     || area.w != s_layerArea.w || area.h != s_layerArea.h)
                 {
-                    s_layer.Setup(fb, area, 10, s_pixels, sizeof(s_pixels));
+                    s_layer.Setup(fb, area, 10, pixels, UI::ScreenBuffer::Bytes);
+
                     s_layerArea = area;
                     s_dirty = true;
                 }

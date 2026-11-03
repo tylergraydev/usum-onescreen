@@ -26,6 +26,8 @@
 #include "Screens/Boxes.hpp"
 #include "Screens/XMenu.hpp"
 #include "Screens/ThemeScreen.hpp"
+#include "UI/Assets.hpp"
+#include "UI/ScreenBuffer.hpp"
 #include "Settings.hpp"
 #include "Shot.hpp"
 #include "UI/Device.hpp"
@@ -631,6 +633,11 @@ namespace CTRPluginFramework
         for (const std::string &line : boxesLog)
             WriteLog(line, false);
 
+        std::vector<std::string> assetsLog;
+        OneScreen::UI::AssetsUpdate(scene, assetsLog);
+        for (const std::string &line : assetsLog)
+            WriteLog(line, false);
+
         std::vector<std::string> themeLog;
         OneScreen::ThemeScreenUpdate(s_game->offsets.sceneManager, themeLog);
         for (const std::string &line : themeLog)
@@ -704,6 +711,8 @@ namespace CTRPluginFramework
 
     int main(void)
     {
+        // First, before the heap fragments (UI/ScreenBuffer.hpp).
+        const bool bufferOk = OneScreen::UI::ScreenBuffer::Init();
         if (s_game == nullptr)
         {
             // Unsupported title or version: show what was detected so the
@@ -720,6 +729,10 @@ namespace CTRPluginFramework
         std::string hooks;
         const bool hooksOk = OneScreen::VerifyHooks(*s_game, hooks);
         WriteLog(msg + "\n" + hooks + (hooksOk ? "hooks: all ok" : "hooks: FAILED, nothing will be patched"), true);
+        WriteLog(Utils::Format("screen buffer: %u KB%s; ", (unsigned)(OneScreen::UI::ScreenBuffer::Bytes / 1024),
+                               bufferOk ? "" : ", NO MEMORY (native screens stay hidden)")
+                     + OneScreen::UI::ScreenBuffer::HeapStatus(),
+                 false);
         OSD::Notify(msg);
         if (!hooksOk)
         {
