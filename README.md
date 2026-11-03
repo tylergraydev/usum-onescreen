@@ -2,9 +2,11 @@
 
 A 3GX plugin (CTRPluginFramework) that makes Pokémon Ultra Sun / Ultra Moon playable on the top screen only, in Azahar with the 3GX plugin loader enabled. Plan: https://claude.ai/artifact/LxD6pmGFR8x91NrRRF8P7R
 
-**Status:** Phase 2 under way. The goal is native menus on the top screen; the X menu (`Sources/Screens/XMenu.cpp`), the nickname keyboard (`Sources/Screens/Keyboard.cpp`), the Party screen with the summary (`Sources/Screens/PartyScreen.cpp`) and the PC boxes (`Sources/Screens/Boxes.cpp`) have one. Until every screen has one, **L+R** shows the bottom screen on the top screen as a half-size panel or a full view (`Sources/Panel.cpp`, copied on the emulated GPU), and a touch cursor (`Sources/Cursor.cpp`) on it: **C-stick** moves it, **ZL** touches. The panel can also follow the scene automatically (`auto = on`, `Sources/AutoPanel.cpp`). See [docs/PLAYING.md](docs/PLAYING.md).
+**Status:** first beta (v0.1) in preparation; not released yet. The goal is native menus on the top screen. These have one: battle with catching and move learning (`Sources/Screens/BattleScreen.cpp`, `MoveLearn.cpp`), the X menu (`XMenu.cpp`), the nickname keyboard (`Keyboard.cpp`), the Pokédex (`Pokedex.cpp`), Options / Trainer Passport / Battle Video (`SubScreens.cpp`), the Bag (`Bag.cpp`), the map on **ZR** (`Map.cpp`), the Party screen with the summary (`PartyScreen.cpp`), the PC boxes (`Boxes.cpp`) and Rotom's chat prompts (`RotomPrompt.cpp`), all in `Sources/Screens/`. Screens without one (Ride Pager, Quick Link, Festival Plaza and others) use the fallback: **L+R** shows the bottom screen on the top screen as a half-size panel or a full view (`Sources/Panel.cpp`, copied on the emulated GPU), and a touch cursor (`Sources/Cursor.cpp`) on it: **C-stick** moves it, **ZL** touches. The panel can also follow the scene automatically (`auto = on`, `Sources/AutoPanel.cpp`). See [docs/PLAYING.md](docs/PLAYING.md) for controls and known gaps, and [docs/RELEASE-NOTES-v0.1.md](docs/RELEASE-NOTES-v0.1.md) for what must be done before tagging.
 
 **Players:** see [docs/PLAYING.md](docs/PLAYING.md) for install, controls and bug reports, and [CHANGELOG.md](CHANGELOG.md) for what's new.
+
+The optional Windows launcher in [`player/`](player/README.md) checks your own game and update, sets up a portable copy of your Azahar with the plugin, and starts it. Read [docs/PLAYER-APP.md](docs/PLAYER-APP.md) first: new-game startup and update-version compatibility remain open issues. Native battle Party/Bag controls and Party held-item/TM teaching are described in the player guide; SOS / double targeting still needs **L+R**.
 
 ## Targets
 
@@ -54,6 +56,7 @@ At boot the plugin reads `usum-onescreen.ini` at the emulated SD root (next to t
 [controls]
 panel_key = L+R         ; cycles off / panel / full; A B X Y L R ZL ZR Start Select Up Down Left Right, L+R for a combo, or none
 touch_key = ZL          ; touches at the cursor while held
+map_key = ZR            ; opens and closes the top-screen map (B closes it too)
 cursor_move = cstick    ; cstick, dpad or circlepad (dpad / circlepad still reach the game too)
 cursor_speed = 6        ; top speed in px/frame, 1-20; starts at 1, then 3 (or less), then this
 
@@ -119,6 +122,8 @@ CTRPF opens its menu with **Select** (its default menu hotkey; `Preferences::Men
 - `py -3 -I tools/shot.py [name]` asks the running plugin for a screenshot and saves `analysis/private/shots/<name>-top.png` and `-bottom.png`. The top shot includes anything the plugin draws.
 
 ### Isolated Azahar instances
+
+At most 4 instance emulators run at once on the PC, counted across every checkout and worktree: `start` waits for a free slot (set `USUM_EMU_SLOTS` to change the limit, `start --no-queue` to skip the wait). `status` lists every running instance emulator. Your own Azahar is never counted.
 
 `tools/instance.py` runs Ultra Sun in Azahar instances that share nothing with each other or with your own Azahar (`%APPDATA%\Azahar`), so several tests can run at once:
 
