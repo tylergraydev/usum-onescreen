@@ -17,6 +17,7 @@
 #include "Screens/XMenuGrid.hpp"
 #include "UI/Device.hpp"
 #include "UI/Layer.hpp"
+#include "UI/ScreenBuffer.hpp"
 
 namespace OneScreen
 {
@@ -52,8 +53,7 @@ namespace OneScreen
     static volatile bool s_scanWanted = false;
     static volatile int  s_scanPage = -1, s_scanSlot = -1;
     static volatile u32  s_scanCount = 0;
-    static u8           *s_pixels = nullptr;    // the layer's buffer, allocated on first show
-    static const size_t  PixelBytes = XMenuArea.w * XMenuArea.h * 4;
+    static const char *const Owner = "xmenu";   // UI::ScreenBuffer
 
     // --- Plugin thread ---
     static bool s_enabled = true;
@@ -117,16 +117,23 @@ namespace OneScreen
                 ScanGameCursor(screen);
             return false;
         }
-        if (!s_shown || s_pixels == nullptr)
+        if (!s_shown)
+        {
+            UI::ScreenBuffer::GiveBack(Owner);
+            return false;
+        }
+        bool fresh = false;
+        u8 *pixels = UI::ScreenBuffer::Borrow(Owner, fresh);
+        if (pixels == nullptr)
             return false;
 
         UiInitFont();
         const UI::Surface fb = SurfaceFromScreen(screen);
         const u32 version = s_viewVersion;
         bool redraw = version != s_drawnVersion;
-        if (!s_layer.Matches(fb))
+        if (fresh || !s_layer.Matches(fb))
         {
-            if (!s_layer.Setup(fb, XMenuArea, XMenuRadius, s_pixels, PixelBytes))
+            if (!s_layer.Setup(fb, XMenuArea, XMenuRadius, pixels, UI::ScreenBuffer::Bytes))
                 return false;
             redraw = true;
         }
@@ -352,8 +359,6 @@ namespace OneScreen
         const bool shown = s_enabled && !s_yield && menuUp;
         if (shown && !s_shown)
         {
-            if (s_pixels == nullptr)
-                s_pixels = new (std::nothrow) u8[PixelBytes];
             s_shownAt = s_frames;
             s_synced = false;
             s_stableCount = 0;
@@ -361,14 +366,16 @@ namespace OneScreen
             s_lastScan = s_scanCount;
             s_scanWanted = true;
             s_repeatKey = 0;
-            log.push_back(Utils::Format("xmenu: shown (game page %d)%s",
-                                        (ActionProbeFlags() & WorldXMenuPage2) ? 2 : 1,
-                                        s_pixels == nullptr ? ", NO MEMORY for the layer" : ""));
+            log.push_back(Utils::Format("xmenu: shown (game page %d)", (ActionProbeFlags() & WorldXMenuPage2) ? 2 : 1));
+            log.push_back(UI::ScreenBuffer::HeapLog("xmenu shown"));
         }
         else if (!shown && s_shown)
         {
             s_scanWanted = false;
             log.push_back("xmenu: hidden");
+            log.push_back(UI::ScreenBuffer::HeapLog("xmenu hidden"));
+
+
         }
         s_shown = shown;
 
