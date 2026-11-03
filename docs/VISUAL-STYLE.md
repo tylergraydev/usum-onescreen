@@ -179,7 +179,7 @@ shared change first, so every screen gets the game's font and icons: load
 | Keyboard | `Keyboard.cpp`, `KeyboardGrid.cpp` | keys as small option pills, the name field in a `DrawWindow`, prompts |
 | Pokédex | `Pokedex.cpp`, `PokedexList.cpp` | `DexSelected` / `DexRow` / `DexEmpty` rows, ball icon for caught counts, light blue background |
 | Options, Passport, Battle Video | `SubScreens.cpp`, `Options.cpp`, `TrainerPassport.cpp`, `BattleVideo.cpp` | `DrawWindow` panels, list rows, option pills for choices |
-| Bag | `Bag.cpp`, `BagList.cpp` | list rows (28 px), the party column with `DrawHpBar`, item description in a `DrawWindow`, X/Y prompts; pocket icons once loaded (not yet) |
+| Bag | `Bag.cpp`, `BagList.cpp` | done in W7-3 (`docs/BAG.md`): list rows (28 px), the party column with `DrawHpBar`, the item description in a `DrawWindow`, A/B prompts (X and Y are not used: the native Bag doesn't sort or move), the game's pocket icons |
 | Map | `Map.cpp`, `MapView.cpp` | place name in a `DrawWindow`, prompts |
 | Party and summary | `PartyScreen.cpp`, `PartyMenu.cpp` | plates with `DrawHighlightFrame` and `DrawHpBar`, gender icons, the submenu as option pills; summary moves with type plates and category icons, blue values |
 | PC boxes | `Boxes.cpp`, `BoxesGrid.cpp` | box title in a `DrawWindow`, party as list rows, ball icons, prompts |

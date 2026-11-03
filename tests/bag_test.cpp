@@ -1,7 +1,9 @@
 // Host tests for the native Bag's pure part (Sources/Screens/BagList.cpp):
-// tabs and actions, the list cursor, which menu entries are native, and the
-// driver against a small fake of the game's Bag. Build and run: make -C tests.
-// With a path argument, also writes a preview of the Bag there as a PPM image.
+// tabs and actions, the list cursor, which menu entries are native, items
+// with a follow-up and the result lines, the pocket icons and descriptions
+// read from a made-up RomFS, and the driver against a small fake of the
+// game's Bag. Build and run: make -C tests. With a path argument, also
+// writes a preview of the Bag there as a PPM image.
 
 #include "Screens/BagList.hpp"
 
@@ -14,6 +16,129 @@ static int s_failures = 0;
 
 #define CHECK(cond) \
     do { if (!(cond)) { std::printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond); s_failures++; } } while (0)
+
+// --- Byte builders: message files, layout archives, LZ11 ---
+
+static void Put16(std::vector<u8> &b, size_t at, u32 v)
+{
+    if (b.size() < at + 2)
+        b.resize(at + 2);
+    b[at] = (u8)v;
+    b[at + 1] = (u8)(v >> 8);
+}
+
+static void Put32(std::vector<u8> &b, size_t at, u32 v)
+{
+    Put16(b, at, v & 0xFFFF);
+    Put16(b, at + 2, v >> 16);
+}
+
+// A message file (docs/RE2-text.md) with ASCII lines, encrypted as the game's.
+static std::vector<u8> MakeMessageFile(const std::vector<std::string> &lines)
+{
+    std::vector<u8> b;
+    Put16(b, 0, 1);
+    Put16(b, 2, (u32)lines.size());
+    const u32 section = 0x10;
+    Put32(b, 0x0C, section);
+    u32 text = 4 + (u32)lines.size() * 8;
+    for (size_t l = 0; l < lines.size(); l++)
+    {
+        const u32 length = (u32)lines[l].size() + 1;   // with the terminating 0
+        Put32(b, section + 4 + l * 8, text);
+        Put16(b, section + 4 + l * 8 + 4, length);
+        u16 key = (u16)(0x2983 * (l + 3));
+        for (u32 i = 0; i < length; i++)
+        {
+            const u16 c = i < lines[l].size() ? (u16)(u8)lines[l][i] : 0;
+            Put16(b, section + text + i * 2, c ^ key);
+            key = (u16)((key << 3) | (key >> 13));
+        }
+        text += length * 2;
+    }
+    Put32(b, section, text);
+    return b;
+}
+
+// An ALYT stand-in (16 bytes) and a SARC with these files, each `gap`
+// bytes after the last (filled with a pattern that repeats every 4096).
+static std::vector<u8> MakeArchive(const std::vector<std::string> &names, const std::vector<std::vector<u8>> &data, u32 gap)
+{
+    std::vector<u8> b(16, 0);
+    std::memcpy(&b[0], "ALYT", 4);
+    const size_t s = 16, sfat = 0x14, sfnt = sfat + 0x0C + names.size() * 16;
+    b.resize(s + sfnt + 8);
+    std::memcpy(&b[s], "SARC", 4);
+    Put16(b, s + 4, 0x14);
+    Put16(b, s + 6, 0xFEFF);
+    std::memcpy(&b[s + sfat], "SFAT", 4);
+    Put16(b, s + sfat + 4, 0x0C);
+    Put16(b, s + sfat + 6, (u32)names.size());
+    std::memcpy(&b[s + sfnt], "SFNT", 4);
+    Put16(b, s + sfnt + 4, 8);
+    size_t nameAt = 0;
+    for (size_t i = 0; i < names.size(); i++)
+    {
+        b.resize(s + sfnt + 8 + nameAt + (names[i].size() + 4) / 4 * 4, 0);
+        std::memcpy(&b[s + sfnt + 8 + nameAt], names[i].c_str(), names[i].size());
+        Put32(b, s + sfat + 0x0C + i * 16 + 4, 0x01000000 | (u32)(nameAt / 4));
+        nameAt += (names[i].size() + 4) / 4 * 4;
+    }
+    const u32 dataAt = (u32)((b.size() - s + 0xFF) / 0x100 * 0x100);
+    Put32(b, s + 0x0C, dataAt);
+    b.resize(s + dataAt, 0);
+    u32 off = 0;
+    for (size_t i = 0; i < names.size(); i++)
+    {
+        for (u32 k = 0; k < gap; k++)
+            b.push_back((u8)((off + k) % 4096 % 253));
+        off += gap;
+        Put32(b, s + sfat + 0x0C + i * 16 + 8, off);
+        Put32(b, s + sfat + 0x0C + i * 16 + 12, off + (u32)data[i].size());
+        b.insert(b.end(), data[i].begin(), data[i].end());
+        off += (u32)data[i].size();
+    }
+    Put32(b, s + 8, (u32)(b.size() - s));
+    return b;
+}
+
+// LZ11 with copies 1 back (runs) and 4096 back (the gap pattern), else
+// literals.
+static std::vector<u8> Lz11Compress(const std::vector<u8> &in)
+{
+    std::vector<u8> out = { 0x11, (u8)in.size(), (u8)(in.size() >> 8), (u8)(in.size() >> 16) };
+    size_t i = 0;
+    while (i < in.size())
+    {
+        const size_t flagsAt = out.size();
+        out.push_back(0);
+        for (int bit = 0; bit < 8 && i < in.size(); bit++)
+        {
+            size_t best = 0, disp = 0;
+            for (size_t d : { (size_t)1, (size_t)4096 })
+            {
+                size_t n = 0;
+                while (i >= d && i + n < in.size() && n < 16 && in[i + n] == in[i + n - d])
+                    n++;
+                if (n >= 3 && n > best)
+                {
+                    best = n;
+                    disp = d;
+                }
+            }
+            if (best == 0)
+            {
+                out.push_back(in[i++]);
+                continue;
+            }
+            out[flagsAt] |= (u8)(0x80 >> bit);
+            out.push_back((u8)(((best - 1) << 4) | ((disp - 1) >> 8)));
+            out.push_back((u8)((disp - 1) & 0xFF));
+            i += best;
+        }
+    }
+    return out;
+}
 
 static void TestTables(void)
 {
@@ -31,7 +156,7 @@ static void TestTables(void)
     }
 
     // Every command has an action; all of them may run except the menu
-    // positions that were never tapped (2: Move to Free Space, 5: unseen).
+    // position that was never tapped (5: no 5-entry menu seen).
     BagCmd cmd;
     std::vector<BagCmd> all;
     for (int i = 0; i < BagTabCount; i++) all.push_back(BagCmd{ BagStep::TapTab, i });
@@ -51,7 +176,7 @@ static void TestTables(void)
         CHECK(def->summary != nullptr);
         CHECK(def->needs.scene != nullptr && std::string(def->needs.scene) == SceneBag);
         const std::string bad = CheckAction(*def);
-        const bool untapped = c.step == BagStep::TapMenu && (c.arg == 2 || c.arg == 5);
+        const bool untapped = c.step == BagStep::TapMenu && c.arg == 5;
         if (bad.empty() == untapped)
             std::printf("    %s: '%s'\n", def->name, bad.c_str());
         CHECK(bad.empty() != untapped);
@@ -64,14 +189,244 @@ static void TestTables(void)
 
     CHECK(std::string(BagCommandLabel(BagCommand::Give)) == "Give");
     CHECK(std::string(BagCommandLabel(0x07)) == "Option 0x07");
-    CHECK(BagCommandEnabled(BagCommand::Use, BagTabFind("medicine")));
-    CHECK(BagCommandEnabled(BagCommand::Use, BagTabFind("berries")));
-    CHECK(!BagCommandEnabled(BagCommand::Use, BagTabFind("items")));     // Escape Rope leaves the Bag
-    CHECK(!BagCommandEnabled(BagCommand::Use, BagTabFind("tms")));
-    CHECK(BagCommandEnabled(BagCommand::Give, BagTabFind("items")));
-    CHECK(BagCommandEnabled(BagCommand::Cancel, 0) && BagCommandEnabled(BagCommand::Yes, 0) && BagCommandEnabled(BagCommand::No, 0));
-    CHECK(!BagCommandEnabled(BagCommand::FreeSpace, 1));
-    CHECK(!BagCommandEnabled(0x07, 1));
+    CHECK(std::string(BagCommandLabel(BagCommand::ReturnToPocket)) == "Return to Pocket");
+    CHECK(std::string(BagCommandLabel(BagCommand::Off)) == "Off");
+
+    // Every entry of every menu seen runs natively (positions 1-4); a fifth
+    // entry from the bottom was never tapped.
+    const std::vector<u8> potion = { BagCommand::Use, BagCommand::Give, BagCommand::FreeSpace, BagCommand::Cancel };
+    for (int i = 0; i < 4; i++)
+        CHECK(BagEntryEnabled(potion, i));
+    CHECK(!BagEntryEnabled(potion, 4) && !BagEntryEnabled(potion, -1));
+    const std::vector<u8> expShare = { BagCommand::Off, BagCommand::FreeSpace, BagCommand::Cancel };
+    const std::vector<u8> freeSpace = { BagCommand::Give, BagCommand::ReturnToPocket, BagCommand::Cancel };
+    for (int i = 0; i < 3; i++)
+        CHECK(BagEntryEnabled(expShare, i) && BagEntryEnabled(freeSpace, i));
+    const std::vector<u8> five = { 0x07, BagCommand::Use, BagCommand::Give, BagCommand::FreeSpace, BagCommand::Cancel };
+    CHECK(!BagEntryEnabled(five, 0) && BagEntryEnabled(five, 1));
+    const std::vector<u8> yesNo = { BagCommand::Yes, BagCommand::No };
+    CHECK(BagEntryEnabled(yesNo, 0) && BagEntryEnabled(yesNo, 1));
+
+    // Pocket icons: the selected icon and its "2" variant, all different.
+    for (int i = 0; i < BagTabCount; i++)
+    {
+        CHECK(std::strncmp(BagTabAt(i).icon, "Bag_Icon_", 9) == 0);
+        for (int j = 0; j < i; j++)
+            CHECK(std::strcmp(BagTabAt(i).icon, BagTabAt(j).icon) != 0);
+    }
+    CHECK(std::string(BagTabAt(BagTabFind("rotom_powers")).icon) == "Bag_Icon_06f");
+    CHECK(std::string(BagTabAt(BagTabFind("medicine")).icon) == "Bag_Icon_01b");
+}
+
+static void TestItems(void)
+{
+    // Kinds of the items with a follow-up.
+    CHECK(BagItemKindOf(17) == BagItemKind::Other);           // Potion
+    CHECK(BagItemKindOf(78) == BagItemKind::Other);           // Escape Rope
+    CHECK(BagItemKindOf(38) == BagItemKind::PpOne);           // Ether
+    CHECK(BagItemKindOf(53) == BagItemKind::PpOne);           // PP Max
+    CHECK(BagItemKindOf(40) == BagItemKind::PpAll);           // Elixir
+    CHECK(BagItemKindOf(79) == BagItemKind::Repel && BagItemKindOf(76) == BagItemKind::Repel);
+    CHECK(BagItemKindOf(50) == BagItemKind::RareCandy);
+    CHECK(BagItemKindOf(82) == BagItemKind::Stone && BagItemKindOf(849) == BagItemKind::Stone);
+    CHECK(BagItemKindOf(328) == BagItemKind::Tm && BagItemKindOf(419) == BagItemKind::Tm);    // TM01, TM92
+    CHECK(BagItemKindOf(420) == BagItemKind::Other);          // HM01
+    CHECK(BagItemKindOf(618) == BagItemKind::Tm && BagItemKindOf(694) == BagItemKind::Tm);    // TM93, TM100
+    CHECK(BagItemKindOf(695) == BagItemKind::Other);
+    CHECK(std::string(BagItemKindName(BagItemKind::Tm)) == "tm");
+    CHECK(std::string(BagPickQuestion(328)) == "Which Pokémon do you want to teach it to?");
+    CHECK(std::string(BagPickQuestion(17)) == "Which Pokémon do you want to use this item on?");
+
+    // Stepping aside: only during a Use, only after the game was busy long
+    // enough (an HP bar filling is shorter), and back once it waits in its
+    // list or party pick.
+    CHECK(BagFollowGame(BagMode::Busy, BagAsideFrames, true, false) == BagFollow::Aside);
+    CHECK(BagFollowGame(BagMode::Busy, BagAsideFrames - 1, true, false) == BagFollow::Native);
+    CHECK(BagFollowGame(BagMode::Busy, 10000, false, false) == BagFollow::Native);
+    CHECK(BagFollowGame(BagMode::Message, 10000, true, false) == BagFollow::Native);
+    CHECK(BagFollowGame(BagMode::Busy, 0, true, true) == BagFollow::Aside);
+    CHECK(BagFollowGame(BagMode::Message, 0, true, true) == BagFollow::Aside);
+    CHECK(BagFollowGame(BagMode::List, 0, true, true) == BagFollow::Native);
+    CHECK(BagFollowGame(BagMode::Pick, 0, true, true) == BagFollow::Native);
+
+    // Result lines.
+    BagResult r;
+    r.command = BagCommand::Use;
+    r.item = "Potion";
+    r.countBefore = 9;
+    r.countAfter = 8;
+    r.picked = true;
+    r.mon = "Pichu";
+    r.hpBefore = 7;
+    r.hpAfter = 27;
+    r.maxHp = 27;
+    r.levelBefore = r.levelAfter = 12;
+    CHECK(BagResultText(r) == "Pichu: HP 7 -> 27/27");
+    r.hpAfter = 7;
+    r.countAfter = 9;
+    CHECK(BagResultText(r) == "Potion had no effect on Pichu");
+    // Ether: PP back.
+    r.item = "Ether";
+    r.kind = BagItemKind::PpOne;
+    r.countAfter = 8;
+    r.ppBefore = 40;
+    r.ppAfter = 50;
+    CHECK(BagResultText(r) == "Pichu's PP restored");
+    // Rare Candy: a level and a move.
+    r = BagResult();
+    r.command = BagCommand::Use;
+    r.kind = BagItemKind::RareCandy;
+    r.item = "Rare Candy";
+    r.countBefore = 1;
+    r.picked = true;
+    r.mon = "Pichu";
+    r.levelBefore = 12;
+    r.levelAfter = 13;
+    r.hpBefore = 27;
+    r.hpAfter = 29;
+    r.maxHp = 29;
+    r.learned = { "Sweet Kiss" };
+    CHECK(BagResultText(r) == "Pichu grew to Lv. 13, Pichu learned Sweet Kiss, Pichu: HP 27 -> 29/29");
+    // Stone: an evolution.
+    r.kind = BagItemKind::Stone;
+    r.item = "Thunder Stone";
+    r.levelAfter = 12;
+    r.speciesBefore = 25;
+    r.speciesAfter = 26;
+    r.speciesName = "Raichu";
+    CHECK(BagResultText(r) == "Pichu evolved into Raichu");
+    // TM: learned, or not.
+    r = BagResult();
+    r.command = BagCommand::Use;
+    r.kind = BagItemKind::Tm;
+    r.item = "TM01";
+    r.countBefore = r.countAfter = 1;
+    r.picked = true;
+    r.mon = "Torracat";
+    r.hpBefore = r.hpAfter = r.maxHp = 51;
+    r.levelBefore = r.levelAfter = 17;
+    CHECK(BagResultText(r) == "Torracat did not learn the move");
+    r.learned = { "Work Up" };
+    CHECK(BagResultText(r) == "Torracat learned Work Up");
+    // Repel / Escape Rope: no Pokémon.
+    r = BagResult();
+    r.command = BagCommand::Use;
+    r.kind = BagItemKind::Repel;
+    r.item = "Repel";
+    r.countBefore = 2;
+    r.countAfter = 1;
+    CHECK(BagResultText(r) == "Used Repel");
+    r.countAfter = 2;
+    CHECK(BagResultText(r) == "Repel wasn't used");
+    // Key Items and Free Space.
+    r.item = "Exp. Share";
+    r.command = BagCommand::Off;
+    CHECK(BagResultText(r) == "Exp. Share turned off");
+    r.command = BagCommand::On;
+    CHECK(BagResultText(r) == "Exp. Share turned on");
+    r.item = "Quick Claw";
+    r.command = BagCommand::FreeSpace;
+    CHECK(BagResultText(r) == "Quick Claw moved to the Free Space");
+    r.command = BagCommand::ReturnToPocket;
+    CHECK(BagResultText(r) == "Quick Claw returned to its pocket");
+    // Give.
+    r = BagResult();
+    r.command = BagCommand::Give;
+    r.item = "Escape Rope";
+    r.picked = true;
+    r.mon = "Pichu";
+    r.heldBefore = "Quick Claw";
+    r.heldAfter = "Escape Rope";
+    r.holdsItem = true;
+    CHECK(BagResultText(r) == "Pichu now holds Escape Rope (Quick Claw back in the Bag)");
+    r.holdsItem = false;
+    r.heldAfter = "Quick Claw";
+    CHECK(BagResultText(r) == "Pichu still holds Quick Claw");
+    r.command = BagCommand::Cancel;
+    CHECK(BagResultText(r).empty());
+
+    // Descriptions: one line of the message file, read on its own; line
+    // breaks become spaces.
+    const std::vector<std::string> texts = { "", "Catches\nanything.", "  Two\n\nlines  " };
+    const std::vector<u8> msg = MakeMessageFile(texts);
+    const std::vector<u8> image = std::vector<u8>(100, 0xEE);   // the file sits at 100 in the "RomFS"
+    std::vector<u8> romfs = image;
+    romfs.insert(romfs.end(), msg.begin(), msg.end());
+    int reads = 0;
+    const RomfsRead read = [&romfs, &reads](uint64_t offset, void *dst, u32 size) {
+        reads++;
+        if (offset + size > romfs.size())
+            return false;
+        std::memcpy(dst, &romfs[offset], size);
+        return true;
+    };
+    std::string line, error;
+    CHECK(ReadMessageLine(read, 100, (u32)msg.size(), 1, line, error) && line == "Catches\nanything.");
+    CHECK(!ReadMessageLine(read, 100, (u32)msg.size(), 3, line, error) && !error.empty());
+    CHECK(!ReadMessageLine(read, 100, 8, 1, line, error));
+    BagAssets assets;
+    CHECK(assets.Pocket(0, true) == nullptr && assets.PocketCount() == 0);
+    CHECK(BagReadDescription(read, assets, 1).empty());     // no file found
+    assets.descriptionsAt = 100;
+    assets.descriptionsSize = (u32)msg.size();
+    reads = 0;
+    CHECK(BagReadDescription(read, assets, 1) == "Catches anything.");
+    CHECK(reads <= 3);                                      // header, line entry, text: not the whole file
+    CHECK(BagReadDescription(read, assets, 2) == "Two lines");
+    CHECK(BagReadDescription(read, assets, 0).empty() && BagReadDescription(read, assets, 60000).empty());
+    assets.pockets[1][0].w = assets.pockets[1][0].h = 2;
+    assets.pockets[1][0].rgba.assign(16, 255);
+    CHECK(assets.Pocket(1, true) == &assets.pockets[1][0] && assets.Pocket(1, false) == nullptr);
+    CHECK(assets.Pocket(BagTabCount, true) == nullptr && assets.PocketCount() == 1);
+
+    // Loading from a RomFS that isn't there: both parts fail and say so.
+    std::vector<std::string> log;
+    BagAssets none;
+    LoadBagAssets([](uint64_t, void *, u32) { return false; }, 2, none, log);
+    CHECK(log.size() == 2 && none.PocketCount() == 0 && none.descriptionsSize == 0);
+    for (const std::string &l : log)
+        CHECK(l.find("not loaded") != std::string::npos);
+}
+
+static void TestArchive(void)
+{
+    // A layout archive bigger than the decoder's window, with the wanted
+    // files far apart, compressed with literals and copies (1 back, 4096
+    // back): the streamed read finds exactly those files.
+    const std::vector<std::string> names = { "timg/Bag_Icon_01b.bflim", "timg/Bag_Icon_06f2.bflim", "timg/other.bflim" };
+    std::vector<std::vector<u8>> contents(3);
+    for (int f = 0; f < 3; f++)
+        for (int i = 0; i < 1000 + f * 300; i++)
+            contents[f].push_back((u8)(i * 7 + f * 31));
+    const std::vector<u8> alyt = MakeArchive(names, contents, 9000);
+    const std::vector<u8> lz = Lz11Compress(alyt);
+    CHECK(lz.size() < alyt.size());
+    std::vector<u8> romfs(64, 0);
+    romfs.insert(romfs.end(), lz.begin(), lz.end());
+    const RomfsRead read = [&romfs](uint64_t offset, void *dst, u32 size) {
+        if (offset + size > romfs.size())
+            return false;
+        std::memcpy(dst, &romfs[offset], size);
+        return true;
+    };
+    std::vector<std::vector<u8>> files;
+    std::string error;
+    const std::vector<std::string> wanted = { names[1], "timg/missing.bflim", names[0] };
+    CHECK(Lz11ArchiveFiles(read, 64, (u32)lz.size(), wanted, files, error));
+    CHECK(files.size() == 3 && files[0] == contents[1] && files[1].empty() && files[2] == contents[0]);
+    // A cut stream, a stream that isn't LZ11, data that isn't an archive.
+    CHECK(!Lz11ArchiveFiles(read, 64, (u32)lz.size() / 2, wanted, files, error) && !error.empty());
+    CHECK(!Lz11ArchiveFiles(read, 0, 64, wanted, files, error));
+    std::vector<u8> plain(20000, 'z');
+    const std::vector<u8> lzPlain = Lz11Compress(plain);
+    const RomfsRead readPlain = [&lzPlain](uint64_t offset, void *dst, u32 size) {
+        if (offset + size > lzPlain.size())
+            return false;
+        std::memcpy(dst, &lzPlain[offset], size);
+        return true;
+    };
+    CHECK(!Lz11ArchiveFiles(readPlain, 0, (u32)lzPlain.size(), wanted, files, error));
+    CHECK(error == "not a layout archive");
 }
 
 static void TestCursor(void)
@@ -81,12 +436,13 @@ static void TestCursor(void)
     CHECK(BagMoveCursor(3, 1, 9) == 4);
     CHECK(BagMoveCursor(5, 1, 0) == 0);
     CHECK(BagListTop(0, 3, 5) == 0);        // short list: never scrolls
-    CHECK(BagListTop(0, 7, 9) == 0);        // 8 rows: 0..7 fit
-    CHECK(BagListTop(0, 8, 9) == 1);
+    CHECK(BagListTop(0, 4, 9) == 0);        // 5 rows: 0..4 fit
+    CHECK(BagListTop(0, 5, 9) == 1);
     CHECK(BagListTop(1, 0, 9) == 0);        // wrapped to the top
-    CHECK(BagListTop(0, 8, 20) == 1);
+    CHECK(BagListTop(0, 8, 20) == 4);
     CHECK(BagListTop(10, 12, 20) == 10);    // still visible: stays
-    CHECK(BagListTop(15, 19, 20) == 12);    // never past the end
+    CHECK(BagListTop(10, 19, 20) == 15);    // never past the end
+    CHECK(BagListTop(0, 3, 8, 8) == 0 && BagListTop(0, 8, 9, 8) == 1);  // other row counts
 }
 
 // --- A fake of the game's field Bag ---
@@ -104,6 +460,8 @@ struct FakeBag
     u8 pending = 0;                         // Use or Give chosen in the menu
     bool ignoreTaps = false;
     bool closed = false;
+    int away = 0;                           // frames the game spends on another screen (a TM's move list)
+    BagGame saved;                          // the Bag while it is away
     int commands = 0;
     std::vector<BagCmd> log;
 
@@ -116,6 +474,7 @@ struct FakeBag
             pockets[1].push_back(BagItem{ (u16)(17 + i), (u16)(i + 1), false });
         pockets[2].push_back(BagItem{ 217, 1, false });     // Quick Claw
         pockets[2].push_back(BagItem{ 78, 3, false });      // Escape Rope
+        pockets[3].push_back(BagItem{ 328, 1, false });     // TM01
         held[3] = 217;
         Show(1);
         g.mode = BagMode::List;
@@ -161,9 +520,10 @@ struct FakeBag
         const BagItem &it = g.items[g.Index()];
         g.item = it.id;
         g.commands.clear();
-        if (g.tab == 1 || it.id == 78)
+        if (g.tab == 1 || g.tab == 3 || it.id == 78)
             g.commands.push_back(BagCommand::Use);
-        g.commands.push_back(BagCommand::Give);
+        if (g.tab != 3)
+            g.commands.push_back(BagCommand::Give);
         g.commands.push_back(BagCommand::FreeSpace);
         g.commands.push_back(BagCommand::Cancel);
         Then(BagMode::Menu);
@@ -207,6 +567,18 @@ struct FakeBag
             g.commands.clear();
             if (cmd == BagCommand::Cancel)
                 Then(BagMode::List);
+            else if (cmd == BagCommand::FreeSpace)
+            {
+                // Out of its pocket into the Free Space; a message, then the list.
+                const BagItem it = g.items[g.Index()];
+                pockets[g.tab].erase(pockets[g.tab].begin() + g.Index());
+                pockets[6].push_back(it);
+                Show(g.tab);
+                if (g.Index() >= (int)g.items.size())
+                    g.cursorRow = g.scroll = 0;
+                queue = { (int)BagMode::List };
+                Then(BagMode::Message);
+            }
             else if (cmd == BagCommand::Use || cmd == BagCommand::Give)
             {
                 g.partyCursor = 0;
@@ -229,7 +601,11 @@ struct FakeBag
                 // Use: message, then back to the pick. Give: message, then
                 // the list; over a held item a question first.
                 queue.clear();
-                if (give && held[c.arg] != 0)
+                if (BagItemKindOf(g.item) == BagItemKind::Tm)
+                    // "You booted up the TM." ... then the move-forget
+                    // screen, and back with "did not learn".
+                    queue = { (int)BagMode::Message, -1, (int)BagMode::List };
+                else if (give && held[c.arg] != 0)
                     queue = { (int)BagMode::Menu };     // Yes / No after the message
                 else
                     queue = { (int)(give ? BagMode::List : BagMode::Pick) };
@@ -241,9 +617,17 @@ struct FakeBag
         case BagStep::PressA:
             if (g.mode == BagMode::Message && !queue.empty())
             {
-                const BagMode next = (BagMode)queue.front();
+                const int nextValue = queue.front();
+                const BagMode next = (BagMode)nextValue;
                 queue.erase(queue.begin());
-                if (next == BagMode::Menu)
+                if (nextValue < 0)
+                {
+                    saved = g;
+                    saved.mode = BagMode::Message;
+                    g = BagGame();
+                    away = 60;
+                }
+                else if (next == BagMode::Menu)
                 {
                     g.commands = { BagCommand::Yes, BagCommand::No };
                     Then(BagMode::Menu);
@@ -285,6 +669,12 @@ struct FakeBag
         if (closed)
         {
             g = BagGame();
+            return;
+        }
+        if (away > 0)
+        {
+            if (--away == 0)
+                g = saved;
             return;
         }
         if (busy > 0 && --busy == 0)
@@ -480,6 +870,57 @@ static void TestDriver(void)
         CHECK(!Run(d, f, false));
         CHECK(d.Failure().find("gone") != std::string::npos);
     }
+    // A TM: Use, pick, messages, then the game leaves the Bag for its
+    // move-forget screen. The goal that was running then is done, not
+    // failed; back in the Bag, the message and the list follow.
+    {
+        FakeBag f;
+        BagDriver d;
+        d.Tab(3);
+        CHECK(Run(d, f));
+        d.Open(0, 328);
+        CHECK(Run(d, f));
+        CHECK(f.g.commands.size() == 3 && f.g.commands[0] == BagCommand::Use);
+        d.Choose(0);
+        CHECK(Run(d, f));
+        CHECK(f.log.back() == (BagCmd{ BagStep::TapMenu, 3 }) && f.g.mode == BagMode::Pick);
+        d.Pick(0);
+        CHECK(Run(d, f));
+        d.Advance();
+        CHECK(Run(d, f));
+        CHECK(!f.g.Valid() && f.away > 0 && d.Failure().empty());
+        while (f.away > 0)
+            f.Frame();
+        CHECK(f.g.mode == BagMode::Message);
+        d.Advance();
+        CHECK(Run(d, f));
+        CHECK(f.g.mode == BagMode::List && f.g.items.size() == 1);   // a TM isn't used up
+    }
+    // The Bag gone before any command of a goal is still a failure.
+    {
+        FakeBag f;
+        BagDriver d;
+        d.Advance();
+        f.closed = true;
+        CHECK(!Run(d, f, false));
+        CHECK(d.Failure().find("gone") != std::string::npos);
+    }
+    // Move to Free Space: 2nd from the bottom, a message, the list.
+    {
+        FakeBag f;
+        BagDriver d;
+        d.Tab(2);
+        CHECK(Run(d, f));
+        d.Open(0, 217);
+        CHECK(Run(d, f));
+        CHECK(f.g.commands.size() == 3);
+        d.Choose(1);
+        CHECK(Run(d, f));
+        CHECK(f.log.back() == (BagCmd{ BagStep::TapMenu, 2 }));
+        d.Advance();
+        CHECK(Run(d, f));
+        CHECK(f.g.mode == BagMode::List && f.g.items.size() == 1 && f.pockets[6].size() == 1);
+    }
     // Settling: the driver doesn't act on a screen that keeps changing.
     {
         BagGame g;
@@ -570,23 +1011,69 @@ static void TestDraw(const char *preview)
         view.party.push_back(m);
     }
 
-    // Every mode draws, and nothing outside the area is touched.
-    for (BagMode mode : { BagMode::List, BagMode::Pick, BagMode::Message, BagMode::Busy, BagMode::Menu })
-    {
-        canvas.FillRect(UI::Rect{ 0, 0, UI::ScreenW, UI::ScreenH }, UI::Rgb(10, 200, 10));
-        view.mode = mode;
-        view.partyCursor = mode == BagMode::Pick ? 3 : -1;
-        DrawBag(canvas, view);
-        const UI::Color outside = At(canvas, BagArea.x - 1, BagArea.y + 50);
-        CHECK(outside.r == 10 && outside.g == 200 && outside.b == 10);
-        CHECK(At(canvas, BagArea.Right() + 1, BagArea.Bottom() - 50).g == 200);
-        CHECK(At(canvas, BagArea.x + 40, BagArea.y + 100).g != 200);
-    }
-    // Empty pocket.
+    view.description = "A spray-type medicine for treating wounds. It can be used to restore 20 HP to an injured Pokémon.";
+    // Synthetic pocket icons: a coloured square per pocket, lighter when not selected.
+    BagAssets assets;
+    for (int t = 0; t < BagTabCount; t++)
+        for (int s = 0; s < 2; s++)
+        {
+            UI::Image &image = assets.pockets[t][s];
+            image.w = image.h = 20;
+            image.rgba.resize(20 * 20 * 4);
+            for (int p = 0; p < 20 * 20; p++)
+            {
+                image.rgba[p * 4 + 0] = (u8)(40 * t);
+                image.rgba[p * 4 + 1] = s ? 220 : 120;
+                image.rgba[p * 4 + 2] = 200;
+                image.rgba[p * 4 + 3] = 255;
+            }
+        }
+
+    // Every mode draws the whole area (the Bag covers the top screen), with
+    // and without the game's icons.
+    for (const BagAssets *a : { (const BagAssets *)nullptr, (const BagAssets *)&assets })
+        for (BagMode mode : { BagMode::List, BagMode::Pick, BagMode::Message, BagMode::Busy, BagMode::Menu })
+        {
+            canvas.FillRect(UI::Rect{ 0, 0, UI::ScreenW, UI::ScreenH }, UI::Rgb(10, 200, 10));
+            view.mode = mode;
+            view.assets = a;
+            view.partyCursor = mode == BagMode::Pick ? 3 : -1;
+            view.pickQuestion = mode == BagMode::Pick ? BagPickQuestion(17) : "";
+            DrawBag(canvas, view);
+            for (int y = 0; y < UI::ScreenH; y += 7)
+                for (int x = 0; x < UI::ScreenW; x += 7)
+                {
+                    const UI::Color c = At(canvas, x, y);
+                    if (c.r == 10 && c.g == 200 && c.b == 10)
+                    {
+                        std::printf("    mode %d: %d,%d not drawn\n", (int)mode, x, y);
+                        s_failures++;
+                        y = UI::ScreenH;
+                        break;
+                    }
+                }
+        }
+    // The open pocket's game icon is drawn (the selected variant).
+    view.mode = BagMode::List;
+    DrawBag(canvas, view);
+    bool icon = false;
+    for (int y = 200; y < UI::ScreenH && !icon; y++)
+        for (int x = 0; x < UI::ScreenW && !icon; x++)
+        {
+            const UI::Color c = At(canvas, x, y);
+            icon = c.r == 40 && c.g == 120 && c.b == 200;
+        }
+    CHECK(icon);
+    // Empty pocket, and nothing at all.
     BagView empty;
     empty.mode = BagMode::List;
     empty.tab = 6;
     DrawBag(canvas, empty);
+    DrawBag(canvas, BagView());
+    // The preview: the menu over the list, the game's icons.
+    view.mode = BagMode::Menu;
+    view.menuTitle = "What do you want to do with the Fresh Water?";
+    view.cursor = 8;
     DrawBag(canvas, view);
 
     if (preview != nullptr)
@@ -614,6 +1101,8 @@ static void TestDraw(const char *preview)
 int main(int argc, char **argv)
 {
     TestTables();
+    TestItems();
+    TestArchive();
     TestCursor();
     TestDriver();
     TestSignature();

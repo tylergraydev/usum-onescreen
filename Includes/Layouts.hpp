@@ -142,7 +142,7 @@ namespace OneScreen
         { "bag.scrollbar", 316, 10, 318, 210, 317, 190, LayoutVerified::None },
         { "bag.back", 0, 214, 31, 234, 15, 224, LayoutVerified::Tap },
         { "bag_item_menu.from_bottom1", 161, 209, 316, 236, 236, 222, LayoutVerified::Tap },
-        { "bag_item_menu.from_bottom2", 161, 181, 316, 206, 236, 194, LayoutVerified::Measured },
+        { "bag_item_menu.from_bottom2", 161, 181, 316, 206, 236, 194, LayoutVerified::Tap },
         { "bag_item_menu.from_bottom3", 161, 153, 316, 178, 236, 166, LayoutVerified::Tap },
         { "bag_item_menu.from_bottom4", 161, 125, 316, 150, 236, 138, LayoutVerified::Tap },
         { "bag_item_menu.from_bottom5", 161, 97, 316, 122, 236, 110, LayoutVerified::Measured },

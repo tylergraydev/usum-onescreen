@@ -228,14 +228,14 @@
       "reach": "Bag: tap an item row",
       "buttons": {
         "from_bottom1": {"rect": [161, 209, 316, 236], "tap": [236, 222], "does": "last entry: Cancel (closes the item menu)", "verified": "tap", "evidence": "re5-bag-cancel; p24 menu1 -> list (frame +0x54 back to 0)"},
-        "from_bottom2": {"rect": [161, 181, 316, 206], "tap": [236, 194], "does": "2nd from the bottom: Move to Free Space in every menu seen", "verified": "measured", "why": "changes the bag (Free Space); not needed by the native Bag (the Party screen's Bag: party_bag_menu)"},
+        "from_bottom2": {"rect": [161, 181, 316, 206], "tap": [236, 194], "does": "2nd from the bottom: Move to Free Space in every menu seen outside the Free Space pocket, Return to Pocket in it", "verified": "tap", "evidence": "w73 free1 (Quick Claw: 'The Quick Claw was moved to the Free Space.', Items 10 -> 9 items), free2/free3 (Return to Pocket: Free Space empty, Quick Claw at the end of Items)"},
         "from_bottom3": {"rect": [161, 153, 316, 178], "tap": [236, 166], "does": "3rd from the bottom: Give (Potion, Escape Rope, Quick Claw, Oran Berry), Use (TMs)", "verified": "tap", "evidence": "p24 g1 (Quick Claw, 3 entries: Give -> Which Pokemon), p24 Escape Rope (4 entries: Give)"},
         "from_bottom4": {"rect": [161, 125, 316, 150], "tap": [236, 138], "does": "4th from the bottom: Use in 4-entry menus (Medicine, Escape Rope, Oran Berry)", "verified": "tap", "evidence": "p24 use1 (Potion: Use -> 'Which Pokemon do you want to use this item on?')"},
         "from_bottom5": {"rect": [161, 97, 316, 122], "tap": [236, 110], "does": "5th from the bottom: no 5-entry menu seen", "verified": "measured", "why": "same 28 px pitch; never seen"}
       },
       "notes": [
         "The menu grows upwards from Cancel, so entries are named by position from the bottom. Its entries are in the Bag param (docs/BAG.md): Use 0x00, Give 0x03, Move to Free Space 0x04, Cancel 0x11.",
-        "Seen: Medicine/Escape Rope/Oran Berry Use, Give, Free Space, Cancel; Poke Ball/Quick Claw/Roto Boost Give, Free Space, Cancel; TM Use, Free Space, Cancel; Z-Power Ring Free Space, Cancel."
+        "Seen: Medicine/Escape Rope/Oran Berry Use, Give, Free Space, Cancel; Poke Ball/Quick Claw/Roto Boost Give, Free Space, Cancel; TM Use, Free Space, Cancel; Z-Power Ring and Lens Case Free Space, Cancel; Exp. Share Off (0x02) or On (0x01), Free Space, Cancel; in the Free Space pocket Give, Return to Pocket (0x05), Cancel."
       ]
     },
     "bag_yes_no": {

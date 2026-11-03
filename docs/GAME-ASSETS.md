@@ -177,9 +177,11 @@ pixel (x, y) is texel (texW - 1 - y, x). Every icon below has it.
   (`Theme::DrawTypePlate`).
 - **Status icons**: the same, only `sick_icon_01_mahi` (paralysis) is in
   the layouts.
-- **Bag pocket icons**: `a/0/6/5` (the Bag layout) has `Bag_Icon_01b..g`
-  (24x24 ETC1A4) and others; which is which pocket was not worked out, so
-  they aren't loaded yet.
+- **Bag pocket icons**: found since (W7-3): `a/0/6/5` (the Bag layout),
+  `Bag_Icon_06f`, `01b` ... `01g` and their `2` variants, mapped to the
+  pockets through the tab animations' texture keys. The native Bag loads
+  them itself (`docs/BAG.md`, "Pocket icons and descriptions"), with the
+  item descriptions (message file 39 of `a/0/3/<lang>`).
 - **L, R, START button icons**: only `ButtonIcon_R` (in `a/1/0/1`) and
   `ButtonIcon_CursorKey` exist; not loaded.
 
