@@ -10,7 +10,7 @@ OUT      := build
 PYTHON   ?= python3
 CODE_BIN ?=
 
-TESTS    := $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/ui_host_test $(OUT)/party_data_test $(OUT)/action_queue_test $(OUT)/xmenu_test $(OUT)/battle_menu_test $(OUT)/keyboard_test $(OUT)/pokedex_test $(OUT)/native_screens_test $(OUT)/bag_test
+TESTS    := $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/ui_host_test $(OUT)/party_data_test $(OUT)/action_queue_test $(OUT)/xmenu_test $(OUT)/battle_menu_test $(OUT)/keyboard_test $(OUT)/pokedex_test $(OUT)/native_screens_test $(OUT)/bag_test $(OUT)/map_test
 
 all: run
 
@@ -61,6 +61,16 @@ $(OUT)/native_screens_test: native_screens_test.cpp $(SCREEN_SRCS) $(SCREEN_HDRS
 $(OUT)/bag_test: bag_test.cpp ../Sources/Screens/BagList.cpp ../Includes/Screens/BagList.hpp                   ../Sources/ActionQueue.cpp ../Includes/ActionQueue.hpp ../Includes/Layouts.hpp $(UI_SRCS) $(UI_HDRS)
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) bag_test.cpp ../Sources/Screens/BagList.cpp ../Sources/ActionQueue.cpp $(UI_SRCS) -o $@
+MAP_PREVIEW := ../analysis/private/map-preview.ppm
+PLACE_GARC  ?= ../analysis/private/romfs-base/a/0/3/2
+
+# PLACE_GARC: the user's own English text GARC (a/0/3/2), for the real
+# place-name check; skipped if missing (CI).
+MAP_SRCS := ../Sources/Screens/MapView.cpp ../Sources/RomfsText.cpp ../Sources/PartyData.cpp
+
+$(OUT)/map_test: map_test.cpp $(MAP_SRCS) ../Includes/Screens/MapView.hpp ../Includes/Where.hpp ../Includes/RomfsText.hpp ../Includes/PartyData.hpp $(UI_SRCS) $(UI_HDRS)
+	@mkdir -p $(OUT)
+	$(CXX) $(CXXFLAGS) map_test.cpp $(MAP_SRCS) $(UI_SRCS) -o $@
 
 $(OUT)/ui_host_test: ui_host_test.cpp $(UI_SRCS) $(UI_HDRS)
 	@mkdir -p $(OUT)
@@ -84,6 +94,7 @@ run: $(TESTS)
 	./$(OUT)/pokedex_test $(DEX_PREVIEW)
 	./$(OUT)/native_screens_test $(SCREEN_PREVIEWS)
 	./$(OUT)/bag_test $(BAG_PREVIEW)
+	./$(OUT)/map_test $(MAP_PREVIEW) $(PLACE_GARC)
 	$(PYTHON) -I sigscan_test.py $(CODE_BIN)
 
 clean:

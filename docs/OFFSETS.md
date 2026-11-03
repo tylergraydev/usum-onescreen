@@ -146,3 +146,13 @@ Read by the native screens (`Sources/Screens/SubScreens.cpp`, [NATIVE-SCREENS.md
 - **Trainer Passport** (scene `TrainerPass`): scene object `*(*(0x6A599C))` (`*(*sceneManager)`) `+0x14` = the passport's work object (vtable in its CRO), which holds: `+0x10` the stamp book (its `+0x1C` is the scene object, `+0x20` the page, 0-based: 2, 3, 4 on pages 3/15, 4/15, 5/15 in three dumps; the game remembers it between visits), `+0x14` MyStatus, `+0x20` play time (vtable `0x64F480`: u16 hours `+4`, u8 minutes `+6`, u8 seconds `+7`; read 14:44:30 while the card showed 14:44), `+0x24` Misc (`Savedata::Misc`, vtable `0x64F384`: money u32 `+8`, read 27068 = ₽27,068 on the card), `+0x2C` a full-load MsgData of the passport's message file (52 lines, file 107 of `a/0/3/2`: labels on lines 0-21, stamp n's name and text on lines 22+2n and 23+2n; `+0x0C` dat ID reads 0, loaded from memory). The objects are filled in a few frames after the scene shows.
 - **MyStatus** (`Savedata::MyStatus`, vtable `0x64F460`) = SaveData `+0xEE8`: `+8` u32 TID | SID << 16 (`0x2C422D1C`; the card's ID No. is it mod 1000000, 534428), `+0x40` the name, UTF-16, 12 characters and a 0.
 - Battle Video (scene `BattleVideoPlayer`): nothing read from memory; its states come from bottom-screen pixels (NATIVE-SCREENS.md). The save has no Battle Videos, so a list was never seen.
+
+## Native map (runtime, 2026-11-02)
+
+Full write-up: [MAP.md](MAP.md). Used by `Sources/Screens/Map.cpp`.
+
+- `0x671A10` (u8): current text language, 0-9 (RE2, static). Read 2 in the field (instance p25); the map then read `a/0/3/2` from the game's RomFS and its file 72 line 12 / 20 / 21 decoded to "Route 2" / "Hau’oli City" / "Shopping District", the in-game banners (RE4). Picks the place-name GARC `a/0/3/<lang>`.
+- Not an address but relied on: `ARCHIVE_ROMFS` (`FSUSER_OpenFileDirectly`, binary path {0, 0, 0}) opens the running title's RomFS at IVFC level 3 from the plugin in Azahar 2126.2 (`map: place names: 234 lines from a/0/3/2 file 72 (17 ms)`).
+- Field work zone (`*(*(gm+0x2C)+0x88)+0x1C`) right after a door: reads 0 for ~3 readings (4 frames apart) with the old position while the entry zone (`location+0x0A`) already has the new zone (79 → 0 → 7, logged); settled readings had zone == entry zone.
+- Zone data `+0x4E` (u8): the zone's map, Rotom map index + 1 (1-4 the islands, 5 Aether Paradise, 6-21 small maps). From a runtime dump of all 380 entries read against the place names; zones 7, 13, 79 = 1 with Rotom map index 0. Only the 56 outdoor island zones have no fixed map point (`+0x44/+0x48`). docs/RE4-map.md.
+- Bottom screen in the field: Rotom's eyes reach y 97 at the sides of the map window (29,84 – 290,231); the map copies (30,104) 260 × 128.

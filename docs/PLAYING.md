@@ -37,6 +37,7 @@ If you use an HD texture pack, turn off **Emulation → Configure… → Graphic
 | **L+R** | Show the bottom screen on the top screen when you need it: off → corner panel → full view → off. It stays as you set it. |
 | **C-stick** | Move the touch cursor (a crosshair on the panel or full view). It starts slow for precise taps and speeds up while you hold it. |
 | **ZL** | Touch the bottom screen at the cursor, for as long as you hold it. The crosshair turns red while touching. |
+| **ZR** | In the overworld: show the map on the top screen (place name, island, your position and Rotom's map around you). **ZR** or **B** closes it. You can keep walking with it open. The X menu's **Map** opens it too. See [MAP.md](MAP.md). |
 
 Every other button works as normal.
 

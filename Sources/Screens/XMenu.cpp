@@ -12,6 +12,7 @@
 #include "Scene.hpp"
 #include "Screens/Pokedex.hpp"
 #include "Screens/Bag.hpp"
+#include "Screens/Map.hpp"
 #include "Screens/XMenuGrid.hpp"
 #include "UI/Device.hpp"
 #include "UI/Layer.hpp"
@@ -61,6 +62,7 @@ namespace OneScreen
     static bool s_yield = false;        // the player turned the panel on: stay hidden until the X menu closes
     static bool s_capturing = false;
     static int  s_opening = -1;         // entry whose action is running
+    static bool s_mapAfter = false;     // Map: open the native map once the X menu has closed
     static bool s_synced = false;       // the game's cursor was read (or given up on) since the menu showed
     static u32  s_frames = 0;
     static u32  s_shownAt = 0;
@@ -203,6 +205,15 @@ namespace OneScreen
         // up, and keeps the panel off until then.
         if (XMenuEntries()[index].opens == SceneBag)
             BagExpectOpen();
+        // Map: the native map (Screens/Map.hpp) instead of the game's Town
+        // Map, unless it is turned off: close the X menu, then open it.
+        const bool native = std::string(EntryName(index)) == "map" && MapEnabled();
+        log.push_back(Utils::Format("xmenu: open %s%s", EntryName(index), native ? " (native map)" : ""));
+        if (ActionStart(native ? XMenuCloseAction() : XMenuAction(index), sceneManager, log))
+        {
+            s_opening = index;
+            s_mapAfter = native;
+        }
     }
 
     static void HandleInput(u32 sceneManager, std::vector<std::string> &log)
@@ -331,7 +342,12 @@ namespace OneScreen
         }
 
         if (s_opening >= 0 && !ActionRunning())
+        {
             s_opening = -1;
+            if (s_mapAfter)
+                MapRequestOpen();
+            s_mapAfter = false;
+        }
 
         const bool shown = s_enabled && !s_yield && menuUp;
         if (shown && !s_shown)
