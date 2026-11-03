@@ -17,6 +17,7 @@
 #include "Screens/XMenuGrid.hpp"
 #include "UI/Device.hpp"
 #include "UI/Layer.hpp"
+#include "UI/Theme.hpp"
 
 namespace OneScreen
 {
@@ -80,6 +81,7 @@ namespace OneScreen
 
     static UI::Layer s_layer;
     static u32 s_drawnVersion = ~0u;
+    static bool s_drawnGameFont = false;    // the game font was loaded when last drawn
 
     // The game's cursor is a red arrow left of the pill it points at
     // (docs/LAYOUTS.md); it bobs a few pixels, so scan two rows across the gutter.
@@ -123,7 +125,10 @@ namespace OneScreen
         UiInitFont();
         const UI::Surface fb = SurfaceFromScreen(screen);
         const u32 version = s_viewVersion;
-        bool redraw = version != s_drawnVersion;
+        // Also once the game's font and icons have loaded (UI::Theme draws
+        // with them from then on).
+        const bool gameFont = UI::Theme::UsingGameFont();
+        bool redraw = version != s_drawnVersion || gameFont != s_drawnGameFont;
         if (!s_layer.Matches(fb))
         {
             if (!s_layer.Setup(fb, XMenuArea, XMenuRadius, s_pixels, PixelBytes))
@@ -139,6 +144,7 @@ namespace OneScreen
             UI::Canvas canvas = s_layer.Begin();
             DrawXMenu(canvas, view);
             s_drawnVersion = version;
+            s_drawnGameFont = gameFont;
         }
         s_layer.Present(fb);
         return true;

@@ -44,7 +44,7 @@ BAG_PREVIEW := ../analysis/private/bag-preview.ppm
 
 $(OUT)/xmenu_test: xmenu_test.cpp ../Sources/Screens/XMenuGrid.cpp ../Includes/Screens/XMenuGrid.hpp                    ../Sources/ActionQueue.cpp ../Includes/ActionQueue.hpp ../Includes/Layouts.hpp $(UI_SRCS) $(UI_HDRS)
 	@mkdir -p $(OUT)
-	$(CXX) $(CXXFLAGS) xmenu_test.cpp ../Sources/Screens/XMenuGrid.cpp ../Sources/ActionQueue.cpp $(UI_SRCS) -o $@
+	$(CXX) $(CXXFLAGS) xmenu_test.cpp ../Sources/Screens/XMenuGrid.cpp ../Sources/ActionQueue.cpp $(THEME_SRCS) $(UI_SRCS) -o $@
 
 $(OUT)/keyboard_test: keyboard_test.cpp ../Sources/Screens/KeyboardGrid.cpp ../Includes/Screens/KeyboardGrid.hpp                     ../Sources/ActionQueue.cpp ../Includes/ActionQueue.hpp ../Includes/Layouts.hpp $(UI_SRCS) $(UI_HDRS)
 	@mkdir -p $(OUT)
