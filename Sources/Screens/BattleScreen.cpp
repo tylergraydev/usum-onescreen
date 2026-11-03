@@ -10,6 +10,7 @@
 #include "Party.hpp"
 #include "Settings.hpp"
 #include "Screens/BattleMenu.hpp"
+#include "Screens/MoveLearn.hpp"
 #include "UI/Device.hpp"
 #include "UI/Layer.hpp"
 
@@ -187,9 +188,19 @@ namespace OneScreen
         s_snap.actionRunning = ActionRunning();
         s_snap.panelKey = KeysToString(GetSettings().panelKey);
 
+        // A Pokémon wants a fifth move: the move-learning screen takes it,
+        // and the "the game asks" helper stays away.
+        const u32 pressed = inBattle ? CaptureRealPressed() : 0;
+        const MoveLearnFrame learn = MoveLearnUpdate(sceneManager, inBattle, pressed, log);
+        if (learn.asked && s_snap.menu == Screens::GameMenu::Other)
+        {
+            s_snap.menu = Screens::GameMenu::None;
+            s_snap.otherVtable = 0;
+        }
+
         const Screens::BattlePage before = s_menu.Page();
         const u32 beforeFrames = s_menu.Stable();
-        const Screens::BattleMenuOutput out = s_menu.Update(s_snap, inBattle ? CaptureRealPressed() : 0);
+        const Screens::BattleMenuOutput out = s_menu.Update(s_snap, pressed);
         if (before == Screens::BattlePage::Command && s_menu.Page() != before && beforeFrames < 120)
             log.push_back(Utils::Format("battle-ui: the game's command menu went after %lu frames", beforeFrames));
 
@@ -211,7 +222,7 @@ namespace OneScreen
         // An action captures everything while it runs and then restores the
         // request it found (ours), so only change ours between actions.
         if (!ActionRunning())
-            SetCapture(out.capture ? Screens::BattleMenuKeys : 0);
+            SetCapture(out.capture ? Screens::BattleMenuKeys : learn.capture);
 
         const bool visible = s_menu.Visible();
         const std::string key = visible ? s_menu.DrawKey(s_snap) : std::string();
@@ -229,8 +240,9 @@ namespace OneScreen
 
     bool BattleScreenOnScreen(const Screen &screen)
     {
+        const bool learnDrew = MoveLearnOnScreen(screen);
         if (!screen.IsTop || !s_visible)
-            return false;
+            return learnDrew;
         UiInitFont();
         const UI::Surface fb = SurfaceFromScreen(screen);
 
@@ -276,6 +288,6 @@ namespace OneScreen
     std::string BattleScreenStatus(void)
     {
         return std::string("battle-ui: ") + (s_enabled ? "on" : "off") + Utils::Format(", capture %08lX; ", s_captured)
-               + s_menu.Status(s_snap).substr(11);
+               + s_menu.Status(s_snap).substr(11) + "; " + MoveLearnStatus();
     }
 }
