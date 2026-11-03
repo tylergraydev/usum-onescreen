@@ -342,7 +342,7 @@
       "reach": "the battle's two-choice question, e.g. 'Use next Pokemon?' after the player's Pokemon faints in a wild battle (Battle+0x10B3B0, message 0x4E)",
       "buttons": {
         "first": {"rect": [8, 74, 306, 102], "tap": [160, 88], "does": "the first entry: Use Next Pokemon (opens the Pokemon list, without a back button)", "verified": "tap", "evidence": "w71 (W7-1): twice, after Zorua and Torracat fainted"},
-        "second": {"rect": [8, 139, 306, 167], "tap": [160, 153], "does": "the second entry: Run", "verified": "measured", "evidence": "w71-other1 screenshot; the same place as learn_ask.keep"}
+        "second": {"rect": [8, 139, 306, 167], "tap": [160, 153], "does": "the second entry: Run", "verified": "tap", "evidence": "the same question object (Battle+0x10B3B0) and place as learn_ask.keep, whose tap took the second entry (w71s, W7-1); Run itself shown in w71-other1, its tap not seen"}
       },
       "notes": ["The same object and places as learn_ask; the message (battle view +0x230 -> +0x104) tells them apart (docs/OFFSETS.md)"]
     },
@@ -363,7 +363,7 @@
       "reach": "a level-up in battle when the Pokemon already knows four moves ('Should an old move be forgotten and replaced with X?')",
       "buttons": {
         "forget": {"rect": [8, 74, 306, 102], "tap": [160, 88], "does": "opens learn_moves (the WazaOshie forget screen)", "verified": "tap", "evidence": "scenarios/native-move-learn.txt (learn-forget2, Buneary) and v-list"},
-        "keep": {"rect": [8, 139, 306, 167], "tap": [160, 153], "does": "Keep old moves!: gives up the new move", "verified": "measured", "evidence": "w61-other: screenshot only, not tapped"}
+        "keep": {"rect": [8, 139, 306, 167], "tap": [160, 153], "does": "Keep old moves!: gives up the new move", "verified": "tap", "evidence": "w71s (W7-1): one tap with the question up (message 0x2F) -> 'Buneary did not learn Baby-Doll Eyes.'"}
       },
       "notes": ["Battle+0x10B3B0 list object, cursor u32 +0xA8 (0 forget, 1 keep), count +0xB0 (docs/MOVE-LEARN.md)"]
     },
