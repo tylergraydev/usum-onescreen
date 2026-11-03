@@ -467,7 +467,20 @@ namespace Screens
         if (m_wantPocket == (s32)snap.bagPocket || m_goal != Goal::Tab)
             m_wantPocket = -1;
         if (snap.bagPick && !m_seenPick)
+        {
+            // Where the game's cursor is, or for an HP item the first
+            // Pokémon it would help.
             m_pickCursor = snap.bagPickCursor < snap.partyCount ? snap.bagPickCursor : 0;
+            const u16 item = snap.bagPageIndex < snap.bagItemCount ? snap.bagItems[snap.bagPageIndex].id : 0;
+            const BattlePartyMon &on = snap.party[m_pickCursor];
+            if (IsHpOnlyItem(item) && (on.hp == 0 || on.hp >= on.maxHp))
+                for (u8 i = 0; i < snap.partyCount; i++)
+                    if (snap.party[i].hp > 0 && snap.party[i].hp < snap.party[i].maxHp && !snap.party[i].egg)
+                    {
+                        m_pickCursor = i;
+                        break;
+                    }
+        }
         m_seenPick = snap.bagPick;
         const u8 count = snap.bagItemCount;
         if (m_bagCursor >= count)
@@ -698,7 +711,10 @@ namespace Screens
             out += std::string(", ") + BattlePocketName(snap.bagPocket);
             if (snap.bagPick)
                 out += Format(", pick %u of %u", m_pickCursor, snap.partyCount)
-                       + (m_pickCursor < snap.partyCount ? " (" + snap.party[m_pickCursor].name + ")" : std::string());
+                       + (m_pickCursor < snap.partyCount
+                          ? " (" + snap.party[m_pickCursor].name
+                            + Format(" %u/%u)", snap.party[m_pickCursor].hp, snap.party[m_pickCursor].maxHp)
+                          : std::string());
             else
             {
                 out += Format(", cursor %u of %u", m_bagCursor, snap.bagItemCount);
