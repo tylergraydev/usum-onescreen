@@ -183,10 +183,11 @@ namespace UsumOneScreen
             if (romBox.Text != "")
                 ShowCheck(romBox, romCheck, DumpKind.Game);
             int v = home.InstalledUpdateVersion();
-            if (v == Dump.UpdateVersion)
+            if (Dump.IsSupportedUpdate(v))
             {
-                updateCheck.Text = "Update v1.2 is installed; you don't need to pick it again.";
-                updateCheck.ForeColor = Color.DarkGreen;
+                updateCheck.Text = "Update v1.2 is installed; you don't need to pick it again." +
+                                   (v == Dump.PatchedUpdateVersion ? " " + Dump.PatchedWarning : "");
+                updateCheck.ForeColor = v == Dump.PatchedUpdateVersion ? Color.DarkOrange : Color.DarkGreen;
             }
             controls.SelectedIndex = (int)home.CurrentControls();
             mapButtons.Enabled = SelectedPreset() == ControlPreset.Custom;
@@ -239,8 +240,8 @@ namespace UsumOneScreen
                 return;
             }
             var c = Dump.Check(box.Text.Trim(), kind);
-            check.Text = (c.Ok ? "✓ " : "✗ ") + c.Message;
-            check.ForeColor = c.Ok ? Color.DarkGreen : Color.DarkRed;
+            check.Text = (c.Ok ? "✓ " : "✗ ") + c.Message + (c.Warning != null ? " " + c.Warning : "");
+            check.ForeColor = !c.Ok ? Color.DarkRed : c.Warning != null ? Color.DarkOrange : Color.DarkGreen;
         }
 
         void PickAzahar()

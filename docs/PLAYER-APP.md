@@ -54,22 +54,24 @@ See [`player/README.md`](../player/README.md) for use and build. In short:
 
 It never ships, downloads or explains how to get game files or keys.
 
-## Tested (2026-11-03, Azahar 2126.2, home `analysis/private/instances/player1`)
+## Tested (2026-11-03, Azahar 2126.2, test homes under `analysis/private/instances/`)
 
-- `check` against real files: the decrypted `.cci` is accepted; the encrypted base `.cia` is refused (encrypted); the decrypted update is accepted (`0x0800`); Fire Emblem ROMs, a DLC CIA, a text file and the `.3gx` are refused with the title or reason.
-- `setup` from nothing: copied Azahar 2126.2, wrote the config, installed the plugin, installed the update with `azahar -i` (the dialog was closed by the app), read `0x0800` back from the installed TMD.
-- `play`: Azahar logged `Layout_LayoutOption: 1`, `Layout_SwapScreen: false`, `System_PluginLoader: true`, `Utility_CustomTextures: false`; the plugin logged `Pokemon Ultra Sun 00040000001B5000 v2048 (0x0800)` and `hooks: all ok`; title → field (`scene: FieldRo`), top-screen shot taken with `tools/shot.py`.
+- `check` against real files: the decrypted `.cci` is accepted; the genuine decrypted v1.2 update (`0x0820`) is accepted; the rebuilt `0x0800` copy is accepted with a warning; the encrypted base `.cia` and encrypted update are refused (encrypted); Fire Emblem ROMs, a DLC CIA, a text file and the `.3gx` are refused with the title or reason.
+- `setup` from nothing: copied Azahar 2126.2, wrote the config, installed the plugin, installed the update with `azahar -i` (the dialog was closed by the app), read the version back from the installed TMD.
+- `play` (`player1`, the `0x0800` update and a copy of a test save): Azahar logged `Layout_LayoutOption: 1`, `Layout_SwapScreen: false`, `System_PluginLoader: true`, `Utility_CustomTextures: false`; the plugin logged `hooks: all ok`; title → field (`scene: FieldRo`), top-screen shot taken with `tools/shot.py`.
+- **New game** (`player4`, no save, the genuine `0x0820` update, the plugin from PR #56): the plugin logged `Pokemon Ultra Sun 00040000001B5000 v2080 (0x0820)` and `hooks: all ok`; the language screen showed on the top screen and took D-pad/A; the game went on into Kukui's intro (shots taken).
 - The window, drawn with `UsumOneScreen snapshot` (empty and ready states).
 
-## Open issues
+## The new-game stall (solved: the `0x0800` update file)
 
-- **A brand-new game (no save) on v1.2 hits a fatal error in the game at its first-boot language screen.** The end-to-end test above used a copy of the save and extdata from a test instance. Investigated 2026-11-03 in `analysis/private/instances/player2`:
-  - What happens: the game loads `LangSelect`, then the main thread calls the game's fatal handler and spins forever in `0x3FD518: nop; b 0x3FD518` (read through Azahar's GDB stub: `[Debugging] use_gdbstub`, `arm-none-eabi-gdb` from devkitARM). Path: caller `0x318194` → `0x35B59C`, which looks a name up (string compare `0x4B76A0`) in a table of 52-byte entries. The table pointer is null, so the lookup fails and the assert at `0x35B6B4` calls `0x1074BC`; Azahar's `unmapped Read32 @ 0x0 / 0x4 / 0x80 at PC 0x0035B6E8` lines are the same null table. Because the main thread spins, the plugin thread never writes its boot line.
-  - Not the cause (each tested): the plugin (same with the loader off), the renderer (OpenGL and Vulkan; azahar-emu/azahar#2179 is a different OpenGL crash), `apply_region_free_patch`, `is_new_3ds`, the NAND system config (identical to a working instance's except the console ID), extdata, the save archive.
-  - **Base v1.0 is fine**: with the update hidden, the same fresh profile gets through `LangSelect` (A presses from a `tools/movie.py` movie) to the intro (`AppDemo`) and creates its save. A save made that early doesn't help: v1.2 still shows `LangSelect` and stalls.
-  - The installed v1.2 here is byte-identical to the one in Tyler's own Azahar (same `.app` SHA-256, TMD version `0x0800`), so a new game would stall there too; Tyler's save just skips this screen.
-  - Next suspect: the update file itself. It is a decrypted copy whose TMD says `0x0800`, while the encrypted original it was made from says `0x0820`. A name lookup failing in a resource table fits a RomFS file the v1.2 code expects but this update doesn't give it. Testing the original update needs Azahar to install an encrypted CIA, which needs keys in the test home's `sysdata`.
-  - Launcher options until it's understood: tell players a new game needs a save first (not workable, the save must be past the language screen), or add "import my save" from the player's own Azahar (reads `%APPDATA%\Azahar`, player's choice), or accept `0x0820` once the original update is shown to work.
-- **Update version 0x0820.** The encrypted v1.2 update file here reports title version `0x0820` (2080) in its TMD, while the decrypted one reports `0x0800`. The plugin only accepts `0x0800`, and so does the launcher. Whether genuine v1.2 dumps report `0x0820` was not checked; if they do, both the plugin and the launcher refuse them.
-  - **Update 2026-11-03 (docs/PORTING.md):** genuine v1.2 is `0x0820`, with the same `code.bin` as the `0x0800` copy. The plugin now accepts both. With the genuine update (decrypted locally, since Azahar 2126.2 won't install encrypted CIAs) a new game passes the language screen into the intro, so the stall above comes from the patched `0x0800` file. The launcher (`Dump.UpdateVersion`) still accepts only `0x0800`.
-- Not tested: the Gamepad preset with a real controller, "Map buttons in Azahar", fullscreen, a decrypted base-game `.cia` (none available), and a player's Azahar that isn't 2126.2.
+Genuine v1.2 is title version `0x0820` (v2.2.0); Tyler's encrypted Ultra Sun and Ultra Moon updates both say so. The decrypted copy the project first tested with is a rebuild whose TMD says `0x0800`. Its `code.bin` is the same, so it plays with an existing save, but a new game on it stops at the first-boot language screen:
+
+- The game loads `LangSelect`, a name lookup in a resource table finds a null table (`0x318194` → `0x35B59C`, string compare `0x4B76A0`), the assert at `0x35B6B4` calls the fatal handler `0x1074BC`, and the main thread spins in `0x3FD518: nop; b 0x3FD518` (read through Azahar's GDB stub). Azahar logs `unmapped Read32 @ 0x0 / 0x4 / 0x80 at PC 0x0035B6E8`. With the main thread spinning, the plugin never writes its boot line.
+- It happens with the plugin loader off too, on OpenGL and Vulkan, with the region-free patch off, in Old 3DS mode, and with extdata present. Base v1.0 gets past the screen. Changing only the installed TMD's version to `0x0820` doesn't help, so it is the file's content (the code is identical, so most likely its RomFS), not the number.
+- With the genuine update (decrypted locally from Tyler's dump, see docs/PORTING.md) a new game gets past the screen, through the plugin and the launcher alike (above).
+
+So the launcher accepts `0x0820`, and accepts `0x0800` with a warning (existing saves play; a new game doesn't start). Azahar 2126.2 can't install the encrypted update at all: `InstallCIA` refuses any CIA with encrypted content (exit code 7), even with `aes_keys.txt` in `sysdata`. Players need a decrypted dump.
+
+## Not tested
+
+The Gamepad preset with a real controller, "Map buttons in Azahar", fullscreen, a decrypted base-game `.cia` (none available), Ultra Moon (the launcher only takes Ultra Sun), and a player's Azahar that isn't 2126.2.

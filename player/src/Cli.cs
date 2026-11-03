@@ -118,6 +118,8 @@ namespace UsumOneScreen
                 var kind = info.TitleId == Dump.UpdateTitle ? DumpKind.Update : DumpKind.Game;
                 var c = Dump.Check(f, kind);
                 Console.WriteLine($"{(c.Ok ? "ok" : "refused")}: {c.Message}");
+                if (c.Warning != null)
+                    Console.WriteLine("  warning: " + c.Warning);
                 if (info.Error == null)
                     Console.WriteLine($"  format {info.Format}, title {Dump.Title(info.TitleId)}, " +
                                       $"version {(info.Version < 0 ? "-" : Dump.VersionText(info.Version))}, " +
