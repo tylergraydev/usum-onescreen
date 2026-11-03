@@ -10,6 +10,7 @@
 #include "Framebuffer.hpp"
 #include "InputCapture.hpp"
 #include "Scene.hpp"
+#include "Screens/MoveLearn.hpp"
 
 namespace OneScreen
 {
@@ -105,12 +106,14 @@ namespace OneScreen
         if (now || s_frames % 5 == 0)
         {
             s_world.scene = SceneModule(sceneManager);
-            s_world.flags &= ~(WorldBattleCommand | WorldBattleMoves);
+            s_world.flags &= ~(WorldBattleCommand | WorldBattleMoves | WorldLearnAsk | WorldLearnList | WorldLearnConfirm);
             const BattleMenu menu = s_world.scene == SceneBattle ? ReadBattle(sceneManager).menu : BattleMenu::None;
             if (menu == BattleMenu::Command)
                 s_world.flags |= WorldBattleCommand;
             if (menu == BattleMenu::Moves)
                 s_world.flags |= WorldBattleMoves;
+            if (s_world.scene == SceneBattle)
+                s_world.flags |= MoveLearnWorldFlags(sceneManager);
         }
         s_world.flags = (s_world.flags & ~(WorldXMenu | WorldXMenuPage2 | WorldPartyList)) | ActionProbeFlags();
         const u32 box = WorldBoxIdle | WorldBoxModal | WorldBoxCarrying;
@@ -133,7 +136,9 @@ namespace OneScreen
                              (world.flags & WorldBoxIdle) ? ", box idle"
                              : (world.flags & WorldBoxModal) ? ", box modal"
                              : (world.flags & WorldBoxCarrying) ? ", box carrying" : "")
-               + ((world.flags & WorldPartyList) ? ", party list" : "");
+               + ((world.flags & WorldPartyList) ? ", party list" : "")
+               + ((world.flags & WorldLearnAsk) ? ", learn ask" : (world.flags & WorldLearnList) ? ", learn list"
+                  : (world.flags & WorldLearnConfirm) ? ", learn confirm" : "");
     }
 
     static void BeginCapture(void)

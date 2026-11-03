@@ -10,7 +10,7 @@ OUT      := build
 PYTHON   ?= python3
 CODE_BIN ?=
 
-TESTS    := $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/ui_host_test $(OUT)/party_data_test $(OUT)/action_queue_test $(OUT)/xmenu_test $(OUT)/battle_menu_test $(OUT)/keyboard_test $(OUT)/pokedex_test $(OUT)/native_screens_test $(OUT)/bag_test $(OUT)/map_test $(OUT)/party_menu_test $(OUT)/boxes_test $(OUT)/field_settle_test
+TESTS    := $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/ui_host_test $(OUT)/party_data_test $(OUT)/action_queue_test $(OUT)/xmenu_test $(OUT)/battle_menu_test $(OUT)/keyboard_test $(OUT)/pokedex_test $(OUT)/native_screens_test $(OUT)/bag_test $(OUT)/map_test $(OUT)/party_menu_test $(OUT)/boxes_test $(OUT)/field_settle_test $(OUT)/move_learn_test
 
 all: run
 
@@ -91,6 +91,18 @@ $(OUT)/boxes_test: boxes_test.cpp $(BOXES_SRCS) $(BOXES_HDRS) $(UI_SRCS) $(UI_HD
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) boxes_test.cpp $(BOXES_SRCS) $(UI_SRCS) -o $@
 
+LEARN_PREVIEW := ../analysis/private/move-learn-preview.ppm
+MOVE_GARC     ?= ../analysis/private/romfs-base/a/0/1/1
+
+# MOVE_GARC: the user's own move data GARC (a/0/1/1), for the real move
+# check; skipped if missing (CI).
+LEARN_SRCS := ../Sources/Screens/MoveLearnMenu.cpp ../Sources/Screens/BattleMenu.cpp ../Sources/MoveData.cpp ../Sources/RomfsText.cpp ../Sources/PartyData.cpp ../Sources/ActionQueue.cpp
+LEARN_HDRS := ../Includes/Screens/MoveLearnMenu.hpp ../Includes/Screens/BattleMenu.hpp ../Includes/MoveData.hpp ../Includes/RomfsText.hpp ../Includes/ActionQueue.hpp ../Includes/Layouts.hpp
+
+$(OUT)/move_learn_test: move_learn_test.cpp $(LEARN_SRCS) $(LEARN_HDRS) $(UI_SRCS) $(UI_HDRS)
+	@mkdir -p $(OUT)
+	$(CXX) $(CXXFLAGS) move_learn_test.cpp $(LEARN_SRCS) $(UI_SRCS) -o $@
+
 $(OUT)/ui_host_test: ui_host_test.cpp $(UI_SRCS) $(UI_HDRS)
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) ui_host_test.cpp $(UI_SRCS) -o $@
@@ -117,6 +129,7 @@ run: $(TESTS)
 	./$(OUT)/map_test $(MAP_PREVIEW) $(PLACE_GARC)
 	./$(OUT)/party_menu_test $(PARTY_PREVIEW)
 	./$(OUT)/boxes_test $(BOXES_PREVIEW)
+	./$(OUT)/move_learn_test $(LEARN_PREVIEW) $(MOVE_GARC)
 	$(PYTHON) -I sigscan_test.py $(CODE_BIN)
 
 clean:

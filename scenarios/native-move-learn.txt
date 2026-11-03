@@ -1,0 +1,92 @@
+# Native move learning (W6-1, Screens/MoveLearn.hpp): wild battles from
+# the `grass` start point until a Pokémon levels up and wants a fifth move
+# (in this save Buneary, Lv 13: Baby-Doll Eyes, after one or two battles
+# with Exp. Share). With the panel off:
+#   1. the top screen lists the four moves and the new one (the "the game
+#      asks" helper stays away);
+#   2. Down/Up and A open the confirm page, B goes back;
+#   3. A, A forgets the second move (Splash); the action answers the game's
+#      question and its forget screen;
+#   4. after the battle the party has the new move in that slot.
+# Never saves.
+restore grass
+include common/boot
+
+send battleui
+expect-log ^battle-ui: on 5
+sleep 4
+
+# Fight until the question comes: each round taps Fight and a move (the
+# second; the first if the second is refused, e.g. by Disable), then B
+# through the messages. The rounds stop once the move list shows.
+mark
+repeat 60 until-log ^move-learn:\spage\schoose
+  # Centred steps (right, left twice as long, right): a battle that starts
+  # partway leaves no drift one way, so the player stays in the grass.
+  repeat 40 until-scene Battle
+    send stick 150 0 10
+    sleep 0.4
+    send stick -150 0 20
+    sleep 0.6
+    send stick 150 0 10
+    sleep 0.4
+  end
+  send action battle-fight
+  sleep 1.5
+  send action battle-move2
+  sleep 1
+  send action battle-move1
+  sleep 6
+  if-scene Battle send press b
+  sleep 1.5
+  if-scene Battle send press b
+  sleep 1.5
+end
+expect-scene Battle
+expect-mode off
+expect-log ^move-learn: party 5 Buneary wants Baby-Doll Eyes \(608\); knows Defense Curl, Splash, Pound, Foresight$ 5
+reject-log ^battle-ui: page game, game other, prompt
+shot choose
+
+# B picks "don't learn"; Down wraps to the first move, then the second.
+send press b
+expect-log ^move-learn: page choose, game ask, Buneary wants Baby-Doll Eyes, cursor 4 \(don't learn\)$ 5
+send press down
+sleep 0.5
+send press down
+expect-log ^move-learn: page choose, game ask, Buneary wants Baby-Doll Eyes, cursor 1 \(Splash\)$ 5
+shot choose-splash
+send press a
+expect-log ^move-learn: page confirm, game ask, Buneary wants Baby-Doll Eyes, cursor 1 \(Splash\)$ 5
+shot confirm
+send press b
+expect-log ^move-learn: page choose, game ask, Buneary wants Baby-Doll Eyes, cursor 1 \(Splash\)$ 5
+send press a
+sleep 0.5
+mark
+send press a
+expect-log ^move-learn: chose learn-forget2$ 5
+expect-log ^action: learn-forget2 ok 20
+expect-log ^move-learn: done, Buneary forgot Splash and learned Baby-Doll Eyes$ 5
+shot done
+reject-log ^battle-ui: page game, game other, prompt
+
+# The rest of the battle ("1, 2, and... Ta-da!", any other level-ups):
+# B through it; fight on if the opponent is still up.
+repeat 30 until-scene FieldRo
+  send action battle-fight
+  sleep 1.5
+  send action battle-move2
+  sleep 1
+  send action battle-move1
+  sleep 3
+  if-scene Battle send press b
+  sleep 1.5
+end
+wait-scene FieldRo 30
+sleep 3
+mark
+send party
+expect-log ^  6 \w+ Buneary\(427\) "Buneary" L13 .* moves 111:\d+ 608:30 1:\d+ 193:\d+ 5
+reject-log ^action: .* FAILED
+stop
