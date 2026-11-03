@@ -60,6 +60,36 @@ The table is the game's zone data (0x54 bytes per zone), resident on the heap wh
 
 **Name text:** not resident. In the field there is no full-load `MsgData` (vtable `0x64B104`) for file 72, and the global message cache (`0x6A7368`) holds only items. The game's WordSet path reads a place name from the RomFS per lookup (`docs/RE2-text.md`). So `where` prints the line number; for display, decode file 72 from the user's own dump (`tools/romfs_text.py text <romfs>/a/0/3/2 72`) or call the game's loader.
 
+## Zone table, all 380 zones (P2-5, 2026-11-02)
+
+The whole table was dumped at runtime (instance p25, in the Route 2 Pokémon
+Center: `peek` from `*(0x6A59C4)` → `+0x24` → `+0x54` (vtable `0x64BDD0`) →
+`+0x14` = `0x33FA609C`, `+0x18` = `0x7CB0`; `dump 33FA609C 7CB0 zones`) and
+read offline next to the place names from the user's own dump (file 72). The
+dump and the list stay in `analysis/private/`. What it shows:
+
+- **Fixed map point (`+0x44/+0x48`)**: 324 zones have one. The 56 that don't
+  are exactly the outdoor routes, towns, beaches and seas, in four contiguous
+  blocks: zones 0-18 (Route 1-3, Kala'e Bay, Melemele Sea, Big Wave Beach,
+  Hau'oli City, Iki Town) plus 318-320 (Route 1), 80-92 (Route 4-9, Hano,
+  Heahea, Paniola, Konikoni, Royal Avenue), 164-175 (Route 10-17, Ula'ula
+  Beach, Tapu Village, Malie City), 264-272 (Poni Wilds ... Seafolk Village).
+  Everything else (buildings like zone 79, caves, trial sites, Aether
+  Paradise) has a point. So the rule "map point set = not placed by world
+  coordinates" holds across the whole table: **"indoor" means any zone that
+  is not one of the outdoor island areas** (caves included), not only
+  buildings. Runtime checks are still the three zones above.
+- **`+0x4E` (u8), the zone's map**: 1 for every Melemele outdoor zone, 2
+  Akala, 3 Ula'ula, 4 Poni, 5 the 57 Aether Paradise zones, and 6-21 one
+  value each for single areas with their own small map (Hau'oli Cemetery,
+  Berry Fields, Po Town and Shady House, Memorial Hill, Paniola Ranch,
+  Mount Hokulani, Poni Meadow, Exeggutor Island, Pikachu Valley, ...).
+  The Route 2 Pokémon Center (zone 79) has 1; 72 zones have 1, 22 of them outdoor. 21 values for the 21
+  entries of the map table at `0x5BE110` (0-3 islands, 4-19 smaller maps,
+  above), and zones 7, 13, 79 (value 1) showed Rotom map index 0: so `+0x4E`
+  = map index + 1. This gives the island from the zone data alone, without
+  the Rotom map view. Only value 1 / index 0 was seen at runtime.
+
 ## The Rotom Dex map (what it reads)
 
 The bottom-screen map in the field is a main-image class (vtable **`0x64786C`**) owned by the FieldMenu CRO: scene manager stack (`*(0x6A599C) + 0..0x1C`) → the entry whose vtable is FieldMenu + `0x183A0` (module name checked) → `+0xD0` → map view.
@@ -93,7 +123,8 @@ For a native map: `map_px = world * (0.0270139, 0.0270536)` (plus the map entry'
 ## Confidence
 
 - High: position, facing (quaternion → yaw and its axis convention), the player path and its vtable checks, the current zone (`work + 0x1C`) in the three zones tested, the place-name line field, the Rotom map centre / scale / bounds.
-- Medium: indoor = fixed map point (one interior tested; the cross-check with the map centre held); map index = island (only index 0 seen, all on Melemele; the table has one 16 × 8 entry per island); the meaning of `location + 0x0A` (last entry zone; it equalled the current zone in every test because no seamless boundary was crossed back and forth before a door).
+- Firmer since P2-5 (whole zone table, above): indoor = fixed map point (only the 56 outdoor island zones lack one; caves count as "indoor"); island = zone `+0x4E` - 1 = Rotom map index (four outdoor blocks, 1-4; one value per small map). Still only one interior and one island seen at runtime.
+- Medium: the meaning of `location + 0x0A` (last entry zone; it equalled the current zone in every test because no seamless boundary was crossed back and forth before a door). P2-5: right after a door it already holds the new zone while `work + 0x1C` still reads 0 (docs/MAP.md).
 - The heap addresses were the same in every run (`gm` `0x33F67FE0`, player `0x33F81E20`); the paths were not exercised against a different heap layout, but the code follows them and checks vtables each time.
 
 ## Open questions

@@ -204,7 +204,7 @@ namespace OneScreen
 
     // One line of a full-load MsgData, checked as docs/RE2-text.md proposes.
     // `lines` (if not 0) is the line count the file must have.
-    static std::string MsgLine(u32 msg, u32 dat, u32 line, u32 lines = 0)
+    std::string MsgLine(u32 msg, u32 dat, u32 line, u32 lines)
     {
         if (!Readable(msg, 0x30) || Read32(msg) != VtMsgData || Read8(msg + 0x08) != 1 || Read32(msg + 0x0C) != dat)
             return "";
@@ -281,7 +281,7 @@ namespace OneScreen
     {
         // Line counts of the English files (docs/RE2-text.md); a file with
         // another count is not used.
-        const u32 lines = dat == MoveNameDat ? 729 : dat == AbilityNameDat ? 234 : dat == NatureNameDat ? 26 : 0;
+        const u32 lines = dat == SummaryMoveDat ? 729 : dat == SummaryAbilityDat ? 234 : dat == SummaryNatureDat ? 26 : 0;
         if (loader == 0 || lines == 0 || line >= lines)
             return "";
         const u32 entries = Read32(loader + LoaderEntries);

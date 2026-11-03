@@ -104,9 +104,12 @@ namespace OneScreen
         if (now || s_frames % 5 == 0)
         {
             s_world.scene = SceneModule(sceneManager);
-            s_world.flags &= ~WorldBattleCommand;
-            if (s_world.scene == SceneBattle && ReadBattle(sceneManager).menu == BattleMenu::Command)
+            s_world.flags &= ~(WorldBattleCommand | WorldBattleMoves);
+            const BattleMenu menu = s_world.scene == SceneBattle ? ReadBattle(sceneManager).menu : BattleMenu::None;
+            if (menu == BattleMenu::Command)
                 s_world.flags |= WorldBattleCommand;
+            if (menu == BattleMenu::Moves)
+                s_world.flags |= WorldBattleMoves;
         }
         s_world.flags = (s_world.flags & ~(WorldXMenu | WorldXMenuPage2 | WorldPartyList)) | ActionProbeFlags();
     }
@@ -119,10 +122,11 @@ namespace OneScreen
 
     static std::string DescribeWorld(const ActionWorld &world)
     {
-        return Utils::Format("scene %s%s%s%s", world.scene.empty() ? "(none)" : world.scene.c_str(),
+        return Utils::Format("scene %s%s%s%s%s", world.scene.empty() ? "(none)" : world.scene.c_str(),
                              (world.flags & WorldXMenu) ? ", x menu" : "",
                              (world.flags & WorldXMenuPage2) ? " page 2" : "",
-                             (world.flags & WorldBattleCommand) ? ", battle command" : "")
+                             (world.flags & WorldBattleCommand) ? ", battle command" : "",
+                             (world.flags & WorldBattleMoves) ? ", battle moves" : "")
                + ((world.flags & WorldPartyList) ? ", party list" : "");
     }
 

@@ -31,6 +31,10 @@ namespace OneScreen
     // through the transition, so it doesn't flash on before the list shows.
     void PartyScreenExpect(void);
 
+    // A Use item is driving the game's Bag (the Party screen's Restore): the
+    // native Bag stays out of the way meanwhile.
+    bool PartyScreenUsingBag(void);
+
     // "partyui on|off|status" (the part after "partyui "). False if it isn't one.
     bool PartyScreenCommand(const std::string &args, std::vector<std::string> &log);
 

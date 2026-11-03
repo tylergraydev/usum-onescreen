@@ -39,6 +39,7 @@ namespace OneScreen
     const u32 WorldXMenu         = 1u << 0;  // the X menu is on the bottom screen (pixel probe)
     const u32 WorldBattleCommand = 1u << 1;  // battle: Fight / Pokémon / Bag / Run is up
     const u32 WorldXMenuPage2    = 1u << 2;  // with WorldXMenu: its second page is showing
+    const u32 WorldBattleMoves   = 1u << 3;  // battle: the move list is up
     const u32 WorldPartyList     = 1u << 8;  // Party screen: the plain list (no menu, message or move mode; pixel probe)
 
     struct ActionWorld
@@ -115,7 +116,8 @@ namespace OneScreen
         std::vector<ActionStep> steps;
     };
 
-    // The built-in actions (open-pokedex, open-party, open-bag, battle-run, close).
+    // The built-in actions (open-pokedex, open-party, open-bag, battle-run,
+    // close, and the native battle menu's battle-fight ... battle-moves-back).
     const std::vector<ActionDef> &Actions(void);
     const ActionDef *FindAction(const std::string &name);
 

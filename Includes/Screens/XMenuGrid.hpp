@@ -68,11 +68,24 @@ namespace OneScreen
         int m_gamePage = -1, m_gameSlot = -1;   // last game cursor we know of
     };
 
+    // True if entry `index` opens a native top-screen screen
+    // (Screens/SubScreens.hpp); the others show on the bottom screen
+    // (L+R: the panel).
+    bool XMenuOpensNative(int index);
+
     // The action that opens entry `index` from the open X menu: turns the
     // game's page if needed and taps the entry (Save: Y; Map: B, then the
     // field map); done when the entry's scene shows or the X menu goes away.
     // The definitions live as long as the program.
     const ActionDef &XMenuAction(int index);
+    // Just closes the X menu (B), done when the field shows without it. The
+    // Map entry uses it to hand over to the native map (Screens/Map.hpp).
+    const ActionDef &XMenuCloseAction(void);
+
+    // The native screen that takes over once entry `index` has opened the
+    // game's own ("pokedex": Screens/Pokedex.hpp), or nullptr. The X menu
+    // still opens the game's screen; it keeps the panel off until then.
+    const char *XMenuNativeScreen(int index);
 
     // What the native menu shows.
     struct XMenuView

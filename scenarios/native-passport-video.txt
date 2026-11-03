@@ -1,0 +1,129 @@
+# Native Trainer Passport and Battle Video (Screens/TrainerPassport.cpp,
+# Screens/BattleVideo.cpp, docs/NATIVE-SCREENS.md), both opened from the
+# native X menu with the panel off. Passport: the card values are read, the
+# stamp pages turn with L/R and Left/Right on the game's book too (no wrap),
+# A is kept from the game (it would open Portrait Photo), B goes back.
+# Battle Video: the intro, A opens the recorder, which is empty on this save;
+# B goes back, from the recorder and from the intro. A screenshot is taken
+# before every A.
+include common/boot
+# Both scenes' automatic view is the panel: the native screens hold it off.
+send auto on
+
+# --- Trainer Passport ---
+mark
+send press x
+expect-log ^xmenu: shown 10
+send xmenu select trainer_passport
+expect-log ^xmenu: cursor trainer_passport 5
+shot pre-passport
+send press a
+expect-log ^action: xmenu-trainer_passport ok 15
+wait-scene TrainerPass 10
+expect-log ^passport: .+, ID No\. \d{6}, money \$[\d,]+, play time \d+:\d\d 10
+expect-log ^passport: page 1/15, earned: Official Pok 10
+expect-log ^passport: shown 5
+expect-mode off
+sleep 1
+shot passport
+
+mark
+send press r
+expect-log ^passport: page 2/15, not earned 5
+mark
+send press right
+expect-log ^passport: page 3/15, not earned 5
+mark
+send press l
+expect-log ^passport: page 2/15, not earned 5
+mark
+send press left
+expect-log ^passport: page 1/15, earned 5
+# Two quick presses: the second, made while the first turn runs, is kept.
+mark
+send press right
+sleep 0.2
+send press right
+expect-log ^passport: page 3/15, not earned 10
+mark
+send press left
+sleep 0.2
+send press left
+expect-log ^passport: page 1/15, earned 10
+sleep 1
+mark
+# Page 1 has nothing to its left; A stays with the native screen.
+send press left
+sleep 1
+shot pre-passport-a
+send press a
+sleep 2
+reject-log ^action: passport-prev
+reject-log ^passport: hidden
+expect-scene TrainerPass
+shot passport-after-a
+check-save
+
+mark
+send press b
+wait-scene FieldRo 10
+expect-log ^passport: hidden 5
+expect-log ^xmenu: shown 15
+expect-mode off
+
+# --- Battle Video: intro, then the (empty) recorder ---
+mark
+send xmenu select battle_video
+expect-log ^xmenu: cursor battle_video 5
+shot pre-video
+send press a
+expect-log ^action: xmenu-battle_video ok 15
+wait-scene BattleVideoPlayer 10
+expect-log ^video: intro \(Open the Vs\. Recorder\) 10
+expect-log ^video: shown 5
+expect-mode off
+sleep 1
+shot video-intro
+mark
+send press a
+expect-log ^video: open the Vs\. Recorder 5
+expect-log ^action: video-open ok 10
+expect-log ^video: recorder empty \(no Battle Videos\) 10
+sleep 4
+reject-log ^video: recorder shows something
+shot video-empty
+mark
+send press a
+sleep 2
+reject-log ^action: video-open
+expect-scene BattleVideoPlayer
+mark
+send press b
+wait-scene FieldRo 10
+expect-log ^video: hidden 5
+expect-log ^xmenu: shown 15
+expect-mode off
+check-save
+
+# --- Battle Video: B from the intro ---
+mark
+send xmenu open battle_video
+expect-log ^action: xmenu-battle_video ok 15
+expect-log ^video: intro 10
+sleep 1
+send press b
+wait-scene FieldRo 10
+expect-log ^video: hidden 5
+expect-log ^xmenu: shown 15
+reject-log ^video: open
+
+# --- Close the X menu: field, input given back ---
+mark
+send press b
+expect-log ^xmenu: hidden 10
+expect-mode off
+send status
+expect-log ^buttons: .*capture 00000000 5
+shot field
+check-save
+stop

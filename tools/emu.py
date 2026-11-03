@@ -41,7 +41,7 @@ def sdmc_for(argv):
 
 def read_log(sdmc):
     log = sdmc / "usum-onescreen.log"
-    return log.read_text(errors="replace") if log.exists() else ""
+    return log.read_text(encoding="utf-8", errors="replace") if log.exists() else ""
 
 
 def wait_gone(path, timeout):
