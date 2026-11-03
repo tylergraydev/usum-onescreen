@@ -54,6 +54,7 @@ namespace OneScreen
     static u32  s_frames = 0;
     static u32  s_lastToggle = 0;
     static u32  s_requestUntil = 0;
+    static const char *s_requestHow = "X menu";
     static MapView s_view;
     static bool s_logged = false;               // the current view's zone was logged
     static MapZoneFilter s_zones;
@@ -243,7 +244,7 @@ namespace OneScreen
         if (s_requestUntil != 0)
         {
             if (canOpen && !s_open)
-                Open("X menu", log);
+                Open(s_requestHow, log);
             if (s_open || s_frames >= s_requestUntil)
                 s_requestUntil = 0;
         }
@@ -322,14 +323,25 @@ namespace OneScreen
         }
     }
 
-    void MapRequestOpen(void)
+    void MapRequestOpen(const char *how)
     {
         s_requestUntil = s_frames + RequestFrames;
+        s_requestHow = how;
     }
 
     bool MapEnabled(void)
     {
         return s_enabled;
+    }
+
+    bool MapIsOpen(void)
+    {
+        return s_open;
+    }
+
+    void MapClose(const char *why, std::vector<std::string> &log)
+    {
+        Close(why, log);
     }
 
     bool MapCommand(const std::string &args, std::vector<std::string> &log)
