@@ -94,13 +94,21 @@ OSD callback plus its show/hide log).
 
 Each screen logs on show and hide:
 
-    mem: party shown, heap 1530 KB used, 1300 KB free, largest 1250 KB
+    mem: party shown, heap 1870 KB used, 77 KB free, largest 988 KB
 
 `used`/`free` are newlib's `mallinfo()` (`uordblks`, `fordblks`; `free` is
 only what malloc already got from the heap, not the never-touched rest).
-`largest` is the largest block `malloc` gives right now (a binary search with
-malloc/free, 1 KB steps), which is what decides whether the next big
-allocation works. Under `ScreenBuffer::LowMark` (256 KB) the line ends in
+`largest` is the largest block `malloc` could hand out right now, which is
+what decides whether the next big allocation works. It is read, not probed:
+under `__malloc_lock` it walks newlib's free bins (dlmalloc 2.6.4,
+`newlib/libc/stdlib/mallocr.c`; the bin layout was checked against
+`__malloc_av_` in the ELF) and adds the top chunk plus the part of the heap
+sbrk hasn't handed out yet, up to `fake_heap_end` (libsysbase's `_sbrk_r`
+refuses anything past it; checked in the disassembly). A first version probed
+with malloc/free: GCC removed the pair (the block was never used, and it
+assumes malloc succeeds), so every probe "succeeded" and it printed 8191 KB;
+and a real probe would briefly own the whole free block while another thread
+(the asset Task, the game thread) might allocate. Under `ScreenBuffer::LowMark` (256 KB) the line ends in
 `, LOW`. The boot log has the same numbers after the buffer is allocated
 (`screen buffer: 281 KB; heap ...`).
 
@@ -110,7 +118,27 @@ map, Rotom's prompt), then battles twice in a second boot, and fails on any
 `LOW`, `NO MEMORY`, `bad_alloc` or `PANIC` plugin log line (`guard-reject`)
 or an emulated crash (Azahar `<Critical>`, the log guard).
 
-MEASURED_PLACEHOLDER
+### Measured (2026-11-03, Azahar, instance p24, MemorySize 5MiB)
+
+memory-tour PASS in 617 s, real save unchanged. Heap lines (KB):
+
+| Point | used | largest free |
+|---|---|---|
+| boot, after the screen buffer | 1392 | 1514 |
+| W7-0 assets loaded | +247 | |
+| first Rotom prompt shown | 1678 | 1119 |
+| after Rotom's texts are cached | 1866 | 931-988 |
+| Pokédex shown (its data cached) | 1919-1939 | 853-862 |
+| rest of part 1, both rounds (boxes, X menu, Party + summary, Bag, Options, Passport, Battle Video, map) | 1892-1912 | 912 |
+| part 2 (second boot): both battles, X menu, Party, Bag | 1869-1885 | 988 |
+
+The largest free block never went under 853 KB and did not drift down over
+the second round; no `NO MEMORY`, `LOW`, bad_alloc or PANIC. Before this
+change the same ground ran out ("NO MEMORY for the layer" with X menu + Bag
++ Party; PANIC at 87 KB free).
+
+Not covered: the nickname keyboard (it needs a catch; native-nickname) and
+move learning (native-move-learn). Both borrow the same buffer.
 
 ## Can the plugin have more than 5 MiB?
 
@@ -133,4 +161,11 @@ Yes, 10 MiB, by changing `MemorySize: 5MiB` to `MemorySize: 10MiB` in
 - With this executable: 10 MiB gives 8712 KB plugin heap, 8028 KB newlib heap,
   about 7 MB after CTRPF's 1 MiB (vs about 1.9 MB at 5 MiB).
 
-TENMIB_PLACEHOLDER
+Verified 2026-11-03 under Azahar (instance p24, New 3DS mode, plugin
+loader on): the same ELF packed with `MemorySize: 10MiB` (3GX header byte
+0x30 = 0x2B, memoryRegionSize 2; the 5 MiB build has 0x23, 0) booted to the
+field, loaded the W7-0 assets and logged
+`screen buffer: 281 KB; heap 1392 KB used, 7 KB free, largest 6634 KB`
+against `largest 1514 KB` at 5 MiB: exactly 5120 KB more. Not switched in
+this change: real hardware (Old 3DS SYSTEM region, Luma) is UNVERIFIED, and
+the 5 MiB budget now holds (above).
