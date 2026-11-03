@@ -1,12 +1,14 @@
-# Native battle menu (P2-1, Screens/BattleScreen.hpp): wild battles played
-# with buttons only, the panel off the whole time.
-#   1. Fight -> move list -> B back; Pokémon -> the game's list (helper) -> B;
-#      Run.
-#   2. Bag -> Poké Balls tab -> Poké Ball -> Use, until it is caught; B
-#      through the Pokédex page / nickname question (No) to the field.
+# Native battle menu (P2-1, W7-1, Screens/BattleScreen.hpp): wild battles
+# played with buttons only, the panel off the whole time.
+#   1. Fight -> move list -> B back; Pokémon -> the native list -> B back;
+#      switch Pokémon (Pokémon, A, Switch) until the one coming in has been
+#      hit; Bag -> HP/PP Restore -> Potion -> the hurt Pokémon (Potion x9 ->
+#      x8); Run.
+#   2. Bag -> Poké Balls -> Poké Ball, thrown until it is caught; B through
+#      the Pokédex page / nickname question (No) to the field.
 #   3. Fight, a different move each turn, until the battle is won.
 # Every choice is a press; the menu taps the hidden bottom screen itself.
-# Start in the Pokémon Center whatever ran before (native-move-learn leaves the grass).
+# Never saves. Starts in the Pokémon Center whatever ran before (native-move-learn leaves the grass).
 restore pokecenter
 include common/boot
 
@@ -51,16 +53,89 @@ sleep 1
 shot command-pokemon
 send press a
 expect-log ^action: battle-pokemon ok 10
-expect-log ^battle-ui: page game, game pokemon, Torracat 10
+expect-log ^battle-ui: page party, cursor 1 of 6 \(Zorua Lv14 10
+sleep 1
 shot pokemon-list
-send press b              # the game's list takes B itself
-expect-log ^battle-ui: page command, cursor 0 of 4 \(Fight\) 15
+mark
+send press b              # back: the list's back button
+expect-log ^battle-ui: step battle_party\.back 10
+expect-log ^battle-ui: page command, cursor 0 of 4 \(Fight\)$ 15
+
+# Switch until the Pokémon that comes in has been hit (the foe attacks it
+# as it comes in): Zorua and Torracat take turns at the front.
+repeat 6 until-log ^\s+player\s\w+\ssp\s(570\sL\d+\shp\s([0-9]|[12]\d|3[0-4])/35|726\sL\d+\shp\s([0-9]|[1-4]\d|50)/51)\s
+  expect-log ^battle-ui: page command, cursor 0 of 4 \(Fight\)$ 40
+  send press down
+  sleep 1
+  send press down         # Pokémon
+  sleep 1
+  send press a
+  expect-log ^battle-ui: page party, cursor 1 of 6 \((Zorua|Torracat) 15
+  sleep 1
+  send press a
+  expect-log ^battle-ui: page party, cursor 1 of 6 .*, menu Switch$ 5
+  shot switch-menu
+  send press a            # Switch
+  expect-log ^battle-ui: step party\.slot2 15
+  expect-log ^battle-ui: step battle_party_page\.switch 15
+  mark
+  sleep 10
+end
+
+# A Potion on it: the Bag (first tab in a new battle), Right to HP/PP Restore,
+# A on Potion; the pick starts on the hurt Pokémon.
+send bag
+expect-log ^  Medicine \d+/60: Potion\(17\) x9 5
+expect-log ^battle-ui: page command, cursor 0 of 4 \(Fight\)$ 40
+mark
+send press down           # Bag
+sleep 1
+send press a
+expect-log ^action: battle-bag ok 10
+expect-log ^battle-ui: page bag, Rotom Powers, cursor 0 of 1 10
+sleep 1
+send press right
+expect-log ^battle-ui: step battle_bag\.pocket_hp_pp 10
+expect-log ^battle-ui: page bag, HP/PP Restore, cursor 0 of 4 \(Potion x9\)$ 10
+sleep 1
+shot bag-hp
+send press a
+expect-log ^battle-ui: step bag\.item_row1 10
+expect-log ^battle-ui: step battle_bag_item_page\.use 10
+expect-log ^battle-ui: page bag, HP/PP Restore, pick \d of 6 \((Zorua|Torracat) (\d+)/(35|51)\)$ 10
+sleep 1
+shot bag-pick
+send press a
+expect-log ^battle-ui: page bag, HP/PP Restore, pick .*, busy: Using Potion on 5
+expect-log ^battle-ui: step bag_party\.slot 10
+expect-log ^battle-ui: page command, cursor 0 of 4 \(Fight\)$ 40
+send bag
+expect-log ^  Medicine \d+/60: Potion\(17\) x8 5
+reject-log ^battle-ui: .*note:
 sleep 1
 send press up             # wraps to Run
 sleep 1
 shot command-run
 send press a
-expect-log ^action: battle-flee ok 10
+expect-log ^battle-ui: chose battle-flee 10
+# Run is refused while the foe has trapped us (seen: Ekans's Wrap); then
+# the battle is fought out with moves (any level-up move question is
+# skipped).
+repeat 12 until-scene FieldRo
+  sleep 8
+  if-scene Battle send action battle-fight
+  sleep 1.5
+  if-scene Battle send action battle-move1
+  sleep 6
+  if-scene Battle send press b
+  sleep 2
+  if-scene Battle send press b
+  # A move question: B is Don't learn, A A confirms (at the command bar
+  # these pick Fight and a move: the battle goes on).
+  if-scene Battle send press a
+  sleep 1
+  if-scene Battle send press a
+end
 wait-scene FieldRo 30
 expect-mode off
 sleep 3
@@ -79,33 +154,36 @@ send press down           # Bag
 sleep 1
 send press a
 expect-log ^action: battle-bag ok 10
-expect-log ^battle-ui: page game, game bag, Rotom Powers 5
-# The Bag opens on its first tab after boot; Poké Balls is the fourth.
-send press right
-sleep 1.2
-send press right
-sleep 1.2
-send press right
-expect-log ^battle-ui: page game, game bag, Poké Balls, Poké Ball$ 5
-send press a              # the ball's page
-expect-log ^battle-ui: page game, game bag, Poké Balls, item page, Poké Ball 5
+# A new battle's Bag opens on its first tab; Poké Balls is the fourth
+# (within a battle it keeps its tab).
+expect-log ^battle-ui: page bag, Rotom Powers, cursor 0 of 1 10
 sleep 1
-shot ball-page
-send press a              # Use: throw it
+send press right
+expect-log ^battle-ui: step battle_bag\.pocket_hp_pp 10
+sleep 1.5
+send press right
+expect-log ^battle-ui: step battle_bag\.pocket_status 10
+sleep 1.5
+send press right
+expect-log ^battle-ui: page bag, Poké Balls, cursor 0 of 3 \(Poké Ball x\d+\)$ 10
+sleep 1
+shot balls
+send press a              # throw it
+expect-log ^battle-ui: page bag, Poké Balls, .*busy: Throwing Poké Ball 5
+expect-log ^battle-ui: step battle_bag_item_page\.use 15
 sleep 30                  # the throw, the shakes, the opponent's turn
-# Broke free: the same again (the Bag keeps its tab and cursor).
+# Broke free: the same again (the Bag keeps its tab).
 repeat 12 until-scene Zukan
   expect-log ^battle-ui: page command, cursor 0 of 4 \(Fight\)$ 20
   mark
   send press down
   sleep 1
   send press a
-  expect-log ^battle-ui: page game, game bag, Poké Balls, Poké Ball$ 10
-  send press a
-  expect-log ^battle-ui: page game, game bag, Poké Balls, item page, Poké Ball 5
+  expect-log ^battle-ui: page bag, Poké Balls, cursor 0 of 3 \(Poké Ball x\d+\)$ 10
   sleep 1
-  shot ball-page-again
+  shot balls-again
   send press a
+  expect-log ^battle-ui: step battle_bag_item_page\.use 15
   sleep 30
 end
 wait-scene Zukan 30
@@ -147,10 +225,19 @@ repeat 8 until-scene FieldRo
   expect-log ^action: battle-move\d ok 10
   mark
   # The turn, then EXP and level-up windows (Exp. Share): B advances them.
-  # A move-learning question ("Forget an old move?") isn't answered here;
-  # if one comes, the next expect fails with the prompt helper in the log.
+  # The catch's EXP can make Buneary want a fifth move (docs/MOVE-LEARN.md):
+  # B moves its cursor to Don't learn, A A confirms. At the command bar
+  # those A presses pick Fight and a move, which is the next turn anyway.
   repeat 7
     sleep 4
+    if-scene Battle send press b
+  end
+  if-scene Battle send press a
+  sleep 1
+  if-scene Battle send press a
+  # Then the rest of the messages (the battle may be over).
+  repeat 3
+    sleep 3
     if-scene Battle send press b
   end
 end

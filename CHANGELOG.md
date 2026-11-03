@@ -10,6 +10,7 @@ Supports Pokémon Ultra Sun (USA) v1.2 (`00040000001B5000`, title version `0x080
 
 #### Added
 
+- USUM One Screen app (`player/`, Windows): pick your own Ultra Sun ROM and v1.2 update, and it checks them, sets up its own copy of your Azahar (plugin loader on, top screen only, custom textures off), installs the plugin and the update, and starts the game. Controller presets and the plugin settings are in its window. A new game with no save doesn't start yet (docs/PLAYER-APP.md, Open issues).
 - Bottom screen drawn on the top screen, as a corner panel (1/2 or 2/3 size, `size` in the settings file) or a full view. The copy runs on the emulated GPU, so the half panel and the full view cost Azahar a few percent of speed at most (was ~40%); 2/3 costs ~8% (docs/PERF.md).
 - Optional automatic view per scene (`auto = on`; off by default, since native top-screen menus come first): off on the title screen and overworld; corner panel for the X menu (also Quick Link, the save dialog and Festival Plaza), battle, Pokédex, Bag, Pokémon summary, Trainer Passport, Battle Video and unmapped scenes; full view for Party, PC boxes, Town Map, Options and Pokémon Refresh.
 - The X menu is detected from the game's field state, so closing it by touch turns the panel off too.
