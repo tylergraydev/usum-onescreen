@@ -10,7 +10,7 @@ OUT      := build
 PYTHON   ?= python3
 CODE_BIN ?=
 
-TESTS    := $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/ui_host_test $(OUT)/party_data_test $(OUT)/action_queue_test $(OUT)/xmenu_test $(OUT)/battle_menu_test $(OUT)/keyboard_test
+TESTS    := $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/ui_host_test $(OUT)/party_data_test $(OUT)/action_queue_test $(OUT)/xmenu_test $(OUT)/battle_menu_test $(OUT)/keyboard_test $(OUT)/pokedex_test
 
 all: run
 
@@ -35,6 +35,7 @@ UI_HDRS  := $(wildcard ../Includes/UI/*.hpp)
 PREVIEW  := ../analysis/private/ui-demo.png
 XMENU_PREVIEW := ../analysis/private/xmenu-preview.ppm
 KEYBOARD_PREVIEW := ../analysis/private/keyboard-preview.ppm
+DEX_PREVIEW := ../analysis/private/pokedex-preview
 
 $(OUT)/xmenu_test: xmenu_test.cpp ../Sources/Screens/XMenuGrid.cpp ../Includes/Screens/XMenuGrid.hpp                    ../Sources/ActionQueue.cpp ../Includes/ActionQueue.hpp ../Includes/Layouts.hpp $(UI_SRCS) $(UI_HDRS)
 	@mkdir -p $(OUT)
@@ -43,6 +44,10 @@ $(OUT)/xmenu_test: xmenu_test.cpp ../Sources/Screens/XMenuGrid.cpp ../Includes/S
 $(OUT)/keyboard_test: keyboard_test.cpp ../Sources/Screens/KeyboardGrid.cpp ../Includes/Screens/KeyboardGrid.hpp                     ../Sources/ActionQueue.cpp ../Includes/ActionQueue.hpp ../Includes/Layouts.hpp $(UI_SRCS) $(UI_HDRS)
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) keyboard_test.cpp ../Sources/Screens/KeyboardGrid.cpp ../Sources/ActionQueue.cpp $(UI_SRCS) -o $@
+
+$(OUT)/pokedex_test: pokedex_test.cpp ../Sources/Screens/PokedexList.cpp ../Includes/Screens/PokedexList.hpp $(UI_SRCS) $(UI_HDRS)
+	@mkdir -p $(OUT)
+	$(CXX) $(CXXFLAGS) pokedex_test.cpp ../Sources/Screens/PokedexList.cpp $(UI_SRCS) -o $@
 
 $(OUT)/ui_host_test: ui_host_test.cpp $(UI_SRCS) $(UI_HDRS)
 	@mkdir -p $(OUT)
@@ -63,6 +68,7 @@ run: $(TESTS)
 	./$(OUT)/ui_host_test $(PREVIEW)
 	./$(OUT)/xmenu_test $(XMENU_PREVIEW)
 	./$(OUT)/keyboard_test $(KEYBOARD_PREVIEW)
+	./$(OUT)/pokedex_test $(DEX_PREVIEW)
 	$(PYTHON) -I sigscan_test.py $(CODE_BIN)
 
 clean:

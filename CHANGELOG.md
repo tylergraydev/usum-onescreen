@@ -15,6 +15,8 @@ Supports Pokémon Ultra Sun (USA) v1.2 (`00040000001B5000`, title version `0x080
 - The X menu is detected from the game's field state, so closing it by touch turns the panel off too.
 - Native X menu on the top screen: **X** in the field shows Pokémon, Pokédex, Bag, Quick Link, Festival Plaza, Trainer Passport, Pokémon Refresh, Battle Video, Options, the map and Save as a grid (D-pad and L/R move, **A** opens, **B** closes) with the panel off. It starts on the entry the game's own X menu remembers. QR Scanner is shown but not available yet.
 - Native keyboard on the top screen: when the game asks for a nickname after a catch, its keyboard shows on the top screen with the name typed so far (D-pad moves, **A** types, **B** deletes, **Y** Shift, **X** space, **START** jumps to OK) with the panel off.
+
+- Native Pokédex on the top screen (from the X menu or Rotom's face, with the panel off): the top level with each Pokédex's caught / seen counts and locked islands, the Alola list, an island Pokédex's entries around its cursor, and an entry page's number, name and caught / seen, each next to what the game shows on top (the Pokémon's model, the island map). The game's own keys drive it (D-pad, **A**, **B**; Up/Down on an entry go to the next seen one).
 - **L+R** cycles the bottom-screen view off / panel / full by hand (`panel_key`); with `auto = on` the choice holds until the next scene change.
 - Touch cursor: **C-stick** moves it, **ZL** touches the bottom screen at the cursor.
 - Startup check of the game, its version and every patched function; the plugin does nothing on an unsupported game or if the check fails, and shows an on-screen notice either way.

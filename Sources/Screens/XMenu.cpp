@@ -10,6 +10,7 @@
 #include "Framebuffer.hpp"
 #include "Panel.hpp"
 #include "Scene.hpp"
+#include "Screens/Pokedex.hpp"
 #include "Screens/XMenuGrid.hpp"
 #include "UI/Device.hpp"
 #include "UI/Layer.hpp"
@@ -175,6 +176,13 @@ namespace OneScreen
         log.push_back(Utils::Format("xmenu: cursor %s", EntryName(index)));
     }
 
+    // Entry `index` opens a screen the plugin shows natively (and it is on).
+    static bool OpensNative(int index)
+    {
+        const char *native = XMenuNativeScreen(index);
+        return native != nullptr && std::string(native) == "pokedex" && PokedexEnabled();
+    }
+
     static void Open(int index, u32 sceneManager, std::vector<std::string> &log)
     {
         if (((s_enabledMask >> index) & 1u) == 0)
@@ -186,7 +194,7 @@ namespace OneScreen
         s_cursor.Chosen(index);
         s_synced = true;
         s_scanWanted = false;
-        log.push_back(Utils::Format("xmenu: open %s", EntryName(index)));
+        log.push_back(Utils::Format("xmenu: open %s%s", EntryName(index), OpensNative(index) ? " (native)" : ""));
         if (ActionStart(XMenuAction(index), sceneManager, log))
             s_opening = index;
     }
@@ -286,7 +294,12 @@ namespace OneScreen
 
         // The panel: off while the native menu is (about to be) up. A panel
         // turned on while we hold it off is the player's doing (L+R): step aside.
-        bool holdOff = s_enabled && !s_yield && (menuUp || s_frames < s_pendingUntil);
+        // Also while an entry with a native screen opens (field and loading
+        // frames): the X menu is gone then, and the panel would show until
+        // the native screen holds it off in its own scene.
+        const bool nativeOpening = (inField || scene.empty()) && s_opening >= 0 && ActionRunning()
+                                   && OpensNative(s_opening);
+        bool holdOff = s_enabled && !s_yield && (menuUp || s_frames < s_pendingUntil || nativeOpening);
         if (holdOff && s_forcedOff && GetPanelMode() != PanelMode::Off)
         {
             s_yield = true;

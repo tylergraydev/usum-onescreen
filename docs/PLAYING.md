@@ -46,7 +46,7 @@ When the game asks for a nickname (Yes to *Would you like to give X a nickname?*
 
 ## The bottom-screen view
 
-The goal is native menus on the top screen (the X menu has one already), so the bottom screen is hidden by default and **L+R** brings it up when a screen has no native menu yet. The corner panel is a half-size copy of the bottom screen in the lower-right corner of the top screen. Full view replaces the top screen with the bottom screen.
+The goal is native menus on the top screen (the X menu and the Pokédex have one already), so the bottom screen is hidden by default and **L+R** brings it up when a screen has no native menu yet. The corner panel is a half-size copy of the bottom screen in the lower-right corner of the top screen. Full view replaces the top screen with the bottom screen.
 
 ### Automatic view (optional)
 
@@ -74,6 +74,8 @@ Battles are played with buttons, no panel: when it is your turn a menu appears o
 - When the game asks something else in battle (learning a move, sending in the next Pokémon), a box at the top says so; the choices are on the bottom screen (**L+R**).
 
 If something in a battle isn't covered (a double battle's target screen, for example), **L+R** still shows the bottom screen.
+
+The native X menu and Pokédex keep the panel off while they show; in the Pokédex the panel comes back for its screens that have no native view yet (Habitat, Appearance, search, Evaluation once chosen).
 
 ## Known gaps
 
