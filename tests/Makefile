@@ -70,7 +70,7 @@ PLACE_GARC  ?= ../analysis/private/romfs-base/a/0/3/2
 
 # PLACE_GARC: the user's own English text GARC (a/0/3/2), for the real
 # place-name check; skipped if missing (CI).
-MAP_SRCS := ../Sources/Screens/MapView.cpp ../Sources/RomfsText.cpp ../Sources/PartyData.cpp
+MAP_SRCS := ../Sources/Screens/MapView.cpp ../Sources/UI/GameAssets.cpp ../Sources/UI/Theme.cpp ../Sources/RomfsText.cpp ../Sources/PartyData.cpp
 
 $(OUT)/map_test: map_test.cpp $(MAP_SRCS) ../Includes/Screens/MapView.hpp ../Includes/Where.hpp ../Includes/RomfsText.hpp ../Includes/PartyData.hpp $(UI_SRCS) $(UI_HDRS)
 	@mkdir -p $(OUT)

@@ -424,6 +424,15 @@ static void TestLayout(void)
     // On the top screen, inside the map's area with room for the frame.
     CHECK(MapWindow.x - 2 > MapArea.x && MapWindow.Right() + 2 < MapArea.Right());
     CHECK(MapWindow.y - 2 > MapArea.y + 50 && MapWindow.Bottom() + 2 + 18 <= MapArea.Bottom());
+    // The header, the recessed frame and the compass fit around it without
+    // touching it, and the prompts fit under the frame.
+    const UI::Rect recess = { MapWindow.x - MapRecess, MapWindow.y - MapRecess, MapWindow.w + 2 * MapRecess,
+                              MapWindow.h + 2 * MapRecess };
+    CHECK(MapHeader.x > MapArea.x && MapHeader.Right() < MapArea.Right() && MapHeader.y > MapArea.y);
+    CHECK(MapHeader.Bottom() < recess.y);
+    CHECK(MapCompassBox.x > MapArea.x && MapCompassBox.Right() < recess.x);
+    CHECK(MapCompassBox.y > MapHeader.Bottom() && MapCompassBox.Bottom() < MapArea.Bottom());
+    CHECK(recess.Bottom() + 20 < MapArea.Bottom());
 }
 
 static void TestDraw(const char *preview)
@@ -445,20 +454,38 @@ static void TestDraw(const char *preview)
     // Nothing outside the area is touched.
     const UI::Color outside = At(canvas, MapArea.x - 1, MapArea.y + 50);
     CHECK(outside.r == 10 && outside.g == 200 && outside.b == 10);
-    // The window is filled (sea) and framed.
+    // The window is filled (the Town Map's sea) and framed: a dark line in
+    // Rotom's red recess.
     const UI::Color sea = At(canvas, MapWindow.x + 3, MapWindow.y + 3);
     CHECK(sea.b > sea.r && sea.g != 200);
     const UI::Color frame = At(canvas, MapWindow.x - 1, MapWindow.y + 30);
-    CHECK(frame.b > 200);
-    // The compass arrow (red) points south-west: below-left of its centre.
-    bool red = false;
-    for (int y = MapWindow.y; y < MapWindow.Bottom(); y++)
-        for (int x = MapArea.x; x < MapWindow.x; x++)
+    CHECK(frame.r < 80 && frame.g < 80 && frame.b < 80);
+    const UI::Color recess = At(canvas, MapWindow.x - 4, MapWindow.y + 30);
+    CHECK(recess.r > 120 && recess.g < 80 && recess.b < 80);
+    // The header is the theme's dark window.
+    const UI::Color header = At(canvas, MapHeader.x + 6, MapHeader.Bottom() - 7);
+    CHECK(header.r == 0x2B && header.g == 0x2A && header.b == 0x19);
+    // The compass arrow (the theme's red cursor) points south-west: its tip,
+    // the red pixel farthest from the dial's centre, is below-left of it.
+    int count = 0, tipX = 0, tipY = 0, tipD = -1;
+    const int cx = MapCompassBox.x + MapCompassBox.w / 2, cy = MapCompassBox.y + 20 + (MapCompassBox.h - 26) / 2;
+    for (int y = MapCompassBox.y; y < MapCompassBox.Bottom(); y++)
+        for (int x = MapCompassBox.x; x < MapCompassBox.Right(); x++)
         {
             const UI::Color c = At(canvas, x, y);
-            red |= c.r > 200 && c.g < 120;
+            if (c.r > 200 && c.g < 30 && c.b < 30)
+            {
+                count++;
+                const int d = (x - cx) * (x - cx) + (y - cy) * (y - cy);
+                if (d > tipD)
+                {
+                    tipD = d;
+                    tipX = x;
+                    tipY = y;
+                }
+            }
         }
-    CHECK(red);
+    CHECK(count > 20 && tipX < cx - 3 && tipY > cy + 1);
 
     if (preview != nullptr)
     {
