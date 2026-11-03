@@ -1,4 +1,6 @@
 # Title -> Continue -> overworld (FieldRo), panel off throughout.
+# Start in the Pokémon Center whatever ran before (native-move-learn leaves the grass).
+restore pokecenter
 include common/boot
 shot field
 expect-scene FieldRo

@@ -6,6 +6,8 @@
 #   - A past the 12-character limit is refused; B deletes back to "Bobo"
 #   - START moves to OK, A confirms: "Bobo has been sent to a Box!" (shot)
 # The keyboard's log lines are read back from the game's text object.
+# Start in the Pokémon Center whatever ran before (native-move-learn leaves the grass).
+restore pokecenter
 include common/boot
 
 # Out of the door and into the tall grass (as wild-battle-run.txt).
