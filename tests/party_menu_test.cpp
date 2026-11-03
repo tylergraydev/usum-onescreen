@@ -582,7 +582,7 @@ struct FakeParty
     }
 };
 
-static bool Run(FakeParty &game, const PartyAction &action)
+static bool Run(FakeParty &game, const PartyAction &action, bool quiet = false)
 {
     std::vector<std::string> log;
     ActionRunner runner;
@@ -592,7 +592,7 @@ static bool Run(FakeParty &game, const PartyAction &action)
         game.Feed(runner.Update(game.world, log));
     CHECK(!runner.Running());
     const bool ok = !log.empty() && log.back().find(" ok in ") != std::string::npos;
-    if (!ok)
+    if (!ok && !quiet)
         for (const std::string &line : log)
             std::printf("    %s\n", line.c_str());
     return ok;
@@ -830,7 +830,7 @@ static void TestActions(void)
         game.teachRow = 2;
         game.mode = FakeParty::Closed;      // taps hit nothing
         MakePartyTeachAction(a, 0);
-        CHECK(!Run(game, a));
+        CHECK(!Run(game, a, true));
         CHECK(game.forgot == -1 && game.world.scene == SceneTeach);
     }
 }
