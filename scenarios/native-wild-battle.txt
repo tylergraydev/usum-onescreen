@@ -8,7 +8,7 @@
 #      the Pokédex page / nickname question (No) to the field.
 #   3. Fight, a different move each turn, until the battle is won.
 # Every choice is a press; the menu taps the hidden bottom screen itself.
-# Never saves.
+# Never saves. Starts in the Pokémon Center whatever ran before (native-move-learn leaves the grass).
 restore pokecenter
 include common/boot
 
