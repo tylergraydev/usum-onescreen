@@ -16,6 +16,7 @@
 #include "Screens/PartyMenu.hpp"
 #include "UI/Device.hpp"
 #include "UI/Layer.hpp"
+#include "UI/ScreenBuffer.hpp"
 
 namespace OneScreen
 {
@@ -58,8 +59,7 @@ namespace OneScreen
     static volatile bool s_ringWanted = false;
     static volatile int s_ringPos = -1;
     static volatile u32 s_ringCount = 0;
-    static u8 *s_pixels = nullptr;
-    static const size_t PixelBytes = PartyArea.w * PartyArea.h * 4;
+    static const char *const Owner = "party";   // UI::ScreenBuffer
 
     // --- Plugin thread ---
     static bool s_enabled = true;
@@ -145,15 +145,22 @@ namespace OneScreen
                 ScanRing(screen);
             return false;
         }
-        if (!s_showLayer || s_pixels == nullptr)
+        if (!s_showLayer)
+        {
+            UI::ScreenBuffer::GiveBack(Owner);
+            return false;
+        }
+        bool fresh = false;
+        u8 *pixels = UI::ScreenBuffer::Borrow(Owner, fresh);
+        if (pixels == nullptr)
             return false;
 
         UiInitFont();
         const UI::Surface fb = SurfaceFromScreen(screen);
         bool redraw = s_viewVersion != s_drawnVersion;
-        if (!s_layer.Matches(fb))
+        if (fresh || !s_layer.Matches(fb))
         {
-            if (!s_layer.Setup(fb, PartyArea, PartyRadius, s_pixels, PixelBytes))
+            if (!s_layer.Setup(fb, PartyArea, PartyRadius, pixels, UI::ScreenBuffer::Bytes))
                 return false;
             redraw = true;
         }
@@ -772,8 +779,6 @@ namespace OneScreen
         const bool shown = s_enabled && !s_yield && here;
         if (shown && !s_shown)
         {
-            if (s_pixels == nullptr)
-                s_pixels = new (std::nothrow) u8[PixelBytes];
             s_menu.Reset(6);
             s_note.clear();
             s_repeatKey = 0;
@@ -783,12 +788,16 @@ namespace OneScreen
             ReadPartyNow(sceneManager, log);
             if (s_party.screenCursor >= 0)
                 s_menu.SetCursor(s_party.screenCursor, Count());
-            log.push_back(Utils::Format("party-ui: shown (%s, cursor %d)%s", scene.empty() ? "(none)" : scene.c_str(),
-                                        s_menu.Cursor() + 1, s_pixels == nullptr ? ", NO MEMORY for the layer" : ""));
+            log.push_back(Utils::Format("party-ui: shown (%s, cursor %d)", scene.empty() ? "(none)" : scene.c_str(),
+                                        s_menu.Cursor() + 1));
+            log.push_back(UI::ScreenBuffer::HeapLog("party shown"));
         }
         else if (!shown && s_shown)
         {
             log.push_back("party-ui: hidden");
+            log.push_back(UI::ScreenBuffer::HeapLog("party hidden"));
+
+
             if (s_stage != Stage::Idle && !ActionRunning())
                 s_stage = Stage::Idle;
             s_busy.clear();
