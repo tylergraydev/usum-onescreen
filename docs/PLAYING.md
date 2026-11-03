@@ -72,7 +72,8 @@ Battles are played with buttons, no panel: when it is your turn a menu appears o
 - **Fight** lists your moves with their type, PP, and how effective each is against the opponent. **A** uses one, **B** goes back.
 - **Bag** and **Pokémon** open the game's own screens; a small box on the top screen says what is highlighted (on the Poké Balls tab, which ball). Use **Left/Right** for the Bag's tabs, **Up/Down**, **A** and **B** as on the bottom screen. To catch: Bag → Poké Balls → a ball → A → A (Use).
 - After a catch, **B** goes through the Pokédex page and the nickname question (No). Yes opens a keyboard on the bottom screen: use **L+R** to see it.
-- When the game asks something else in battle (learning a move, sending in the next Pokémon), a box at the top says so; the choices are on the bottom screen (**L+R**).
+- When a Pokémon wants to learn a fifth move, the top screen lists its four moves and the new one (type, PP; power and accuracy of the highlighted one). **Up/Down** and **A** pick the move to forget, or **Don't learn**; **B** jumps to Don't learn. **A** again confirms, **B** goes back.
+- When the game asks something else in battle (sending in the next Pokémon), a box at the top says so; the choices are on the bottom screen (**L+R**).
 
 If something in a battle isn't covered (a double battle's target screen, for example), **L+R** still shows the bottom screen.
 
