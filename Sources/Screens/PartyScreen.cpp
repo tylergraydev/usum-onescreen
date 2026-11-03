@@ -1,6 +1,5 @@
 #include "Screens/PartyScreen.hpp"
 
-#include <malloc.h>
 #include <map>
 #include <new>
 
@@ -18,6 +17,7 @@
 #include "UI/Device.hpp"
 #include "UI/Assets.hpp"
 #include "UI/Layer.hpp"
+#include "UI/ScreenBuffer.hpp"
 
 namespace OneScreen
 {
@@ -68,47 +68,10 @@ namespace OneScreen
     static volatile bool s_ringWanted = false;
     static volatile int s_ringPos = -1;
     static volatile u32 s_ringCount = 0;
-    // The layer keeps the screen's own format: BGR8 on the top screen (3
-    // bytes, 246 KB), more only if the OSD callback asks for it (an
-    // RGBA8-sized 337 KB one failed once the game's assets were loaded).
-    // Allocated the first time the screen shows and kept: freed when hidden
-    // (`partyui freelayer on`), the block was split by small allocations
-    // before the screen opened again, and 246 KB no longer fitted with 328 KB
-    // free in the arena, in every try (instance w72). If it can't be had,
-    // the screen tries again for NoMemoryFrames, then steps aside for the
-    // panel.
-    // s_bufferVersion tells the OSD callback to set the layer up again on a
-    // new buffer.
-    static u8 *s_pixels = nullptr;
-    static size_t s_pixelBytes = 0;
-    static volatile size_t s_pixelsWanted = PartyArea.w * PartyArea.h * 3;
-    static volatile u32 s_bufferVersion = 0;
-    static const u32 FreeAfter = 600, NoMemoryFrames = 60;
-    static bool s_freeWhenHidden = false;
-    static u32 s_noMemorySince = 0;
-
-    // "heap N KB used, N KB free in the arena" (newlib's mallinfo).
-    static std::string HeapText(void)
-    {
-        const struct mallinfo heap = mallinfo();
-        return Utils::Format("heap %d KB used, %d KB free in the arena", heap.uordblks / 1024, heap.fordblks / 1024);
-    }
-
-    // (Re)allocates the layer buffer if it is missing or too small. Only
-    // while the layer is hidden or has no buffer, so the OSD callback isn't
-    // using it.
-    static void AllocLayer(std::vector<std::string> &log)
-    {
-        const size_t want = s_pixelsWanted;
-        if (s_pixels != nullptr && s_pixelBytes >= want)
-            return;
-        delete[] s_pixels;
-        s_pixels = new (std::nothrow) u8[want];
-        s_pixelBytes = s_pixels != nullptr ? want : 0;
-        s_bufferVersion = s_bufferVersion + 1;
-        log.push_back(Utils::Format("party-ui: layer buffer %u KB%s; ", want / 1024, s_pixels != nullptr ? "" : ": NO MEMORY")
-                      + HeapText());
-    }
+    // The layer draws into the native screens' shared buffer (W7-M,
+    // UI/ScreenBuffer.hpp), borrowed while the layer shows and given back
+    // when it doesn't; nothing is allocated for it here.
+    static const char *const BufferOwner = "party";
 
     // --- Plugin thread ---
     static bool s_enabled = true;
@@ -120,7 +83,7 @@ namespace OneScreen
     static bool s_forcedOff = false, s_yield = false;
     static u32 s_captureKeys = 0;       // keys we asked to capture, 0 = none
     static u32 s_ourRequest = 0;        // InputCaptureRequest() right after we did
-    static u32 s_frames = 0, s_expectUntil = 0, s_readAt = 0, s_hiddenAt = 0;
+    static u32 s_frames = 0, s_expectUntil = 0, s_readAt = 0;
     static u32 s_repeatKey = 0, s_repeatAt = 0;
     static std::string s_prevScene, s_lastScene;     // last frame's, and the last non-empty one
     static bool s_fromParty = false;    // the summary was opened from the Party screen
@@ -207,22 +170,24 @@ namespace OneScreen
                 ScanRing(screen);
             return false;
         }
-        if (!s_showLayer || s_pixels == nullptr)
+        if (!s_showLayer)
+        {
+            UI::ScreenBuffer::GiveBack(BufferOwner);
             return false;
+        }
+        bool fresh = false;
+        u8 *pixels = UI::ScreenBuffer::Borrow(BufferOwner, fresh);
+        if (pixels == nullptr)
+            return false;       // another screen holds it: next frame
 
         UiInitFont();
         const UI::Surface fb = SurfaceFromScreen(screen);
         bool redraw = s_viewVersion != s_drawnVersion;
-        static u32 setupVersion = ~0u;
-        if (!s_layer.Matches(fb) || setupVersion != s_bufferVersion)
+        if (fresh || !s_layer.Matches(fb))
         {
-            setupVersion = s_bufferVersion;
-            if (!s_layer.Setup(fb, PartyArea, PartyRadius, s_pixels, s_pixelBytes))
-            {
-                // A 4-byte screen format: the plugin thread allocates more.
-                s_pixelsWanted = UI::Layer::BytesFor(fb, PartyArea);
+            // fresh: another screen drew in the buffer meanwhile.
+            if (!s_layer.Setup(fb, PartyArea, PartyRadius, pixels, UI::ScreenBuffer::Bytes))
                 return false;
-            }
             redraw = true;
         }
         if (redraw && s_viewLock.TryLock() == 0)
@@ -1274,8 +1239,6 @@ namespace OneScreen
         {
             // The layer is hidden here, so the OSD callback isn't using the
             // buffer: (re)allocate it if it is missing or too small.
-            AllocLayer(log);
-            s_noMemorySince = s_frames;
             UI::RequestAssets();    // the game's font, icons and move table for the drawing
             s_menu.Reset(6);
             s_note.clear();
@@ -1286,13 +1249,12 @@ namespace OneScreen
             ReadPartyNow(sceneManager, log);
             if (s_party.screenCursor >= 0)
                 s_menu.SetCursor(s_party.screenCursor, Count());
-            log.push_back(Utils::Format("party-ui: shown (%s, cursor %d)%s", scene.empty() ? "(none)" : scene.c_str(),
-                                        s_menu.Cursor() + 1, s_pixels == nullptr ? ", NO MEMORY for the layer" : ""));
+            log.push_back(Utils::Format("party-ui: shown (%s, cursor %d); ", scene.empty() ? "(none)" : scene.c_str(),
+                                        s_menu.Cursor() + 1) + UI::ScreenBuffer::HeapStatus());
         }
         else if (!shown && s_shown)
         {
-            log.push_back("party-ui: hidden");
-            s_hiddenAt = s_frames;
+            log.push_back("party-ui: hidden; " + UI::ScreenBuffer::HeapStatus());
             if (s_stage != Stage::Idle && !ActionRunning())
                 s_stage = Stage::Idle;
             s_menu.EndAsk();
@@ -1303,31 +1265,10 @@ namespace OneScreen
         if (!shown)
         {
             s_showLayer = false;
-            // Off by default (see s_pixels): give the layer's memory back
-            // once the screen has been hidden a while.
-            if (s_freeWhenHidden && s_pixels != nullptr && s_frames - s_hiddenAt >= FreeAfter)
-            {
-                delete[] s_pixels;
-                s_pixels = nullptr;
-                s_pixelBytes = 0;
-                log.push_back("party-ui: layer freed; " + HeapText());
-            }
             s_ringWanted = false;
             SetCapture(0);
             s_prevScene = scene;
             return;
-        }
-
-        // No layer memory: try again now and then; give up to the panel.
-        if (s_pixels == nullptr)
-        {
-            if ((s_frames - s_noMemorySince) % 15 == 14)
-                AllocLayer(log);
-            if (s_pixels == nullptr && s_frames - s_noMemorySince >= NoMemoryFrames)
-            {
-                log.push_back("party-ui: no memory for the layer; the native screen steps aside (panel)");
-                s_yield = true;
-            }
         }
 
         if (s_frames - s_readAt >= ReadEvery)
@@ -1396,11 +1337,6 @@ namespace OneScreen
         }
         else if (args == "status")
             log.push_back(PartyScreenStatus());
-        else if (args == "freelayer on" || args == "freelayer off")
-        {
-            s_freeWhenHidden = args == "freelayer on";
-            log.push_back(std::string("party-ui: free the layer when hidden: ") + (s_freeWhenHidden ? "on" : "off"));
-        }
         else
             return false;
         return true;
@@ -1411,9 +1347,10 @@ namespace OneScreen
         static const char *const stages[] = { "idle", "summary", "swap", "take", "bag-open", "bag-seek", "bag-row",
                                               "bag-menu", "follow", "follow-act", "asking", "bag-back" };
         static const char *const pages[] = { "list", "menu", "swap", "items", "ask" };
-        return Utils::Format("party-ui: %s, %s, page %s, cursor %d, stage %s%s%s; layer %u KB, ", s_enabled ? "on" : "off",
+        return Utils::Format("party-ui: %s, %s, page %s, cursor %d, stage %s%s%s; buffer %s, ", s_enabled ? "on" : "off",
                              s_shown ? "shown" : "hidden", pages[(int)s_menu.Page()], s_menu.Cursor() + 1,
                              stages[(int)s_stage], s_yield ? ", panel on by hand" : "",
-                             s_captureKeys ? ", input captured" : "", s_pixelBytes / 1024) + HeapText();
+                             s_captureKeys ? ", input captured" : "",
+                             UI::ScreenBuffer::Holder() == BufferOwner ? "held" : "not held") + UI::ScreenBuffer::HeapStatus();
     }
 }
