@@ -15,6 +15,7 @@
 #include "Party.hpp"
 #include "Scene.hpp"
 #include "Screens/BattleScreen.hpp"
+#include "Screens/Keyboard.hpp"
 #include "Screens/XMenu.hpp"
 #include "Settings.hpp"
 #include "Shot.hpp"
@@ -119,6 +120,8 @@ namespace CTRPluginFramework
     //     Screens/BattleScreen.hpp; on by default)
     //   xmenu on|off|status | xmenu select NAME | xmenu open NAME   (native X menu,
     //     Screens/XMenu.hpp; NAME as in XMenuGrid.cpp: pokemon, pokedex, ..., map, save)
+    //   keyboard on|off|status|read   (native keyboard, Screens/Keyboard.hpp; read
+    //     looks for the game's keyboard now and logs its text)
     static const char *CommandPath = "/usum-cmd.txt";
 
     // Global data + bss of USUM v1.2 (from the exheader): 0x669000 .. 0x6D5F44.
@@ -309,6 +312,18 @@ namespace CTRPluginFramework
                 return;
             }
         }
+        else if (line.compare(0, 9, "keyboard ") == 0)
+        {
+            std::vector<std::string> log;
+            const bool known = OneScreen::KeyboardCommand(line.substr(9), s_game->offsets.sceneManager, log);
+            for (const std::string &l : log)
+                WriteLog(l, false);
+            if (!known)
+            {
+                WriteLog("cmd: unknown keyboard command in '" + line + "'", false);
+                return;
+            }
+        }
         else if ((fields = std::sscanf(line.c_str(), "peek %x %u", &a, &b)) >= 1)
         {
             // Logs COUNT words (default 4) at ADDR, if readable.
@@ -455,6 +470,11 @@ namespace CTRPluginFramework
         for (const std::string &line : xmenuLog)
             WriteLog(line, false);
 
+        std::vector<std::string> keyboardLog;
+        OneScreen::KeyboardUpdate(s_game->offsets.sceneManager, keyboardLog);
+        for (const std::string &line : keyboardLog)
+            WriteLog(line, false);
+
         OneScreen::ShotPoll();
         PollCommands();
     }
@@ -552,6 +572,7 @@ namespace CTRPluginFramework
         // Before the panel: its callback takes the screenshots, so it must
         // run after the native menus have drawn.
         OneScreen::StartXMenu();
+        OneScreen::StartKeyboard();
         OneScreen::StartPanel(OneScreen::PanelMode::Off, s_game->offsets.gxDisplayTransfer.address,
                               s_game->offsets.gxTextureCopy.address);
         OneScreen::StartActions();
