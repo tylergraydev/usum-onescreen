@@ -72,12 +72,14 @@ Battles are played with buttons, no panel: when it is your turn a menu appears o
 
 - **Up/Down** pick Fight, Bag, Pokémon or Run, **A** chooses.
 - **Fight** lists your moves with their type, PP, and how effective each is against the opponent. **A** uses one, **B** goes back.
-- **Bag** and **Pokémon** open the game's own screens; a small box on the top screen says what is highlighted (on the Poké Balls tab, which ball). Use **Left/Right** for the Bag's tabs, **Up/Down**, **A** and **B** as on the bottom screen. To catch: Bag → Poké Balls → a ball → A → A (Use).
+- **Pokémon** shows your party on the top screen. Move with the **D-pad**, **A** opens *Switch* / *Cancel*, **B** goes back (after a faint you must pick one).
+- **Bag** shows the battle Bag's pockets on the top screen. **Left/Right** (or **L/R**) change pocket, **Up/Down** pick an item, **A** uses it: a ball is thrown; a Potion asks which Pokémon (it starts on the one that is hurt), **A** again uses it. **B** goes back. To catch: Bag → Poké Balls → a ball → A.
 - After a catch, **B** goes through the Pokédex page and the nickname question (No). Yes opens a keyboard on the bottom screen: use **L+R** to see it.
 - When a Pokémon wants to learn a fifth move, the top screen lists its four moves and the new one (type, PP; power and accuracy of the highlighted one). **Up/Down** and **A** pick the move to forget, or **Don't learn**; **B** jumps to Don't learn. **A** again confirms, **B** goes back.
-- When the game asks something else in battle (sending in the next Pokémon), a box at the top says so; the choices are on the bottom screen (**L+R**).
+- When your Pokémon faints in a wild battle, *Use next Pokémon?* shows on the top screen: **Up/Down**, **A** (Use Next Pokémon opens the party).
+- When the game asks something else in battle, a box at the top says so; the choices are on the bottom screen (**L+R**).
 
-If something in a battle isn't covered (a double battle's target screen, for example), **L+R** still shows the bottom screen.
+If something in a battle isn't covered (a double battle's target screen, for example: the top screen shows it but can't choose yet), **L+R** still shows the bottom screen.
 
 The native X menu and Pokédex keep the panel off while they show; in the Pokédex the panel comes back for its screens that have no native view yet (Habitat, Appearance, search, Evaluation once chosen).
 

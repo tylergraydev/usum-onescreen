@@ -17,7 +17,20 @@ A, B, X, Y, START, L, R, the D-pad and the circle pad are captured while the key
 
 ## What it shows
 
-The game's QWERTY page, key for key, in the same staggered rows (scaled 13/10 across, 4/5 down), the name so far with a caret and a slot line per character the limit allows, the count (`4 / 12`) and the key hints. Key labels follow the game's shift: with shift on, letters are capitals and the top row is `! ♂ ♀ + - * / = % ( )`; with it off, `! 1 2 … 0`. Shift is orange while on, as in the game.
+The game's QWERTY page, key for key, in the same staggered rows (scaled 13/10 across, 17/20 down), the name so far, and button prompts. Key labels follow the game's shift: with shift on, letters are capitals and the top row is `! ♂ ♀ + - * / = % ( )`; with it off, `! 1 2 … 0`.
+
+### Look (W7-8)
+
+Drawn to match the game's own name-entry keyboard (its bottom screen), colours measured from screenshots of it:
+
+- A light grey board (`#F2F2F2`) under a sky-blue name band (`#B4E0FF` → `#DCF1FF`, grey line above, white strip below).
+- The name one character per slot, over a dark slot line (`#6C6D6C`) per character the limit allows; the next slot is yellow (`#FFEB00`, dark edge) and the blue caret (`#0096FF`) stands before it, as in the game.
+- Character keys: pale rim, `#B9F9FF` → `#50A8E6` top to bottom, blue base and dark edge, black labels. Delete, OK (a drawn ↵) and Space are green (`#B9F449` → `#6BA008`) with white labels; Shift is green with an outlined arrow while off and orange (`#FFA847` → `#EA4507`) with a filled arrow while on.
+- The selected key has the game's yellow frame (a touch lighter, `#FFD22E`, than its `#FDC52E` so it shows on the top screen).
+- Text uses the game's font once `UI::Assets` has loaded it (`♂ ♀ ’ “ ” é É` are all in its loaded part; ↵ and the shift arrow aren't, so those are drawn). Before that, the system font.
+- `UI::Theme` button prompts along the bottom: A Type, B Delete, Y Shift, X Space, START OK. A note (*The name is full*) takes their place while it shows.
+
+Still different from the game: no Pokémon icon and gender left of the name, no page arrow (the grid page isn't mirrored), no grey shading strips between key rows, and the keys are a little wider and flatter (the top screen is wider than the bottom one).
 
 Pressing a key taps the same key on the hidden bottom screen (one action per key, `keyboard-<key>`: `StepTap("strinput.<key>")` then 4 frames). The game types it with its own rules, and the name shown is read back from the game each frame. So:
 
