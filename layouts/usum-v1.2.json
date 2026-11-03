@@ -325,7 +325,7 @@
       "scene": "Battle",
       "reach": "battle_party: tap a slot",
       "buttons": {
-        "switch": {"rect": [57, 181, 310, 207], "tap": [182, 194], "does": "Switch (label on the button)", "verified": "measured", "why": "avoided spending a turn on a switch"},
+        "switch": {"rect": [57, 181, 310, 207], "tap": [182, 194], "does": "Switch (label on the button)", "verified": "tap", "evidence": "w71 (W7-1): switched Zorua in from the list; Torracat and Pikipek in after a faint (Use Next Pokemon)"},
         "restore": {"rect": [57, 213, 178, 238], "tap": [118, 226], "does": "Restore (label on the button; not tried)", "verified": "measured", "why": "avoided"},
         "summary": {"rect": [186, 213, 310, 238], "tap": [248, 226], "does": "summary page", "verified": "tap", "evidence": "re5-b-summary"},
         "party_icon_1": {"rect": [0, 4, 40, 34], "tap": [20, 18], "does": "show slot 1", "verified": "measured", "why": "same strip as party_icon_2"},
@@ -354,18 +354,39 @@
       "scene": "Battle",
       "reach": "battle_bag: tap an item row",
       "buttons": {
-        "use": {"rect": [65, 208, 300, 236], "tap": [182, 222], "does": "Use; rect approximate (inner fill measured 72-291 x 225-230, column scan 208-235). On a Poke Ball's page it throws the ball", "verified": "tap", "evidence": "w51-ball -> Use threw the Poke Ball (W5-1 catches, scenarios/native-nickname.txt); other items still never used"},
+        "use": {"rect": [65, 208, 300, 236], "tap": [182, 222], "does": "Use; rect approximate (inner fill measured 72-291 x 225-230, column scan 208-235). On a Poke Ball's page it throws the ball", "verified": "tap", "evidence": "w51-ball -> Use threw the Poke Ball (W5-1 catches, scenarios/native-nickname.txt); w71 (W7-1): Use on a Potion's page asks 'Which Pokemon do you want to use this item on?' (bag_party slots; a tap off the cursor only moves it)"},
         "prev_item": {"rect": [14, 76, 22, 86], "tap": [18, 81], "does": "previous item in the pocket", "verified": "tap", "evidence": "re5-b3-itemprev"},
         "next_item": {"rect": [297, 76, 305, 86], "tap": [301, 81], "does": "next item in the pocket", "verified": "tap", "evidence": "re5-b3-itemnext2 (Super Potions); (306,95) missed"},
         "back": {"rect": [0, 214, 31, 234], "tap": [15, 224], "does": "back to the item list", "verified": "tap", "evidence": "re5-b3-itemback"}
       }
+    },
+    "battle_ask": {
+      "scene": "Battle",
+      "reach": "the battle's two-choice question, e.g. 'Use next Pokemon?' after the player's Pokemon faints in a wild battle (Battle+0x10B3B0, message 0x4E)",
+      "buttons": {
+        "first": {"rect": [8, 74, 306, 102], "tap": [160, 88], "does": "the first entry: Use Next Pokemon (opens the Pokemon list, without a back button)", "verified": "tap", "evidence": "w71 (W7-1): twice, after Zorua and Torracat fainted"},
+        "second": {"rect": [8, 139, 306, 167], "tap": [160, 153], "does": "the second entry: Run", "verified": "tap", "evidence": "the same question object (Battle+0x10B3B0) and place as learn_ask.keep, whose tap took the second entry (w71s, W7-1); Run itself shown in w71-other1, its tap not seen"}
+      },
+      "notes": ["The same object and places as learn_ask; the message (battle view +0x230 -> +0x104) tells them apart (docs/OFFSETS.md)"]
+    },
+    "battle_target": {
+      "scene": "Battle",
+      "reach": "a move with one target when more than one Pokemon could take it (double battles, SOS battles); not reached in this save",
+      "buttons": {
+        "top_left": {"rect": [8, 39, 158, 117], "tap": [83, 78], "does": "target top left", "verified": "measured", "evidence": "Battle_TRG_LOW_000.bflyt (a/0/6/7 entry 10, W7-1): pane BtnTrgt_00, 150x78 at layout (-77,42) from the centre; never seen in a battle (no double battle or SOS call reached)"},
+        "top_right": {"rect": [161, 39, 311, 117], "tap": [236, 78], "does": "target top right", "verified": "measured", "evidence": "Battle_TRG_LOW_000.bflyt (a/0/6/7 entry 10, W7-1): pane BtnTrgt_01, 150x78 at layout (76,42) from the centre; never seen in a battle (no double battle or SOS call reached)"},
+        "bottom_left": {"rect": [8, 123, 158, 201], "tap": [83, 162], "does": "target bottom left", "verified": "measured", "evidence": "Battle_TRG_LOW_000.bflyt (a/0/6/7 entry 10, W7-1): pane BtnTrgt_02, 150x78 at layout (-77,-42) from the centre; never seen in a battle (no double battle or SOS call reached)"},
+        "bottom_right": {"rect": [161, 123, 311, 201], "tap": [236, 162], "does": "target bottom right", "verified": "measured", "evidence": "Battle_TRG_LOW_000.bflyt (a/0/6/7 entry 10, W7-1): pane BtnTrgt_03, 150x78 at layout (76,-42) from the centre; never seen in a battle (no double battle or SOS call reached)"},
+        "back": {"rect": [0, 205, 49, 239], "tap": [22, 224], "does": "back to the move list", "verified": "measured", "evidence": "Battle_TRG_LOW_000.bflyt pane BG_Back, 54x38 at layout (-138,-104)"}
+      },
+      "notes": ["Layout coordinates are from the screen centre, y up: screen = (160 + x, 120 - y). Which row is which side is not known (the game's double battle screen is usually foes on top)", "Each button also has a name plate Br_Base_0N (128x24) and a Globe (Poke Ball) part"]
     },
     "learn_ask": {
       "scene": "Battle",
       "reach": "a level-up in battle when the Pokemon already knows four moves ('Should an old move be forgotten and replaced with X?')",
       "buttons": {
         "forget": {"rect": [8, 74, 306, 102], "tap": [160, 88], "does": "opens learn_moves (the WazaOshie forget screen)", "verified": "tap", "evidence": "scenarios/native-move-learn.txt (learn-forget2, Buneary) and v-list"},
-        "keep": {"rect": [8, 139, 306, 167], "tap": [160, 153], "does": "Keep old moves!: gives up the new move", "verified": "measured", "evidence": "w61-other: screenshot only, not tapped"}
+        "keep": {"rect": [8, 139, 306, 167], "tap": [160, 153], "does": "Keep old moves!: gives up the new move", "verified": "tap", "evidence": "w71s (W7-1): one tap with the question up (message 0x2F) -> 'Buneary did not learn Baby-Doll Eyes.'"}
       },
       "notes": ["Battle+0x10B3B0 list object, cursor u32 +0xA8 (0 forget, 1 keep), count +0xB0 (docs/MOVE-LEARN.md)"]
     },
