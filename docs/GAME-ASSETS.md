@@ -53,6 +53,13 @@ assets: text: 18 type names, 729 move names from a/0/3/2
 uitheme: assets loaded in 657 ms
 ```
 
+With the shared service (instance `w70`, 2026-11-02), the same part lines
+follow `assets: loading (field reached)` and end with
+`assets: ready, loaded in 621 ms, 248 KB kept (heap +247 KB), game font on`.
+Boot to the field (`scenarios/boot-to-field.txt`, start to `FieldRo`) took
+31.6 / 31.0 s before and 31.2 / 31.1 s after: the load starts once the
+field is reached, so it doesn't slow the boot.
+
 Kept in memory: the font 129 KB (logged), ball icons 64 KB (16 x 32x32
 RGBA), the other icons ~22 KB, the move table 4 KB, names ~25 KB: about
 250 KB (computed from the sizes, not measured on the heap). While loading,
