@@ -319,6 +319,37 @@
         "back": {"rect": [0, 214, 31, 234], "tap": [15, 224], "does": "back to the item list", "verified": "tap", "evidence": "re5-b3-itemback"}
       }
     },
+    "learn_ask": {
+      "scene": "Battle",
+      "reach": "a level-up in battle when the Pokemon already knows four moves ('Should an old move be forgotten and replaced with X?')",
+      "buttons": {
+        "forget": {"rect": [8, 74, 306, 102], "tap": [160, 88], "does": "opens learn_moves (the WazaOshie forget screen)", "verified": "tap", "evidence": "scenarios/native-move-learn.txt (learn-forget2, Buneary) and v-list"},
+        "keep": {"rect": [8, 139, 306, 167], "tap": [160, 153], "does": "Keep old moves!: gives up the new move", "verified": "measured", "evidence": "w61-other: screenshot only, not tapped"}
+      },
+      "notes": ["Battle+0x10B3B0 list object, cursor u32 +0xA8 (0 forget, 1 keep), count +0xB0 (docs/MOVE-LEARN.md)"]
+    },
+    "learn_moves": {
+      "scene": "Battle",
+      "reach": "learn_ask: forget",
+      "buttons": {
+        "move1": {"rect": [165, 3, 318, 40], "tap": [245, 22], "does": "opens learn_confirm for move 1", "verified": "tap", "evidence": "v-row1 (Defense Curl page), closed with Return"},
+        "move2": {"rect": [165, 47, 318, 83], "tap": [245, 70], "does": "opens learn_confirm for move 2", "verified": "tap", "evidence": "ml-tap-splash (Buneary's Splash page)"},
+        "move3": {"rect": [165, 90, 318, 126], "tap": [245, 108], "does": "opens learn_confirm for move 3", "verified": "tap", "evidence": "v-row3 (Pound page: Physical, 40, 100)"},
+        "move4": {"rect": [165, 133, 318, 169], "tap": [245, 151], "does": "opens learn_confirm for move 4", "verified": "tap", "evidence": "v-row4 (Foresight page)"},
+        "new": {"rect": [165, 186, 318, 226], "tap": [245, 208], "does": "opens learn_confirm for the new move ('Give up on learning the move')", "verified": "tap", "evidence": "ml-tap-new (Baby-Doll Eyes page)"},
+        "back": {"rect": [0, 210, 32, 239], "tap": [16, 222], "does": "back (B)", "verified": "none", "evidence": "seen on screen, not tapped"}
+      },
+      "notes": ["WazaOshie CRO screen (vtable WazaOshie+0x76D0) under a main-image frame (0x648E38); a tap opens the move's page, it doesn't forget yet", "rows are ~43 px apart; the new move sits apart at the bottom"]
+    },
+    "learn_confirm": {
+      "scene": "Battle",
+      "reach": "learn_moves: a row",
+      "buttons": {
+        "yes": {"rect": [12, 150, 306, 180], "tap": [160, 165], "does": "'Forget this move' (old move) or 'Give up on learning the move' (new move): the battle goes on with the result messages", "verified": "tap", "evidence": "ml-confirm-splash -> 'Buneary forgot how to use Splash' and the party then had Baby-Doll Eyes; on the new move: v-skip-done 'Buneary did not learn Baby-Doll Eyes.'"},
+        "return": {"rect": [12, 184, 306, 212], "tap": [160, 197], "does": "Return to the move-selection screen", "verified": "tap", "evidence": "v-row1/3/4 -> v-back: back on the list, cursor on that row"}
+      },
+      "notes": ["WazaOshie object +0xB4 byte 1 = 1 while this page is up, +0xB8 the row it is about (0-3, 4 = the new move)"]
+    },
     "strinput": {
       "scene": "any (StrInput CRO; seen over Zukan)",
       "reach": "after a catch: 'Would you like to give X a nickname?' -> Yes",

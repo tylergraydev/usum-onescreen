@@ -23,6 +23,8 @@ Supports Pokémon Ultra Sun (USA) v1.2 (`00040000001B5000`, title version `0x080
 - Native Party screen on the top screen: X menu → Pokémon shows the party (name, level, HP, status, held item). **A** opens Summary / Use item / Move, **Y** moves a Pokémon, **B** closes. The summary shows name, level, HP, item, ability, nature and moves with PP (Up/Down change Pokémon, **Y** shows the game's own page). Use item uses Medicine or Berries on that Pokémon.
 
 - Native PC boxes on the top screen: at a Pokémon Center PC the box (its name and the Pokémon in each slot) and the party show with the panel off. The D-pad moves the game's own cursor, **A** picks a Pokémon up and puts it down (swapping with one already there; box ↔ party and across boxes), **L/R** turn the box, **Y** shows the game's own details of the Pokémon at the cursor, **B** puts a held Pokémon back or leaves.
+
+- Native move learning in battle: when a Pokémon wants a fifth move, the top screen lists its four moves and the new one (type, PP; category, power and accuracy of the highlighted one). **Up/Down** and **A** pick the move to forget or *Don't learn*, **A** confirms, **B** goes back; the plugin answers the game's question and forget screen itself.
 - **L+R** cycles the bottom-screen view off / panel / full by hand (`panel_key`); with `auto = on` the choice holds until the next scene change.
 - Touch cursor: **C-stick** moves it, **ZL** touches the bottom screen at the cursor.
 - Startup check of the game, its version and every patched function; the plugin does nothing on an unsupported game or if the check fails, and shows an on-screen notice either way.

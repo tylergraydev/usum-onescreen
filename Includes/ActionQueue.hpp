@@ -46,6 +46,11 @@ namespace OneScreen
     const u32 WorldBoxIdle       = 1u << 9;  // browsing
     const u32 WorldBoxModal      = 1u << 10; // the slot menu or a message is up
     const u32 WorldBoxCarrying   = 1u << 11; // a Pokémon is held
+    // Battle: a Pokémon wants a fifth move (Screens/MoveLearn.hpp,
+    // docs/MOVE-LEARN.md); at most one is set.
+    const u32 WorldLearnAsk      = 1u << 16; // "Forget an old move" / "Keep old moves!"
+    const u32 WorldLearnList     = 1u << 17; // the forget screen's move list
+    const u32 WorldLearnConfirm  = 1u << 18; // one move's page: "Forget this move" / back
 
     struct ActionWorld
     {

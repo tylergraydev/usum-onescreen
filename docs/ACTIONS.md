@@ -26,12 +26,13 @@ Only buttons verified by a tap (`verified: tap` in the JSON) can be tapped: `Che
 | `battle-fight`, `battle-bag`, `battle-pokemon`, `battle-flee` | `Battle`, command menu up | taps Fight / Bag / Pokémon / Run; again if the command menu is still up 90 frames later (twice at most) | the command menu gone (anywhere in the battle) |
 | `battle-move1` … `battle-move4` | `Battle`, move list up | taps that move | the move list gone |
 | `battle-moves-back` | `Battle`, move list up | taps the move list's back button | the command menu |
+| `learn-forget1` … `learn-forget4`, `learn-skip` (native move learning's own, `ActionStart`) | `Battle`, the move-learning question or forget screen up | *Forget an old move* (if the question is up), that move's row (or the new move's), then *Forget this move* / *Give up on learning the move* | none of the three screens up (docs/MOVE-LEARN.md) |
 
 The `battle-*` one-tap actions are what the native battle menu (`docs/BATTLE-UI.md`) uses; they don't wait for the command menu to settle (the menu does that before it starts one). `battle-flee` ends when the command menu goes, so it also suits a trainer battle, where the game answers Run with a message and shows the commands again; `battle-run` waits for the field.
 
 The X menu remembers its cursor, so entries are always tapped, never chosen with the D-pad.
 
-Screens add their own actions with `ActionStart` (the native X menu's `xmenu-*`, the PC boxes' `box-pick-N`, `box-drop-N`, `box-prev`, `box-next`, `docs/BOXES.md`). In the `Box` scene the world also carries the Box screen's mode, read from memory every frame (`BoxWorldFlags`, `docs/RE6-boxes.md`): `WorldBoxIdle`, `WorldBoxModal` (its slot menu or a message), `WorldBoxCarrying` (a Pokémon held).
+Screens add their own actions with `ActionStart` (the native X menu's `xmenu-*`, the PC boxes' `box-pick-N`, `box-drop-N`, `box-prev`, `box-next`, `docs/BOXES.md`). In the `Box` scene the world also carries the Box screen's mode, read from memory every frame (`BoxWorldFlags`, `docs/RE6-boxes.md`): `WorldBoxIdle`, `WorldBoxModal` (its slot menu or a message), `WorldBoxCarrying` (a Pokémon held). In battle it carries the move-learning screens (`MoveLearnWorldFlags`, docs/MOVE-LEARN.md): `WorldLearnAsk`, `WorldLearnList`, `WorldLearnConfirm` (bits 16-18).
 
 ## What the runs showed (2026-11-02, instance `ui3`)
 
