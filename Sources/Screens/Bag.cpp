@@ -170,9 +170,10 @@ namespace OneScreen
     static volatile u32  s_drawnVersion = 0;
     static volatile bool s_shown = false;
     static u8           *s_pixels = nullptr;
-    static const size_t  PixelBytes = BagArea.w * BagArea.h * 4;
-    static const u32     FreeAfter = 4;     // frames after hiding before the buffer is freed
-    static u32           s_freeAt = 0;
+    static size_t        s_pixelBytes = 0;
+    // Bytes per pixel of the top screen, seen by the callback (0: not yet).
+    // The game's top screen is BGR8: 288 KB for the layer instead of 384.
+    static volatile u32  s_topBpp = 0;
 
     // --- Plugin thread ---
     static const u32 MoveUp    = Key::DPadUp | Key::CPadUp;
@@ -280,12 +281,27 @@ namespace OneScreen
         return 0;
     }
 
-    // Starts the load the first time the Bag shows; writes its log once done.
+    // The load needs about 120 KB while it runs (the RomFS tables, the
+    // archive's header, the icons). The plugin is built without exceptions,
+    // so running out of heap in it would abort the plugin: it only starts
+    // with this much free (probed, then given back).
+    static const size_t AssetsHeadroom = 192 * 1024;
+
+    // Starts the load the first time the Bag shows with its layer allocated
+    // and room to spare; writes its log once done.
     static void AssetsUpdate(bool shown, std::vector<std::string> &log)
     {
         const int state = s_assetsState.load(std::memory_order_acquire);
-        if (state == 0 && shown)
+        if (state == 0 && shown && s_pixels != nullptr)
         {
+            u8 *probe = new (std::nothrow) u8[AssetsHeadroom];
+            if (probe == nullptr)
+            {
+                log.push_back("bag assets: not loaded, less than 192 KB of heap free; drawn icons, no descriptions");
+                s_assetsState.store(3);
+                return;
+            }
+            delete[] probe;
             s_assetsTask = new (std::nothrow) Task(LoadAssetsTask, nullptr, -1);
             if (s_assetsTask == nullptr)
             {
@@ -491,19 +507,22 @@ namespace OneScreen
 
     static bool BagOnScreen(const Screen &screen)
     {
+        if (!screen.IsTop)
+            return false;
+        const UI::Surface fb = SurfaceFromScreen(screen);
+        s_topBpp = UI::BytesPerPixel(fb.format);
         u8 *const pixels = s_pixels;
-        if (!screen.IsTop || !s_shown || pixels == nullptr)
+        const size_t bytes = s_pixelBytes;
+        if (!s_shown || pixels == nullptr)
             return false;
         UiInitFont();
-        const UI::Surface fb = SurfaceFromScreen(screen);
         const u32 version = s_viewVersion;
         bool redraw = version != s_drawnVersion;
-        // The buffer is freed while the Bag is hidden (it is the whole top
-        // screen), so a new one needs a new setup.
+        // A new buffer (a later shared one, say) needs a new setup.
         if (!s_layer.Matches(fb) || s_layerBuffer != pixels)
         {
             s_layerBuffer = nullptr;
-            if (!s_layer.Setup(fb, BagArea, BagRadius, pixels, PixelBytes))
+            if (!s_layer.Setup(fb, BagArea, BagRadius, pixels, bytes))
                 return false;
             s_layerBuffer = pixels;
             redraw = true;
@@ -941,13 +960,17 @@ namespace OneScreen
             AutoPanelSetEnabled(AutoPanelEnabled());
         }
 
-        const bool shown = s_enabled && !s_yield && !s_aside && inBag && s_game.Valid();
-        AssetsUpdate(shown, log);
+        bool shown = s_enabled && !s_yield && !s_aside && inBag && s_game.Valid();
         if (shown && !s_shown)
         {
             UI::RequestAssets();    // the game's font and cursor (usually loaded at the first field already)
             if (s_pixels == nullptr)
-                s_pixels = new (std::nothrow) u8[PixelBytes];
+            {
+                // A screen in another format than the one seen here can't
+                // be drawn (Setup fails); the next show allocates for it.
+                s_pixelBytes = (size_t)BagArea.w * BagArea.h * (s_topBpp != 0 ? s_topBpp : 4);
+                s_pixels = new (std::nothrow) u8[s_pixelBytes];
+            }
             s_prevTab = -1;
             s_prevMode = BagMode::None;
             s_wantTab = -1;
@@ -959,23 +982,31 @@ namespace OneScreen
             s_handedTo.clear();
             s_repeatKey = 0;
             ReadPartyNow(sceneManager);
-            log.push_back(Utils::Format("bag: shown (pocket %s, %u items)%s", s_game.tab >= 0 ? BagTabAt(s_game.tab).name : "?",
-                                        (unsigned)s_game.items.size(), s_pixels == nullptr ? ", NO MEMORY for the layer" : ""));
+            const struct mallinfo heap = mallinfo();
+            log.push_back(Utils::Format("bag: shown (pocket %s, %u items)%s, layer %u KB, heap %u KB used",
+                                        s_game.tab >= 0 ? BagTabAt(s_game.tab).name : "?", (unsigned)s_game.items.size(),
+                                        s_pixels == nullptr ? ", NO MEMORY for the layer" : "",
+                                        (unsigned)(s_pixelBytes / 1024), (unsigned)(heap.uordblks / 1024)));
+            // Nothing to draw with: the panel, until the Bag closes.
+            if (s_pixels == nullptr)
+            {
+                s_yield = true;
+                shown = false;
+                s_driver.Stop();
+                SetPanelMode(PanelMode::Panel);
+                log.push_back("bag: no layer, the panel shows the Bag until it closes -> " + PanelStatus());
+            }
         }
         else if (!shown && s_shown)
         {
             s_driver.Stop();
-            s_freeAt = s_frames + FreeAfter;
             log.push_back("bag: hidden");
         }
         s_shown = shown;
-        // The layer's 380 KB go back to the heap once the OSD callback can't
-        // be drawing with them any more (it checks s_shown first).
-        if (!shown && s_pixels != nullptr && s_frames >= s_freeAt)
-        {
-            delete[] s_pixels;
-            s_pixels = nullptr;
-        }
+        // The layer is kept once allocated: freed, the heap's small
+        // allocations split the block and it can't be had again
+        // (docs/BAG.md "Memory").
+        AssetsUpdate(shown, log);
 
         if (shown)
         {
