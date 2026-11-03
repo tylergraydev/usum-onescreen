@@ -3,9 +3,10 @@
 #include <cstdio>
 #include <vector>
 
-#include "UI/Icons.hpp"
+#include "UI/GameAssets.hpp"
 #include "UI/Layout.hpp"
 #include "UI/Text.hpp"
+#include "UI/Theme.hpp"
 
 namespace OneScreen
 {
@@ -133,25 +134,37 @@ namespace OneScreen
 
     // --- Drawing ---
 
-    static constexpr UI::Color PanelBg   = Rgb(22, 30, 52);
-    static constexpr UI::Color Border    = Rgb(120, 150, 220);
-    static constexpr UI::Color Divider   = Rgb(120, 150, 220, 90);
-    static constexpr UI::Color TextMain  = Rgb(250, 252, 255);
-    static constexpr UI::Color TextDim   = Rgb(150, 165, 200);
-    static constexpr UI::Color Selected  = Rgb(255, 236, 120);
-    static constexpr UI::Color Holding   = Rgb(255, 150, 60);
-    static constexpr UI::Color BoxFill   = Rgb(46, 112, 70);    // the game's green box wallpaper
-    static constexpr UI::Color PartyFill = Rgb(40, 96, 160);
-    static constexpr UI::Color EmptyLine = Rgb(120, 150, 220, 110);
+    namespace Theme = UI::Theme;
 
-    // Inside BoxesArea: header (box name), 5 rows of 6 slots, the party in
-    // one row of 6 (the game's cursor order: 30, 31, ... 35), footer.
-    static const int GridX = BoxesArea.x + 6;
-    static const int HeaderY = BoxesArea.y + 6, HeaderH = 24;
-    static const int GridY = HeaderY + HeaderH + 6;
+    // Measured on the game's Box screen (bottom screen, docs/BOXES.md).
+    static constexpr UI::Color FrameLine  = Rgb(0x10, 0x22, 0x0E);   // dark line around the wallpaper
+    static constexpr UI::Color GrassTop   = Rgb(0x52, 0xAD, 0x4A);   // grass wallpaper, top to bottom
+    static constexpr UI::Color GrassBot   = Rgb(0x37, 0x8A, 0x2F);
+    static constexpr UI::Color GrassTuft  = Rgb(0x61, 0xB8, 0x58);
+    static constexpr UI::Color TabRim     = Rgb(0xCC, 0xDD, 0xFF);   // box name tab: pale rim, slate line,
+    static constexpr UI::Color TabLine    = Rgb(0x33, 0x55, 0x77);   // the wallpaper's picture inside
+    static constexpr UI::Color TabTop     = Rgb(0x77, 0xBB, 0x99);
+    static constexpr UI::Color TabBot     = Rgb(0x4E, 0x82, 0x60);
+    static constexpr UI::Color ArrowBlue  = Rgb(0x11, 0x99, 0xFF);
+    static constexpr UI::Color ArrowDark  = Rgb(0x00, 0x66, 0xCC);
+    static constexpr UI::Color PartyPanel = Rgb(0x20, 0x83, 0x18);   // the party's dark green panel
+    // Ours (the game shows Pokémon icons on the bare wallpaper).
+    static constexpr UI::Color MonPlate   = Rgb(0x10, 0x40, 0x10, 0x8C);
+    static constexpr UI::Color EmptyLine  = Rgb(0xFF, 0xFF, 0xFF, 0x46);
+    static constexpr UI::Color DimText    = Rgb(0xB0, 0xC8, 0xAC);
+    static constexpr UI::Color White      = Rgb(0xFF, 0xFF, 0xFF);
+
+    // Inside BoxesArea: header (< box name >, the cursor's Pokémon), 5 rows
+    // of 6 slots, the party as one row of 6 list rows (the game's cursor
+    // order: 30, 31, ... 35), the button prompts.
     static const int CellW = 60, CellH = 25, Gap = 2;
-    static const int PartyGap = 10;
-    static const int FooterH = 18;
+    static const int GridX = BoxesArea.x + 6;
+    static const int GridW = (int)BoxColumns * (CellW + Gap) - Gap;
+    static const int HeaderY = BoxesArea.y + 5, HeaderH = 24;
+    static const int GridY = HeaderY + HeaderH + 5;
+    static const int PartyGap = 8, PartyH = Theme::RowHeight;
+    static const int ArrowW = 16;
+    static const int TabW = 170;
 
     UI::Rect BoxesCellRect(u32 index)
     {
@@ -160,15 +173,23 @@ namespace OneScreen
                              GridY + (int)(index / BoxColumns) * (CellH + Gap), CellW, CellH };
         if (index < BoxSlots + BoxPartySlots)
             return UI::Rect{ GridX + (int)(index - BoxSlots) * (CellW + Gap),
-                             GridY + (int)BoxRows * (CellH + Gap) - Gap + PartyGap, CellW, CellH };
-        // The box name, between the arrows.
-        return UI::Rect{ GridX + CellW + Gap, HeaderY, 4 * CellW + 3 * Gap, HeaderH };
+                             GridY + (int)BoxRows * (CellH + Gap) - Gap + PartyGap, CellW, PartyH };
+        // The box name tab, between the arrows.
+        return UI::Rect{ GridX + ArrowW + 4, HeaderY, TabW, HeaderH };
     }
 
     static UI::Rect FooterRect(void)
     {
         const UI::Rect party = BoxesCellRect(BoxSlots);
-        return UI::Rect{ GridX, party.Bottom() + 5, (int)BoxColumns * (CellW + Gap) - Gap, FooterH };
+        return UI::Rect{ GridX, party.Bottom() + 3, GridW, Theme::PromptHeight };
+    }
+
+    // Right of the tab's right arrow: the Pokémon at the cursor (or held).
+    static UI::Rect InfoRect(void)
+    {
+        const UI::Rect name = BoxesCellRect(BoxCursorName);
+        const int x = name.Right() + 4 + ArrowW + 6;
+        return UI::Rect{ x, HeaderY, GridX + GridW - x, HeaderH };
     }
 
     std::string BoxesFooter(const BoxesView &view)
@@ -192,55 +213,166 @@ namespace OneScreen
         return "A Move   Y Details   L/R Box   B Exit";
     }
 
-    static void DrawCell(UI::Canvas &canvas, const UI::Rect &r, const std::string &label, UI::Color fill,
+    static UI::Color Mix(UI::Color a, UI::Color b, int num, int den)
+    {
+        return Rgb((u8)(a.r + (b.r - a.r) * num / den), (u8)(a.g + (b.g - a.g) * num / den),
+                   (u8)(a.b + (b.b - a.b) * num / den), (u8)(a.a + (b.a - a.a) * num / den));
+    }
+
+    // A vertical gradient in a rounded rect: the rounded ends solid, the
+    // straight middle line by line.
+    static void FillGradient(UI::Canvas &canvas, const UI::Rect &r, int radius, UI::Color top, UI::Color bottom)
+    {
+        canvas.FillRoundRect(UI::Rect{ r.x, r.y, r.w, 2 * radius }, radius, top);
+        canvas.FillRoundRect(UI::Rect{ r.x, r.Bottom() - 2 * radius, r.w, 2 * radius }, radius, bottom);
+        for (int y = r.y + radius; y < r.Bottom() - radius; y++)
+            canvas.HLine(r.x, y, r.w, Mix(top, bottom, y - r.y, r.h - 1));
+    }
+
+    // The game's blue arrow beside the box name, pointing left or right.
+    static void DrawArrow(UI::Canvas &canvas, int x, int cy, bool right)
+    {
+        const float tip = right ? x + ArrowW : x, back = right ? x : x + ArrowW;
+        const float in = right ? -1.0f : 1.0f;     // from the tip towards the back
+        canvas.FillTriangle(tip, cy, back, cy - 10, back, cy + 10, White);
+        canvas.FillTriangle(tip + 3 * in, cy, back - in, cy - 7, back - in, cy + 7, ArrowDark);
+        canvas.FillTriangle(tip + 4 * in, cy - 1, back - in, cy - 6, back - in, cy, ArrowBlue);
+    }
+
+    // The 24x24 middle of the game's ball icon (the ball fills it; the rest
+    // of the 32x32 icon is clear). Nothing while the icons aren't loaded.
+    static void DrawBallIcon(UI::Canvas &canvas, int x, int y, u8 ball)
+    {
+        const UI::GameAssets *assets = UI::GetGameAssets();
+        const UI::Image *icon = assets != nullptr && ball >= 1 && ball <= 16 ? assets->Ball(ball) : nullptr;
+        if (icon == nullptr)
+            return;
+        const UI::Rect src{ 4, 4, 24, 24 };
+        UI::DrawImage(canvas, *icon, x, y, &src);
+    }
+
+    static void DrawCell(UI::Canvas &canvas, const UI::Rect &r, const std::string &label, bool party,
                          bool cursor, bool holding, bool dim, const std::string &held)
     {
-        if (!label.empty())
-            canvas.FillRoundRect(r, 6, dim ? Rgb(fill.r / 2, fill.g / 2, fill.b / 2) : fill);
-        else
-            canvas.StrokeRoundRect(r, 6, EmptyLine, 1);
-        if (cursor)
-            canvas.StrokeRoundRect(UI::Inset(r, -2), 8, holding ? Holding : Selected, 2);
-
-        UI::TextStyle style;
-        style.color = dim ? TextDim : TextMain;
+        Theme::TextStyle style;
+        style.size = Theme::TextSize::Small;
         style.align = UI::Align::Center;
+        if (label.empty())
+            canvas.StrokeRoundRect(r, 6, EmptyLine, 1);
+        else if (party)
+        {
+            Theme::DrawRowBackground(canvas, r, Theme::RowKind::List);
+            if (dim)
+                canvas.FillRoundRect(r, Theme::RowRadius, Rgb(0x20, 0x40, 0x20, 0x80));
+            style.color = Theme::ListText;
+        }
+        else
+        {
+            canvas.FillRoundRect(r, 6, dim ? Rgb(MonPlate.r, MonPlate.g, MonPlate.b, MonPlate.a / 2) : MonPlate);
+            style.color = dim ? DimText : White;
+            style.outline = dim ? Rgb(0, 0, 0, 0) : FrameLine;
+        }
+        if (cursor)
+        {
+            // The orange frame of the game's selected plate; red while holding.
+            const UI::Rect ring = UI::Inset(r, -2);
+            if (holding)
+                canvas.StrokeRoundRect(ring, 8, Theme::CursorRed, 2);
+            else
+                Theme::DrawHighlightFrame(canvas, ring, 8);
+        }
+
+        const UI::Rect text = UI::Inset(r, 2, 0, 2, party ? 2 : 0);
         if (!label.empty())
-            UI::DrawText(canvas, label, UI::Inset(r, 1, 0, 1, 0), style);
+            Theme::DrawText(canvas, label, text, style);
         else if (cursor && holding && !held.empty())
         {
             // Where the held Pokémon would go.
-            style.color = Holding;
-            UI::DrawText(canvas, held, UI::Inset(r, 1, 0, 1, 0), style);
+            style.color = White;
+            style.outline = Theme::CursorRed;
+            Theme::DrawText(canvas, held, text, style);
         }
+    }
+
+    static void DrawPrompts(UI::Canvas &canvas, const UI::Rect &r,
+                            const std::vector<std::pair<Theme::Button, std::string>> &prompts)
+    {
+        int x = r.x;
+        for (const auto &p : prompts)
+            x += Theme::DrawButtonPrompt(canvas, x, r.y, p.first, p.second) + (p.second.empty() ? 2 : 6);
     }
 
     void DrawBoxes(UI::Canvas &canvas, const BoxesView &view)
     {
-        canvas.FillRoundRect(BoxesArea, BoxesRadius, PanelBg);
-        canvas.StrokeRoundRect(BoxesArea, BoxesRadius, Border, 2);
         const bool carrying = view.mode == BoxMode::Carrying;
 
-        // Header: < Box name >, and which box of how many.
+        // Wallpaper: dark frame, grass gradient, a few lighter tufts.
+        canvas.FillRoundRect(BoxesArea, BoxesRadius, FrameLine);
+        FillGradient(canvas, UI::Inset(BoxesArea, 2), BoxesRadius - 2, GrassTop, GrassBot);
+        for (int y = GridY + 10, row = 0; y < BoxesArea.Bottom() - 8; y += 18, row++)
+            for (int x = GridX + 4 + (row % 2) * 31; x < GridX + GridW - 4; x += 62)
+            {
+                canvas.FillTriangle(x, y + 4, x + 2, y, x + 3, y + 4, GrassTuft);
+                canvas.FillTriangle(x + 3, y + 4, x + 5, y - 1, x + 6, y + 4, GrassTuft);
+            }
+
+        // Header: < Box name > with which box of how many; the Pokémon at
+        // the cursor in a window beside it, with its ball.
         const UI::Rect name = BoxesCellRect(BoxCursorName);
+        const int radius = name.h / 2;
+        canvas.FillRoundRect(name, radius, TabRim);
+        canvas.FillRoundRect(UI::Inset(name, 1), radius - 1, TabLine);
+        FillGradient(canvas, UI::Inset(name, 3), radius - 3, TabTop, TabBot);
         if (view.cursor == BoxCursorName)
-            canvas.StrokeRoundRect(UI::Inset(name, -2), 8, Selected, 2);
-        canvas.FillRoundRect(name, 8, Rgb(52, 70, 110));
-        UI::DrawIcon(canvas, UI::Icon::ArrowLeft, UI::Rect{ name.x - 26, name.y + 4, 16, 16 }, TextMain);
-        UI::DrawIcon(canvas, UI::Icon::ArrowRight, UI::Rect{ name.Right() + 10, name.y + 4, 16, 16 }, TextMain);
-        UI::TextStyle title;
+            Theme::DrawHighlightFrame(canvas, UI::Inset(name, -2), radius + 2);
+        DrawArrow(canvas, name.x - 4 - ArrowW, name.y + name.h / 2, false);
+        DrawArrow(canvas, name.Right() + 4, name.y + name.h / 2, true);
+        Theme::TextStyle title;
+        title.color = White;
+        title.outline = TabLine;
         title.align = UI::Align::Center;
-        UI::DrawText(canvas, view.boxName, name, title);
+        Theme::DrawText(canvas, view.boxName, UI::Inset(name, 34, 0, 34, 0), title);
         char count[24];
         std::snprintf(count, sizeof(count), "%u/%u", (unsigned)(view.tray + 1), (unsigned)view.unlocked);
-        UI::TextStyle small;
-        small.font = UI::Font::Small;
-        small.color = TextDim;
+        Theme::TextStyle small;
+        small.size = Theme::TextSize::Small;
+        small.color = White;
+        small.outline = TabLine;
         small.align = UI::Align::Right;
-        const int countX = name.Right() + 28;
-        UI::DrawText(canvas, count, UI::Rect{ countX, name.y, GridX + (int)BoxColumns * (CellW + Gap) - Gap - countX,
-                                              name.h }, small);
+        Theme::DrawText(canvas, count, UI::Inset(name, 0, 0, 10, 0), small);
 
+        const UI::Rect info = InfoRect();
+        Theme::DrawWindow(canvas, info);
+        std::string what;
+        u8 ball = 0;
+        if (carrying)
+        {
+            what = view.held.empty() ? std::string("Moving") : view.held;
+            ball = view.heldBall;
+        }
+        else if (view.cursor < BoxSlots)
+        {
+            what = view.slots[view.cursor];
+            ball = view.slotBalls[view.cursor];
+        }
+        else if (view.cursor < BoxSlots + BoxPartySlots)
+        {
+            what = view.party[view.cursor - BoxSlots];
+            ball = view.partyBalls[view.cursor - BoxSlots];
+        }
+        else if (view.cursor == BoxCursorName)
+            what = view.boxName;
+        else if (view.cursor == BoxCursorBoxList)
+            what = "Box List";
+        DrawBallIcon(canvas, info.x + 3, info.y, ball);
+        Theme::TextStyle infoText;
+        infoText.color = carrying ? Theme::Highlight : Theme::WindowText;
+        Theme::DrawText(canvas, what, UI::Inset(info, 29, 0, Theme::WindowPad, 0), infoText);
+
+        // The box, then the party on its dark green panel.
+        const UI::Rect first = BoxesCellRect(BoxSlots);
+        canvas.FillRoundRect(UI::Rect{ GridX - 3, first.y - 3, GridW + 6, first.h + 6 }, Theme::RowRadius + 3,
+                             PartyPanel);
         for (u32 i = 0; i < BoxSlots + BoxPartySlots; i++)
         {
             const bool party = i >= BoxSlots;
@@ -249,26 +381,38 @@ namespace OneScreen
             // drop; dim it here.
             const bool source = carrying && view.heldIndex == (int)i
                                 && (party || view.heldTray == (int)view.tray);
-            DrawCell(canvas, BoxesCellRect(i), label, party ? PartyFill : BoxFill, i == view.cursor, carrying,
+            DrawCell(canvas, BoxesCellRect(i), label, party, i == view.cursor, carrying,
                      source || !view.busy.empty(), view.held);
         }
 
-        const UI::Rect party = BoxesCellRect(BoxSlots);
-        canvas.HLine(GridX, party.y - PartyGap / 2 - 1, (int)BoxColumns * (CellW + Gap) - Gap, Divider);
-
-        UI::TextStyle hint;
-        hint.color = carrying || !view.busy.empty() ? TextMain : TextDim;
-        if (carrying && view.busy.empty())
-            hint.color = Holding;
-        UI::DrawText(canvas, BoxesFooter(view), FooterRect(), hint);
+        // Footer: the button prompts while the screen takes keys, else what
+        // is happening in a window.
+        const UI::Rect footer = FooterRect();
+        const bool waiting = view.busy.empty() && view.cursor != BoxCursorBoxList
+                             && (view.mode == BoxMode::Idle || carrying);
+        if (waiting && carrying)
+            DrawPrompts(canvas, footer, { { Theme::Button::A, "Drop" }, { Theme::Button::B, "Cancel" },
+                                          { Theme::Button::L, "" }, { Theme::Button::R, "Box" } });
+        else if (waiting)
+            DrawPrompts(canvas, footer, { { Theme::Button::A, "Move" }, { Theme::Button::Y, "Details" },
+                                          { Theme::Button::L, "" }, { Theme::Button::R, "Box" },
+                                          { Theme::Button::B, "Exit" } });
+        else
+        {
+            Theme::DrawWindow(canvas, footer);
+            Theme::TextStyle text;
+            text.size = Theme::TextSize::Small;
+            text.color = Theme::WindowText;
+            Theme::DrawText(canvas, BoxesFooter(view), UI::Inset(footer, Theme::WindowPad, 0, Theme::WindowPad, 0),
+                            text);
+        }
     }
 
     void DrawBoxesBadge(UI::Canvas &canvas)
     {
-        canvas.FillRoundRect(BoxesBadgeArea, 8, Rgb(22, 30, 52, 230));
-        canvas.StrokeRoundRect(BoxesBadgeArea, 8, Border, 1);
-        UI::TextStyle style;
-        style.align = UI::Align::Center;
-        UI::DrawText(canvas, "Y  Boxes", BoxesBadgeArea, style);
+        // A prompt chip on the layer's black (it is copied whole, rounded).
+        const int w = Theme::PromptWidth(Theme::Button::Y, "Boxes");
+        Theme::DrawButtonPrompt(canvas, BoxesBadgeArea.x + (BoxesBadgeArea.w - w) / 2,
+                                BoxesBadgeArea.y + (BoxesBadgeArea.h - Theme::PromptHeight) / 2, Theme::Button::Y, "Boxes");
     }
 }
