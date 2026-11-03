@@ -5,6 +5,7 @@
 
 #include <vector>
 
+#include "Party.hpp"
 #include "Scene.hpp"
 
 namespace OneScreen
@@ -45,6 +46,16 @@ namespace OneScreen
     static const u32 BagChildLink = 0x40, BagPocket = 0xD8, BagView = 0xCC, BagViewList = 0x88;
     static const u32 VtBagView = 0x6488C8;
     static const u32 ItemListCount = 0x10, ItemListCursor = 0x18;
+    // Bag frame: u8 1 while the item list shows, 0 on an item's page (Use).
+    static const u32 BagFrameListShown = 0x6E;
+
+    // The busy object (always on the stack in battle) holds the battle's
+    // WordSet; its loader (+0x14) keeps the message files it loaded:
+    // u32 count +0xC, entries +0x10 of {buffer, size, u32 dat, MsgData*}.
+    static const u32 BusyWordSet = 0x94, WordSetLoader = 0x14;
+    static const u32 LoaderCount = 0x0C, LoaderEntries = 0x10, LoaderStride = 0x10;
+    static const u32 EntryDat = 0x08, EntryMsg = 0x0C;
+    static const u32 MoveNameDat = 118, MoveNameLines = 729;
 
     static u8 Read8(u32 address)
     {
@@ -111,6 +122,8 @@ namespace OneScreen
             state.partyCount[client] = Read8(party + 0x18);
             ReadMon(Read32(party), client == 0 ? state.player : state.opponent);
         }
+        for (u32 slot = 0; slot < 6 && slot < state.partyCount[0]; slot++)
+            ReadMon(Read32(pokecon + PokeConParty + slot * 4), state.party[slot]);
         state.valid = state.player.address != 0 && state.opponent.address != 0;
 
         for (u32 i = 0; i < ManagerSlots; i++)
@@ -119,6 +132,8 @@ namespace OneScreen
             if (object == 0)
                 break;
             state.menuObject = object;
+            if (Read32(object) == module + VtBusy)
+                state.wordSet = Read32(object + BusyWordSet);
         }
         const u32 top = state.menuObject;
         const u32 vtable = top ? Read32(top) : 0;
@@ -159,6 +174,7 @@ namespace OneScreen
         else if (vtModuleName == "Bag" && state.menuVtable == VtBagFrame)
         {
             state.menu = BattleMenu::Bag;
+            state.bagItemPage = Read8(top + BagFrameListShown) == 0;
             const u32 link = Read32(top + BagChildLink);
             const u32 child = link ? link - 4 : 0;
             if (child != 0 && Read32(child) == vtModule + VtBagChild)
@@ -176,6 +192,32 @@ namespace OneScreen
         else
             state.menu = BattleMenu::Other;
         return state;
+    }
+
+    std::string MoveName(const BattleState &state, u16 move)
+    {
+        if (state.wordSet == 0 || move == 0 || move >= MoveNameLines
+            || !Process::CheckAddress(state.wordSet, MEMPERM_READ))
+            return "";
+        const u32 loader = Read32(state.wordSet + WordSetLoader);
+        if (loader == 0 || !Process::CheckAddress(loader, MEMPERM_READ))
+            return "";
+        const u32 count = Read32(loader + LoaderCount), entries = Read32(loader + LoaderEntries);
+        if (count > 16 || entries == 0 || !Process::CheckAddress(entries, MEMPERM_READ))
+            return "";
+        for (u32 i = 0; i < count; i++)
+        {
+            const u32 entry = entries + i * LoaderStride;
+            if (Read32(entry + EntryDat) != MoveNameDat)
+                continue;
+            // Loaded from the loader's buffer, so the MsgData's own dat field is 0.
+            const u32 msg = Read32(entry + EntryMsg);
+            const u32 header = Read32(msg + 0x14);
+            if (header == 0 || Read16(header + 2) != MoveNameLines)
+                return "";
+            return MsgLine(msg, 0, move);
+        }
+        return "";
     }
 
     static std::string DescribeMon(const char *who, const BattleMon &mon, u8 count)
@@ -200,7 +242,7 @@ namespace OneScreen
         if (state.menu != BattleMenu::None && state.menu != BattleMenu::Other)
             out += Utils::Format(" cursor %u of %u", state.cursor, state.listCount);
         if (state.menu == BattleMenu::Bag)
-            out += Utils::Format(" pocket %u", state.bagPocket);
+            out += Utils::Format(" pocket %u%s", state.bagPocket, state.bagItemPage ? " item page" : "");
         if (state.menu == BattleMenu::Moves)
         {
             out += " [type/eff";
@@ -210,6 +252,11 @@ namespace OneScreen
         }
         out += "\n  " + DescribeMon("player", state.player, state.partyCount[0]);
         out += "\n  " + DescribeMon("opponent", state.opponent, state.partyCount[1]);
+        std::string names;
+        for (u32 i = 0; i < 4; i++)
+            if (state.player.moves[i] != 0)
+                names += (names.empty() ? "" : ", ") + MoveName(state, state.player.moves[i]);
+        out += "\n  player move names: " + (names.empty() ? std::string("(none)") : names);
         return out;
     }
 

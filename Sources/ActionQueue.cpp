@@ -38,9 +38,9 @@ namespace OneScreen
 
     std::string ActionCond::Describe(void) const
     {
-        static const char *flagNames[] = { "x-menu", "battle-command", "x-menu-page-2" };
+        static const char *flagNames[] = { "x-menu", "battle-command", "x-menu-page-2", "battle-moves" };
         std::string out = scene == nullptr ? "any scene" : std::string(sceneNot ? "not " : "") + SceneName(scene);
-        for (u32 i = 0; i < 3; i++)
+        for (u32 i = 0; i < 4; i++)
         {
             if (set & (1u << i))
                 out += std::string(" +") + flagNames[i];
@@ -183,6 +183,34 @@ namespace OneScreen
         } });
         list.push_back({ "close", "back out to the field", NotInScene(SceneBattle), {
             StepBackOut(1200),
+        } });
+
+        // The native battle menu (Screens/BattleMenu.hpp): one tap per choice.
+        // The menu waits until the game's menu has settled before it starts
+        // one (a tap as the command menu slid in only moved its cursor); if
+        // the game's menu is still up after the tap, tap again. They end as
+        // soon as the menu goes, wherever the game goes next (a trainer
+        // battle refuses Run with a message, then shows the commands again).
+        const ActionCond command = InScene(SceneBattle).With(WorldBattleCommand);
+        const ActionCond moves = InScene(SceneBattle).With(WorldBattleMoves);
+        const auto pick = [&](const char *name, const char *summary, const char *button, bool fromMoves) {
+            return ActionDef{ name, summary, fromMoves ? moves : command, {
+                StepTap(button),
+                StepWaitFor(AnyScene().Without(fromMoves ? WorldBattleMoves : WorldBattleCommand), 90).Retry(0, 2),
+            } };
+        };
+        list.push_back(pick("battle-fight", "battle: tap Fight", "battle_command.fight", false));
+        list.push_back(pick("battle-bag", "battle: tap Bag", "battle_command.bag", false));
+        list.push_back(pick("battle-pokemon", "battle: tap Pokemon", "battle_command.pokemon", false));
+        list.push_back(pick("battle-flee", "battle: tap Run (stays in the battle if it can't run)",
+                            "battle_command.run", false));
+        list.push_back(pick("battle-move1", "battle: use move 1", "battle_moves.move1", true));
+        list.push_back(pick("battle-move2", "battle: use move 2", "battle_moves.move2", true));
+        list.push_back(pick("battle-move3", "battle: use move 3", "battle_moves.move3", true));
+        list.push_back(pick("battle-move4", "battle: use move 4", "battle_moves.move4", true));
+        list.push_back({ "battle-moves-back", "battle: move list back to the commands", moves, {
+            StepTap("battle_moves.back"),
+            StepWaitFor(command, 90).Retry(0, 2),
         } });
         return list;
     }

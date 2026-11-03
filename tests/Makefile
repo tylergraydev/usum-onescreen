@@ -10,7 +10,7 @@ OUT      := build
 PYTHON   ?= python3
 CODE_BIN ?=
 
-TESTS    := $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/ui_host_test $(OUT)/party_data_test             $(OUT)/action_queue_test $(OUT)/xmenu_test
+TESTS    := $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/ui_host_test $(OUT)/party_data_test             $(OUT)/action_queue_test $(OUT)/xmenu_test $(OUT)/battle_menu_test
 
 all: run
 
@@ -43,11 +43,16 @@ $(OUT)/ui_host_test: ui_host_test.cpp $(UI_SRCS) $(UI_HDRS)
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) ui_host_test.cpp $(UI_SRCS) -o $@
 
+$(OUT)/battle_menu_test: battle_menu_test.cpp ../Sources/Screens/BattleMenu.cpp ../Includes/Screens/BattleMenu.hpp $(UI_SRCS) $(UI_HDRS)
+	@mkdir -p $(OUT)
+	$(CXX) $(CXXFLAGS) battle_menu_test.cpp ../Sources/Screens/BattleMenu.cpp $(UI_SRCS) -o $@
+
 run: $(TESTS)
 	./$(OUT)/input_capture_test
 	./$(OUT)/settings_test
 	./$(OUT)/party_data_test
 	./$(OUT)/action_queue_test
+	./$(OUT)/battle_menu_test
 	$(PYTHON) -I ../tools/gen_layouts.py --check
 	@mkdir -p $(dir $(PREVIEW))
 	./$(OUT)/ui_host_test $(PREVIEW)
