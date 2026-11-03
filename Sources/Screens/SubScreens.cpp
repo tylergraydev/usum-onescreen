@@ -13,9 +13,11 @@
 #include "Screens/BattleVideo.hpp"
 #include "Screens/Options.hpp"
 #include "Screens/TrainerPassport.hpp"
+#include "UI/Assets.hpp"
 #include "UI/Device.hpp"
 #include "UI/Layer.hpp"
 #include "UI/ScreenBuffer.hpp"
+#include "UI/Theme.hpp"
 
 namespace OneScreen
 {
@@ -212,6 +214,7 @@ namespace OneScreen
     static UI::Layer s_layer;
     static int s_layerScreen = -1;
     static u32 s_drawnKey = ~0u;
+    static bool s_drawnGameFont = false;    // the game font was loaded when last drawn
 
     static void SampleBottom(const Screen &screen, int index)
     {
@@ -264,12 +267,16 @@ namespace OneScreen
         // plugin thread isn't changing it right now (else next frame).
         if (!s_lock.TryLock())
         {
+            // Also once the game's font and icons have loaded (UI::Theme
+            // draws with them from then on).
             const u32 key = ns->DrawKey();
-            if (redraw || key != s_drawnKey)
+            const bool gameFont = UI::Theme::UsingGameFont();
+            if (redraw || key != s_drawnKey || gameFont != s_drawnGameFont)
             {
                 UI::Canvas canvas = s_layer.Begin();
                 ns->Draw(canvas);
                 s_drawnKey = key;
+                s_drawnGameFont = gameFont;
             }
             s_lock.Unlock();
         }
@@ -388,6 +395,7 @@ namespace OneScreen
             Leave(log);
             if (active >= 0)
             {
+                UI::RequestAssets();
                 std::vector<std::string> begin;
                 if (active == 0)
                 {

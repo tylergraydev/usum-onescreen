@@ -17,7 +17,7 @@ footer now says which entries open on the top screen (`XMenuOpensNative`).
 - `Includes/Screens/NativeScreen.hpp`, `Sources/Screens/NativeScreen.cpp`: what
   the screens share: the interface the glue runs (`NativeScreen`), key bits,
   sample points and colour tests, the one-press action (`ScreenPressAction`),
-  frame and footer drawing.
+  the shared drawing (water background, message window, button prompts).
 - `Options.*`, `TrainerPassport.*`, `BattleVideo.*` (in `Includes/Screens/`
   and `Sources/Screens/`): each screen, pure C++ (no CTRPF). Host tests in
   `tests/native_screens_test.cpp`; `make -C tests` also writes previews to
@@ -42,10 +42,38 @@ footer now says which entries open on the top screen (`XMenuOpensNative`).
   one runs is handled after it (the last such key only). B is never captured: the
   game's B does what it always does, and the screen goes when the scene does.
 - Drawing: one `UI::Layer` over the screen's area, redrawn only when its
-  `DrawKey()` changes; screen state is shared with the OSD callback under a
+  `DrawKey()` changes or the game font finishes loading (a screen opening
+  calls `UI::RequestAssets()`); screen state is shared with the OSD callback under a
   mutex (the callback skips a frame rather than wait). Registered before the
   panel, so `tools/shot.py` includes it.
 - Commands: `screens on|off|status` (default on).
+
+## Look (W7-9)
+
+Each screen draws the game's own bottom screen with `UI::Theme`
+(`docs/VISUAL-STYLE.md`), in the game font once it has loaded:
+
+- **Options**: the game's blue water background (`DrawWaterBackground`,
+  row averages of the empty recorder), five menu-option pills at a 30 px
+  pitch with the label on the left and the light value strip `#D6FFFF` on
+  the right, ◀ ▶ only where the value can move (blue `#0077EE` on the
+  cursor's row, grey `#9E9E9E` elsewhere), the red cursor on the row; the
+  question in a `DrawWindow` with Yes / No pills at the right over the
+  dimmed list. Prompts (B) Back and (A) Confirm (question: (B) No,
+  (A) Choose).
+- **Trainer Passport**: the page's beige paper `#F5F5E4` with its tan top
+  band, the trainer's card (name, ID, money, play time) in a `DrawWindow`,
+  the stamp's name on the peach plate `#FFD7BE`, its text on a white strip,
+  "1/15" at the bottom right and the blue `#33AAFF` page arrows at the sides.
+- **Battle Video**: water background, "Open the Vs. Recorder!" in a
+  `DrawWindow`, the one option pill with the cursor; the empty recorder
+  shows the game's own top-screen line, "There is no Battle Video."
+
+What still differs from the game: no water texture (a flat gradient), no
+stamp emblem on the passport (not loaded from the RomFS), the game's
+orange-badge back button is drawn as a (B) prompt chip, and the Options
+row text is the game's English text typed into `Options.cpp`, not read
+from its message files.
 
 ## Options
 

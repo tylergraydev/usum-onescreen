@@ -13,6 +13,7 @@
 
 #include "ActionQueue.hpp"
 #include "UI/Raster.hpp"
+#include "UI/Theme.hpp"
 
 #ifndef __3DS__
 typedef int16_t s16;     // libctru's, for the host build (ActionQueue.hpp has the others)
@@ -99,21 +100,29 @@ namespace OneScreen
     // the same arguments give the same definition.
     const ActionDef &ScreenPressAction(const char *name, const char *scene, u32 keys, u32 settle);
 
-    // Shared look (after the native X menu).
+    // Shared look: the game's own Options / Battle Video screens
+    // (docs/VISUAL-STYLE.md, docs/NATIVE-SCREENS.md), drawn with UI::Theme.
     namespace ScreenStyle
     {
-        constexpr UI::Color PanelBg  = UI::Rgb(22, 30, 52);
-        constexpr UI::Color Border   = UI::Rgb(120, 150, 220);
-        constexpr UI::Color Divider  = UI::Rgb(120, 150, 220, 90);
-        constexpr UI::Color RowBg    = UI::Rgb(38, 50, 84);
-        constexpr UI::Color TextMain = UI::Rgb(250, 252, 255);
-        constexpr UI::Color TextDim  = UI::Rgb(150, 165, 200);
-        constexpr UI::Color Selected = UI::Rgb(255, 236, 120);
-        constexpr s32 Radius = 12;
+        constexpr s32 Radius = 6;               // the layer's corners (the game's window corner)
+        constexpr s32 PromptGap = 6;            // between button prompts
     }
 
-    // Background, border and title; returns the area left below the title.
-    UI::Rect DrawScreenFrame(UI::Canvas &canvas, const UI::Rect &area, const std::string &title);
-    // One line of key hints at the bottom of `area`; returns the area above it.
-    UI::Rect DrawScreenFooter(UI::Canvas &canvas, const UI::Rect &area, const std::string &hints);
+    // The blue water background of the game's Options and Battle Video
+    // screens (measured top to bottom on the empty recorder).
+    void DrawWaterBackground(UI::Canvas &canvas, const UI::Rect &area);
+    // The game's dark message window across the top of `area` with `text`
+    // (one line per "\n"), white; returns the area left below it.
+    UI::Rect DrawMessageWindow(UI::Canvas &canvas, const UI::Rect &area, const std::string &text);
+
+    struct ScreenPrompt
+    {
+        UI::Theme::Button button;
+        std::string label;
+    };
+    // Button prompts along the bottom of `area`: `left` from the left edge
+    // (the game's back button sits there), `right` ending at the right edge.
+    // Returns the area above them.
+    UI::Rect DrawScreenPrompts(UI::Canvas &canvas, const UI::Rect &area, const std::vector<ScreenPrompt> &left,
+                               const std::vector<ScreenPrompt> &right);
 }
