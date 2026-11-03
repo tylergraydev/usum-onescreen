@@ -7,16 +7,16 @@ This is a beta. It has only been tested on Windows.
 ## Requirements
 
 - **Azahar** with the 3GX plugin loader. Tested on Azahar **2126.2** (build `HEAD-219d743`, Windows MSVC build). Older or newer versions may work but have not been tried.
-- **Pokémon Ultra Sun (USA)**, title ID `00040000001B5000`, with the **v1.2 update** installed (title version `0x0800`). Use your own legally dumped copy of the game and update; this project does not provide them or explain how to get them.
+- **Pokémon Ultra Sun (USA)**, title ID `00040000001B5000`, with the **v1.2 update** installed (title version `0x0820`; a decrypted copy reporting `0x0800` works too). Use your own legally dumped copy of the game and update; this project does not provide them or explain how to get them.
 - `usum-onescreen.3gx` from the project's Releases page (or built from source, see `README.md`).
 
-Ultra Moon is **not supported yet**: its addresses have not been found, so the plugin's startup check fails and it does nothing.
+**Pokémon Ultra Moon (USA)** v1.2 (`00040000001B5100`, `0x0820`) is accepted: every address the plugin uses is the same as Ultra Sun's. It has not been played with the plugin yet. For Ultra Moon the plugin goes in `luma\plugins\00040000001B5100\`.
 
 ## Windows launcher (optional)
 
 The app in [`player/`](../player/README.md) checks your own Ultra Sun dump and v1.2 update, copies your installed Azahar into its own portable folder, enables the plugin loader, selects the top screen only, turns custom textures off, installs the plugin and update, and starts the game. Its window offers Keyboard / Gamepad presets, mapping in Azahar, plugin settings and windowed / fullscreen play. It does not modify your existing Azahar profile or provide game files. See [PLAYER-APP.md](PLAYER-APP.md) for setup, recorded tests and open issues; the manual install below remains available.
 
-**Before using it:** a brand-new game with no save currently stalls at the first language screen on the tested v1.2 setup, including with the plugin loader off. The launcher and plugin accept only version `0x0800`; an update reporting `0x0820` is refused, and whether genuine v1.2 dumps report that version remains unchecked. The recorded launch test reached the field using an existing test save; it does not prove a new game works. Real gamepad input, mapping in Azahar, fullscreen, decrypted base-game CIA installation and Azahar versions other than 2126.2 were not tested.
+**Before using it:** a brand-new game with no save currently stalls at the first language screen on the tested v1.2 setup, including with the plugin loader off. The launcher accepts only version `0x0800`, but genuine v1.2 updates report `0x0820` (the plugin accepts both), and with a genuine update a new game gets past the language screen (docs/PORTING.md). The recorded launch test reached the field using an existing test save; it does not prove a new game works. Real gamepad input, mapping in Azahar, fullscreen, decrypted base-game CIA installation and Azahar versions other than 2126.2 were not tested.
 
 ## Manual install
 
@@ -130,7 +130,7 @@ On the first run the plugin writes a commented `usum-onescreen.ini` in the root 
 
 ## Known gaps
 
-- Ultra Moon isn't supported yet (see Requirements).
+- Ultra Moon is accepted but has not been played with the plugin yet (see Requirements).
 - No native screen yet for the Ride Pager, Poké Pelago, Festival Plaza, Quick Link, Pokémon Refresh or Save. The Ride Pager and Pelago need a later save than the one the plugin was tested with, so they are untested. Use **L+R**.
 - SOS / double targeting is host-tested only; use **L+R** to pick a target. Trainer battles haven't been played; no SOS call was reached during the documented search.
 - Not native yet: the PC's Summary / Held Item / Release / Marking, the Pokédex's Habitat / Appearance / search / Evaluation, QR Scanner, saved Battle Video lists. The field Bag's TM and other follow-up uses still need the panel; Party TM teaching is native.

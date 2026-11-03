@@ -6,27 +6,25 @@
 
 namespace OneScreen
 {
-    // USA v1.2 only. Hooks are tied to exact addresses, so any other region or
-    // update needs its own entry and offset table.
-    //
-    // Ultra Sun: title ID and version confirmed in Azahar on 2026-11-02. The
-    // installed v1.2 update's TMD says title version 0x0800 (2048), and
-    // Process::GetVersion() reports the same value.
-    // Ultra Moon has no local dump yet; its title ID and version are assumed to
-    // match Ultra Sun's pattern and are unconfirmed, and its offsets are unknown.
+    // USA v1.2 only. Ultra Sun and Ultra Moon v1.2 share every address the
+    // plugin uses (checked with tools/sigscan.py and a code.bin/CRO diff,
+    // docs/PORTING.md). Genuine v1.2 updates report 0x0820; 0x0800 is accepted
+    // for decrypted copies whose TMD says 0x0800 (same code.bin).
+    static const Offsets s_usumV12 =
+    {
+        { 0x00279BB4, { 0xE92D5FF0, 0xE1A06000, 0xE28D0028, 0xE3A08000 } },
+        { 0x002826F0, { 0xE92D4FFF, 0xE24DD004, 0xE3A0C000, 0xE3520000 } },
+        { 0x00282548, { 0xE92D4FFF, 0xE24DD014, 0xE3A0C000, 0xE3520000 } },
+        0x006A599C,
+        { 0x0027A5BC, { 0xE92D43F0, 0xE24DD024, 0xE28D4040, 0xE1811802 } },
+        { 0x00279E28, { 0xE92D43F0, 0xE24DD024, 0xE28D4040, 0xE89401E0 } },
+    };
+
     static const GameInfo s_games[] =
     {
-        { "Pokemon Ultra Sun", 0x00040000001B5000ULL, 0x0800, true,
-          {
-              { 0x00279BB4, { 0xE92D5FF0, 0xE1A06000, 0xE28D0028, 0xE3A08000 } },
-              { 0x002826F0, { 0xE92D4FFF, 0xE24DD004, 0xE3A0C000, 0xE3520000 } },
-              { 0x00282548, { 0xE92D4FFF, 0xE24DD014, 0xE3A0C000, 0xE3520000 } },
-              0x006A599C,
-              { 0x0027A5BC, { 0xE92D43F0, 0xE24DD024, 0xE28D4040, 0xE1811802 } },
-              { 0x00279E28, { 0xE92D43F0, 0xE24DD024, 0xE28D4040, 0xE89401E0 } },
-          } },
-        { "Pokemon Ultra Moon", 0x00040000001B5100ULL, 0x0800, false,
-          { { 0, {} }, { 0, {} }, { 0, {} }, 0 } },
+        { "Pokemon Ultra Sun", 0x00040000001B5000ULL, 0x0820, true, s_usumV12 },
+        { "Pokemon Ultra Sun", 0x00040000001B5000ULL, 0x0800, true, s_usumV12 },
+        { "Pokemon Ultra Moon", 0x00040000001B5100ULL, 0x0820, true, s_usumV12 },
     };
 
     const GameInfo *DetectGame(void)
