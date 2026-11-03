@@ -63,7 +63,6 @@ namespace OneScreen
     static const size_t PixelBytes = PokedexMaxW * PokedexMaxH * 4;
     static UI::Layer s_layer;
     static UI::Rect s_layerArea = {};
-    static bool s_drawnGameFont = false;    // the game font was loaded when last drawn
 
     // --- Plugin thread ---
     static bool s_enabled = true;
@@ -138,15 +137,11 @@ namespace OneScreen
                 s_layerArea = s_layer.Setup(fb, area, PokedexRadius, s_pixels, PixelBytes) ? area : UI::Rect{};
                 s_dirty = true;
             }
-            // Also once the game's font and icons have loaded (UI::Theme
-            // draws with them from then on).
-            const bool gameFont = UI::Theme::UsingGameFont();
-            if ((s_dirty || gameFont != s_drawnGameFont) && s_layerArea.w > 0)
+            if (s_dirty && s_layerArea.w > 0)
             {
                 UI::Canvas canvas = s_layer.Begin();
                 DrawPokedex(canvas, s_drawView);
                 s_dirty = false;
-                s_drawnGameFont = gameFont;
             }
             s_drawLock.Unlock();
         }
@@ -485,13 +480,21 @@ namespace OneScreen
                 if (!s_visible)
                 {
                     // The game's font and icons (normally loaded at the first
-                    // field already); the screen redraws once they are in.
+                    // field already).
                     UI::RequestAssets();
                     log.push_back(Utils::Format("pokedex: shown %s", DexScreenName(view.screen)));
                 }
                 log.push_back(key);
                 s_view = view;
                 s_viewKey = key;
+                Publish(true);
+            }
+            // Redraw once the game's font has loaded (UI::Theme draws with
+            // it from then on).
+            static bool s_gameFont = false;
+            if (UI::Theme::UsingGameFont() != s_gameFont)
+            {
+                s_gameFont = !s_gameFont;
                 Publish(true);
             }
             s_lastWhy.clear();
