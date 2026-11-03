@@ -4,13 +4,17 @@ Usage: py -3 -I tools/instance.py COMMAND NAME [options]
 
   create NAME [--force]     make analysis/private/instances/NAME/
   install NAME [3GX]        copy a built plugin in (default: ./usum-onescreen.3gx)
-  start NAME [--rom PATH] [--wait SECONDS] [--movie CTM] [--no-plugin]
+  start NAME [--rom PATH] [--wait SECONDS] [--movie CTM] [--no-plugin] [--no-queue]
                             launch Ultra Sun; with --wait, wait for the plugin's
                             boot log and print it; --movie plays an input movie
                             (tools/movie.py); --no-plugin turns the 3GX plugin
-                            loader off for this run (each start sets it)
+                            loader off for this run (each start sets it).
+                            Waits first while USUM_EMU_SLOTS (default 4) instance
+                            emulators already run, from any checkout or worktree;
+                            --no-queue skips that wait
   stop NAME                 stop that instance's own Azahar process
-  status [NAME]             show instances and whether they are running
+  status [NAME]             show instances and whether they are running, and
+                            every running instance emulator on this PC
   sdmc NAME                 print the instance's emulated SD path
 
 Azahar (checked against 2126.2 and azahar-emu/azahar src/common/file_util.cpp)
@@ -24,6 +28,7 @@ writes to %APPDATA%\\Azahar.
 import argparse
 import ctypes
 import json
+import msvcrt
 import os
 import re
 import shutil
@@ -44,6 +49,12 @@ SD_ID = Path("Nintendo 3DS") / ("0" * 32) / ("0" * 32)
 # Paths under the SD ID folder that Ultra Sun needs: the v1.2 update, the save, the extdata.
 SD_COPIES = [Path("title/0004000e/001b5000"), Path("title/00040000/001b5000"),
              Path("extdata/00000000/00001B50")]
+# How many instance emulators may run at once on this PC, across every
+# checkout and worktree; start waits for a free one. The lock file serialises
+# that check, so it lives outside the repo, where all worktrees see it.
+EMU_SLOTS = int(os.environ.get("USUM_EMU_SLOTS", "4"))
+EMU_LOCK = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "usum-onescreen" / "emulator-queue.lock"
+INSTANCE_EXE = re.compile(r"[\\/]analysis[\\/]private[\\/]instances[\\/][^\\/]+[\\/]azahar[\\/]azahar\.exe$", re.I)
 
 
 def instance_dir(name):
@@ -182,6 +193,59 @@ def process_info(pid):
         kernel32.CloseHandle(h)
 
 
+psapi = ctypes.WinDLL("psapi", use_last_error=True)
+
+
+def instance_emulators():
+    """(pid, exe) of every running azahar.exe that is an instance copy made by
+    this tool, in any checkout or worktree. The user's own Azahar is not one."""
+    pids = (wintypes.DWORD * 4096)()
+    needed = wintypes.DWORD()
+    if not psapi.EnumProcesses(pids, ctypes.sizeof(pids), ctypes.byref(needed)):
+        return []
+    found = []
+    for pid in pids[:needed.value // ctypes.sizeof(wintypes.DWORD)]:
+        info = process_info(pid) if pid else None
+        if info and INSTANCE_EXE.search(info[0]):
+            found.append((pid, info[0]))
+    return found
+
+
+def wait_for_slot(name):
+    """Hold the shared lock until fewer than EMU_SLOTS instance emulators run.
+    Returns the open lock file; the caller closes it once its Azahar is up."""
+    EMU_LOCK.parent.mkdir(parents=True, exist_ok=True)
+    lock = open(EMU_LOCK, "a+")
+    told = False
+    while True:
+        try:
+            msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+            break
+        except OSError:
+            if not told:
+                print(f"'{name}': waiting for the emulator queue lock", flush=True)
+                told = True
+            time.sleep(1)
+    told = False
+    while True:
+        running = instance_emulators()
+        if len(running) < EMU_SLOTS:
+            return lock
+        if not told:
+            print(f"'{name}': {len(running)} of {EMU_SLOTS} emulator slots in use, waiting", flush=True)
+            told = True
+        time.sleep(2)
+
+
+def release_slot(lock):
+    try:
+        lock.seek(0)
+        msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
+    except OSError:
+        pass
+    lock.close()
+
+
 def same_path(a, b):
     return os.path.normcase(os.path.abspath(a)) == os.path.normcase(os.path.abspath(b))
 
@@ -211,11 +275,16 @@ def cmd_start(args):
     command = [str(exe_path(args.name))]
     if args.movie:
         command += ["-p", str(Path(args.movie).resolve())]
-    flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
-    proc = subprocess.Popen(command + [str(args.rom)], cwd=instance_dir(args.name),
-                            creationflags=flags, close_fds=True,
-                            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    info = process_info(proc.pid)
+    lock = None if args.no_queue else wait_for_slot(args.name)
+    try:
+        flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+        proc = subprocess.Popen(command + [str(args.rom)], cwd=instance_dir(args.name),
+                                creationflags=flags, close_fds=True,
+                                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        info = process_info(proc.pid)
+    finally:
+        if lock:
+            release_slot(lock)
     if not info:
         sys.exit("Azahar exited at once")
     state_path(args.name).write_text(json.dumps({"pid": proc.pid, "created": info[1], "exe": info[0]}))
@@ -260,6 +329,10 @@ def cmd_status(args):
     for name in names:
         pid = running_pid(name)
         print(f"{name}: {'running pid ' + str(pid) if pid else 'stopped'}  {instance_dir(name)}")
+    running = instance_emulators()
+    print(f"emulator slots: {len(running)} of {EMU_SLOTS} in use on this PC")
+    for pid, exe in running:
+        print(f"  pid {pid}  {exe}")
 
 
 def cmd_sdmc(args):
@@ -283,6 +356,7 @@ def main():
     p.add_argument("--wait", type=float, default=0)
     p.add_argument("--movie")
     p.add_argument("--no-plugin", action="store_true")
+    p.add_argument("--no-queue", action="store_true", help="don't wait for a free emulator slot")
     p.set_defaults(func=cmd_start)
     for cmd, func in (("stop", cmd_stop), ("sdmc", cmd_sdmc)):
         p = sub.add_parser(cmd)
