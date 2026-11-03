@@ -352,7 +352,7 @@ namespace OneScreen
         s.push_back(StepWaitFor(InScene(SceneBag), 180));
         s.push_back(StepWait(30));      // the Bag slides in
         s.push_back(StepTap(PartyPocketButton(pocket)));
-        s.push_back(StepWait(15));
+        s.push_back(StepWait(20));
     }
 
     void MakePartySummaryAction(PartyAction &out, int pos)
@@ -435,6 +435,13 @@ namespace OneScreen
         Begin(out, up ? "party-bag-up" : "party-bag-down", "Party's Bag: one D-pad step", InScene(SceneBag));
         out.def.steps.push_back(StepPress(up ? KeyUp : KeyDown));
         out.def.steps.push_back(StepWait(10));
+    }
+
+    void MakePartyBagTabAction(PartyAction &out, PartyPocket pocket)
+    {
+        Begin(out, "party-bag-tab", "Party's Bag: tap the pocket's tab", InScene(SceneBag));
+        out.def.steps.push_back(StepTap(PartyPocketButton(pocket)));
+        out.def.steps.push_back(StepWait(20));
     }
 
     void MakePartyBagMenuAction(PartyAction &out, int fromBottom)
@@ -761,7 +768,7 @@ namespace OneScreen
                         Style(Theme::TextSize::Small, Theme::WindowText));
     }
 
-    static const int ItemRowsShown = 6;
+    static const int ItemRowsShown = 5;
 
     void DrawParty(UI::Canvas &canvas, const PartyView &view)
     {
@@ -868,11 +875,13 @@ namespace OneScreen
                                           + " where?   A here, B cancel");
                 break;
             case PartyPage::Items:
-                DrawPrompts(canvas, { { Theme::Button::A, view.giving ? "Give" : "Use" }, { Theme::Button::L, "R Pocket" },
+                DrawPrompts(canvas, { { Theme::Button::A, view.giving ? "Give" : "Use" }, { Theme::Button::L, "" }, { Theme::Button::R, "Pocket" },
                                       { Theme::Button::B, "Back" } });
                 break;
             case PartyPage::Ask:
-                DrawPrompts(canvas, { { Theme::Button::A, "Choose" }, { Theme::Button::B, "Back" } });
+                // The move list reaches the bottom (and B isn't an answer there).
+                if (!view.ask.moves && !view.ask.choices.empty())
+                    DrawPrompts(canvas, { { Theme::Button::A, "Choose" }, { Theme::Button::B, view.ask.choices.back().label } });
                 break;
             }
     }

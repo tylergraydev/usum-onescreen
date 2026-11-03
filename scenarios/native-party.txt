@@ -9,6 +9,9 @@
 #      damage.
 #   5. Use a Potion on Buneary from the native screen: HP goes up, Potion
 #      x9 -> x8.
+#   6. Give Buneary the Quick Claw (Held Item -> Use/Give), take it back.
+#   7. TM01 on Torracat: the game's teaching screen asks natively; forget
+#      Lick for Work Up (TMs stay in the Bag).
 # A screenshot is taken before every A. Nothing is saved.
 include common/boot
 # Checks the automatic view per scene (Party would be full), off by default.
@@ -184,6 +187,81 @@ expect-mode off
 reject-log ^action: .* FAILED
 sleep 2
 shot potion-used
+
+# --- 6. Give Quick Claw to Buneary, then take it back ---
+mark
+send press a
+expect-log ^party-ui: page menu, Summary 5
+send press down
+send press down
+expect-log ^party-ui: page menu, Give item 5
+shot pre-give
+send press a
+expect-log ^party-ui: page items \(give\), Medicine 1 of 9 5
+send press r
+expect-log ^party-ui: page items \(give\), Items 1 of 10: Quick Claw x1 5
+sleep 1
+shot give-items
+send press a
+expect-log ^party-ui: give Quick Claw \(Items 1 of 10\) to 1 \(Buneary\) 5
+expect-log ^action: party-held-bag ok 15
+expect-log ^party-ui: item menu 07 11, Give is 2 from the bottom 15
+expect-log ^party-ui: gave Quick Claw to Buneary: held - -> Quick Claw, Quick Claw x1 -> x0 30
+expect-mode off
+sleep 2
+shot gave
+mark
+send press a
+send press down
+send press down
+send press down
+expect-log ^party-ui: page menu, Take item 5
+shot pre-take
+send press a
+expect-log ^party-ui: take Quick Claw from 1 \(Buneary\) 5
+expect-log ^action: party-take ok 15
+expect-log ^party-ui: took Quick Claw from Buneary: held Quick Claw -> -, Quick Claw x0 -> x1 5
+reject-log ^action: .* FAILED
+sleep 2
+shot took
+
+# --- 7. TM01 on Torracat (6): the teaching question, forget Lick ---
+mark
+send press right
+send press down
+send press down
+expect-log ^party-ui: cursor 6 \(Torracat\) 5
+send press a
+send press down
+expect-log ^party-ui: page menu, Use item 5
+shot pre-use-tm
+send press a
+expect-log ^party-ui: page items, Items 5
+send press r
+expect-log ^party-ui: page items, TMs 1 of 2: TM01 x1 5
+sleep 1
+shot tms
+send press a
+expect-log ^party-ui: use TM01 \(TMs 1 of 2\) on 6 \(Torracat\) 5
+expect-log ^party-ui: item menu 06 11, Use is 2 from the bottom 20
+expect-log ^party-ui: teach screen: Torracat wants Work Up \(526, param \d+\); knows Scratch, Fire Fang, Double Kick, Lick 30
+expect-mode off
+sleep 1
+shot teach
+send press down
+send press down
+send press down
+expect-log ^party-ui: page ask, Lick 5
+shot pre-forget
+send press a
+expect-log ^party-ui: answer 4 \(Lick\) 5
+expect-log ^action: party-teach-forget4 ok 15
+expect-log ^party-ui: used TM01 on Torracat: hp 51/51 -> 51/51, status 0 -> 0, TM01 x1 -> x1, moves Scratch, Fire Fang, Double Kick, Lick -> Scratch, Fire Fang, Double Kick, Work Up 40
+reject-log ^action: .* FAILED
+reject-log ^party-ui: .*FAILED
+expect-mode off
+sleep 2
+shot taught
 
 # --- Close: B to the X menu, B to the field ---
 mark
