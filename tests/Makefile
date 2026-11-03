@@ -10,7 +10,7 @@ OUT      := build
 PYTHON   ?= python3
 CODE_BIN ?=
 
-TESTS    := $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/ui_host_test $(OUT)/party_data_test $(OUT)/action_queue_test $(OUT)/xmenu_test $(OUT)/battle_menu_test $(OUT)/keyboard_test $(OUT)/pokedex_test $(OUT)/native_screens_test
+TESTS    := $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/ui_host_test $(OUT)/party_data_test $(OUT)/action_queue_test $(OUT)/xmenu_test $(OUT)/battle_menu_test $(OUT)/keyboard_test $(OUT)/pokedex_test $(OUT)/native_screens_test $(OUT)/bag_test
 
 all: run
 
@@ -36,6 +36,7 @@ PREVIEW  := ../analysis/private/ui-demo.png
 XMENU_PREVIEW := ../analysis/private/xmenu-preview.ppm
 KEYBOARD_PREVIEW := ../analysis/private/keyboard-preview.ppm
 DEX_PREVIEW := ../analysis/private/pokedex-preview
+BAG_PREVIEW := ../analysis/private/bag-preview.ppm
 
 $(OUT)/xmenu_test: xmenu_test.cpp ../Sources/Screens/XMenuGrid.cpp ../Includes/Screens/XMenuGrid.hpp                    ../Sources/ActionQueue.cpp ../Includes/ActionQueue.hpp ../Includes/Layouts.hpp $(UI_SRCS) $(UI_HDRS)
 	@mkdir -p $(OUT)
@@ -56,6 +57,10 @@ SCREEN_PREVIEWS := ../analysis/private
 $(OUT)/native_screens_test: native_screens_test.cpp $(SCREEN_SRCS) $(SCREEN_HDRS)                     ../Sources/ActionQueue.cpp ../Includes/ActionQueue.hpp ../Includes/Layouts.hpp $(UI_SRCS) $(UI_HDRS)
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) native_screens_test.cpp $(SCREEN_SRCS) ../Sources/ActionQueue.cpp $(UI_SRCS) -o $@
+
+$(OUT)/bag_test: bag_test.cpp ../Sources/Screens/BagList.cpp ../Includes/Screens/BagList.hpp                   ../Sources/ActionQueue.cpp ../Includes/ActionQueue.hpp ../Includes/Layouts.hpp $(UI_SRCS) $(UI_HDRS)
+	@mkdir -p $(OUT)
+	$(CXX) $(CXXFLAGS) bag_test.cpp ../Sources/Screens/BagList.cpp ../Sources/ActionQueue.cpp $(UI_SRCS) -o $@
 
 $(OUT)/ui_host_test: ui_host_test.cpp $(UI_SRCS) $(UI_HDRS)
 	@mkdir -p $(OUT)
@@ -78,6 +83,7 @@ run: $(TESTS)
 	./$(OUT)/keyboard_test $(KEYBOARD_PREVIEW)
 	./$(OUT)/pokedex_test $(DEX_PREVIEW)
 	./$(OUT)/native_screens_test $(SCREEN_PREVIEWS)
+	./$(OUT)/bag_test $(BAG_PREVIEW)
 	$(PYTHON) -I sigscan_test.py $(CODE_BIN)
 
 clean:
