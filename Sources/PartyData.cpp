@@ -94,6 +94,7 @@ namespace OneScreen
         mon.heldItem = Get16(plain, 0x0A);
         mon.ability = plain[0x14];
         mon.nature = plain[0x1C];
+        mon.gender = (plain[0x1D] >> 1) & 3;
         for (u32 i = 0; i < 12; i++)
             mon.nickname[i] = Get16(plain, 0x40 + i * 2);
         mon.nickname[12] = 0;

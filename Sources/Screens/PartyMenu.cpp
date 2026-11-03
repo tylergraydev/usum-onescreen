@@ -2,17 +2,26 @@
 
 #include <cstdio>
 
-#include "UI/Icons.hpp"
+#include "UI/GameAssets.hpp"
 #include "UI/Layout.hpp"
-#include "UI/Text.hpp"
+#include "UI/Theme.hpp"
 
 namespace OneScreen
 {
     using UI::Rgb;
+    namespace Theme = UI::Theme;
 
-    // HID key bit for A (same value as CTRPF's Key::A), for the actions.
+    const char *const SceneTeach = "WazaOshie";
+
+    // HID key bits (same values as CTRPF's Key::), for the actions.
     static const u32 KeyA = 1u << 0;
     static const u32 KeyUp = 1u << 6, KeyDown = 1u << 7;
+
+    // The game's item menu entries (docs/BAG.md). The Party screen's Bag
+    // has its own Use 0x06 and Give 0x07 (Escape Rope: 06 07 11; TM: 06 11),
+    // the field Bag Use 0x00 and Give 0x03.
+    static const u8 CmdGive = 0x03, CmdPartyGive = 0x07, CmdFreeSpace = 0x04, CmdCancel = 0x11, CmdYes = 0x12,
+                    CmdNo = 0x13;
 
     const char *PartyStatusName(u32 status)
     {
@@ -22,18 +31,55 @@ namespace OneScreen
 
     const char *PartyPocketName(PartyPocket pocket)
     {
-        return pocket == PartyPocket::Berries ? "Berries" : "Medicine";
+        static const char *const names[] = { "Medicine", "Items", "TMs", "Berries" };
+        return (u32)pocket < (u32)PartyPocket::Count ? names[(u32)pocket] : "?";
     }
 
     const char *PartyPocketButton(PartyPocket pocket)
     {
-        return pocket == PartyPocket::Berries ? "bag.pocket_berries" : "bag.pocket_medicine";
+        static const char *const buttons[] = { "bag.pocket_medicine", "bag.pocket_items", "bag.pocket_tms",
+                                               "bag.pocket_berries" };
+        return buttons[(u32)pocket < (u32)PartyPocket::Count ? (u32)pocket : 0];
+    }
+
+    bool PartyPocketAllowed(PartyPocket pocket, bool give)
+    {
+        return (u32)pocket < (u32)PartyPocket::Count && !(give && pocket == PartyPocket::TMs);
+    }
+
+    PartyPocket PartyNextPocket(PartyPocket pocket, int dir, bool give)
+    {
+        const int n = (int)PartyPocket::Count;
+        int p = (int)pocket;
+        for (int i = 0; i < n; i++)
+        {
+            p = (p + (dir < 0 ? n - 1 : 1)) % n;
+            if (PartyPocketAllowed((PartyPocket)p, give))
+                return (PartyPocket)p;
+        }
+        return pocket;
+    }
+
+    bool PartyUseViaRestore(PartyPocket pocket)
+    {
+        return pocket == PartyPocket::Medicine || pocket == PartyPocket::Berries;
     }
 
     const char *PartyMenuLabel(PartyMenuItem item)
     {
-        static const char *const labels[] = { "Summary", "Use item", "Move", "Cancel" };
+        static const char *const labels[] = { "Summary", "Use item", "Give item", "Take item", "Move", "Cancel" };
         return (u32)item < (u32)PartyMenuItem::Count ? labels[(u32)item] : "?";
+    }
+
+    std::vector<PartyMenuItem> PartyMenuEntries(bool holding, int count)
+    {
+        std::vector<PartyMenuItem> entries = { PartyMenuItem::Summary, PartyMenuItem::UseItem, PartyMenuItem::GiveItem };
+        if (holding)
+            entries.push_back(PartyMenuItem::TakeItem);
+        if (count > 1)
+            entries.push_back(PartyMenuItem::Move);
+        entries.push_back(PartyMenuItem::Cancel);
+        return entries;
     }
 
     int PartyMove(int from, int dx, int dy, int count)
@@ -68,6 +114,18 @@ namespace OneScreen
         m_cursor = count <= 0 ? 0 : pos < 0 ? 0 : pos >= count ? count - 1 : pos;
     }
 
+    void PartyMenuState::Ask(int cursor)
+    {
+        m_page = PartyPage::Ask;
+        m_ask = cursor < 0 ? 0 : cursor;
+    }
+
+    void PartyMenuState::EndAsk(void)
+    {
+        if (m_page == PartyPage::Ask)
+            m_page = PartyPage::List;
+    }
+
     u32 PartyMenuState::Keys(void) const
     {
         const u32 common = PartyKey::A | PartyKey::Up | PartyKey::Down | PartyKey::Left | PartyKey::Right
@@ -85,9 +143,10 @@ namespace OneScreen
         return dx != 0 || dy != 0;
     }
 
-    PartyCommand PartyMenuState::Press(u32 keys, int count, const std::vector<PartyBagItem> *items)
+    PartyCommand PartyMenuState::Press(u32 keys, const PartyMenuInput &in)
     {
         PartyCommand cmd;
+        const int count = in.count;
         if (count <= 0)
             return cmd;
         if (m_cursor >= count)
@@ -114,14 +173,17 @@ namespace OneScreen
 
         case PartyPage::Menu:
         {
-            const int n = (int)PartyMenuItem::Count;
+            const std::vector<PartyMenuItem> entries = PartyMenuEntries(in.holding, count);
+            const int n = (int)entries.size();
+            if (m_menu >= n)
+                m_menu = n - 1;
             if (dy != 0)
                 m_menu = (m_menu + dy + n) % n;
             else if (keys & PartyKey::B)
                 m_page = PartyPage::List;
             else if (keys & PartyKey::A)
             {
-                switch ((PartyMenuItem)m_menu)
+                switch (entries[m_menu])
                 {
                 case PartyMenuItem::Summary:
                     m_page = PartyPage::List;
@@ -129,15 +191,21 @@ namespace OneScreen
                     cmd.pos = m_cursor;
                     break;
                 case PartyMenuItem::UseItem:
+                case PartyMenuItem::GiveItem:
+                    m_give = entries[m_menu] == PartyMenuItem::GiveItem;
+                    if (!PartyPocketAllowed(m_pocket, m_give))
+                        m_pocket = PartyPocket::Medicine;
                     m_page = PartyPage::Items;
                     m_item = 0;
                     break;
+                case PartyMenuItem::TakeItem:
+                    m_page = PartyPage::List;
+                    cmd.kind = PartyCommand::TakeItem;
+                    cmd.pos = m_cursor;
+                    break;
                 case PartyMenuItem::Move:
-                    if (count > 1)
-                    {
-                        m_page = PartyPage::Swap;
-                        m_swapFrom = m_cursor;
-                    }
+                    m_page = PartyPage::Swap;
+                    m_swapFrom = m_cursor;
                     break;
                 default:
                     m_page = PartyPage::List;
@@ -171,12 +239,12 @@ namespace OneScreen
 
         case PartyPage::Items:
         {
-            const int n = items != nullptr ? (int)items->size() : 0;
+            const int n = in.items != nullptr ? (int)in.items->size() : 0;
             if (dy != 0 && n > 0)
                 m_item = (m_item + dy + n) % n;
             else if ((keys & (PartyKey::L | PartyKey::R)) || dx != 0)
             {
-                m_pocket = m_pocket == PartyPocket::Medicine ? PartyPocket::Berries : PartyPocket::Medicine;
+                m_pocket = PartyNextPocket(m_pocket, (keys & PartyKey::L) || dx < 0 ? -1 : 1, m_give);
                 m_item = 0;
             }
             else if (keys & PartyKey::B)
@@ -185,10 +253,32 @@ namespace OneScreen
             {
                 if (m_item >= n)
                     m_item = n - 1;
-                cmd.kind = PartyCommand::UseItem;
+                cmd.kind = m_give ? PartyCommand::GiveItem : PartyCommand::UseItem;
                 cmd.pos = m_cursor;
                 cmd.pocket = m_pocket;
                 cmd.item = m_item;
+                m_page = PartyPage::List;
+            }
+            break;
+        }
+
+        case PartyPage::Ask:
+        {
+            const int n = in.choices;
+            if (dy != 0 && n > 0)
+                m_ask = (m_ask + dy + n) % n;
+            else if ((keys & PartyKey::A) && n > 0)
+            {
+                cmd.kind = PartyCommand::Answer;
+                cmd.choice = m_ask < n ? m_ask : n - 1;
+                cmd.pos = m_cursor;
+                m_page = PartyPage::List;
+            }
+            else if ((keys & PartyKey::B) && in.cancelChoice >= 0)
+            {
+                cmd.kind = PartyCommand::Answer;
+                cmd.choice = in.cancelChoice;
+                cmd.pos = m_cursor;
                 m_page = PartyPage::List;
             }
             break;
@@ -207,6 +297,15 @@ namespace OneScreen
     {
         "bag.item_row1", "bag.item_row2", "bag.item_row3", "bag.item_row4",
         "bag.item_row5", "bag.item_row6", "bag.item_row7",
+    };
+    static const char *const MenuButtons[5] =
+    {
+        "party_bag_menu.from_bottom1", "party_bag_menu.from_bottom2", "party_bag_menu.from_bottom3",
+        "party_bag_menu.from_bottom4", "party_bag_menu.from_bottom5",
+    };
+    static const char *const TeachButtons[5] =
+    {
+        "learn_moves.move1", "learn_moves.move2", "learn_moves.move3", "learn_moves.move4", "learn_moves.new",
     };
 
     static const char *Slot(int pos)
@@ -236,6 +335,24 @@ namespace OneScreen
         s.push_back(StepTap(Slot(pos)));
         s.push_back(StepWaitFor(InScene(SceneParty).Without(WorldPartyList), 30).Retry(0, 1));
         s.push_back(StepWait(12));      // the menu slides in
+    }
+
+    // Slot menu -> Held Item: its submenu (Use/Give, Take, Move, Back).
+    static void OpenHeldMenu(std::vector<ActionStep> &s, int pos)
+    {
+        OpenSlotMenu(s, pos);
+        s.push_back(StepTap("party_slot_menu.held_item"));
+        s.push_back(StepWait(15));
+    }
+
+    // Into the Bag, then the pocket's tab (the Bag reopens on the pocket it
+    // showed last).
+    static void EnterBag(std::vector<ActionStep> &s, PartyPocket pocket)
+    {
+        s.push_back(StepWaitFor(InScene(SceneBag), 180));
+        s.push_back(StepWait(30));      // the Bag slides in
+        s.push_back(StepTap(PartyPocketButton(pocket)));
+        s.push_back(StepWait(15));
     }
 
     void MakePartySummaryAction(PartyAction &out, int pos)
@@ -278,25 +395,85 @@ namespace OneScreen
         std::vector<ActionStep> &s = out.def.steps;
         OpenSlotMenu(s, pos);
         s.push_back(StepTap("party_slot_menu.restore"));
-        s.push_back(StepWaitFor(InScene(SceneBag), 180));
-        s.push_back(StepWait(30));      // the Bag slides in
-        // The Bag reopens on the pocket it showed last.
-        s.push_back(StepTap(PartyPocketButton(pocket)));
-        s.push_back(StepWait(15));
+        EnterBag(s, pocket);
+    }
+
+    void MakePartyHeldBagAction(PartyAction &out, int pos, PartyPocket pocket)
+    {
+        Begin(out, "party-held-bag", "Party: tap the slot, Held Item, Use/Give, the pocket's tab", PartyList());
+        std::vector<ActionStep> &s = out.def.steps;
+        OpenHeldMenu(s, pos);
+        s.push_back(StepTap("party_held_menu.use_give"));
+        EnterBag(s, pocket);
+    }
+
+    void MakePartyTakeAction(PartyAction &out, int pos)
+    {
+        Begin(out, "party-take", "Party: tap the slot, Held Item, Take, B through the message", PartyList());
+        std::vector<ActionStep> &s = out.def.steps;
+        OpenHeldMenu(s, pos);
+        s.push_back(StepTap("party_held_menu.take"));
+        // "You received the X from Y." stays until B (the bar under it
+        // doesn't read as the plain list meanwhile).
+        s.push_back(StepWait(40));
+        const s8 press = (s8)s.size();
+        s.push_back(StepPress(ActionKeyB));
+        // Only pressed again if the list didn't come back: one B too many
+        // would close the Party screen.
+        s.push_back(StepWaitFor(PartyList(), 60).Retry(press, 1));
     }
 
     void MakePartyBagRowAction(PartyAction &out, int row)
     {
-        Begin(out, "party-bag-row", "Restore bag: tap a shown row (item menu)", InScene(SceneBag));
+        Begin(out, "party-bag-row", "Party's Bag: tap a shown row (item menu)", InScene(SceneBag));
         out.def.steps.push_back(StepTap(RowButtons[row < 0 ? 0 : row > 6 ? 6 : row]));
         out.def.steps.push_back(StepWait(20));
     }
 
     void MakePartyBagStepAction(PartyAction &out, bool up)
     {
-        Begin(out, up ? "party-bag-up" : "party-bag-down", "Restore bag: one D-pad step", InScene(SceneBag));
+        Begin(out, up ? "party-bag-up" : "party-bag-down", "Party's Bag: one D-pad step", InScene(SceneBag));
         out.def.steps.push_back(StepPress(up ? KeyUp : KeyDown));
         out.def.steps.push_back(StepWait(10));
+    }
+
+    void MakePartyBagMenuAction(PartyAction &out, int fromBottom)
+    {
+        const int i = fromBottom < 1 ? 0 : fromBottom > 5 ? 4 : fromBottom - 1;
+        char name[32];
+        std::snprintf(name, sizeof(name), "party-bag-menu%d", i + 1);
+        Begin(out, name, "Party's Bag: tap a menu entry (counted from the bottom)", InScene(SceneBag));
+        out.def.steps.push_back(StepTap(MenuButtons[i]));
+        out.def.steps.push_back(StepWait(20));
+    }
+
+    void MakePartyYesNoAction(PartyAction &out, bool yes)
+    {
+        Begin(out, yes ? "party-bag-yes" : "party-bag-no", "Party's Bag: answer the question", InScene(SceneBag));
+        out.def.steps.push_back(StepTap(yes ? "bag_yes_no.yes" : "bag_yes_no.no"));
+        out.def.steps.push_back(StepWait(20));
+    }
+
+    void MakePartyMessageAction(PartyAction &out, bool bag)
+    {
+        Begin(out, bag ? "party-message-a" : "party-message-b", "A / B through a message",
+              InScene(bag ? SceneBag : SceneParty));
+        out.def.steps.push_back(StepPress(bag ? KeyA : ActionKeyB));
+        out.def.steps.push_back(StepWait(15));
+    }
+
+    void MakePartyTeachAction(PartyAction &out, int row)
+    {
+        const int i = row < 0 ? 0 : row > 4 ? 4 : row;
+        char name[32];
+        std::snprintf(name, sizeof(name), i == 4 ? "party-teach-skip" : "party-teach-forget%d", i + 1);
+        Begin(out, name, "Teaching screen: tap the row, then Forget this move / Give up", InScene(SceneTeach));
+        std::vector<ActionStep> &s = out.def.steps;
+        s.push_back(StepTap(TeachButtons[i]));
+        s.push_back(StepWait(30));      // the move's page slides in
+        s.push_back(StepTap("learn_confirm.yes"));
+        // The screen goes; the Bag prints the result.
+        s.push_back(StepWaitFor(NotInScene(SceneTeach), 240));
     }
 
     // B until the Bag is gone (a message, then the list), then the list.
@@ -308,22 +485,24 @@ namespace OneScreen
         s.push_back(StepWaitFor(PartyList(), 180));
     }
 
-    void MakePartyUseAction(PartyAction &out)
-    {
-        Begin(out, "party-use", "Restore bag: Use this item, B through the message, B back to Party",
-              InScene(SceneBag));
-        std::vector<ActionStep> &s = out.def.steps;
-        s.push_back(StepTap("restore_item_menu.use"));
-        s.push_back(StepWait(60));      // the effect and its message
-        s.push_back(StepPress(ActionKeyB));
-        s.push_back(StepWait(30));
-        LeaveBag(s);
-    }
-
     void MakePartyBagBackAction(PartyAction &out)
     {
-        Begin(out, "party-bag-back", "Restore bag: B back to Party", InScene(SceneBag));
+        Begin(out, "party-bag-back", "Party's Bag: B back to Party", InScene(SceneBag));
         LeaveBag(out.def.steps);
+    }
+
+    int PartyItemMenuEntry(const std::vector<u8> &commands, bool give)
+    {
+        const int n = (int)commands.size();
+        for (int k = 0; k < n; k++)
+        {
+            const u8 c = commands[k];
+            const bool isGive = c == CmdGive || c == CmdPartyGive;
+            const bool match = give ? isGive : !isGive && c != CmdFreeSpace && c != CmdCancel && c != CmdYes && c != CmdNo;
+            if (match)
+                return n - k;
+        }
+        return 0;
     }
 
     PartyBagPlan PlanPartyBag(int target, int scroll, int rows, int count)
@@ -338,24 +517,39 @@ namespace OneScreen
         return plan;
     }
 
+    PartyFollowDo PartyFollow(PartyGame game, u32 stable)
+    {
+        // Frames each kind of screen must hold before acting: messages and
+        // lists can flicker between two messages.
+        switch (game)
+        {
+        case PartyGame::PartyList:  return stable >= 10 ? PartyFollowDo::Done : PartyFollowDo::Wait;
+        case PartyGame::PartyOther: return stable >= 15 ? PartyFollowDo::Advance : PartyFollowDo::Wait;
+        case PartyGame::BagList:    return stable >= 20 ? PartyFollowDo::LeaveBag : PartyFollowDo::Wait;
+        case PartyGame::BagMessage: return stable >= 12 ? PartyFollowDo::Advance : PartyFollowDo::Wait;
+        case PartyGame::BagYesNo:
+        case PartyGame::BagMenu:    return stable >= 8 ? PartyFollowDo::Ask : PartyFollowDo::Wait;
+        case PartyGame::Teach:      return stable >= 20 ? PartyFollowDo::Teach : PartyFollowDo::Wait;
+        default:                    return PartyFollowDo::Wait;
+        }
+    }
+
     // --- Drawing ---
 
-    static constexpr UI::Color PanelBg   = Rgb(22, 30, 52);
-    static constexpr UI::Color CardBg    = Rgb(38, 52, 86);
-    static constexpr UI::Color CardDim   = Rgb(30, 38, 62);
-    static constexpr UI::Color Border    = Rgb(120, 150, 220);
-    static constexpr UI::Color TextMain  = Rgb(250, 252, 255);
-    static constexpr UI::Color TextDim   = Rgb(150, 165, 200);
-    static constexpr UI::Color Selected  = Rgb(255, 236, 120);
-    static constexpr UI::Color SwapColor = Rgb(110, 220, 255);
-    static constexpr UI::Color BarBack   = Rgb(16, 20, 34);
-    static constexpr UI::Color HpGreen   = Rgb(64, 214, 96);
-    static constexpr UI::Color HpYellow  = Rgb(240, 200, 40);
-    static constexpr UI::Color HpRed     = Rgb(232, 64, 56);
-    static constexpr UI::Color StatusBg  = Rgb(176, 72, 196);
-    static constexpr UI::Color MenuBg    = Rgb(30, 42, 72);
+    // Party and summary backdrop: the game's green waves, as a gradient.
+    static constexpr UI::Color BackTop     = Rgb(0x9A, 0xE8, 0x5A);
+    static constexpr UI::Color BackBottom  = Rgb(0x2E, 0xB0, 0x3C);
+    static constexpr UI::Color BackLine    = Rgb(0x14, 0x6E, 0x1C);
+    static constexpr UI::Color DimVeil     = Rgb(0x00, 0x00, 0x00, 0x60);
+    static constexpr UI::Color SwapColor   = Rgb(0x11, 0xB6, 0xFF);
+    static constexpr UI::Color StatusBg    = Rgb(0xB0, 0x48, 0xC4);
+    static constexpr UI::Color LabelBar    = Rgb(0x14, 0x6E, 0x1C);   // summary label column
+    static constexpr UI::Color ValueTop    = Rgb(0xE2, 0xFA, 0xB8);
+    static constexpr UI::Color ValueBottom = Rgb(0xC6, 0xF8, 0x8D);
+    static constexpr UI::Color MoveFill    = Rgb(0xF2, 0xFF, 0xF2);
+    static constexpr UI::Color DimText     = Rgb(0x50, 0x60, 0x50);
 
-    static const int Pad = 8, ColGap = 6, RowGap = 5, FooterH = 18, FooterGap = 6;
+    static const int Pad = 6, ColGap = 6, RowGap = 4, FooterH = Theme::PromptHeight, FooterGap = 4;
     static const int CardW = (PartyArea.w - 2 * Pad - ColGap) / 2;
     static const int CardH = (PartyArea.h - 2 * Pad - FooterH - FooterGap - 2 * RowGap) / 3;
 
@@ -363,48 +557,14 @@ namespace OneScreen
     {
         if (pos < 0 || pos > 5)
             pos = 0;
+        // The right column sits a little lower, as on the game's screen.
         return UI::Rect{ PartyArea.x + Pad + (pos % 2) * (CardW + ColGap),
-                         PartyArea.y + Pad + (pos / 2) * (CardH + RowGap), CardW, CardH };
+                         PartyArea.y + Pad + (pos / 2) * (CardH + RowGap) + (pos % 2) * 4, CardW, CardH - 4 };
     }
 
     static UI::Rect FooterRect(void)
     {
         return UI::Rect{ PartyArea.x + Pad, PartyArea.Bottom() - Pad - FooterH, PartyArea.w - 2 * Pad, FooterH };
-    }
-
-    static UI::Color HpColor(u16 hp, u16 maxHp)
-    {
-        if (maxHp == 0 || hp * 2 > maxHp)
-            return HpGreen;
-        return hp * 5 > maxHp ? HpYellow : HpRed;
-    }
-
-    static void DrawHpBar(UI::Canvas &canvas, const UI::Rect &r, u16 hp, u16 maxHp)
-    {
-        canvas.FillRoundRect(r, r.h / 2, BarBack);
-        if (maxHp == 0 || hp == 0)
-            return;
-        const int w = (int)((r.w - 2) * (u32)hp / maxHp);
-        if (w > 0)
-            canvas.FillRoundRect(UI::Rect{ r.x + 1, r.y + 1, w < r.h - 2 ? r.h - 2 : w, r.h - 2 }, (r.h - 2) / 2,
-                                 HpColor(hp, maxHp));
-    }
-
-    // A status badge ending at `right`; returns its left edge.
-    static int DrawStatus(UI::Canvas &canvas, u32 status, int right, int y, int h)
-    {
-        const char *label = PartyStatusName(status);
-        if (label[0] == '\0')
-            return right;
-        UI::TextStyle style;
-        style.font = UI::Font::Small;
-        style.color = TextMain;
-        style.align = UI::Align::Center;
-        const int w = UI::MeasureText(label, style) + 8;
-        const UI::Rect badge = { right - w, y, w, h };
-        canvas.FillRoundRect(badge, 4, StatusBg);
-        UI::DrawText(canvas, label, badge, style);
-        return badge.x;
     }
 
     static std::string Format(const char *fmt, int a, int b = 0)
@@ -414,213 +574,371 @@ namespace OneScreen
         return buf;
     }
 
-    static void DrawCard(UI::Canvas &canvas, const PartyMonView &mon, const UI::Rect &r, bool selected, bool source,
-                         bool dim)
+    static void Backdrop(UI::Canvas &canvas, const UI::Rect &area)
     {
-        canvas.FillRoundRect(r, 10, dim && !selected ? CardDim : CardBg);
+        canvas.FillRoundRect(area, PartyRadius, BackLine);
+        const UI::Rect in = UI::Inset(area, 2);
+        for (int y = 0; y < in.h; y++)
+        {
+            const int t = in.h > 1 ? y * 255 / (in.h - 1) : 0;
+            const UI::Color c = Rgb((u8)(BackTop.r + (BackBottom.r - BackTop.r) * t / 255),
+                                    (u8)(BackTop.g + (BackBottom.g - BackTop.g) * t / 255),
+                                    (u8)(BackTop.b + (BackBottom.b - BackTop.b) * t / 255));
+            // Rounded corners: skip the corner pixels outside the radius.
+            int inset = 0;
+            const int r = PartyRadius - 2;
+            const int dy = y < r ? r - y : y >= in.h - r ? y - (in.h - r - 1) : 0;
+            while (inset < r && (r - inset) * (r - inset) + dy * dy > r * r)
+                inset++;
+            if (dy == 0)
+                inset = 0;
+            canvas.HLine(in.x + inset, in.y + y, in.w - 2 * inset, c);
+        }
+        // A few soft diagonal bands for the game's waves.
+        for (int k = 0; k < 6; k++)
+            canvas.Line((float)(in.x + k * 70), (float)in.Bottom(), (float)(in.x + k * 70 + 90), (float)in.y, 10.0f,
+                        Rgb(0xFF, 0xFF, 0xFF, 0x14));
+    }
+
+    static Theme::TextStyle Style(Theme::TextSize size, UI::Color color, UI::Align align = UI::Align::Left)
+    {
+        Theme::TextStyle s;
+        s.size = size;
+        s.color = color;
+        s.align = align;
+        return s;
+    }
+
+    // A status badge ending at `right`; returns its left edge.
+    static int DrawStatus(UI::Canvas &canvas, u32 status, int right, int y, int h)
+    {
+        const char *label = PartyStatusName(status);
+        if (label[0] == '\0')
+            return right;
+        const Theme::TextStyle style = Style(Theme::TextSize::Small, Theme::WindowText, UI::Align::Center);
+        const int w = Theme::MeasureText(label, Theme::TextSize::Small) + 8;
+        const UI::Rect badge = { right - w, y, w, h };
+        canvas.FillRoundRect(badge, h / 2, StatusBg);
+        Theme::DrawText(canvas, label, badge, style);
+        return badge.x;
+    }
+
+    // A plate as on the game's Party screen: a green list-row plate, name
+    // and gender, Lv., the HP bar with its numbers, the held item.
+    static void DrawCard(UI::Canvas &canvas, const PartyMonView &mon, const UI::Rect &r, bool selected, bool source)
+    {
+        Theme::DrawRowBackground(canvas, r, Theme::RowKind::List);
         if (source)
-            canvas.StrokeRoundRect(UI::Inset(r, -2), 12, SwapColor, 2);
+            canvas.StrokeRoundRect(UI::Inset(r, -2), Theme::RowRadius + 2, SwapColor, 3);
         if (selected)
-            canvas.StrokeRoundRect(UI::Inset(r, -3), 13, Selected, 3);
-
-        UI::TextStyle main;
-        main.color = TextMain;
-        UI::TextStyle dimStyle;
-        dimStyle.color = TextDim;
-        const int line = UI::LineHeight(main);
-        const UI::Rect inner = UI::Inset(r, 10, 1, 8, 1);
-
-        if (!mon.valid)
         {
-            UI::DrawText(canvas, "?", UI::Rect{ inner.x, inner.y, inner.w, line }, dimStyle);
-            return;
-        }
-        if (mon.egg)
-        {
-            UI::DrawText(canvas, "Egg", UI::Rect{ inner.x, inner.y, inner.w, line }, main);
-            return;
+            Theme::DrawHighlightFrame(canvas, UI::Inset(r, -1), Theme::RowRadius + 1);
+            Theme::DrawHighlightFrame(canvas, UI::Inset(r, -3), Theme::RowRadius + 3);
         }
 
-        // Line 1: name and level.
-        UI::TextStyle level = dimStyle;
-        level.align = UI::Align::Right;
-        const std::string lv = Format("Lv.%d", mon.level);
-        const int lvW = UI::MeasureText(lv, level);
-        UI::DrawText(canvas, lv, UI::Rect{ inner.Right() - lvW, inner.y, lvW, line }, level);
-        UI::DrawText(canvas, mon.name, UI::Rect{ inner.x, inner.y, inner.w - lvW - 6, line }, main);
+        const Theme::TextStyle text = Style(Theme::TextSize::Body, Theme::ListText);
+        const Theme::TextStyle small = Style(Theme::TextSize::Small, Theme::ListText);
+        const int line = Theme::LineHeight(Theme::TextSize::Body);
+        const int smallLine = Theme::LineHeight(Theme::TextSize::Small);
+        const UI::Rect inner = UI::Inset(r, 14, 4, 12, 4);
 
-        // Line 2: HP bar and numbers.
+        if (!mon.valid || mon.egg)
+        {
+            Theme::DrawText(canvas, mon.valid ? std::string("Egg") : std::string("?"),
+                            UI::Rect{ inner.x, inner.y, inner.w, line }, text);
+            return;
+        }
+
+        // Line 1: name and gender (as the game: the gender sign at the
+        // right end).
+        Theme::DrawText(canvas, mon.name, UI::Rect{ inner.x, inner.y, inner.w - 16, line }, text);
+        if (mon.gender < 2)
+            Theme::DrawGender(canvas, inner.Right() - 12, inner.y + (line - 12) / 2, mon.gender == 1);
+
+        // Line 2: Lv. (and status), the HP bar.
         const int y2 = inner.y + line;
-        UI::TextStyle hpText = main;
-        hpText.align = UI::Align::Right;
+        const std::string lv = Format("Lv.%d", mon.level);
+        int x2 = inner.x + Theme::DrawText(canvas, lv, UI::Rect{ inner.x, y2, inner.w / 2, smallLine }, small) + 6;
+        const char *status = PartyStatusName(mon.status);
+        if (status[0] != '\0')
+        {
+            const int w = Theme::MeasureText(status, Theme::TextSize::Small) + 8;
+            DrawStatus(canvas, mon.status, x2 + w, y2 + 1, smallLine - 2);
+            x2 += w + 4;
+        }
+        Theme::DrawHpBar(canvas, UI::Rect{ x2, y2 + (smallLine - Theme::GaugeHeight - 3) / 2, inner.Right() - x2,
+                                           Theme::GaugeHeight + 3 }, mon.hp, mon.maxHp);
+
+        // Line 3: held item, HP numbers.
+        const int y3 = y2 + smallLine;
         const std::string hp = Format("%d/%d", mon.hp, mon.maxHp);
-        const int hpW = UI::MeasureText("888/888", hpText);
-        DrawHpBar(canvas, UI::Rect{ inner.x, y2 + line / 2 - 3, inner.w - hpW - 8, 7 }, mon.hp, mon.maxHp);
-        UI::DrawText(canvas, hp, UI::Rect{ inner.Right() - hpW, y2, hpW, line }, hpText);
-
-        // Line 3: held item and status.
-        const int y3 = y2 + line;
-        const int left = DrawStatus(canvas, mon.status, inner.Right(), y3 + 3, line - 6);
-        UI::DrawText(canvas, mon.item.empty() ? std::string("No item") : mon.item,
-                     UI::Rect{ inner.x, y3, left - inner.x - 4, line }, mon.item.empty() ? dimStyle : main);
+        const int hpW = Theme::MeasureText(hp, Theme::TextSize::Small);
+        Theme::DrawText(canvas, hp, UI::Rect{ inner.Right() - hpW, y3, hpW, smallLine }, small);
+        Theme::DrawText(canvas, mon.item.empty() ? std::string("No item") : mon.item,
+                        UI::Rect{ inner.x, y3, inner.w - hpW - 6, smallLine },
+                        Style(Theme::TextSize::Small, mon.item.empty() ? DimText : Theme::ListText));
     }
 
-    // A popup list on the right: `title` then the entries, `cursor` marked.
-    static void DrawPopup(UI::Canvas &canvas, const UI::Rect &r, const std::string &title,
-                          const std::vector<std::string> &rows, int first, int shown, int cursor)
+    // The game's question window: white text on the dark window, up to two
+    // lines ('\n' between).
+    static void DrawQuestion(UI::Canvas &canvas, const UI::Rect &r, const std::string &text)
     {
-        canvas.FillRoundRect(r, 10, MenuBg);
-        canvas.StrokeRoundRect(r, 10, Border, 2);
-        UI::TextStyle main;
-        main.color = TextMain;
-        UI::TextStyle head;
-        head.color = Selected;
-        const int line = UI::LineHeight(main);
-        int y = r.y + 6;
-        if (!title.empty())
-        {
-            UI::DrawText(canvas, title, UI::Rect{ r.x + 12, y, r.w - 24, line }, head);
-            y += line + 2;
-        }
-        if (rows.empty())
-        {
-            UI::TextStyle dim = main;
-            dim.color = TextDim;
-            UI::DrawText(canvas, "(nothing here)", UI::Rect{ r.x + 22, y, r.w - 30, line }, dim);
-            return;
-        }
-        for (int i = first; i < (int)rows.size() && i < first + shown; i++, y += line + 2)
-        {
-            const UI::Rect row = { r.x + 6, y, r.w - 12, line + 2 };
-            if (i == cursor)
-            {
-                canvas.FillRoundRect(row, 6, Rgb(255, 236, 120, 60));
-                UI::DrawIcon(canvas, UI::Icon::ArrowRight, UI::Rect{ row.x + 2, row.y + row.h / 2 - 5, 10, 10 },
-                             Selected);
-            }
-            UI::DrawText(canvas, rows[i], UI::Rect{ row.x + 16, row.y + 1, row.w - 20, line }, main);
-        }
-        if (first > 0)
-            UI::DrawIcon(canvas, UI::Icon::ArrowUp, UI::Rect{ r.Right() - 18, r.y + 6, 10, 10 }, TextDim);
-        if (first + shown < (int)rows.size())
-            UI::DrawIcon(canvas, UI::Icon::ArrowDown, UI::Rect{ r.Right() - 18, r.Bottom() - 16, 10, 10 }, TextDim);
+        Theme::DrawWindow(canvas, r);
+        const size_t nl = text.find('\n');
+        // The game's text is narrower than the system font: a line that
+        // doesn't fit goes down to the small size.
+        const int room = r.w - 2 * Theme::WindowPad - 4;
+        const bool fits = Theme::MeasureText(text.substr(0, nl), Theme::TextSize::Body) <= room
+                          && (nl == std::string::npos || Theme::MeasureText(text.substr(nl + 1), Theme::TextSize::Body) <= room);
+        const Theme::TextSize size = fits ? Theme::TextSize::Body : Theme::TextSize::Small;
+        const Theme::TextStyle white = Style(size, Theme::WindowText);
+        const int line = Theme::LineHeight(size);
+        const int lines = nl == std::string::npos ? 1 : 2;
+        int y = r.y + (r.h - lines * line) / 2;
+        Theme::DrawText(canvas, text.substr(0, nl), UI::Rect{ r.x + Theme::WindowPad + 2, y, r.w - 2 * Theme::WindowPad - 4, line },
+                        white);
+        if (lines == 2)
+            Theme::DrawText(canvas, text.substr(nl + 1),
+                            UI::Rect{ r.x + Theme::WindowPad + 2, y + line, r.w - 2 * Theme::WindowPad - 4, line }, white);
     }
 
-    static const int ItemRowsShown = 7;
+    // Option pills stacked from `top`, the cursor on `cursor`.
+    static void DrawOptions(UI::Canvas &canvas, int x, int top, int w, const std::vector<std::string> &labels, int cursor)
+    {
+        for (int i = 0; i < (int)labels.size(); i++)
+            Theme::DrawRow(canvas, UI::Rect{ x, top + i * Theme::RowPitch, w, Theme::OptionHeight },
+                           Theme::RowKind::Option, labels[i], i == cursor);
+    }
+
+    static std::string MoveName(u16 move, const std::string &known)
+    {
+        if (!known.empty())
+            return known;
+        const UI::GameAssets *assets = UI::GetGameAssets();
+        const std::string name = assets != nullptr ? assets->MoveName(move) : std::string();
+        return name.empty() ? Format("Move %d", move) : name;
+    }
+
+    // A move as a light row: type plate, name, PP (max from the move table
+    // when it is loaded).
+    static void DrawMoveRow(UI::Canvas &canvas, const UI::Rect &r, u16 move, const std::string &name, u8 pp, bool selected)
+    {
+        Theme::DrawRowBackground(canvas, r, Theme::RowKind::List);
+        const UI::GameAssets *assets = UI::GetGameAssets();
+        const UI::MoveInfo info = assets != nullptr ? assets->Move(move) : UI::MoveInfo();
+        int x = r.x + Theme::RowTextInset;
+        if (info.valid)
+        {
+            Theme::DrawTypePlate(canvas, UI::Rect{ x, r.y + (r.h - Theme::TypePlateH) / 2, Theme::TypePlateW, Theme::TypePlateH },
+                                 info.type, Theme::Upper(assets->TypeName(info.type)));
+            x += Theme::TypePlateW + 6;
+        }
+        const std::string ppText = info.valid && info.pp ? Format("%d/%d", pp, info.pp) : Format("PP %d", pp);
+        const int ppW = Theme::MeasureText("88/88", Theme::TextSize::Small) + 4;
+        Theme::TextStyle ppStyle = Style(Theme::TextSize::Small, Theme::ListText, UI::Align::Right);
+        Theme::DrawText(canvas, ppText, UI::Rect{ r.Right() - 12 - ppW, r.y, ppW, r.h }, ppStyle);
+        Theme::DrawText(canvas, name, UI::Rect{ x, r.y, r.Right() - 16 - ppW - x, r.h },
+                        Style(Theme::TextSize::Body, Theme::ListText));
+        if (selected)
+            Theme::DrawCursor(canvas, r.x + 14, r.y + r.h / 2);
+    }
+
+    static void DrawPrompts(UI::Canvas &canvas, const std::vector<std::pair<Theme::Button, std::string>> &prompts)
+    {
+        const UI::Rect f = FooterRect();
+        int x = f.x;
+        for (const auto &p : prompts)
+            x += Theme::DrawButtonPrompt(canvas, x, f.y, p.first, p.second) + 4;
+    }
+
+    // A message along the bottom, in the game's window.
+    static void DrawFooterMessage(UI::Canvas &canvas, const std::string &text)
+    {
+        const UI::Rect f = FooterRect();
+        const UI::Rect r = { f.x, f.Bottom() - 26, f.w, 26 };
+        Theme::DrawWindow(canvas, r);
+        Theme::DrawText(canvas, text, UI::Inset(r, Theme::WindowPad + 2, 0, Theme::WindowPad, 0),
+                        Style(Theme::TextSize::Small, Theme::WindowText));
+    }
+
+    static const int ItemRowsShown = 6;
 
     void DrawParty(UI::Canvas &canvas, const PartyView &view)
     {
-        canvas.FillRoundRect(PartyArea, PartyRadius, PanelBg);
-        canvas.StrokeRoundRect(PartyArea, PartyRadius, Border, 2);
+        Backdrop(canvas, PartyArea);
 
-        const bool popup = view.page == PartyPage::Menu || view.page == PartyPage::Items;
-        const bool dim = popup || !view.busy.empty();
+        const bool popup = view.page == PartyPage::Menu || view.page == PartyPage::Items || view.page == PartyPage::Ask;
         for (int i = 0; i < (int)view.mons.size() && i < 6; i++)
-            DrawCard(canvas, view.mons[i], PartyCardRect(i), i == view.cursor && view.busy.empty(),
-                     view.page == PartyPage::Swap && i == view.swapFrom, dim);
+            DrawCard(canvas, view.mons[i], PartyCardRect(i), i == view.cursor && view.busy.empty() && view.page != PartyPage::Ask,
+                     view.page == PartyPage::Swap && i == view.swapFrom);
         if (view.mons.empty())
-        {
-            UI::TextStyle dimStyle;
-            dimStyle.color = TextDim;
-            dimStyle.align = UI::Align::Center;
-            UI::DrawText(canvas, "Reading the party...", PartyCardRect(0), dimStyle);
-        }
+            Theme::DrawText(canvas, "Reading the party...", PartyCardRect(0),
+                            Style(Theme::TextSize::Body, Theme::ListText, UI::Align::Center));
+        if (popup || !view.busy.empty())
+            canvas.FillRoundRect(UI::Inset(PartyArea, 2), PartyRadius - 2, DimVeil);
 
         const std::string name = view.cursor >= 0 && view.cursor < (int)view.mons.size()
                                  ? view.mons[view.cursor].name : std::string();
+        const bool holding = view.cursor >= 0 && view.cursor < (int)view.mons.size() && view.mons[view.cursor].itemId != 0;
+        const int qx = PartyArea.x + Pad, qw = PartyArea.w - 2 * Pad;
+        const UI::Rect question = { qx, PartyArea.y + Pad, qw, 48 };
+
         if (view.page == PartyPage::Menu)
         {
-            std::vector<std::string> rows;
-            for (int i = 0; i < (int)PartyMenuItem::Count; i++)
-                rows.push_back(PartyMenuLabel((PartyMenuItem)i));
-            const int line = 20;
-            const UI::Rect r = { PartyArea.Right() - Pad - 150, PartyArea.y + 40, 150, 10 + line * 5 + 4 };
-            DrawPopup(canvas, r, name, rows, 0, 4, view.menuCursor);
+            // As the game's: the question on top, the options down the
+            // right, touching (28 px pitch), no prompts under them.
+            const UI::Rect q = { qx, question.y, qw, 44 };
+            DrawQuestion(canvas, q, "What would you like to do\nwith " + name + "?");
+            std::vector<std::string> labels;
+            for (PartyMenuItem item : PartyMenuEntries(holding, (int)view.mons.size()))
+                labels.push_back(PartyMenuLabel(item));
+            const int w = 160;
+            DrawOptions(canvas, PartyArea.Right() - Pad - w, q.Bottom() + 4, w, labels, view.menuCursor);
         }
         else if (view.page == PartyPage::Items)
         {
-            std::vector<std::string> rows;
-            for (const PartyBagItem &item : view.items)
-                rows.push_back(item.name + Format("  x%d", item.count));
+            DrawQuestion(canvas, question, std::string(view.giving ? "Give " : "Use ") + "an item " +
+                                           (view.giving ? "to " : "on ") + name + "\n< " +
+                                           PartyPocketName(view.pocket) + " >");
             int first = view.itemCursor - ItemRowsShown / 2;
-            if (first > (int)rows.size() - ItemRowsShown)
-                first = (int)rows.size() - ItemRowsShown;
+            if (first > (int)view.items.size() - ItemRowsShown)
+                first = (int)view.items.size() - ItemRowsShown;
             if (first < 0)
                 first = 0;
-            const UI::Rect r = { PartyArea.Right() - Pad - 210, PartyArea.y + Pad, 210,
-                                 PartyArea.h - 2 * Pad - FooterH - FooterGap };
-            DrawPopup(canvas, r, std::string("< ") + PartyPocketName(view.pocket) + " >  for " + name, rows, first,
-                      ItemRowsShown, view.itemCursor);
+            const int w = 230, x = PartyArea.Right() - Pad - w;
+            int y = question.Bottom() + 4;
+            if (view.items.empty())
+                Theme::DrawRow(canvas, UI::Rect{ x, y, w, Theme::RowHeight }, Theme::RowKind::List, "(nothing here)", false);
+            for (int i = first; i < (int)view.items.size() && i < first + ItemRowsShown; i++, y += Theme::RowPitch)
+            {
+                const UI::Rect row = { x, y, w, Theme::RowHeight };
+                Theme::DrawRow(canvas, row, Theme::RowKind::List, view.items[i].name, i == view.itemCursor);
+                Theme::DrawText(canvas, Format("x%d", view.items[i].count), UI::Rect{ row.x, row.y, row.w - 14, row.h },
+                                Style(Theme::TextSize::Small, Theme::ListText, UI::Align::Right));
+            }
+            if (first > 0)
+                Theme::DrawText(canvas, "^", UI::Rect{ x - 14, question.Bottom() + 4, 12, 19 },
+                                Style(Theme::TextSize::Body, Theme::WindowText));
+            if (first + ItemRowsShown < (int)view.items.size())
+                Theme::DrawText(canvas, "v", UI::Rect{ x - 14, y - 20, 12, 19 }, Style(Theme::TextSize::Body, Theme::WindowText));
+        }
+        else if (view.page == PartyPage::Ask)
+        {
+            const bool two = view.ask.title.find('\n') != std::string::npos;
+            const UI::Rect q = { qx, PartyArea.y + Pad, qw, two ? 48 : 30 };
+            DrawQuestion(canvas, q, view.ask.title);
+            if (view.ask.moves)
+            {
+                const int w = 300, x = PartyArea.Right() - Pad - w, h = 28;
+                for (int i = 0; i < (int)view.ask.choices.size(); i++)
+                {
+                    const PartyChoice &c = view.ask.choices[i];
+                    const UI::Rect row = { x, q.Bottom() + 4 + i * (h + 2) + (i == 4 ? 4 : 0), w, h };
+                    if (c.move != 0)
+                        DrawMoveRow(canvas, row, c.move, c.label, c.pp, i == view.askCursor);
+                    else
+                        Theme::DrawRow(canvas, row, Theme::RowKind::Option, c.label, i == view.askCursor);
+                }
+            }
+            else
+            {
+                std::vector<std::string> labels;
+                for (const PartyChoice &c : view.ask.choices)
+                    labels.push_back(c.label);
+                const int w = 160;
+                DrawOptions(canvas, PartyArea.Right() - Pad - w, q.Bottom() + 8, w, labels, view.askCursor);
+            }
         }
 
-        UI::TextStyle hint;
-        hint.color = TextDim;
-        std::string text;
-        switch (view.page)
-        {
-        case PartyPage::List:  text = "A Choose   Y Move   B Close"; break;
-        case PartyPage::Menu:  text = "A Choose   B Back"; break;
-        case PartyPage::Swap:  text = "Move " + (view.swapFrom >= 0 && view.swapFrom < (int)view.mons.size()
-                                                 ? view.mons[view.swapFrom].name : std::string()) + " where?   A Here   B Cancel"; break;
-        case PartyPage::Items: text = "A Use   L/R Pocket   B Back"; break;
-        }
         if (!view.busy.empty())
-        {
-            text = view.busy;
-            hint.color = TextMain;
-        }
+            DrawFooterMessage(canvas, view.busy);
         else if (!view.note.empty() && view.page == PartyPage::List)
-        {
-            text = view.note;
-            hint.color = TextMain;
-        }
-        UI::DrawText(canvas, text, FooterRect(), hint);
+            DrawFooterMessage(canvas, view.note);
+        else
+            switch (view.page)
+            {
+            case PartyPage::List:
+                DrawPrompts(canvas, { { Theme::Button::A, "Choose" }, { Theme::Button::Y, "Move" }, { Theme::Button::B, "Close" } });
+                break;
+            case PartyPage::Menu:
+                break;
+            case PartyPage::Swap:
+                DrawFooterMessage(canvas, "Move " + (view.swapFrom >= 0 && view.swapFrom < (int)view.mons.size()
+                                                     ? view.mons[view.swapFrom].name : std::string())
+                                          + " where?   A here, B cancel");
+                break;
+            case PartyPage::Items:
+                DrawPrompts(canvas, { { Theme::Button::A, view.giving ? "Give" : "Use" }, { Theme::Button::L, "R Pocket" },
+                                      { Theme::Button::B, "Back" } });
+                break;
+            case PartyPage::Ask:
+                DrawPrompts(canvas, { { Theme::Button::A, "Choose" }, { Theme::Button::B, "Back" } });
+                break;
+            }
+    }
+
+    // A summary row: the label in a dark green bar, the value on light green.
+    static void DrawInfoRow(UI::Canvas &canvas, const UI::Rect &r, const std::string &label, const std::string &value,
+                            UI::Color valueColor)
+    {
+        const int labelW = 62;
+        canvas.FillRoundRect(r, 4, ValueBottom);
+        canvas.FillRoundRect(UI::Rect{ r.x, r.y, r.w, r.h / 2 }, 4, ValueTop);
+        canvas.FillRoundRect(UI::Rect{ r.x, r.y, labelW, r.h }, 4, LabelBar);
+        Theme::DrawText(canvas, label, UI::Rect{ r.x + 6, r.y, labelW - 8, r.h }, Style(Theme::TextSize::Small, Theme::WindowText));
+        const Theme::TextSize size = Theme::MeasureText(value, Theme::TextSize::Body) <= r.w - labelW - 10
+                                     ? Theme::TextSize::Body : Theme::TextSize::Small;
+        Theme::DrawText(canvas, value, UI::Rect{ r.x + labelW + 6, r.y, r.w - labelW - 10, r.h }, Style(size, valueColor));
     }
 
     void DrawSummary(UI::Canvas &canvas, const SummaryView &view)
     {
-        canvas.FillRoundRect(PartyArea, PartyRadius, PanelBg);
-        canvas.StrokeRoundRect(PartyArea, PartyRadius, Border, 2);
+        Backdrop(canvas, PartyArea);
         const PartyMonView &mon = view.mon;
+        const Theme::TextStyle white = Style(Theme::TextSize::Body, Theme::WindowText);
+        const Theme::TextStyle whiteSmall = Style(Theme::TextSize::Small, Theme::WindowText);
+        const int x = PartyArea.x + Pad, w = PartyArea.w - 2 * Pad;
+        int y = PartyArea.y + Pad;
 
-        UI::TextStyle large;
-        large.font = UI::Font::Large;
-        large.color = TextMain;
-        UI::TextStyle main;
-        main.color = TextMain;
-        UI::TextStyle dim;
-        dim.color = TextDim;
-        UI::TextStyle right = dim;
-        right.align = UI::Align::Right;
-        const int line = UI::LineHeight(main);
-        const int x = PartyArea.x + 14, w = PartyArea.w - 28;
-        int y = PartyArea.y + 8;
-
-        // Header: name, species, level, position.
+        // Header window: name, gender, species, Lv., position.
+        const UI::Rect head = { x, y, w, 32 };
+        Theme::DrawWindow(canvas, head);
+        const UI::Rect hin = UI::Inset(head, Theme::WindowPad + 2, 0, Theme::WindowPad + 2, 0);
         const std::string where = Format("%d/%d", view.pos + 1, view.count);
-        const int whereW = UI::MeasureText(where, right);
-        UI::DrawText(canvas, where, UI::Rect{ x + w - whereW, y + 3, whereW, line }, right);
-        const int nameW = UI::DrawText(canvas, mon.valid ? mon.name : std::string("?"),
-                                       UI::Rect{ x, y, w - whereW - 80, UI::LineHeight(large) }, large);
-        if (mon.valid && !mon.egg && mon.species != mon.name)
-            UI::DrawText(canvas, "(" + mon.species + ")",
-                         UI::Rect{ x + nameW + 8, y + 3, w - whereW - nameW - 16, line }, dim);
-        y += UI::LineHeight(large) + 2;
+        const int whereW = Theme::MeasureText(where, Theme::TextSize::Small);
+        Theme::DrawText(canvas, where, UI::Rect{ hin.Right() - whereW, hin.y, whereW, hin.h }, whiteSmall);
+        int hx = hin.x;
+        hx += Theme::DrawText(canvas, mon.valid ? mon.name : std::string("?"), UI::Rect{ hx, hin.y, 150, hin.h }, white);
+        if (mon.valid && !mon.egg && mon.gender < 2)
+        {
+            Theme::DrawGender(canvas, hx + 4, hin.y + (hin.h - 12) / 2, mon.gender == 1);
+            hx += 18;
+        }
+        if (mon.valid && !mon.egg)
+        {
+            hx += 8;
+            hx += Theme::DrawText(canvas, Format("Lv.%d", mon.level), UI::Rect{ hx, hin.y, 60, hin.h }, whiteSmall);
+            if (mon.species != mon.name)
+                Theme::DrawText(canvas, mon.species, UI::Rect{ hx + 10, hin.y, hin.Right() - whereW - 10 - hx - 10, hin.h },
+                                Style(Theme::TextSize::Small, Theme::AccentText));
+        }
+        y = head.Bottom() + 6;
         if (!mon.valid || mon.egg)
             return;
 
-        // Level, HP, status.
-        UI::DrawText(canvas, Format("Lv.%d", mon.level), UI::Rect{ x, y, 60, line }, main);
-        const std::string hp = Format("HP %d/%d", mon.hp, mon.maxHp);
-        const int hpW = UI::MeasureText("HP 888/888", main);
-        const int statusLeft = DrawStatus(canvas, mon.status, x + w, y + 3, line - 6);
-        UI::DrawText(canvas, hp, UI::Rect{ statusLeft - 8 - hpW, y, hpW, line }, main);
-        const int barX = x + 64;
-        DrawHpBar(canvas, UI::Rect{ barX, y + line / 2 - 3, statusLeft - 8 - hpW - 8 - barX, 7 }, mon.hp, mon.maxHp);
-        y += line + 6;
-
-        // Item, ability, nature.
-        const int labelW = 86;
+        // Left: HP, status, item, ability, nature.
+        const int leftW = 196, rowH = 24, gap = 4;
+        {
+            const UI::Rect r = { x, y, leftW, rowH };
+            canvas.FillRoundRect(r, 4, ValueBottom);
+            canvas.FillRoundRect(UI::Rect{ r.x, r.y, 62, r.h }, 4, LabelBar);
+            Theme::DrawText(canvas, "HP", UI::Rect{ r.x + 6, r.y, 30, r.h }, whiteSmall);
+            DrawStatus(canvas, mon.status, r.x + 60, r.y + 4, r.h - 8);
+            Theme::DrawText(canvas, Format("%d/%d", mon.hp, mon.maxHp), UI::Rect{ r.x + 66, r.y, r.w - 72, r.h },
+                            Style(Theme::TextSize::Body, Theme::AccentText, UI::Align::Right));
+            Theme::DrawHpBar(canvas, UI::Rect{ r.x, r.Bottom() + 2, leftW, Theme::GaugeHeight + 3 }, mon.hp, mon.maxHp);
+        }
+        y += rowH + Theme::GaugeHeight + 3 + 2 + gap;
         const std::string rows[3][2] =
         {
             { "Item", mon.item.empty() ? std::string("None") : mon.item },
@@ -629,32 +947,43 @@ namespace OneScreen
         };
         for (const auto &row : rows)
         {
-            UI::DrawText(canvas, row[0], UI::Rect{ x, y, labelW, line }, dim);
-            UI::DrawText(canvas, row[1], UI::Rect{ x + labelW, y, w - labelW, line }, main);
-            y += line;
+            DrawInfoRow(canvas, UI::Rect{ x, y, leftW, rowH }, row[0], row[1], Theme::AccentText);
+            y += rowH + gap;
         }
-        y += 4;
-        canvas.HLine(x, y, w, Rgb(120, 150, 220, 90));
-        y += 4;
 
-        // Moves.
-        for (int i = 0; i < 4; i++)
+        // Right: the four moves with type plate, category icon and PP.
+        const UI::GameAssets *assets = UI::GetGameAssets();
+        const int mx = x + leftW + 8, mw = w - leftW - 8, mh = 40;
+        int my = PartyArea.y + Pad + 32 + 6;
+        for (int i = 0; i < 4; i++, my += mh + 3)
         {
+            const UI::Rect r = { mx, my, mw, mh };
+            canvas.FillRoundRect(r, 8, BackLine);
+            canvas.FillRoundRect(UI::Inset(r, 2), 6, MoveFill);
             if (mon.moves[i] == 0)
             {
-                UI::DrawText(canvas, "-", UI::Rect{ x + 8, y, w, line }, dim);
-                y += line;
+                Theme::DrawText(canvas, "-", UI::Inset(r, 12, 0, 8, 0), Style(Theme::TextSize::Body, DimText));
                 continue;
             }
-            const std::string name = mon.moveNames[i].empty() ? Format("Move %d", mon.moves[i]) : mon.moveNames[i];
-            UI::DrawText(canvas, name, UI::Rect{ x + 8, y, w - 90, line }, main);
-            const std::string pp = Format("PP %d", mon.pp[i]);
-            UI::DrawText(canvas, pp, UI::Rect{ x + w - 80, y, 80, line }, right);
-            y += line;
+            const UI::MoveInfo info = assets != nullptr ? assets->Move(mon.moves[i]) : UI::MoveInfo();
+            const int top = r.y + 3, bottom = r.y + 21;
+            int nx = r.x + 8;
+            if (info.valid)
+            {
+                Theme::DrawTypePlate(canvas, UI::Rect{ nx, top + 2, Theme::TypePlateW, Theme::TypePlateH }, info.type,
+                                     Theme::Upper(assets->TypeName(info.type)));
+                nx += Theme::TypePlateW + 6;
+            }
+            Theme::DrawText(canvas, MoveName(mon.moves[i], mon.moveNames[i]), UI::Rect{ nx, top, r.Right() - 8 - nx, 19 },
+                            Style(Theme::TextSize::Body, Theme::ListText));
+            if (info.valid)
+                Theme::DrawCategoryIcon(canvas, r.x + 8 + (Theme::TypePlateW - 42) / 2, bottom - 1, info.category);
+            const std::string pp = info.valid && info.pp ? Format("PP %d/%d", mon.pp[i], info.pp) : Format("PP %d", mon.pp[i]);
+            Theme::DrawText(canvas, pp, UI::Rect{ r.x + 8, bottom, r.w - 16, 17 },
+                            Style(Theme::TextSize::Small, Theme::AccentText, UI::Align::Right));
         }
 
-        UI::TextStyle hint = dim;
-        UI::DrawText(canvas, "Up/Down Pokemon   Y Game   B Back", FooterRect(), hint);
+        DrawPrompts(canvas, { { Theme::Button::Y, "Game page" }, { Theme::Button::B, "Back" } });
     }
 
     static std::string MonKey(const PartyMonView &m)
@@ -662,7 +991,7 @@ namespace OneScreen
         std::string k = m.valid ? "v" : "-";
         k += m.egg ? "e" : "";
         k += m.name + "|" + m.species + "|" + m.item + "|" + m.ability + "|" + m.nature;
-        k += Format("|%d|%d", m.level, m.hp) + Format("|%d|%d", m.maxHp, (int)m.status);
+        k += Format("|%d|%d", m.level, m.hp) + Format("|%d|%d", m.maxHp, (int)m.status) + Format("|%d|%d", m.gender, m.itemId);
         for (int i = 0; i < 4; i++)
             k += Format("|%d:%d", m.moves[i], m.pp[i]) + m.moveNames[i];
         return k;
@@ -671,11 +1000,14 @@ namespace OneScreen
     std::string PartyViewKey(const PartyView &v)
     {
         std::string k = Format("%d/%d", (int)v.page, v.cursor) + Format("/%d/%d", v.menuCursor, v.swapFrom)
-                      + Format("/%d/%d", (int)v.pocket, v.itemCursor) + "/" + v.busy + "/" + v.note;
+                      + Format("/%d/%d", (int)v.pocket, v.itemCursor) + Format("/%d/%d", v.giving, v.askCursor)
+                      + "/" + v.busy + "/" + v.note + "/" + v.ask.title + (v.ask.moves ? "m" : "");
         for (const PartyMonView &m : v.mons)
             k += "#" + MonKey(m);
         for (const PartyBagItem &i : v.items)
             k += Format("@%d:%d", i.id, i.count) + i.name;
+        for (const PartyChoice &c : v.ask.choices)
+            k += Format("?%d:%d", c.move, c.pp) + c.label;
         return k;
     }
 

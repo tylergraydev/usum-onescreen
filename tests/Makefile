@@ -78,9 +78,10 @@ $(OUT)/map_test: map_test.cpp $(MAP_SRCS) ../Includes/Screens/MapView.hpp ../Inc
 
 PARTY_PREVIEW := ../analysis/private/party-preview.ppm ../analysis/private/summary-preview.ppm
 
-$(OUT)/party_menu_test: party_menu_test.cpp ../Sources/Screens/PartyMenu.cpp ../Includes/Screens/PartyMenu.hpp                         ../Sources/ActionQueue.cpp ../Includes/ActionQueue.hpp ../Includes/Layouts.hpp $(UI_SRCS) $(UI_HDRS)
+PARTY_THEME := ../Sources/UI/GameAssets.cpp ../Sources/UI/Theme.cpp ../Sources/RomfsText.cpp ../Sources/PartyData.cpp
+$(OUT)/party_menu_test: party_menu_test.cpp ../Sources/Screens/PartyMenu.cpp ../Includes/Screens/PartyMenu.hpp                         ../Sources/ActionQueue.cpp ../Includes/ActionQueue.hpp ../Includes/Layouts.hpp $(PARTY_THEME) $(UI_SRCS) $(UI_HDRS)
 	@mkdir -p $(OUT)
-	$(CXX) $(CXXFLAGS) party_menu_test.cpp ../Sources/Screens/PartyMenu.cpp ../Sources/ActionQueue.cpp $(UI_SRCS) -o $@
+	$(CXX) $(CXXFLAGS) party_menu_test.cpp ../Sources/Screens/PartyMenu.cpp ../Sources/ActionQueue.cpp $(PARTY_THEME) $(UI_SRCS) -o $@
 
 BOXES_PREVIEW := ../analysis/private/boxes-preview.ppm
 
