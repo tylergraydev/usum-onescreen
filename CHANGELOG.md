@@ -11,7 +11,7 @@ Supports Pokémon Ultra Sun (USA) v1.2 (`00040000001B5000`, title version `0x080
 #### Added
 
 - Genuine Ultra Sun v1.2 updates (title version `0x0820`) are accepted. Before, only `0x0800`, a decrypted copy with a rewritten TMD, was. The code is identical.
-- Ultra Moon (USA) v1.2 (`00040000001B5100`, `0x0820`) is accepted, with the same addresses as Ultra Sun (checked statically; not yet run in the emulator).
+- Ultra Moon (USA) v1.2 (`00040000001B5100`, `0x0820`) is accepted, with the same addresses as Ultra Sun (checked statically, then in Azahar: boot, panel, native X menu, Party, Bag). The native X menu also recognises Ultra Moon's light-blue menu background.
 
 - **Windows launcher** (`player/`): checks your own Ultra Sun dump and v1.2 update, sets up its own portable copy of your Azahar (plugin loader on, top screen only, custom textures off), installs the plugin and update, and starts the game. Controller presets and plugin settings are in its window. A new game with no save does not start on the tested v1.2 setup; see [docs/PLAYER-APP.md](docs/PLAYER-APP.md).
 
@@ -43,7 +43,7 @@ Native top-screen menus (the panel is off while they show; the game's own screen
 
 #### Known gaps
 
-- Ultra Moon has not been played yet: its addresses match Ultra Sun's, but the game has not been booted with the plugin.
+- Ultra Moon has only been checked briefly (boot, panel, X menu, Party, Bag). A brand-new Ultra Moon game stalls in the opening bedroom scene in Azahar; Ultra Sun passes the same scene.
 - No native screen for the Ride Pager (**Y** in the field), Poké Pelago, Festival Plaza, Quick Link and Pokémon Refresh: use the bottom-screen panel (**L+R**). The Ride Pager and Pelago need a later save than the one used for testing, so they have not been looked at.
 - SOS / double targeting has a host-tested native page, but its taps are unverified and refused; use the panel (**L+R**). No SOS call was reached during the documented search. Trainer battles were not played.
 - Not native yet: Pokémon summary from the PC, Held Item / Release / Marking in the boxes, Habitat / Appearance / search / Evaluation in the Pokédex, follow-up uses in the field Bag, QR Scanner, Battle Video lists (the test save has none). Party TM teaching is native; Party Ether / Elixir, evolution stones and Rare Candy follow-ups are host-tested only, with unverified taps falling back to the panel.

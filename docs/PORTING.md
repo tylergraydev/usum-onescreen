@@ -44,11 +44,21 @@ In Azahar (instance `us20`, genuine update installed): the plugin before this ch
 
 `Game.cpp` has an Ultra Moon `0x0820` entry using the shared table.
 
-**Not run yet:** the Ultra Moon base CIA uses seed crypto (NCCH flag `0x20`), and no seed for `00040000001B5100` is available locally (no `seeddb.bin`), so it could not be decrypted, installed or booted. The Moon update is installed in instance `um1`, and `instance.py install` now puts the plugin in both `luma/plugins/00040000001B5000/` and `…/00040000001B5100/`. Still to do on Moon: the boot log (`Pokemon Ultra Moon 00040000001B5100 v2080 (0x0820)`, `hooks: all ok`), a new game to the field, the panel, the native X menu and one native screen.
+**Seed.** The Ultra Moon base CIA uses seed crypto (NCCH flag `0x20`). The seed came from Nintendo's public seed server (`kagiya-ctr.cdn.nintendo.net/title/0x00040000001B5100/ext_key?country=US`, 16 bytes, fetched by hand). It passed the NCCH seed check (`0x114`), every ExeFS file SHA-256 and the full RomFS IVFC hash tree (896160 level-3 blocks, 0 bad). The seed is kept in `analysis/private/seeddb/`.
+
+**In Azahar (instance `um1`, Moon base and update installed from local decrypted copies):**
+- Boot log: `USUM One Screen: Pokemon Ultra Moon 00040000001B5100 v2080 (0x0820)`, every hook `ok`, `hooks: all ok`. The game assets load (font, icons, moves, names from `a/0/3/2`). `instance.py start` needs `--rom` with the installed `.app`'s **absolute** path; a relative one fails, because Azahar runs from the instance folder.
+- **New game: reaches `FieldRo`, then stalls.** It goes LangSelect → Kukui intro → `HeroSelect` → name (game keyboard) → opening cutscene → `FieldRo`, but the opening bedroom scene never moves on. Meowth stays at the room's edge, field state 17, while frames keep running. This happened twice, once with the panel used and once without it. The same steps on Ultra Sun (genuine `0x0820`, also with the plugin) pass that scene (Meowth's "Mwaaawwwrrrrr!!!"). The RomFS checks out, so this isn't the decrypt. Not settled: whether it happens without the plugin. Driving the intro without the plugin needs a touch-capable input movie, and `tools/movie.py` has no touch input.
+- **Field through a Sun save:** USUM saves share one format, and Moon loaded a copy of the `pokecenter` start point's Ultra Sun save (title menu: Continue, Route 2). From there:
+  - Panel (`mode panel`): draws Moon's bottom screen (the Rotom map) with the cursor, GPU readback ok. The L+R key itself can't be tested with injected input (it reads the real pad).
+  - **Native X menu: needed a fix.** Ultra Moon's X-menu background is light blue (animated; measured 137..161 / 219..252 / 244..255 at (10,120)), not Sun's yellow, so the pixel probe never matched (`xmenu: … the native menu isn't waiting for input`). `Sources/Actions.cpp` now accepts either background. The Save bar, the Y corner, the page-2 arrow and the red game cursor are the same colours in both games. After the fix: `xmenu: shown (game page 1)`, the cursor moves, and Pokémon → `action: xmenu-pokemon ok`, `party-ui: shown`; B returns to the native menu, B closes it.
+  - Native Party (`main:00647FCC`): `party-ui: shown`, party read correctly (Torracat L17 … Buneary L12); the Party list probe colours match Sun's.
+  - Native Bag (`main:006488C8`): pocket icons, item descriptions and the party sidebar all shown.
+- Not checked on Moon: Pokédex, map, boxes, battles, keyboard, the remaining X-menu entries, and any other screen that checks bottom-screen colours. Any colour probe could hit a Moon theme difference like the X menu's.
 
 ## Ultra Moon checklist
 
-(Steps 1–3 are done for Ultra Moon v1.2; see the section above. Steps 4–6 wait on a bootable base game.)
+(Done for Ultra Moon v1.2; see the section above. Step 6's full play-check is not.)
 
 1. **Dump and extract.** Dump the base game and the v1.2 update as decrypted CIAs (no Ultra Moon dump exists yet). Extract the update's code:
    ```
