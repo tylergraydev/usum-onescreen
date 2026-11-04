@@ -13,28 +13,88 @@ namespace OneScreen
     // HID key bit for Y (same value as CTRPF's Key::Y): Save in the X menu.
     static const u32 XMenuKeyY = 1u << 11;
 
+    static XMenuGameLayout s_layout;
+    static u32 s_layoutVersion = 0;
+
+    const XMenuGameLayout &XMenuCurrentLayout(void) { return s_layout; }
+    u32 XMenuLayoutVersion(void) { return s_layoutVersion; }
+
+    bool XMenuSetLayout(const XMenuGameLayout &layout)
+    {
+        XMenuGameLayout next = layout.read ? layout : XMenuGameLayout();
+        unsigned seen = 0;
+        for (u8 id : next.ids)
+        {
+            if (id >= 12 || (seen & (1u << id)))
+            {
+                next = XMenuGameLayout();
+                break;
+            }
+            seen |= 1u << id;
+        }
+        next.unlocked &= 0xFFF;
+        bool changed = next.read != s_layout.read || next.unlocked != s_layout.unlocked;
+        for (int i = 0; i < 12; i++)
+            changed = changed || next.ids[i] != s_layout.ids[i];
+        if (!changed)
+            return false;
+        s_layout = next;
+        int slots[12];
+        for (int id = 0; id < 12; id++)
+            slots[id] = -1;
+        for (int i = 0; i < 12; i++)
+            if (next.unlocked & (1u << next.ids[i]))
+                slots[next.ids[i]] = i;
+        ActionSetXMenuSlots(slots);
+        s_layoutVersion++;
+        return true;
+    }
+
     const std::vector<XMenuEntry> &XMenuEntries(void)
     {
-        // Page 1 then page 2 in the game's slot order, then the two extras.
+        // Game entry ids, then the two extras.
         // Colours: page 1 and Save measured on the game's pills
         // (docs/VISUAL-STYLE.md), the others picked to match.
         // Scenes from docs/OFFSETS.md; Quick Link and Festival Plaza stay in
         // FieldRo (the X menu just goes away).
-        static const std::vector<XMenuEntry> entries =
+        static std::vector<XMenuEntry> entries =
         {
-            { "pokemon",          "Pokémon",  "",         0, 0, "xmenu.pokemon",               SceneParty,          0, 0, 1, Rgb(0, 168, 96) },
-            { "pokedex",          "Pokédex",  "",         0, 1, "xmenu.pokedex",               SceneDex,            1, 0, 1, Rgb(232, 44, 64) },
-            { "bag",              "Bag",      "",         0, 2, "xmenu.bag",                   SceneBag,            0, 1, 1, Rgb(244, 124, 20) },
-            { "quick_link",       "Quick",    "Link",     0, 3, "xmenu.quick_link",            nullptr,             1, 1, 1, Rgb(16, 72, 224) },
-            { "festival_plaza",   "Festival", "Plaza",    0, 4, "xmenu.festival_plaza",        nullptr,             0, 2, 1, Rgb(16, 164, 170) },
-            { "trainer_passport", "Trainer",  "Passport", 0, 5, "xmenu.trainer_passport",      "TrainerPass",       1, 2, 1, Rgb(24, 104, 232) },
-            { "pokemon_refresh",  "Pokémon",  "Refresh",  1, 0, "xmenu_page2.pokemon_refresh", "Kawaigari",         2, 0, 1, Rgb(224, 150, 20) },
-            { "qr_scanner",       "QR",       "Scanner",  1, 1, "xmenu_page2.qr_scanner",      "QRReader",          3, 0, 1, Rgb(120, 64, 210) },
-            { "battle_video",     "Battle",   "Video",    1, 2, "xmenu_page2.battle_video",    "BattleVideoPlayer", 2, 1, 1, Rgb(20, 128, 224) },
-            { "options",          "Options",  "",         1, 3, "xmenu_page2.options",         "Config",            3, 1, 1, Rgb(206, 48, 160) },
-            { "map",              "Map",      "",        -1, -1, nullptr,                      SceneTownMap,        0, 3, 2, Rgb(30, 150, 160) },
-            { "save",             "Save",     "",        -1, -1, nullptr,                      nullptr,             2, 3, 2, Rgb(17, 182, 255) },
+            { "pokemon",           "Pokémon",     "",          -1, -1, nullptr, SceneParty,          -1, -1, 1, Rgb(0, 168, 96) },
+            { "pokedex",           "Pokédex",     "",          -1, -1, nullptr, SceneDex,            -1, -1, 1, Rgb(232, 44, 64) },
+            { "bag",               "Bag",         "",          -1, -1, nullptr, SceneBag,            -1, -1, 1, Rgb(244, 124, 20) },
+            { "photo_album",       "Photo",       "Album",     -1, -1, nullptr, "MyAlbum",           -1, -1, 1, Rgb(224, 64, 160) },
+            { "quick_link",        "Quick",       "Link",      -1, -1, nullptr, nullptr,             -1, -1, 1, Rgb(16, 72, 224) },
+            { "festival_plaza",    "Festival",    "Plaza",     -1, -1, nullptr, nullptr,             -1, -1, 1, Rgb(16, 164, 170) },
+            { "trainer_passport",  "Trainer",     "Passport",  -1, -1, nullptr, "TrainerPass",       -1, -1, 1, Rgb(24, 104, 232) },
+            { "poke_pelago",       "Pok\xC3\xA9", "Pelago",    -1, -1, nullptr, nullptr,             -1, -1, 1, Rgb(64, 168, 64) },
+            { "pokemon_refresh",   "Pokémon",     "Refresh",   -1, -1, nullptr, "Kawaigari",         -1, -1, 1, Rgb(224, 150, 20) },
+            { "qr_scanner",        "QR",          "Scanner",   -1, -1, nullptr, "QRReader",          -1, -1, 1, Rgb(120, 64, 210) },
+            { "battle_video",      "Battle",      "Video",     -1, -1, nullptr, "BattleVideoPlayer", -1, -1, 1, Rgb(20, 128, 224) },
+            { "options",           "Options",     "",          -1, -1, nullptr, "Config",            -1, -1, 1, Rgb(206, 48, 160) },
+            { "map",               "Map",         "",          -1, -1, nullptr, SceneTownMap,         0,  3, 2, Rgb(30, 150, 160) },
+            { "save",              "Save",        "",          -1, -1, nullptr, nullptr,              2,  3, 2, Rgb(17, 182, 255) },
         };
+        static u32 version = ~0u;
+        if (version != XMenuLayoutVersion())
+        {
+            for (int id = 0; id < 12; id++)
+            {
+                XMenuEntry &e = entries[id];
+                e.page = e.slot = e.col = e.row = -1;
+                e.button = nullptr;
+                for (int i = 0; i < 12; i++)
+                    if (s_layout.ids[i] == id && (s_layout.unlocked & (1u << id)))
+                    {
+                        e.page = i / 6;
+                        e.slot = i % 6;
+                        e.col = e.page * 2 + e.slot % 2;
+                        e.row = e.slot / 2;
+                        e.button = ActionXMenuButton(id);
+                        break;
+                    }
+            }
+            version = XMenuLayoutVersion();
+        }
         return entries;
     }
 
@@ -56,16 +116,45 @@ namespace OneScreen
         return -1;
     }
 
+    bool XMenuVisible(int index)
+    {
+        const std::vector<XMenuEntry> &entries = XMenuEntries();
+        return index >= 0 && index < (int)entries.size() && entries[index].row >= 0;
+    }
+
+    int XMenuCursor::Index(void) const
+    {
+        if (m_layoutVersion != XMenuLayoutVersion())
+        {
+            m_layoutVersion = XMenuLayoutVersion();
+            m_gamePage = m_gameSlot = -1;
+        }
+        if (XMenuVisible(m_index))
+            return m_index;
+        for (int i = 0; i < (int)XMenuEntries().size(); i++)
+            if (XMenuVisible(i))
+            {
+                m_index = i;
+                return i;
+            }
+        return 0;
+    }
+
     static bool Enabled(unsigned enabled, int i)
     {
-        return ((enabled >> i) & 1u) != 0;
+        return XMenuVisible(i) && ((enabled >> i) & 1u) != 0;
     }
 
     int XMenuMove(int from, int dx, int dy, unsigned enabled)
     {
         const std::vector<XMenuEntry> &entries = XMenuEntries();
-        if (from < 0 || from >= (int)entries.size())
-            return 0;
+        if (!XMenuVisible(from))
+        {
+            for (int i = 0; i < (int)entries.size(); i++)
+                if (Enabled(enabled, i))
+                    return i;
+            return from;
+        }
         const XMenuEntry &f = entries[from];
         // Centres in half columns, so spans stay whole numbers.
         const int fx = 2 * f.col + f.span;
@@ -105,7 +194,9 @@ namespace OneScreen
     int XMenuFlipPage(int from, int page, unsigned enabled)
     {
         const std::vector<XMenuEntry> &entries = XMenuEntries();
-        if (from < 0 || from >= (int)entries.size() || entries[from].page < 0 || entries[from].page == page)
+        if (!XMenuVisible(from))
+            return XMenuMove(from, 0, 0, enabled);
+        if (entries[from].page < 0 || entries[from].page == page)
             return from;
         const XMenuEntry &f = entries[from];
         int best = -1, bestScore = 0;
@@ -126,6 +217,7 @@ namespace OneScreen
 
     bool XMenuCursor::FromGame(int page, int slot)
     {
+        m_index = Index();
         if (page == m_gamePage && slot == m_gameSlot)
             return false;
         m_gamePage = page;
@@ -140,6 +232,7 @@ namespace OneScreen
     void XMenuCursor::Chosen(int index)
     {
         m_index = index;
+        m_index = Index();
         const std::vector<XMenuEntry> &entries = XMenuEntries();
         if (index >= 0 && index < (int)entries.size() && entries[index].page >= 0)
         {
@@ -177,27 +270,13 @@ namespace OneScreen
             names.push_back(std::string("xmenu-") + e.name);
             ActionDef def = { names.back().c_str(), nullptr, menu, {} };
             std::vector<ActionStep> &s = def.steps;
-            if (e.page >= 0)
+            if (&e - entries.data() < 12)
             {
-                // Turn the game's page if it is on the other one (it reopens
-                // where it was left). The arrow slides the page in: wait for
-                // the probe, then a little more, before tapping the entry.
-                if (e.page == 0)
-                {
-                    s.push_back(StepTap("xmenu_page2.prev_page").SkipIf(AnyScene().Without(WorldXMenuPage2)));
-                    s.push_back(StepWaitFor(menu.Without(WorldXMenuPage2), 45).Retry(0, 2));
-                }
-                else
-                {
-                    s.push_back(StepTap("xmenu.next_page").SkipIf(AnyScene().With(WorldXMenuPage2)));
-                    s.push_back(StepWaitFor(menu.With(WorldXMenuPage2), 45).Retry(0, 2));
-                }
-                s.push_back(StepWait(10));
-                s.push_back(StepTap(e.button));
-                // Entries that open a scene take up to ~2 s; no re-tap (a
-                // second tap would land on the new screen).
-                s.push_back(e.opens != nullptr ? StepWaitFor(InScene(e.opens), 240) : StepWaitFor(gone, 120));
-                summaries.push_back(std::string("X menu: page ") + (e.page == 0 ? "1" : "2") + ", tap " + e.button);
+                s.push_back(StepXMenuEntry((int)(&e - entries.data())));
+                // No re-tap: a second tap could land on the new screen.
+                s.push_back(e.opens != nullptr ? StepWaitFor(InScene(e.opens), 240)
+                                              : StepWaitFor(AnyScene().Without(WorldXMenu), 120));
+                summaries.push_back(std::string("X menu: tap ") + e.name);
             }
             else if (std::string(e.name) == "save")
             {
@@ -282,6 +361,8 @@ namespace OneScreen
     {
         const std::vector<XMenuEntry> &entries = XMenuEntries();
         const XMenuEntry &e = entries[index < 0 || index >= (int)entries.size() ? 0 : index];
+        if (e.row < 0)
+            return UI::Rect{ 0, 0, 0, 0 };
         const int x = ColX(e.col);
         const int w = ColX(e.col + e.span - 1) + CellW - x;
         if (e.row < 3)
@@ -403,7 +484,7 @@ namespace OneScreen
     {
         const XMenuEntry &e = XMenuEntries()[index];
         const std::string name = e.name;
-        return e.opens != nullptr && !XMenuOpensNative(index) && XMenuNativeScreen(index) == nullptr
+        return (e.opens != nullptr || name == "poke_pelago") && !XMenuOpensNative(index) && XMenuNativeScreen(index) == nullptr
                && name != "pokemon" && name != "bag" && name != "map";
     }
 
@@ -460,10 +541,10 @@ namespace OneScreen
                                                      CellW, CellH }, PillRadius, Alpha(Frame, 120), 2);
 
         for (int i = 0; i < (int)entries.size(); i++)
-            if (i != view.cursor)
+            if (i != view.cursor && XMenuVisible(i))
                 DrawCell(canvas, entries[i], XMenuCellRect(i), false, Enabled(view.enabled, i), view.opening >= 0);
         // The selected one last: its cursor reaches past the pill's left end.
-        if (view.cursor >= 0 && view.cursor < (int)entries.size())
+        if (XMenuVisible(view.cursor))
             DrawCell(canvas, entries[view.cursor], XMenuCellRect(view.cursor), true,
                      Enabled(view.enabled, view.cursor), view.opening >= 0);
 
