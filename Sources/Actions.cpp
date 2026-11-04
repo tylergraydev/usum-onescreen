@@ -20,9 +20,11 @@ namespace OneScreen
     static_assert(ActionKeyX == (u32)Key::X, "action key X");
 
     // The X menu is an overlay inside FieldRo, so the scene doesn't show it;
-    // these bottom-screen pixels do (yellow background, the Save bar and its
-    // blue Y corner). In the field they are Rotom's red frame. Colours from
-    // screenshots of the X menu and the field (analysis/private/shots/ui3-*).
+    // these bottom-screen pixels do. Ultra Sun's background is yellow; Ultra
+    // Moon's is light blue (animated, 137..161 / 219..252 / 244..255 measured).
+    // The Save bar and its blue Y corner are the same in both. In the field
+    // they are Rotom's red frame. Colours from screenshots of the X menu and
+    // the field (analysis/private/shots/ui3-*).
     struct PixelProbe
     {
         u16 x, y;
@@ -31,9 +33,13 @@ namespace OneScreen
 
     static const PixelProbe XMenuProbe[] =
     {
-        { 10, 120, 249, 233, 134 },
         { 300, 225, 229, 255, 246 },
         { 260, 230, 2, 183, 255 },
+    };
+    static const PixelProbe XMenuBackground[] =
+    {
+        { 10, 120, 249, 233, 134 },
+        { 10, 120, 149, 236, 250 },
     };
     static const s32 ProbeTolerance = 40;
 
@@ -85,6 +91,10 @@ namespace OneScreen
         bool all = true;
         for (const PixelProbe &p : XMenuProbe)
             all = all && Matches(fb, p);
+        bool background = false;
+        for (const PixelProbe &p : XMenuBackground)
+            background = background || Matches(fb, p);
+        all = all && background;
         s_xmenuSeen = all;
         s_page2Seen = all && Matches(fb, XMenuPage2Probe);
         bool party = true;

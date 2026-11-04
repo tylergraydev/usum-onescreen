@@ -13,7 +13,7 @@ The optional Windows launcher in [`player/`](player/README.md) checks your own g
 | Game | Title ID | Version | Confirmed |
 |---|---|---|---|
 | Ultra Sun (USA) | `00040000001B5000` | v1.2 = title version `0x0820` (2080, genuine update) or `0x0800` (2048, a decrypted copy with a rewritten TMD; same code) | Yes, both in Azahar (`0x0800` 2026-11-02, `0x0820` 2026-11-03) |
-| Ultra Moon (USA) | `00040000001B5100` | v1.2 = title version `0x0820` (2080) | Title, version and every address checked statically 2026-11-03 (docs/PORTING.md); not booted yet |
+| Ultra Moon (USA) | `00040000001B5100` | v1.2 = title version `0x0820` (2080) | Yes, in Azahar 2026-11-03: `hooks: all ok`, panel, native X menu, Party, Bag (docs/PORTING.md) |
 
 On each boot the plugin writes one line to `usum-onescreen.log` at the emulated SD root (`%APPDATA%\Azahar\sdmc\`) and shows the same text as an on-screen notice. On an unsupported title/version that line says `unsupported game <titleid> v<version>` and the plugin does nothing else.
 

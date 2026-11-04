@@ -10,7 +10,7 @@ This is a beta. It has only been tested on Windows.
 - **Pokémon Ultra Sun (USA)**, title ID `00040000001B5000`, with the **v1.2 update** installed (title version `0x0820`; a decrypted copy reporting `0x0800` works too). Use your own legally dumped copy of the game and update; this project does not provide them or explain how to get them.
 - `usum-onescreen.3gx` from the project's Releases page (or built from source, see `README.md`).
 
-**Pokémon Ultra Moon (USA)** v1.2 (`00040000001B5100`, `0x0820`) is accepted: every address the plugin uses is the same as Ultra Sun's. It has not been played with the plugin yet. For Ultra Moon the plugin goes in `luma\plugins\00040000001B5100\`.
+**Pokémon Ultra Moon (USA)** v1.2 (`00040000001B5100`, `0x0820`) is accepted: every address the plugin uses is the same as Ultra Sun's. Checked in Azahar: boot (`hooks: all ok`), the panel, the native X menu, Party and Bag. A brand-new Ultra Moon game stalls in the opening bedroom scene in Azahar (docs/PORTING.md). For Ultra Moon the plugin goes in `luma\plugins\00040000001B5100\`.
 
 ## Windows launcher (optional)
 
@@ -130,7 +130,7 @@ On the first run the plugin writes a commented `usum-onescreen.ini` in the root 
 
 ## Known gaps
 
-- Ultra Moon is accepted but has not been played with the plugin yet (see Requirements).
+- Ultra Moon: only boot, the panel, the native X menu, Party and Bag have been checked, on a copy of an Ultra Sun save. A new Ultra Moon game stalls in Azahar in the opening bedroom scene (see Requirements).
 - No native screen yet for the Ride Pager, Poké Pelago, Festival Plaza, Quick Link, Pokémon Refresh or Save. The Ride Pager and Pelago need a later save than the one the plugin was tested with, so they are untested. Use **L+R**.
 - SOS / double targeting is host-tested only; use **L+R** to pick a target. Trainer battles haven't been played; no SOS call was reached during the documented search.
 - Not native yet: the PC's Summary / Held Item / Release / Marking, the Pokédex's Habitat / Appearance / search / Evaluation, QR Scanner, saved Battle Video lists. The field Bag's TM and other follow-up uses still need the panel; Party TM teaching is native.
