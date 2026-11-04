@@ -18,7 +18,7 @@ All in [`src/`](src):
 
 | File | Job |
 |---|---|
-| `Dump.cs` | Reads NCSD/NCCH/CIA headers and TMDs. Game: title `00040000001B5000`. Update: `0004000E001B5000`, version `0x0800`. Refuses encrypted dumps (NCCH NoCrypto flag; CIA content flag). |
+| `Dump.cs` | Reads NCSD/NCCH/CIA headers and TMDs. Game: title `00040000001B5000`. Update: `0004000E001B5000`, version `0x0820` (genuine v1.2), or `0x0800` with a warning (a rebuilt copy on which new games stall). Refuses encrypted dumps (NCCH NoCrypto flag; CIA content flag). |
 | `Home.cs` | The app folder: `azahar\` (a copy of the player's Azahar, made portable by `azahar\user\`) and `usum-onescreen-app.ini` (ROM path, controls, fullscreen). Writes Azahar's config, installs the plugin, installs CIAs with `azahar.exe -i` (closing the "Success"/"Failure" box Azahar shows on Windows), launches with `-w`/`-f`. |
 | `Ini.cs` | Edits Azahar's `qt-config.ini` (`key\default=false` + `key=value`, as `tools/instance.py` does) and the plugin's `usum-onescreen.ini` in place, keeping its comments. |
 | `Controls.cs` | Controller presets: Keyboard (Azahar's defaults), Gamepad (SDL `maptype:all`, so any controller works without its GUID), Custom (left alone; mapped in Azahar's own window). |
