@@ -29,13 +29,21 @@ namespace UsumOneScreen
     {
         public const ulong GameTitle = 0x00040000001B5000;    // Pokémon Ultra Sun (USA)
         public const ulong UpdateTitle = 0x0004000E001B5000;  // its update
+        public const ulong MoonGameTitle = 0x00040000001B5100;
+        public const ulong MoonUpdateTitle = 0x0004000E001B5100;
         public const int UpdateVersion = 0x0820;              // v1.2 as Nintendo shipped it (v2.2.0)
         // A decrypted v1.2 copy whose TMD was rewritten to 0x0800. Same code, and it
         // plays with an existing save, but a new game stops at the language screen
         // (docs/PLAYER-APP.md).
         public const int PatchedUpdateVersion = 0x0800;
 
-        public static bool IsSupportedUpdate(int v) => v == UpdateVersion || v == PatchedUpdateVersion;
+        public static bool IsGame(ulong title) => title == GameTitle || title == MoonGameTitle;
+        public static bool IsUpdate(ulong title) => title == UpdateTitle || title == MoonUpdateTitle;
+        public static ulong UpdateFor(ulong game) => game == MoonGameTitle ? MoonUpdateTitle : UpdateTitle;
+        public static string GameName(ulong title) =>
+            title == MoonGameTitle || title == MoonUpdateTitle ? "Ultra Moon" : "Ultra Sun";
+        public static bool IsSupportedUpdate(int v, ulong game) =>
+            v == UpdateVersion || (game == GameTitle && v == PatchedUpdateVersion);
 
         public const string PatchedWarning =
             "This v1.2 update file reports version 0x0800, a rebuilt copy: an existing save plays, " +
@@ -45,7 +53,7 @@ namespace UsumOneScreen
 
         public static string VersionText(int v) => $"0x{v:X4} ({v})";
 
-        public static DumpCheck Check(string path, DumpKind kind)
+        public static DumpCheck Check(string path, DumpKind kind, ulong? gameTitle = null)
         {
             var info = Read(path);
             var check = new DumpCheck { Info = info };
@@ -55,33 +63,39 @@ namespace UsumOneScreen
                 check.Message = $"{name}: {info.Error}";
                 return check;
             }
-            ulong want = kind == DumpKind.Game ? GameTitle : UpdateTitle;
-            if (info.TitleId != want)
+            bool supported = kind == DumpKind.Game ? IsGame(info.TitleId) : IsUpdate(info.TitleId);
+            if (!supported)
             {
-                string what = info.TitleId == GameTitle ? "the Ultra Sun game itself, not its update"
-                            : info.TitleId == UpdateTitle ? "the Ultra Sun update, not the game"
-                            : "not Pokémon Ultra Sun (USA)";
-                check.Message = $"{name} is title {Title(info.TitleId)}: {what}. " +
-                                $"Pick {(kind == DumpKind.Game ? "Pokémon Ultra Sun (USA), title " + Title(GameTitle) : "the Ultra Sun v1.2 update, title " + Title(UpdateTitle))}.";
+                check.Message = $"{name} is title {Title(info.TitleId)}. Pick " +
+                    (kind == DumpKind.Game ? "Pokémon Ultra Sun or Ultra Moon (USA), title " + Title(GameTitle) + " or " + Title(MoonGameTitle)
+                                          : "an Ultra Sun or Ultra Moon (USA) v1.2 update, title " + Title(UpdateTitle) + " or " + Title(MoonUpdateTitle)) + ".";
                 return check;
             }
-            if (kind == DumpKind.Update && !IsSupportedUpdate(info.Version))
+            if (kind == DumpKind.Update && gameTitle.HasValue && info.TitleId != UpdateFor(gameTitle.Value))
             {
-                check.Message = $"{name} is update version {VersionText(info.Version)}. " +
-                                $"USUM One Screen only supports v1.2, version {VersionText(UpdateVersion)}.";
+                check.Message = $"{name} is the {GameName(info.TitleId)} update. Your ROM is {GameName(gameTitle.Value)}; " +
+                                $"pick its matching v1.2 update, title {Title(UpdateFor(gameTitle.Value))}.";
+                return check;
+            }
+            ulong game = info.TitleId == MoonUpdateTitle ? MoonGameTitle : GameTitle;
+            if (kind == DumpKind.Update && !IsSupportedUpdate(info.Version, game))
+            {
+                check.Message = $"{name} is the {GameName(info.TitleId)} update, version {VersionText(info.Version)}. " +
+                                $"USUM One Screen only supports v1.2, version {VersionText(UpdateVersion)}" +
+                                (game == MoonGameTitle ? "; rebuilt 0x0800 updates are not supported for Ultra Moon." : ".");
                 return check;
             }
             if (info.Encrypted)
             {
-                check.Message = $"{name} is encrypted. USUM One Screen needs a decrypted dump of your own copy.";
+                check.Message = $"{name} is encrypted. USUM One Screen needs a decrypted dump of your own copy; Azahar 2126.2 can't install encrypted dumps.";
                 return check;
             }
             check.Ok = true;
             if (kind == DumpKind.Update && info.Version == PatchedUpdateVersion)
                 check.Warning = PatchedWarning;
             check.Message = kind == DumpKind.Game
-                ? $"{name}: Pokémon Ultra Sun (USA), title {Title(info.TitleId)}, {info.Format}."
-                : $"{name}: Ultra Sun update v1.2, version {VersionText(info.Version)}.";
+                ? $"{name}: Pokémon {GameName(info.TitleId)} (USA), title {Title(info.TitleId)}, {info.Format}."
+                : $"{name}: {GameName(info.TitleId)} update v1.2, version {VersionText(info.Version)}.";
             return check;
         }
 

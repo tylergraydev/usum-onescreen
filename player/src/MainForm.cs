@@ -30,7 +30,7 @@ namespace UsumOneScreen
         public MainForm(Home home)
         {
             this.home = home;
-            Text = "USUM One Screen";
+            Text = "USUM One Screen - Ultra Sun / Ultra Moon";
             Font = SystemFonts.MessageBoxFont;
             AutoScaleMode = AutoScaleMode.Dpi;
             MinimumSize = new Size(640, 600);
@@ -95,13 +95,14 @@ namespace UsumOneScreen
             g.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             g.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             g.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            AddFileRow(g, "Ultra Sun ROM", romBox, romCheck, DumpKind.Game,
-                       "Pokémon Ultra Sun (*.3ds;*.cci;*.cxi;*.cia)|*.3ds;*.cci;*.cxi;*.cia|All files|*.*");
+            AddFileRow(g, "Sun / Moon ROM", romBox, romCheck, DumpKind.Game,
+                       "Pokémon Ultra Sun / Ultra Moon (*.3ds;*.cci;*.cxi;*.cia)|*.3ds;*.cci;*.cxi;*.cia|All files|*.*");
             AddFileRow(g, "v1.2 update", updateBox, updateCheck, DumpKind.Update,
-                       "Ultra Sun update (*.cia)|*.cia|All files|*.*");
+                       "Ultra Sun / Ultra Moon update (*.cia)|*.cia|All files|*.*");
             var note = new Label
             {
-                Text = "Use your own dumps of Pokémon Ultra Sun (USA) and its v1.2 update. This app doesn't provide them.",
+                Text = "Use your own dumps of Pokémon Ultra Sun or Ultra Moon (USA) and its matching v1.2 update. This app doesn't provide them.",
+                MaximumSize = new Size(600, 0),
                 AutoSize = true, ForeColor = SystemColors.GrayText,
             };
             g.Controls.Add(note, 0, 4);
@@ -147,6 +148,7 @@ namespace UsumOneScreen
             azaharLabel.AutoSize = true;
             azaharLabel.Anchor = AnchorStyles.Left;
             var change = new Button { Text = "Use another Azahar…", AutoSize = true };
+            change.Enabled = Home.BundledAzahar() == null;
             change.Click += (s, e) => PickAzahar();
             g.Controls.Add(Caption("Azahar"), 0, 0);
             g.Controls.Add(azaharLabel, 1, 0);
@@ -182,13 +184,7 @@ namespace UsumOneScreen
             romBox.Text = home.GetState("rom", "");
             if (romBox.Text != "")
                 ShowCheck(romBox, romCheck, DumpKind.Game);
-            int v = home.InstalledUpdateVersion();
-            if (Dump.IsSupportedUpdate(v))
-            {
-                updateCheck.Text = "Update v1.2 is installed; you don't need to pick it again." +
-                                   (v == Dump.PatchedUpdateVersion ? " " + Dump.PatchedWarning : "");
-                updateCheck.ForeColor = v == Dump.PatchedUpdateVersion ? Color.DarkOrange : Color.DarkGreen;
-            }
+            ShowInstalledUpdate(home.CurrentTitle);
             controls.SelectedIndex = (int)home.CurrentControls();
             mapButtons.Enabled = SelectedPreset() == ControlPreset.Custom;
             fullscreen.Checked = home.GetState("fullscreen") == "on";
@@ -219,7 +215,8 @@ namespace UsumOneScreen
 
         void ShowAzahar()
         {
-            string dir = azaharSource ?? (home.HasAzahar ? home.AzaharDir : home.AzaharCandidates().FirstOrDefault());
+            string dir = home.HasAzahar && azaharSource == null ? home.AzaharDir
+                         : Home.BundledAzahar() ?? azaharSource ?? home.AzaharCandidates().FirstOrDefault();
             if (dir == null)
             {
                 azaharLabel.Text = "Not found. Install Azahar, or pick its folder.";
@@ -239,9 +236,32 @@ namespace UsumOneScreen
                 check.Text = "";
                 return;
             }
-            var c = Dump.Check(box.Text.Trim(), kind);
+            ulong? title = null;
+            if (kind == DumpKind.Update && !string.IsNullOrWhiteSpace(romBox.Text))
+            {
+                var rom = Dump.Check(romBox.Text.Trim(), DumpKind.Game);
+                if (rom.Ok) title = rom.Info.TitleId;
+            }
+            var c = Dump.Check(box.Text.Trim(), kind, title);
+            if (kind == DumpKind.Game && c.Ok)
+            {
+                Text = $"USUM One Screen - {Dump.GameName(c.Info.TitleId)}";
+                if (string.IsNullOrWhiteSpace(updateBox.Text)) ShowInstalledUpdate(c.Info.TitleId);
+                else ShowCheck(updateBox, updateCheck, DumpKind.Update);
+            }
             check.Text = (c.Ok ? "✓ " : "✗ ") + c.Message + (c.Warning != null ? " " + c.Warning : "");
             check.ForeColor = !c.Ok ? Color.DarkRed : c.Warning != null ? Color.DarkOrange : Color.DarkGreen;
+        }
+
+        void ShowInstalledUpdate(ulong title)
+        {
+            int v = home.InstalledUpdateVersion(title);
+            bool ok = Dump.IsSupportedUpdate(v, title);
+            updateCheck.Text = ok
+                ? $"{Dump.GameName(title)} update v1.2 is installed; you don't need to pick it again." +
+                  (v == Dump.PatchedUpdateVersion ? " " + Dump.PatchedWarning : "")
+                : $"Pick the {Dump.GameName(title)} v1.2 update.";
+            updateCheck.ForeColor = !ok ? SystemColors.ControlText : v == Dump.PatchedUpdateVersion ? Color.DarkOrange : Color.DarkGreen;
         }
 
         void PickAzahar()
@@ -326,8 +346,11 @@ namespace UsumOneScreen
             {
                 await Task.Run(() => Setup.Run(home, o, Log));
                 azaharSource = null;
+                updateBox.Clear();
                 home.SetState("fullscreen", fullscreen.Checked ? "on" : "off");
                 ShowAzahar();
+                Text = $"USUM One Screen - {home.GameName}";
+                ShowInstalledUpdate(home.CurrentTitle);
                 return true;
             }
             catch (Exception e) when (e is SetupException || e is IOException || e is UnauthorizedAccessException)
@@ -347,7 +370,7 @@ namespace UsumOneScreen
         {
             // Settings changed or never set up: run setup first (it is quick
             // once Azahar is copied and the update is installed).
-            bool same = Setup.NotReady(home) == null && azaharSource == null &&
+            bool same = Setup.NotReady(home) == null && azaharSource == null && string.IsNullOrWhiteSpace(updateBox.Text) &&
                         string.Equals(romBox.Text.Trim(), home.GetState("rom"), StringComparison.OrdinalIgnoreCase) &&
                         SelectedPreset() == home.CurrentControls();
             if (same ? !SavePluginSettings() : !await RunSetup())
@@ -356,7 +379,7 @@ namespace UsumOneScreen
             try
             {
                 var p = home.Launch(home.GetState("game"), fullscreen.Checked);
-                Log("Starting Ultra Sun …");
+                Log($"Starting {home.GameName} …");
                 UpdateButtons();
                 p.EnableRaisingEvents = true;
                 p.Exited += (s, e) => BeginInvoke(new Action(() => { Log("Azahar closed."); UpdateButtons(); }));

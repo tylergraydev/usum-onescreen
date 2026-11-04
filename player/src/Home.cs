@@ -28,7 +28,11 @@ namespace UsumOneScreen
         public string User => Path.Combine(AzaharDir, "user");
         public string Sdmc => Path.Combine(User, "sdmc");
         public string ConfigPath => Path.Combine(User, "config", "qt-config.ini");
-        public string PluginPath => Path.Combine(Sdmc, "luma", "plugins", Dump.Title(Dump.GameTitle), PluginName);
+        // Older launcher state files only supported Sun.
+        public ulong CurrentTitle => GetState("title_id") == Dump.Title(Dump.MoonGameTitle) ? Dump.MoonGameTitle : Dump.GameTitle;
+        public string GameName => Dump.GameName(CurrentTitle);
+        public string PluginPath => PluginPathFor(CurrentTitle);
+        string PluginPathFor(ulong title) => Path.Combine(Sdmc, "luma", "plugins", Dump.Title(title), PluginName);
         public string PluginIniPath => Path.Combine(Sdmc, "usum-onescreen.ini");
         public string PluginLogPath => Path.Combine(Sdmc, "usum-onescreen.log");
         public string StatePath => Path.Combine(Root, "usum-onescreen-app.ini");
@@ -67,6 +71,12 @@ namespace UsumOneScreen
         // --- Azahar ---
 
         public bool HasAzahar => File.Exists(Exe) && Directory.Exists(User);
+
+        public static string BundledAzahar()
+        {
+            string dir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "azahar-bundled");
+            return File.Exists(Path.Combine(dir, "azahar.exe")) ? dir : null;
+        }
 
         // Azahar installs the app could copy, best first.
         public IEnumerable<string> AzaharCandidates()
@@ -165,13 +175,14 @@ namespace UsumOneScreen
         public static string BundledPlugin() =>
             Path.Combine(AppDomain.CurrentDomain.BaseDirectory, PluginName);
 
-        public void InstallPlugin(string plugin, Action<string> log)
+        public void InstallPlugin(string plugin, ulong title, Action<string> log)
         {
             if (!File.Exists(plugin))
                 throw new SetupException($"The plugin {PluginName} is missing; it should be next to the app ({plugin}).");
-            Directory.CreateDirectory(Path.GetDirectoryName(PluginPath));
-            File.Copy(plugin, PluginPath, true);
-            log("Plugin installed.");
+            string destination = PluginPathFor(title);
+            Directory.CreateDirectory(Path.GetDirectoryName(destination));
+            File.Copy(plugin, destination, true);
+            log($"{Dump.GameName(title)} plugin installed.");
         }
 
         // --- titles installed in the portable SD card ---
@@ -200,12 +211,12 @@ namespace UsumOneScreen
             return Directory.GetFiles(dir, "*.tmd").Select(Dump.ReadTmdFile).FirstOrDefault(t => t != null);
         }
 
-        public int InstalledUpdateVersion() => InstalledTmd(Dump.UpdateTitle, out _)?.Version ?? -1;
+        public int InstalledUpdateVersion(ulong? title = null) => InstalledTmd(Dump.UpdateFor(title ?? CurrentTitle), out _)?.Version ?? -1;
 
         // The boot file of a game installed from a CIA, or null.
-        public string InstalledGame()
+        public string InstalledGame(ulong title)
         {
-            var tmd = InstalledTmd(Dump.GameTitle, out var dir);
+            var tmd = InstalledTmd(title, out var dir);
             if (tmd == null)
                 return null;
             string app = Path.Combine(dir, tmd.Content0Id.ToString("x8") + ".app");
