@@ -4,11 +4,11 @@ All notable changes for players are listed here. Versions follow [Semantic Versi
 
 ## [Unreleased]
 
-### v0.1.0 (planned first beta)
+## [0.1.0] - 2026-11-04
 
-Supports Pokémon Ultra Sun and Ultra Moon (USA) v1.2 (`00040000001B5000` / `00040000001B5100`, title version `0x0820`; Sun also accepts rebuilt `0x0800` with a warning) in Azahar with the 3GX plugin loader. See [docs/PLAYING.md](docs/PLAYING.md).
+First beta. Supports Pokémon Ultra Sun and Ultra Moon (USA) v1.2 (`00040000001B5000` / `00040000001B5100`, title version `0x0820`; Sun also accepts rebuilt `0x0800` with a warning) in Azahar with the 3GX plugin loader. See [docs/PLAYING.md](docs/PLAYING.md).
 
-#### Added
+### Added
 
 - The native X menu follows the game's own X-menu layout (entries the player rearranged, and Photo Album and Poké Pelago once unlocked). It used to assume the default layout and could open the wrong entry. Taps are made at the slot the entry is in now.
 - The native Pokédex shows three-digit caught / seen counts in full.
@@ -40,11 +40,11 @@ Native top-screen menus (the panel is off while they show; the game's own screen
 - Developer test harness (command file, headless screenshots, memory tools, scenarios) and analysis tools; see `README.md` and `docs/OFFSETS.md`.
 - Native screens share a buffer allocated at startup instead of allocating a separate drawing layer for each screen. The documented memory tour passed on Azahar with the 5 MiB build and left the real save unchanged; see [docs/MEMORY.md](docs/MEMORY.md). Emulator test instances queue across checkouts and worktrees (four at once by default); the player's own Azahar is not counted.
 
-#### Fixed
+### Fixed
 
 - Host-test linking after Party's theme changes, and Party drawing outside the battle page's bounds (#55). That change records host tests and a plugin build run in WSL/MSYS2; release-commit CI and scenario checks are still required.
 
-#### Known gaps
+### Known gaps
 
 - Ultra Moon has only been checked briefly (boot, panel, X menu, Party, Bag). A brand-new Ultra Moon game stalls in the opening bedroom scene in Azahar; Ultra Sun passes the same scene.
 - No native screen for the Ride Pager (**Y** in the field), Poké Pelago, Festival Plaza, Quick Link and Pokémon Refresh: use the bottom-screen panel (**L+R**). The Ride Pager and Pelago need a later save than the one used for testing, so they have not been looked at.
