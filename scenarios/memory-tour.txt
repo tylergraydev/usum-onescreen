@@ -249,6 +249,7 @@ repeat 2
   send press a
   expect-log ^mem: party shown 15
   sleep 2
+  mark
   send press b
   wait-scene FieldRo 20
   expect-log ^xmenu: shown 15
@@ -260,9 +261,12 @@ repeat 2
   send press a
   expect-log ^mem: bag shown 15
   sleep 2
+  mark
   send press b
   wait-scene FieldRo 20
   expect-log ^xmenu: shown 15
+  sleep 1
+  mark
   send move 16 224; tap 6   # the X menu's back button
   expect-log ^mem: xmenu hidden 10
   sleep 2
