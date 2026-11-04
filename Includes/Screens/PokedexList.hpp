@@ -151,6 +151,9 @@ namespace OneScreen
     static const int PokedexRadius = 10;
     // Largest area, for the layer buffer.
     static const int PokedexMaxW = 304, PokedexMaxH = 224;
+    // Fixed top-level count area, wide enough for 999 in the current font.
+    int DexTopCountWidth(void);
+    int DexTopCountTextWidth(void);
     void DrawPokedex(UI::Canvas &canvas, const DexView &view);
 
     // "#025 Pikachu caught" / "#002 ????? unseen", for the log.

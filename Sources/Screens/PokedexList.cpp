@@ -333,6 +333,16 @@ namespace OneScreen
         return h + Theme::MeasureText(CountText(count), size) + 6;
     }
 
+    int DexTopCountWidth(void)
+    {
+        return CountWidth(999, 18, Theme::TextSize::Body);
+    }
+
+    int DexTopCountTextWidth(void)
+    {
+        return DexTopCountWidth() - 18 - 6;
+    }
+
     // A dark count pill: the mark at its left, the number right-aligned.
     static void DrawCount(UI::Canvas &canvas, const UI::Rect &r, DexState mark, u16 count, UI::Color fill,
                           Theme::TextSize size)
@@ -395,13 +405,23 @@ namespace OneScreen
             {
                 // Caught, then seen, each in its pill, at the right end.
                 const UI::Color pill = sel ? CountSel : CountRow;
-                const int ph = 18, pw = 50, py = r.y + (r.h - 2 - ph) / 2;
+                const int ph = 18, pw = DexTopCountWidth(), py = r.y + (r.h - 2 - ph) / 2;
                 const int seenX = r.Right() - s - 6 - pw;
                 DrawCount(canvas, UI::Rect{ seenX, py, pw, ph }, DexState::Seen, view.counts[row].seen, pill, body);
                 DrawCount(canvas, UI::Rect{ seenX - 4 - pw, py, pw, ph }, DexState::Caught, view.counts[row].caught,
                           pill, body);
-                Theme::DrawText(canvas, std::string(DexName((DexKind)row)) + " Pok\xC3\xA9" "dex",
-                                UI::Rect{ label.x, label.y, seenX - 8 - pw - label.x, label.h }, Style(White, body));
+                const std::string name = std::string(DexName((DexKind)row)) + " Pok\xC3\xA9" "dex";
+                const UI::Rect text{ label.x, label.y, seenX - 8 - pw - label.x, label.h };
+                const Theme::TextSize size = Theme::MeasureText(name, body) <= text.w ? body : Theme::TextSize::Small;
+                if (Theme::MeasureText(name, size) <= text.w)
+                    Theme::DrawText(canvas, name, text, Style(White, size));
+                else
+                {
+                    UI::TextStyle compact;
+                    compact.font = UI::Font::Small;
+                    compact.color = White;
+                    UI::DrawText(canvas, name, text, compact);
+                }
             }
             if (sel)
                 Theme::DrawCursor(canvas, r.x + s + 14, r.y + (r.h - 2) / 2);
@@ -446,9 +466,10 @@ namespace OneScreen
             DrawBar(canvas, r, unseen ? ListUnseen : ListSeen, ListLine, sel ? Rgb(0, 0, 0, 0) : ListLine);
             const int s = Slant(r);
             const UI::Rect in = UI::Inset(r, s + 14, 1, s + 4, 3);
-            Theme::DrawText(canvas, Number(row.number), UI::Rect{ in.x, in.y, 30, in.h },
+            const int nw = std::max(30, (int)Theme::MeasureText(Number(row.number), Theme::TextSize::Small));
+            Theme::DrawText(canvas, Number(row.number), UI::Rect{ in.x, in.y, nw, in.h },
                             Style(unseen ? ListQuery : White, Theme::TextSize::Small));
-            Theme::DrawText(canvas, RowName(row), UI::Rect{ in.x + 32, in.y, in.w - 32 - 16, in.h },
+            Theme::DrawText(canvas, RowName(row), UI::Rect{ in.x + nw + 2, in.y, in.w - nw - 2 - 16, in.h },
                             Style(unseen ? ListQuery : White));
             DrawMark(canvas, row.state, in.Right() - 7, r.y + (r.h - 2) / 2, 12);
             if (sel)

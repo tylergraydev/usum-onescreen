@@ -59,8 +59,12 @@ struct FakeGame
                 continue;
             const std::string name = b.name;
             const std::string screen = name.substr(0, name.find('.'));
+            if ((screen == "xmenu" || screen == "xmenu_page2") && name.find(".slot") == std::string::npos
+                && name != "xmenu.next_page" && name != "xmenu_page2.prev_page")
+                continue;
             if ((world.scene == SceneField && !(world.flags & WorldXMenu) && screen == "field")
-                || (world.scene == SceneField && (world.flags & WorldXMenu) && screen == "xmenu")
+                || (world.scene == SceneField && (world.flags & WorldXMenu)
+                    && screen == ((world.flags & WorldXMenuPage2) ? "xmenu_page2" : "xmenu"))
                 || (world.scene == SceneDex && screen == "pokedex_top")
                 || (world.scene == SceneParty && screen == "party")
                 || (world.scene == SceneBag && screen == "bag")
@@ -74,7 +78,18 @@ struct FakeGame
 
     void OnTap(const std::string &name)
     {
-        if (name == "field.rotom_face")
+        if (name == "xmenu.next_page")
+            Overlay(WorldXMenu | WorldXMenuPage2, 12);
+        else if (name == "xmenu_page2.prev_page")
+            Overlay(WorldXMenu, 12);
+        else if (name.find(".slot") != std::string::npos)
+        {
+            const char *scenes[] = { SceneParty, SceneDex, SceneBag };
+            for (int id = 0; id < 3; id++)
+                if (ActionXMenuButton(id) != nullptr && name == ActionXMenuButton(id))
+                    Go(scenes[id], 0, 10);
+        }
+        else if (name == "field.rotom_face")
         {
             if (!rotomChat)
                 Go(SceneDex, 0, 10);
@@ -252,7 +267,7 @@ static void TestOpenParty(void)
     CHECK(Run(game, "open-party", log));
     CHECK(game.world.scene == SceneParty);
     CHECK(game.xPresses == 1);
-    CHECK(game.tapped.size() == 1 && game.tapped[0] == "xmenu.pokemon");
+    CHECK(game.tapped.size() == 1 && game.tapped[0] == "xmenu.slot1");
 
     // With the X menu already up (its cursor anywhere): no X, just the tap.
     FakeGame open;
@@ -262,7 +277,7 @@ static void TestOpenParty(void)
     CHECK(Run(open, "open-bag", log));
     CHECK(open.world.scene == SceneBag);
     CHECK(open.xPresses == 0);
-    CHECK(open.tapped.size() == 1 && open.tapped[0] == "xmenu.bag");
+    CHECK(open.tapped.size() == 1 && open.tapped[0] == "xmenu.slot3");
 }
 
 static void TestOpenPokedex(void)
@@ -290,7 +305,7 @@ static void TestOpenPokedex(void)
     CHECK(Run(chat, "open-pokedex", log));
     CHECK(chat.world.scene == SceneDex);
     CHECK(chat.xPresses == 1);
-    CHECK(chat.tapped.size() == 3 && chat.tapped[2] == "xmenu.pokedex");
+    CHECK(chat.tapped.size() == 3 && chat.tapped[2] == "xmenu.slot2");
     CHECK(LogHas(log, "going on"));
 
     // Nothing answers at all: fails at the last wait.
@@ -310,6 +325,75 @@ static void TestOpenPokedex(void)
     CHECK(!Run(dex, "open-pokedex", log));
     CHECK(LogHas(log, "refused: needs FieldRo -x-menu, now Zukan"));
     CHECK(dex.taps == 0);
+}
+
+static void PrepareXMenu(std::vector<std::string> &log)
+{
+    const int slots[12] = { 6, 1, 2, -1, 3, 4, 5, -1, 0, 7, 8, 9 };
+    ActionSetXMenuSlots(slots);
+    log.push_back("prepared X menu");
+}
+
+static void TestXMenuRouting(void)
+{
+    // Move all three built-in targets to the other page; the fake reacts
+    // by entry id, independently of the default per-entry button aliases.
+    int slots[12] = { 11, 10, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8 };
+    ActionSetXMenuSlots(slots);
+    const char *actions[] = { "open-party", "open-pokedex", "open-bag" };
+    const char *scenes[] = { SceneParty, SceneDex, SceneBag };
+    for (int id = 0; id < 3; id++)
+    {
+        FakeGame game;
+        game.world.scene = SceneField;
+        game.world.flags = id == 1 ? 0 : WorldXMenu;
+        game.rotomChat = true;
+        std::vector<std::string> log;
+        CHECK(Run(game, actions[id], log));
+        CHECK(game.world.scene == scenes[id]);
+        CHECK(game.tapped.size() >= 2 && game.tapped[game.tapped.size() - 2] == "xmenu.next_page");
+        CHECK(!game.tapped.empty() && game.tapped.back() == ActionXMenuButton(id));
+    }
+    // The plugin refreshes routing before the first field action, even if
+    // the native menu has never shown. Preparation happens before validation.
+    {
+        slots[0] = -1;
+        ActionSetXMenuSlots(slots);
+        ActionSetXMenuPrepare(PrepareXMenu);
+        FakeGame first;
+        first.world.scene = SceneField;
+        std::vector<std::string> log;
+        CHECK(Run(first, "open-party", log));
+        CHECK(LogHas(log, "prepared X menu"));
+        CHECK(first.world.scene == SceneParty);
+        CHECK(first.tapped.size() == 2 && first.tapped[0] == "xmenu.next_page"
+              && first.tapped[1] == "xmenu_page2.slot1");
+        ActionSetXMenuPrepare(nullptr);
+    }
+
+    // A definition remains live when routing changes after Start.
+    slots[0] = 11;
+    ActionSetXMenuSlots(slots);
+    FakeGame game;
+    game.world.scene = SceneField;
+    game.world.flags = WorldXMenu;
+    ActionRunner runner;
+    std::vector<std::string> log;
+    CHECK(runner.Start(*FindAction("open-party"), game.world, log));
+    slots[0] = 4;
+    ActionSetXMenuSlots(slots);
+    for (int i = 0; i < 1000 && runner.Running(); i++)
+        game.Feed(runner.Update(game.world, log));
+    CHECK(!runner.Running() && game.world.scene == SceneParty);
+    CHECK(game.tapped.size() == 1 && game.tapped[0] == "xmenu.slot5");
+
+    slots[0] = -1;
+    ActionSetXMenuSlots(slots);
+    CHECK(!CheckAction(*FindAction("open-party")).empty());
+    ActionDef qr = { "qr", "", AnyScene(), { StepXMenuEntry(9) } };
+    CHECK(CheckAction(qr).find("qr_scanner not available") != std::string::npos);
+    const int defaults[12] = { 0, 1, 2, -1, 3, 4, 5, -1, 6, 7, 8, 9 };
+    ActionSetXMenuSlots(defaults);
 }
 
 static void TestBattleRun(void)
@@ -472,6 +556,7 @@ int main(void)
     TestConditions();
     TestOpenParty();
     TestOpenPokedex();
+    TestXMenuRouting();
     TestBattleRun();
     TestBattleMenuActions();
     TestClose();

@@ -78,6 +78,7 @@ namespace OneScreen
 
     // --- OSD callback ---
 
+    static Mutex s_layoutLock;
     static UI::Layer s_layer;
     static u32 s_drawnVersion = ~0u;
     // The layer draws in the shared screen buffer (UI/ScreenBuffer.hpp),
@@ -149,9 +150,11 @@ namespace OneScreen
             XMenuView view;
             view.cursor = s_viewCursor;
             view.opening = s_viewOpening;
+            s_layoutLock.Lock();
             view.enabled = s_enabledMask;
             UI::Canvas canvas = s_layer.Begin();
             DrawXMenu(canvas, view);
+            s_layoutLock.Unlock();
             s_drawnVersion = version;
             s_drawnGameFont = gameFont;
         }
@@ -159,11 +162,20 @@ namespace OneScreen
         return true;
     }
 
-    void StartXMenu(void)
+    static void RefreshEnabled(void)
     {
+        s_enabledMask = 0;
         for (int i = 0; i < (int)XMenuEntries().size(); i++)
             if (CheckAction(XMenuAction(i)).empty())
                 s_enabledMask |= 1u << i;
+    }
+
+    static void RefreshLayout(std::vector<std::string> &log);
+
+    void StartXMenu(void)
+    {
+        ActionSetXMenuPrepare(RefreshLayout);
+        RefreshEnabled();
         OSD::Run(XMenuOnScreen);
     }
 
@@ -173,6 +185,79 @@ namespace OneScreen
     {
         const std::vector<XMenuEntry> &entries = XMenuEntries();
         return index >= 0 && index < (int)entries.size() ? entries[index].name : "?";
+    }
+
+    static bool Readable(u32 address, u32 size)
+    {
+        return address != 0 && Process::CheckAddress(address, MEMPERM_READ)
+               && Process::CheckAddress(address + size - 1, MEMPERM_READ);
+    }
+
+    static u32 Read32(u32 address)
+    {
+        u32 value = 0;
+        Process::Read32(address, value);
+        return value;
+    }
+
+    static XMenuGameLayout ReadLayout(void)
+    {
+        XMenuGameLayout layout;
+        if (!Readable(0x6A59C4, 4))
+            return layout;
+        const u32 manager = Read32(0x6A59C4);
+        const u32 data = Readable(manager + 0x24, 4) ? Read32(manager + 0x24) : 0;
+        const u32 save = Readable(data + 4, 4) ? Read32(data + 4) : 0;
+        if (!Readable(save, 0x3AE0 + 0x34) || Read32(save) != 0x64F4A0)
+            return layout;
+        const u32 menu = save + 0x3AE0;
+        if (Read32(menu) != 0x64F510)
+            return layout;
+        for (int i = 0; i < 12; i++)
+            if (!Process::Read8(menu + 0x0C + i, layout.ids[i]))
+                return XMenuGameLayout();
+        u32 flags = 0;
+        if (!Process::Read32(menu + 0x30, flags))
+            return XMenuGameLayout();
+        layout.unlocked = (u16)((flags >> 15) & 0xFFF);
+        layout.read = true;
+        return layout;
+    }
+
+    static void RefreshLayout(std::vector<std::string> &log)
+    {
+        // Actions retain their definitions and routing until they finish.
+        if (ActionRunning())
+            return;
+        const XMenuGameLayout layout = ReadLayout();
+        static bool logged = false;
+        s_layoutLock.Lock();
+        const bool changed = XMenuSetLayout(layout);
+        if (changed)
+        {
+            RefreshEnabled();
+            s_viewVersion = s_viewVersion + 1;
+            s_synced = false;
+            s_shownAt = s_frames;
+            s_stableCount = 0;
+            s_scanWanted = true;
+        }
+        if (changed || !logged)
+        {
+            logged = true;
+            if (!XMenuCurrentLayout().read)
+                log.push_back("xmenu: layout unreadable, using the default");
+            std::string line = "xmenu: layout p1";
+            for (int i = 0; i < 12; i++)
+            {
+                if (i == 6)
+                    line += " | p2";
+                const int entry = XMenuAtSlot(i / 6, i % 6);
+                line += std::string(" ") + (entry < 0 ? "-" : EntryName(entry));
+            }
+            log.push_back(line);
+        }
+        s_layoutLock.Unlock();
     }
 
     static void Publish(void)
@@ -189,7 +274,7 @@ namespace OneScreen
     {
         s_synced = true;            // the player moved first: don't jump to the game's cursor
         s_scanWanted = false;
-        if (index == s_cursor.Index())
+        if (!XMenuVisible(index) || index == s_cursor.Index())
             return;
         s_cursor.Set(index);
         log.push_back(Utils::Format("xmenu: cursor %s", EntryName(index)));
@@ -365,6 +450,8 @@ namespace OneScreen
         }
 
         const bool shown = s_enabled && !s_yield && menuUp;
+        if (menuUp && (!s_shown || s_frames % 30 == 0))
+            RefreshLayout(log);
         if (shown && !s_shown)
         {
             // The game's font and icons (normally loaded at the first field
@@ -450,10 +537,11 @@ namespace OneScreen
 
     std::string XMenuStatus(void)
     {
-        return Utils::Format("xmenu: %s, %s, cursor %s%s%s%s%s", s_enabled ? "on" : "off",
+        return Utils::Format("xmenu: %s, %s, cursor %s%s%s%s%s, layout %s v%lu", s_enabled ? "on" : "off",
                              s_shown ? "shown" : "hidden", EntryName(s_cursor.Index()),
                              s_opening >= 0 ? (std::string(", opening ") + EntryName(s_opening)).c_str() : "",
                              s_yield ? ", panel on by hand" : "", s_forcedOff ? ", holding panel off" : "",
-                             s_capturing ? ", input captured" : "");
+                             s_capturing ? ", input captured" : "", XMenuCurrentLayout().read ? "saved" : "default",
+                             (unsigned long)XMenuLayoutVersion());
     }
 }
