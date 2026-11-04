@@ -190,7 +190,10 @@ expect-mode panel 10   # AutoPanel's default for Zukan
 reject-log ^pokedex: shown
 sleep 1
 mark
-send press b
+repeat 5 until-scene FieldRo   # B is ignored during the Pokedex's intro: press again
+  send press b
+  sleep 3
+end
 wait-scene FieldRo 20
 sleep 3
 send press b
