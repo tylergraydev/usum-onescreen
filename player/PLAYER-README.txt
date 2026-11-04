@@ -1,15 +1,17 @@
 USUM One Screen
 ===============
 
-Plays Pokémon Ultra Sun (USA) in the Azahar emulator with only the top screen,
-using the USUM One Screen plugin. Windows 10 or 11.
+Plays Pokémon Ultra Sun or Ultra Moon (USA) in the Azahar emulator with only
+the top screen, using the USUM One Screen plugin. Windows 10 or 11.
 
 You need
-- Azahar, installed the normal way (tested with Azahar 2126.2).
-- Your own dump of Pokémon Ultra Sun (USA), title 00040000001B5000:
-  a .3ds, .cci, .cxi or .cia file, decrypted.
-- Your own dump of its v1.2 update (title 0004000E001B5000, version 0x0820):
-  a .cia file, decrypted.
+- Your own decrypted USA ROM (.3ds, .cci, .cxi or .cia):
+  Ultra Sun: title 00040000001B5000; Ultra Moon: title 00040000001B5100.
+- Your own decrypted v1.2 update (.cia), version 0x0820, matching your ROM:
+  Ultra Sun: 0004000E001B5000; Ultra Moon: 0004000E001B5100.
+Azahar 2126.2 is included in the Windows release zip. If your download has no
+azahar-bundled folder, install Azahar separately or pick its folder in the app.
+Encrypted dumps are refused because Azahar 2126.2 can't install them.
 This app doesn't include, download or explain how to get game files or keys.
 
 Play
@@ -17,9 +19,10 @@ Play
 2. Run UsumOneScreen.exe.
 3. Browse for your ROM and the v1.2 update. Each file is checked as soon as
    you pick it; anything else is refused with the reason.
-4. Press Play. The first time, the app copies your Azahar into an "azahar"
-   folder next to it, sets it up and installs the update there (this takes a
-   minute). After that, Play starts the game straight away.
+4. Press Play. The first time, the app copies bundled Azahar (or your
+   installed Azahar) into an "azahar" folder next to it, sets it up and
+   installs the update there (this takes a minute). After that, Play starts
+   the game straight away. The bundled folder is never modified.
 
 Your own Azahar and its settings and saves are never changed: the app plays
 with its own copy, and keeps its saves in azahar\user\sdmc.
@@ -38,11 +41,12 @@ Settings
 Known problems
 - Soft reset (L+R+Start) closes Azahar. This is a bug in Azahar's plugin
   loader. Save in the game before you try it, or don't use it.
-- Ultra Moon isn't supported yet.
-- If your v1.2 update reports version 0x0800 (the app tells you when you
-  pick it), a brand-new game stops at its first-boot language screen. An
+- Ultra Moon has limited testing; a new game stalls in the opening bedroom
+  scene in Azahar.
+- If your Ultra Sun v1.2 update reports version 0x0800 (the app tells you
+  when you pick it), a brand-new game stops at its first-boot language screen. An
   existing save plays fine. A dump of the update that reports 0x0820 works
-  for new games too.
+  for new Ultra Sun games too. Ultra Moon requires 0x0820; 0x0800 is refused.
 
 If something goes wrong, the plugin's log is azahar\user\sdmc\usum-onescreen.log.
 Don't share game files, saves or keys when you report a problem.
