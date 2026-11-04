@@ -1,6 +1,6 @@
 # Player app: launcher or Azahar fork?
 
-Written 2026-11-02. The question: how should a player get from "I have my own Ultra Sun dump" to "the game is running, top screen only, with the plugin", without the manual steps in [PLAYING.md](PLAYING.md)?
+Written 2026-11-02. The question: how should a player get from "I have my own Ultra Sun or Ultra Moon dump" to "the game is running, top screen only, with the plugin", without the manual steps in [PLAYING.md](PLAYING.md)?
 
 **Recommendation: (a), a launcher that drives a portable copy of stock Azahar.** It does everything a player needs today. A fork only adds the soft reset fix, and that fix is better sent upstream as a small Azahar PR (Tyler's call, since it is public). The launcher is built: [`player/`](../player/README.md).
 
@@ -16,8 +16,8 @@ Written 2026-11-02. The question: how should a player get from "I have my own Ul
 |---|---|---|
 | Effort to first version | Small: about 1 000 lines of C#, no emulator build. Done in this session. | Large: an Azahar build environment (MSVC, Qt 6, CMake, ~40 submodules), a Windows CI that builds it, then the UI work on top. Weeks, not days. |
 | Keeping up with Azahar | Only the config keys and two command-line flags (`-i`, `-f`) are relied on. They have been stable for years (they come from Citra). A new Azahar works unless it renames a key. | Every Azahar release is a rebase of our UI changes onto a moving Qt frontend (`citra_qt.cpp` alone is 4 400 lines). Falling behind means missing emulation fixes. |
-| Licence | Azahar is used as is, never modified or redistributed by us: the launcher copies the player's own install. Nothing to publish beyond our own code. If we ever bundle Azahar binaries, we must also give its source (see below). | Must publish the fork's complete source under the same licence with every binary, keep notices, mark changes. Must not call it "Azahar" in a way that suggests it is the official build. |
-| What the player installs | Azahar (official) + our zip | Our build only |
+| Licence | The Windows zip bundles unmodified Azahar 2126.2 with its licence and a corresponding source notice (see below). The launcher copies it into a writable portable home. | Must publish the fork's complete source under the same licence with every binary, keep notices, mark changes. Must not call it "Azahar" in a way that suggests it is the official build. |
+| What the player installs | Our Windows zip (Azahar 2126.2 included) | Our build only |
 | Soft reset crash | Not fixable. Still crashes ([SOFT-RESET.md](SOFT-RESET.md)). | Fixable: clear the restored plugin loader context in `System::Reset`. |
 | Top screen only | Yes: Azahar's "Single Screen" layout (`layout_option = 1`), status bar and filter bar off, optional fullscreen. The menu bar stays in windowed mode (Azahar has no setting to hide it; fullscreen hides it). | Yes, and the menu bar can go too. |
 | Installing the update CIA | Through `azahar.exe -i`, which on Windows shows a "Success"/"Failure" box; the launcher closes it itself. | Can call the installer directly. |
@@ -28,7 +28,7 @@ Written 2026-11-02. The question: how should a player get from "I have my own Ul
 - Azahar **master** was relicensed on 2026-10-03 (commit `86a9f923`, "Update project license to GPLv3+, was GPLv2+"); `LICENSE.txt` is now **GPL v3**, headers say "GPLv3 or any later version", and `misc/licenses/gplv2.txt` is kept for files still under v2 (commit `0ab6399c`). The GitHub API reports `gpl-3.0`.
 - So a fork that follows master is **GPL-3.0-or-later**. Distributing a fork's binary means: the complete corresponding source of that exact build (including our changes and build scripts) is available to everyone who gets the binary, under GPL-3.0; the licence text and copyright notices stay; modified files carry a notice of the change. A public repo at the tagged commit does this.
 - A launcher that only starts Azahar as a separate program is not a derivative work of it, so the launcher's own licence is free. Our plugin is GPL-3.0 already ([LICENSING.md](LICENSING.md)), so GPL-3.0 for the launcher keeps one licence for the project.
-- Bundling unmodified Azahar binaries in our zip is allowed, but then we also have to provide Azahar's source for that version (a link to the matching upstream tag is the usual way, with the licence text in the zip). The launcher avoids that by copying the player's own Azahar install.
+- Bundling unmodified Azahar binaries in our zip is allowed, but then we also have to provide Azahar's source for that version (a link to the matching upstream tag is the usual way, with the licence text in the zip). The Windows release now bundles 2126.2, includes its licence, and ships `AZAHAR-SOURCE.txt` identifying `azahar-unified-source-2126.2.tar.xz` (SHA-256 `85c8b56fac703df04720125044b8ff887997911858a6cde545dfb1107ba4cd26`) at https://github.com/azahar-emu/azahar/releases/tag/2126.2. See [RELEASING.md](RELEASING.md) for the pinned binary download and hash.
 
 ### What only a fork can do
 
@@ -45,12 +45,14 @@ Until Azahar has the fix, the plugin-side mitigation in [SOFT-RESET.md](SOFT-RES
 
 See [`player/README.md`](../player/README.md) for use and build. In short:
 
-1. **Azahar**: finds the player's install (`C:\Program Files\Azahar` by default, or asks), copies it to `azahar\` next to the launcher and creates `azahar\user\`, which makes it portable. The player's own Azahar and `%APPDATA%\Azahar` are only read from (the program folder) and never written.
-2. **The dump**: the player picks their Ultra Sun ROM (`.3ds`, `.cci`, `.cxi` or `.cia`) and the v1.2 update (`.cia`). The launcher reads the headers itself and refuses anything that is not title `00040000001B5000`, an update that is not `0004000E001B5000` version `0x0800`, or a dump that is still encrypted. Each refusal says what was found.
-3. **Config**: plugin loader on, single-screen layout (top), custom textures off, update check off, status and filter bars off, close without confirming. Controller: "Keyboard" (Azahar's defaults), "Gamepad" (any controller, Xbox layout) or "Set in Azahar" (opens Azahar's own window to map buttons).
-4. **Plugin**: copies `usum-onescreen.3gx` into `sdmc\luma\plugins\00040000001B5000\`, and edits `sdmc\usum-onescreen.ini` (panel key, touch key, map key, cursor, panel size and corner, auto panel) in place, keeping its comments.
-5. **Update**: installs the update CIA with `azahar.exe -i` (and a CIA base game the same way), then checks the installed TMD says version `0x0800`.
-6. **Play**: starts Azahar with the ROM, windowed or fullscreen.
+Players unzip `usum-onescreen-<tag>-windows.zip`, run `UsumOneScreen.exe`, pick their own decrypted ROM and matching decrypted v1.2 update once, and press Play.
+
+1. **Azahar**: uses `azahar-bundled\azahar.exe` next to the launcher as its source, even with `--home`. If absent, finds or asks for the player's installed Azahar. Copies it to the home's `azahar\` and creates `azahar\user\` to make it portable. The source bundle/install is never modified.
+2. **The dump**: detects Ultra Sun (USA), title `00040000001B5000`, or Ultra Moon (USA), `00040000001B5100`, from the ROM (`.3ds`, `.cci`, `.cxi` or `.cia`). Requires its matching update (`0004000E001B5000` / `0004000E001B5100`), version `0x0820`. Sun alone also accepts rebuilt `0x0800` with the existing new-game warning. Moon refuses `0x0800` and other versions. Encrypted dumps are refused because Azahar 2126.2 cannot install them; each refusal gives a reason.
+3. **Config**: plugin loader on, single-screen layout (top), custom textures off, update check off, status and filter bars off, close without confirming. Controller: Keyboard, Gamepad or Custom (map buttons in Azahar).
+4. **Plugin**: copies `usum-onescreen.3gx` into `sdmc\luma\plugins\<detected title>\`, and edits `sdmc\usum-onescreen.ini` in place, keeping comments.
+5. **Update**: installs the update CIA with `azahar.exe -i` (and a CIA base game the same way), then checks that game's installed TMD for the requested version.
+6. **Play**: remembers the ROM, boot path and selected `title_id` in `usum-onescreen-app.ini`; starts Azahar windowed or fullscreen. The window and CLI `check`, `setup`, `status` identify the game. Old Sun-only state files remain usable.
 
 It never ships, downloads or explains how to get game files or keys.
 
@@ -70,8 +72,12 @@ Genuine v1.2 is title version `0x0820` (v2.2.0); Tyler's encrypted Ultra Sun and
 - It happens with the plugin loader off too, on OpenGL and Vulkan, with the region-free patch off, in Old 3DS mode, and with extdata present. Base v1.0 gets past the screen. Changing only the installed TMD's version to `0x0820` doesn't help, so it is the file's content (the code is identical, so most likely its RomFS), not the number.
 - With the genuine update (decrypted locally from Tyler's dump, see docs/PORTING.md) a new game gets past the screen, through the plugin and the launcher alike (above).
 
-So the launcher accepts `0x0820`, and accepts `0x0800` with a warning (existing saves play; a new game doesn't start). Azahar 2126.2 can't install the encrypted update at all: `InstallCIA` refuses any CIA with encrypted content (exit code 7), even with `aes_keys.txt` in `sysdata`. Players need a decrypted dump.
+So the launcher accepts `0x0820` for both games, and for Sun only accepts `0x0800` with a warning (existing saves play; a new game doesn't start). Azahar 2126.2 can't install the encrypted update at all: `InstallCIA` refuses any CIA with encrypted content (exit code 7), even with `aes_keys.txt` in `sysdata`. Players need a decrypted dump.
 
 ## Not tested
 
-The Gamepad preset with a real controller, "Map buttons in Azahar", fullscreen, a decrypted base-game `.cia` (none available), Ultra Moon (the launcher only takes Ultra Sun), and a player's Azahar that isn't 2126.2.
+The Gamepad preset with a real controller, "Map buttons in Azahar", fullscreen, a decrypted base-game `.cia` (none available), Ultra Moon through the launcher and a fresh bundled-zip setup for each game, and a player's Azahar that isn't 2126.2.
+
+## Launcher regression checks (2026-11-03)
+
+The Release launcher builds on .NET Framework 4.8. `python player/test.py` passes using synthetic headers only, without game content or starting Azahar: Sun/Moon validation, encrypted dumps, supported/refused versions, cross-game update rejection, selected-title state and plugin paths, installed CIA boot paths, bundle priority and immutability, fallback source selection, and legacy Sun state. These checks do not replace the in-game and fresh release-zip checks above.

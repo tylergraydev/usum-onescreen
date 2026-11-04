@@ -115,7 +115,7 @@ namespace UsumOneScreen
             foreach (var f in files)
             {
                 var info = Dump.Read(f);
-                var kind = info.TitleId == Dump.UpdateTitle ? DumpKind.Update : DumpKind.Game;
+                var kind = Dump.IsUpdate(info.TitleId) ? DumpKind.Update : DumpKind.Game;
                 var c = Dump.Check(f, kind);
                 Console.WriteLine($"{(c.Ok ? "ok" : "refused")}: {c.Message}");
                 if (c.Warning != null)
@@ -163,7 +163,7 @@ namespace UsumOneScreen
                 throw new SetupException(notReady);
             using (var p = home.Launch(home.GetState("game"), fullscreen))
             {
-                Console.WriteLine($"started pid {p.Id}");
+                Console.WriteLine($"started {home.GameName}, pid {p.Id}");
                 if (wait == null)
                     return 0;
                 string log = home.PluginBootLine((int)(double.Parse(wait) * 1000), () => !p.HasExited);
@@ -214,6 +214,7 @@ namespace UsumOneScreen
         {
             Console.WriteLine($"home: {home.Root}");
             Console.WriteLine($"azahar: {(home.HasAzahar ? home.AzaharDir + " (" + (Home.AzaharVersion(home.AzaharDir) ?? "version unknown") + ")" : "not copied yet")}");
+            Console.WriteLine($"game: {home.GameName} (USA), title {Dump.Title(home.CurrentTitle)}");
             Console.WriteLine($"rom: {home.GetState("rom", "-")}");
             Console.WriteLine($"boot: {home.GetState("game", "-")}");
             int v = home.InstalledUpdateVersion();
