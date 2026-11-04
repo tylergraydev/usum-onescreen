@@ -6,7 +6,8 @@
       "name": "gspSetFramebuffer",
       "kind": "function",
       "known": {
-        "usun-1.2": "0x279BB4"
+        "usun-1.2": "0x279BB4",
+        "umoon-1.2": "0x279BB4"
       },
       "signatures": [
         {
@@ -25,7 +26,8 @@
       "name": "hidTouchRead",
       "kind": "function",
       "known": {
-        "usun-1.2": "0x2826F0"
+        "usun-1.2": "0x2826F0",
+        "umoon-1.2": "0x2826F0"
       },
       "signatures": [
         {
@@ -49,7 +51,8 @@
       "name": "hidPadRead",
       "kind": "function",
       "known": {
-        "usun-1.2": "0x282548"
+        "usun-1.2": "0x282548",
+        "umoon-1.2": "0x282548"
       },
       "signatures": [
         {
@@ -73,7 +76,8 @@
       "name": "sceneManager",
       "kind": "pointer",
       "known": {
-        "usun-1.2": "0x6A599C"
+        "usun-1.2": "0x6A599C",
+        "umoon-1.2": "0x6A599C"
       },
       "signatures": [
         {
@@ -92,7 +96,8 @@
       "name": "Party",
       "kind": "scene",
       "known": {
-        "usun-1.2": "0x647FCC"
+        "usun-1.2": "0x647FCC",
+        "umoon-1.2": "0x647FCC"
       },
       "signatures": [
         {
@@ -106,7 +111,8 @@
       "name": "Bag",
       "kind": "scene",
       "known": {
-        "usun-1.2": "0x6488C8"
+        "usun-1.2": "0x6488C8",
+        "umoon-1.2": "0x6488C8"
       },
       "signatures": [
         {

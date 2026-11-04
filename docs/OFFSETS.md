@@ -1,6 +1,8 @@
-# Offsets: Pokémon Ultra Sun (USA) v1.2
+# Offsets: Pokémon Ultra Sun / Ultra Moon (USA) v1.2
 
-Title `00040000001B5000`, update title version `0x0800` (2048). Code layout from the update's exheader: text `0x100000` (size `0x4BB818`), rodata `0x5BC000`, data `0x669000`, bss `0x301BC`. The code is not compressed.
+**Ultra Moon v1.2 (`00040000001B5100`, update version `0x0820`) uses every address on this page unchanged.** Checked statically on 2026-11-03: `tools/sigscan.py` finds each hook target, `sceneManager` and the Party/Bag vtables at the Ultra Sun address with the same prologue words. A `code.bin` diff shows the same rodata/data layout (only code pointers and a few constants differ, none the plugin reads), and the CROs the plugin reads are byte-identical apart from header hashes and a few immediates. See `docs/PORTING.md`. Booted on Moon the same day: `hooks: all ok`, with the native X menu, Party and Bag working.
+
+Title `00040000001B5000`, update title version `0x0820` (2080) for genuine v1.2. The decrypted copy this page was first measured on says `0x0800` (2048), and its `code.bin` is byte-identical. Code layout from the update's exheader: text `0x100000` (size `0x4BB818`), rodata `0x5BC000`, data `0x669000`, bss `0x301BC`. The code is not compressed.
 
 Found by static analysis of the local `code.bin` (`tools/extract_code.py`, `tools/find_refs.py`, `tools/find_calls.py`, `tools/ghidra/decompile.sh`). The plugin checks the first four instruction words of each hook target at boot and writes the result to `usum-onescreen.log`. `tools/sigscan.py` with `signatures/usum.json` finds the hook targets, `sceneManager` and the Party/Bag vtables again in another build (see `docs/PORTING.md`).
 
