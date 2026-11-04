@@ -198,6 +198,21 @@ Full write-up: [MOVE-LEARN.md](MOVE-LEARN.md). Read by `Sources/Screens/MoveLear
 - **The forget screen** (WazaOshie CRO, loaded at the battle's start): after "Forget an old move" the stack holds an object with vtable WazaOshie+`0x76D0` under a main-image frame (vtable `0x648E38`, the new top). Object `+0xB0` → param: u8 party index `+0x01` (5), u16 new move `+0x08` (0x260), `+0x18` → the battle party's PokemonParams; object `+0xD4` the learner's PokemonParam (vtable `0x649374`). `+0xB4` byte 1 = 1 while one move's page is up ("Forget this move" / "Give up on learning the move" and "Return to the move-selection screen") and 0 on the list; `+0xB8` the row that page is about (0-3, 4 = the new move); `+0xE4` byte 0 the list cursor (0 → 1 → 2 with Down; a tap opens the page without moving it, and the cursor is on that row when the page closes), byte 1 the page's cursor (0 first button, 1 Return). Diffed across Down presses, a tap on Splash, B back and a tap on the new move.
 - **Move data**: RomFS `a/0/1/1` (base game; the v1.2 update has none), one GARC entry: a `WD` pack of 729 records of `0x28` bytes: u8 type `+0`, category `+2` (0 status, 1 physical, 2 special), power `+3`, accuracy `+4` (101 = never misses), PP `+5`. Checked against Scratch, Fire Fang, Double Kick, Lick (battle move list), Splash and Baby-Doll Eyes (the forget screen's pages), Thunder Shock and Nasty Plot. Read once from the running title's RomFS (`ARCHIVE_ROMFS`, as the map).
 
+## X menu layout (runtime and save, 2026-11-03)
+
+Read by `Sources/Screens/XMenu.cpp` so the native X menu follows the game's real layout (`docs/XMENU.md`). The same addresses hold on Ultra Moon.
+
+- **FieldMenu** (`Savedata::FieldMenu`, RTTI; vtable `0x64F510`) = SaveData `+0x3AE0` (`0x33015408` in the Moon dump, SaveData `0x33011928`). Its data is the save's block at `0x4600`, size `0x4C` (vtable `GetDataSize` `0x45CB00` returns 76).
+- `+0x0C` u8 `[2][6]`: the X menu, page-major, `table[page*6 + slot]` = entry id; slots are row-major in 2 columns × 3 rows. Save offset `0x4608`.
+- Entry ids: 0 Pokémon, 1 Pokédex, 2 Bag, 3 Photo Album, 4 Quick Link, 5 Festival Plaza, 6 Trainer Passport, 7 Poké Pelago, 8 Pokémon Refresh, 9 QR Scanner, 10 Battle Video, 11 Options.
+- `+0x30` u32: bits 15-26 = unlocked, bit `15 + id`. A locked entry keeps its place in the table, but its slot shows empty. Bits 1-2 are per-page flags set when an entry unlocks on that page (not used).
+- Game code (Ultra Sun v1.2 addresses): `0x45CBD0` unlocks an entry (sets its bit, then moves unlocked entries ahead of locked ones), `0x45CE40` moves an entry to a page/slot (swaps the two slots; refuses a locked entry), `0x45D000` finds an entry's slot.
+- Found by diffing two heap dumps (`dump 30000000 4184000`) across one drag on the Moon postgame save. Dragging Trainer Passport onto Poké Pelago's slot swapped `06 07` → `07 06` at `0x3301541A`. The same table is at save offset `0x4608`, and the object around it is identified by its RTTI vtable. Then the disassembly of those functions was read.
+- Verified on both saves (files and memory):
+  - **Ultra Sun `pokecenter`:** table `00 01 02 04 05 06 08 09 0A 0B 03 07`, word `0x47BB8EC6`, so unlocked is everything but 3 and 7. On screen: page 1 Pokémon, Pokédex, Bag, Quick Link, Festival Plaza, Trainer Passport; page 2 Pokémon Refresh, QR Scanner, Battle Video, Options, and two empty slots.
+  - **Ultra Moon `umoon-postgame`:** table `00`–`0B` in order, word `0x4FFFBFD6` (all unlocked). On screen: page 1 Pokémon, Pokédex, Bag, Photo Album, Quick Link, Festival Plaza; page 2 Trainer Passport, Poké Pelago, Pokémon Refresh, QR Scanner, Battle Video, Options.
+- What the new entries open: Photo Album opens scene `MyAlbum` (bottom screen; its back button 16,224 returns to the X menu). Poké Pelago opens the main-image scene `main:0064787C` (the first visit starts with Mohn's dialogue and a tutorial that wants taps).
+
 ## Rotom's field prompts (runtime, 2026-11-02)
 
 Full write-up: [ROTOM-FIELD.md](ROTOM-FIELD.md). Used by `Sources/Screens/RotomPrompt.cpp`. FieldMenu offsets are from the CRO's module header (loaded at `0x7F1000` here; decompiled from a `dump 7F1000 23000` with Ghidra at that base). Checked in instance w62 against screenshots of two chats and one Roto Loto.

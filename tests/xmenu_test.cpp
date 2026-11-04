@@ -4,6 +4,7 @@
 
 #include "Screens/XMenuGrid.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 
@@ -46,7 +47,7 @@ static void TestCloseAction(void)
 static void TestTable(void)
 {
     const std::vector<XMenuEntry> &entries = XMenuEntries();
-    CHECK(entries.size() == 12);
+    CHECK(entries.size() == 14);
     CHECK(entries.size() <= 32);    // enabled masks are one word
 
     for (int i = 0; i < (int)entries.size(); i++)
@@ -62,7 +63,7 @@ static void TestTable(void)
         // Every action is allowed except QR Scanner, whose tap isn't
         // verified (Azahar has no camera and hangs in it).
         const std::string bad = CheckAction(XMenuAction(i));
-        if (std::string(e.name) == "qr_scanner")
+        if (std::string(e.name) == "qr_scanner" || !XMenuVisible(i))
             CHECK(!bad.empty());
         else
         {
@@ -75,12 +76,19 @@ static void TestTable(void)
         const std::string n = e.name;
         CHECK(XMenuOpensNative(i) == (n == "options" || n == "trainer_passport" || n == "battle_video"));
 
+        if (!XMenuVisible(i))
+        {
+            CHECK(XMenuCellRect(i).Empty());
+            continue;
+        }
         // Cells sit inside the menu and don't overlap.
         const UI::Rect r = XMenuCellRect(i);
         CHECK(r.x >= XMenuArea.x + 4 && r.Right() <= XMenuArea.Right() - 4);
         CHECK(r.y >= XMenuArea.y + 4 && r.Bottom() <= XMenuArea.Bottom() - 4);
         for (int j = 0; j < i; j++)
         {
+            if (!XMenuVisible(j))
+                continue;
             const UI::Rect o = XMenuCellRect(j);
             CHECK(!(r.x < o.Right() && o.x < r.Right() && r.y < o.Bottom() && o.y < r.Bottom()));
         }
@@ -200,6 +208,9 @@ struct FakeMenu
         for (const LayoutButton &b : LayoutButtons)
         {
             const std::string name = b.name;
+            if (menu && name.find(".slot") == std::string::npos
+                && name != "xmenu.next_page" && name != "xmenu_page2.prev_page")
+                continue;
             if (name.substr(0, name.find('.')) == screen && x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1)
                 return &b;
         }
@@ -214,22 +225,31 @@ struct FakeMenu
                 const std::string name = b->name;
                 tapped.push_back(name);
                 if (name == "xmenu.next_page")
+                {
+                    Later(3, SceneField, 0);   // probe drops while the page slides
                     Later(12, SceneField, WorldXMenu | WorldXMenuPage2);
+                }
                 else if (name == "xmenu_page2.prev_page")
+                {
+                    Later(3, SceneField, 0);
                     Later(12, SceneField, WorldXMenu);
+                }
                 else if (name == "field.map")
                 {
                     Later(10, "", 0);
                     Later(30, SceneTownMap, 0);
                 }
-                else if (name == "xmenu.quick_link" || name == "xmenu.festival_plaza")
-                    Later(15, SceneField, 0);
                 else
                     for (const XMenuEntry &e : XMenuEntries())
                         if (e.button != nullptr && name == e.button)
                         {
-                            Later(10, "", 0);
-                            Later(30, e.opens, 0);
+                            if (e.opens == nullptr)
+                                Later(15, std::string(e.name) == "poke_pelago" ? "main:0064787C" : SceneField, 0);
+                            else
+                            {
+                                Later(10, "", 0);
+                                Later(30, e.opens, 0);
+                            }
                         }
             }
         wasTouching = out.touching;
@@ -302,8 +322,7 @@ static void TestActions(void)
             CHECK(game.tapped.size() == want);
             CHECK(!game.tapped.empty() && game.tapped.back() == e.button);
             CHECK(game.presses.empty());
-            CHECK(e.opens == nullptr ? game.world.scene == SceneField && !(game.world.flags & WorldXMenu)
-                                     : game.world.scene == e.opens);
+            CHECK(e.opens == nullptr ? !(game.world.flags & WorldXMenu) : game.world.scene == e.opens);
             if (!ok)
                 PrintLog(log);
         }
@@ -361,6 +380,93 @@ static void TestActions(void)
         CHECK(taps == 3);
         CHECK(!log.empty() && log.back().find("FAILED") != std::string::npos);
     }
+}
+
+static XMenuGameLayout MoonLayout(void)
+{
+    XMenuGameLayout layout;
+    for (int id = 0; id < 12; id++)
+        layout.ids[id] = (u8)id;
+    layout.unlocked = 0xFFF;
+    layout.read = true;
+    return layout;
+}
+
+static void TestLayouts(void)
+{
+    const ActionDef *quick = &XMenuAction(E("quick_link"));
+    XMenuGameLayout moon = MoonLayout();
+    const u32 version = XMenuLayoutVersion();
+    CHECK(XMenuSetLayout(moon));
+    CHECK(XMenuLayoutVersion() == version + 1);
+    CHECK(!XMenuSetLayout(moon));
+    CHECK(&XMenuAction(E("quick_link")) == quick);
+    const char *names[] = { "pokemon", "pokedex", "bag", "photo_album", "quick_link", "festival_plaza",
+                            "trainer_passport", "poke_pelago", "pokemon_refresh", "qr_scanner", "battle_video", "options" };
+    for (int i = 0; i < 12; i++)
+    {
+        const XMenuEntry &e = XMenuEntries()[E(names[i])];
+        CHECK(e.page == i / 6 && e.slot == i % 6);
+        CHECK(e.col == (i / 6) * 2 + i % 2 && e.row == i % 6 / 2);
+        CHECK(XMenuAtSlot(i / 6, i % 6) == E(names[i]));
+    }
+    TestActions();
+    {
+        FakeMenu game(false);
+        std::vector<std::string> log;
+        CHECK(Open(game, "quick_link", log));
+        CHECK(game.tapped.size() == 1 && game.tapped[0] == "xmenu.slot5");
+    }
+    {
+        FakeMenu game(false);
+        std::vector<std::string> log;
+        CHECK(Open(game, "options", log));
+        CHECK(game.tapped.size() == 2 && game.tapped[0] == "xmenu.next_page"
+              && game.tapped[1] == "xmenu_page2.slot6");
+    }
+
+    XMenuCursor cursor;
+    cursor.Chosen(E("poke_pelago"));
+    std::swap(moon.ids[6], moon.ids[7]);
+    CHECK(XMenuSetLayout(moon));
+    CHECK(XMenuAtSlot(1, 0) == E("poke_pelago"));
+    CHECK(XMenuAtSlot(1, 1) == E("trainer_passport"));
+    TestActions();
+    moon.unlocked &= ~(1u << 7);
+    CHECK(XMenuSetLayout(moon));
+    CHECK(!XMenuVisible(E("poke_pelago")));
+    CHECK(XMenuAtSlot(1, 0) == -1);
+    CHECK(XMenuEntries()[E("poke_pelago")].page == -1);
+    CHECK(!CheckAction(XMenuAction(E("poke_pelago"))).empty());
+    CHECK(XMenuVisible(cursor.Index()) && cursor.Index() != E("poke_pelago"));
+    CHECK(XMenuMove(E("trainer_passport"), -1, 0, ~0u) != E("poke_pelago"));
+
+    XMenuGameLayout qr = MoonLayout();
+    std::swap(qr.ids[0], qr.ids[9]);
+    CHECK(XMenuSetLayout(qr));
+    CHECK(XMenuEntries()[E("qr_scanner")].page == 0 && XMenuEntries()[E("qr_scanner")].slot == 0);
+    CHECK(CheckAction(XMenuAction(E("qr_scanner"))).find("qr_scanner not available") != std::string::npos);
+
+    moon.ids[0] = moon.ids[1];
+    CHECK(XMenuSetLayout(moon));
+    CHECK(!XMenuCurrentLayout().read);
+    CHECK(XMenuAtSlot(0, 3) == E("quick_link"));
+    moon = MoonLayout();
+    moon.ids[0] = 12;
+    XMenuSetLayout(moon);
+    CHECK(!XMenuCurrentLayout().read && XMenuAtSlot(1, 4) == -1);
+
+    // Definitions built on the default layout resolve a later layout at run time.
+    FakeMenu game(false);
+    ActionRunner runner;
+    std::vector<std::string> log;
+    CHECK(runner.Start(*quick, game.world, log));
+    XMenuSetLayout(MoonLayout());
+    while (runner.Running() && game.frame < 1000)
+        game.Feed(runner.Update(game.world, log));
+    CHECK(!runner.Running());
+    CHECK(game.tapped.size() == 1 && game.tapped[0] == "xmenu.slot5");
+    XMenuSetLayout(XMenuGameLayout());
 }
 
 static UI::Color At(const UI::Canvas &canvas, int x, int y)
@@ -428,7 +534,18 @@ int main(int argc, char **argv)
     TestCursorMemory();
     TestActions();
     TestNative();
+    TestLayouts();
     TestDraw(argc > 1 ? argv[1] : nullptr);
+    XMenuSetLayout(MoonLayout());
+    std::string moonPreview;
+    if (argc > 1)
+    {
+        moonPreview = argv[1];
+        const size_t dot = moonPreview.rfind('.');
+        moonPreview.insert(dot == std::string::npos ? moonPreview.size() : dot, "-moon");
+    }
+    TestDraw(argc > 1 ? moonPreview.c_str() : nullptr);
+    XMenuSetLayout(XMenuGameLayout());
     if (s_failures != 0)
     {
         std::printf("xmenu_test: %d failure(s)\n", s_failures);

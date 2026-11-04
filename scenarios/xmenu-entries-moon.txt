@@ -1,0 +1,189 @@
+# Every native X menu entry on the Ultra Moon postgame save, whose X menu is
+# not the default layout (docs/XMENU.md "Layout"): page 1 Pokémon, Pokédex,
+# Bag, Photo Album, Quick Link, Festival Plaza; page 2 Trainer Passport,
+# Poké Pelago, Pokémon Refresh, QR Scanner, Battle Video, Options. Each entry
+# is picked by name, opened with A, and must open its own scene (or, for the
+# entries without one, close the X menu), then is backed out of. Runs on an
+# Ultra Moon instance only (tools/instance.py game NAME moon). Nothing is
+# saved. Poké Pelago comes last: its first visit starts a tutorial that wants
+# taps, so the run stops there.
+restore umoon-postgame
+include common/boot
+
+# --- The native menu reads the game's layout ---
+mark
+send press x
+expect-log ^xmenu: layout p1 pokemon pokedex bag photo_album quick_link festival_plaza \| p2 trainer_passport poke_pelago pokemon_refresh qr_scanner battle_video options 10
+expect-log ^xmenu: shown 10
+expect-mode off
+sleep 1
+shot menu
+
+# --- Pokémon ---
+mark
+send xmenu select pokemon
+expect-log ^xmenu: cursor pokemon 5
+send press a
+expect-log ^action: xmenu-pokemon ok 15
+wait-scene main:00647FCC 10
+expect-log ^party-ui: shown 5
+sleep 2
+shot pokemon
+mark
+send press b
+wait-scene FieldRo 20
+expect-log ^xmenu: shown 15
+
+# --- Pokédex (its back button returns to the X menu) ---
+mark
+send xmenu select pokedex
+expect-log ^xmenu: cursor pokedex 5
+send press a
+expect-log ^action: xmenu-pokedex ok 15
+wait-scene Zukan 10
+sleep 3
+shot pokedex
+mark
+send move 15 223; tap 6
+wait-scene FieldRo 20
+expect-log ^xmenu: shown 15
+
+# --- Bag ---
+mark
+send xmenu select bag
+expect-log ^xmenu: cursor bag 5
+send press a
+expect-log ^action: xmenu-bag ok 15
+wait-scene main:006488C8 10
+sleep 2
+shot bag
+mark
+send press b
+wait-scene FieldRo 20
+expect-log ^xmenu: shown 15
+
+# --- Photo Album (page 1 slot 4 on this save; Quick Link used to land here) ---
+mark
+send xmenu select photo_album
+expect-log ^xmenu: cursor photo_album 5
+send press a
+expect-log ^action: xmenu-photo_album ok 15
+wait-scene MyAlbum 10
+sleep 2
+shot photo-album
+mark
+send move 16 224; tap 6
+wait-scene FieldRo 20
+expect-log ^xmenu: shown 15
+
+# --- Quick Link (page 1 slot 5 here): no scene change, the panel shows it ---
+mark
+send xmenu select quick_link
+expect-log ^xmenu: cursor quick_link 5
+send press a
+expect-log ^action: xmenu-quick_link ok 10
+expect-log ^xmenu: hidden 5
+reject-log ^scene: MyAlbum
+sleep 2
+shot quick-link           # bottom: the Quick Link screen, not the Photo Album
+mark
+send move 15 223; tap 6
+expect-log ^xmenu: shown 15
+
+# --- Trainer Passport (page 2 slot 1 here: the action turns the page) ---
+mark
+send xmenu select trainer_passport
+expect-log ^xmenu: cursor trainer_passport 5
+send press a
+expect-log ^action: xmenu-trainer_passport ok 15
+wait-scene TrainerPass 10
+sleep 2
+shot passport
+mark
+send move 15 223; tap 6
+wait-scene FieldRo 20
+expect-log ^xmenu: shown 15
+
+# --- Pokémon Refresh (page 2 slot 3) ---
+mark
+send xmenu select pokemon_refresh
+expect-log ^xmenu: cursor pokemon_refresh 5
+send press a
+expect-log ^action: xmenu-pokemon_refresh ok 15
+wait-scene Kawaigari 10
+sleep 3
+shot refresh
+mark
+send press b
+sleep 3
+repeat 4 until-scene FieldRo
+  send move 14 222; tap 4
+  sleep 5
+end
+expect-log ^xmenu: shown 15
+
+# --- QR Scanner: still refused, wherever it sits ---
+mark
+send xmenu select qr_scanner
+expect-log ^xmenu: cursor qr_scanner 5
+send press a
+expect-log ^xmenu: qr_scanner not available 5
+reject-log ^action:
+expect-scene FieldRo
+
+# --- Battle Video (page 2 slot 5: a slot the Ultra Sun save leaves empty) ---
+mark
+send xmenu select battle_video
+expect-log ^xmenu: cursor battle_video 5
+send press a
+expect-log ^action: xmenu-battle_video ok 15
+wait-scene BattleVideoPlayer 10
+sleep 2
+shot battle-video
+mark
+send move 16 224; tap 6
+wait-scene FieldRo 20
+expect-log ^xmenu: shown 15
+
+# --- Options (page 2 slot 6, the other slot the Ultra Sun save leaves empty) ---
+mark
+send xmenu select options
+expect-log ^xmenu: cursor options 5
+send press a
+expect-log ^action: xmenu-options ok 15
+wait-scene Config 10
+sleep 2
+shot options
+mark
+send move 15 223; tap 6
+wait-scene FieldRo 20
+expect-log ^xmenu: shown 15
+
+# --- Festival Plaza (page 1 slot 6): goes straight in; leave with back -> "quit?" -> Y ---
+mark
+send xmenu select festival_plaza
+expect-log ^xmenu: cursor festival_plaza 5
+send press a
+expect-log ^action: xmenu-festival_plaza ok 10
+sleep 8
+shot plaza
+send move 16 223; tap 6
+sleep 3
+shot plaza-quit
+send press y
+sleep 12
+wait-scene FieldRo 30
+
+# --- Poké Pelago (page 2 slot 2), last: its tutorial is not left ---
+mark
+send press x
+expect-log ^xmenu: shown 10
+send xmenu select poke_pelago
+expect-log ^xmenu: cursor poke_pelago 5
+send press a
+expect-log ^action: xmenu-poke_pelago ok 15
+wait-scene main:0064787C 15
+sleep 3
+shot pelago
+check-save
+stop

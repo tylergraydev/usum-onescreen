@@ -84,6 +84,7 @@ namespace OneScreen
         Wait,       // `frames` frames
         WaitFor,    // until `until`; after `frames` retry from `retryFrom`, then fail (or go on if optional)
         SucceedIf,  // finish the action now, successfully, if `until` holds
+        XMenuEntry, // resolve an entry id, turn its page and tap its current slot
         BackOut,    // tap the scene's back button until the field shows, X menu closed
     };
 
@@ -91,6 +92,7 @@ namespace OneScreen
     {
         StepKind kind = StepKind::Wait;
         const char *button = nullptr;   // Tap: a LayoutButtons name
+        int entry = -1;                // XMenuEntry: saved FieldMenu id
         u32 keys = 0;                   // Press
         u32 frames = 0;                 // Tap/Press: held; Wait: length; WaitFor/BackOut: timeout
         ActionCond until;               // WaitFor
@@ -112,6 +114,16 @@ namespace OneScreen
     const u32 ActionGapFrames  = 2;
 
     ActionStep StepTap(const char *button, u32 frames = ActionHoldFrames);
+    ActionStep StepXMenuEntry(int id);
+    // Routing shared by the native grid and the field's built-in actions.
+    // Slots are page-major; -1 means locked or absent. Defaults to the Sun save.
+    // Plugin hook: refresh saved routing before an X menu action starts.
+    // Called while idle; pure host users can set routing directly.
+    void ActionSetXMenuPrepare(void (*prepare)(std::vector<std::string> &));
+    void ActionSetXMenuSlots(const int slots[12]);
+    int ActionXMenuSlot(int id);
+    const char *ActionXMenuButton(int id);
+
     ActionStep StepPress(u32 keys, u32 frames = ActionHoldFrames);
     ActionStep StepWait(u32 frames);
     ActionStep StepWaitFor(const ActionCond &until, u32 timeout);
@@ -182,6 +194,7 @@ namespace OneScreen
         std::vector<u8> m_retries;  // retries used, per step
         // BackOut: taps so far, the tap in progress, and how long the world
         // has looked the same.
+        int m_menuPage = 0, m_menuPhase = 0;
         u32 m_taps = 0;
         const LayoutButton *m_tapping = nullptr;
         u32 m_pressing = 0;

@@ -10,6 +10,9 @@ Supports Pokémon Ultra Sun and Ultra Moon (USA) v1.2 (`00040000001B5000` / `000
 
 #### Added
 
+- The native X menu follows the game's own X-menu layout (entries the player rearranged, and Photo Album and Poké Pelago once unlocked). It used to assume the default layout and could open the wrong entry. Taps are made at the slot the entry is in now.
+- The native Pokédex shows three-digit caught / seen counts in full.
+
 - Genuine Ultra Sun v1.2 updates (title version `0x0820`) are accepted. Before, only `0x0800`, a decrypted copy with a rewritten TMD, was. The code is identical.
 - Ultra Moon (USA) v1.2 (`00040000001B5100`, `0x0820`) is accepted, with the same addresses as Ultra Sun (checked statically, then in Azahar: boot, panel, native X menu, Party, Bag). The native X menu also recognises Ultra Moon's light-blue menu background.
 
