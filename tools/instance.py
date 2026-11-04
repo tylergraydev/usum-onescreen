@@ -2,10 +2,13 @@
 
 Usage: py -3 -I tools/instance.py COMMAND NAME [options]
 
-  create NAME [--force]     make analysis/private/instances/NAME/
+  create NAME [--force] [--game sun|moon]
+                            make analysis/private/instances/NAME/ (default sun)
+  game NAME [sun|moon]       print or set the instance's game
   install NAME [3GX]        copy a built plugin in (default: ./usum-onescreen.3gx)
   start NAME [--rom PATH] [--wait SECONDS] [--movie CTM] [--no-plugin] [--no-queue]
-                            launch Ultra Sun; with --wait, wait for the plugin's
+                            launch the instance's game; --rom defaults to the Sun
+                            ROM or installed Moon base content; with --wait, wait for the plugin's
                             boot log and print it; --movie plays an input movie
                             (tools/movie.py); --no-plugin turns the 3GX plugin
                             loader off for this run (each start sets it).
@@ -24,6 +27,8 @@ instance is a copy of the Azahar install with its own `user` folder: config,
 nand, sysdata and sdmc copied from %APPDATA%\\Azahar, holding only the Ultra
 Sun v1.2 update, a copy of its save and extdata, and the plugin. Nothing here
 writes to %APPDATA%\\Azahar.
+Install copies the plugin into both games' plugin folders. Install Ultra Moon into the instance (e.g. run azahar.exe -i from its azahar folder),
+then select it with game NAME moon and launch it with start NAME.
 """
 import argparse
 import ctypes
@@ -45,6 +50,7 @@ APPDATA = Path(os.environ["APPDATA"]) / "Azahar"
 ROM = Path("H:/3DS Roms/POKUS-WORLD-(Update1.2)-Ziperto/"
            "00040000001B5000 Pokemon Ultra Sun (CTR-P-A2AA) (v0.0.0) (W).piratelegit (1)-decrypted.cci")
 TITLE = "00040000001B5000"
+MOON_TITLE = "00040000001B5100"
 SD_ID = Path("Nintendo 3DS") / ("0" * 32) / ("0" * 32)
 # Paths under the SD ID folder that Ultra Sun needs: the v1.2 update, the save, the extdata.
 SD_COPIES = [Path("title/0004000e/001b5000"), Path("title/00040000/001b5000"),
@@ -61,6 +67,15 @@ def instance_dir(name):
     if not re.fullmatch(r"[A-Za-z0-9_-]+", name):
         sys.exit(f"bad instance name '{name}' (letters, digits, _ and - only)")
     return INSTANCES / name
+
+
+def game_of(name):
+    """The instance's game; older instances default to sun."""
+    path = instance_dir(name) / "game.txt"
+    game = path.read_text().strip() if path.is_file() else "sun"
+    if game not in ("sun", "moon"):
+        sys.exit(f"bad game in {path}: expected sun or moon")
+    return game
 
 
 def exe_path(name):
@@ -146,8 +161,18 @@ def cmd_create(args):
         if not src.is_dir():
             sys.exit(f"missing {src}")
         shutil.copytree(src, sdmc_dir(args.name) / SD_ID / rel)
-    (sdmc_dir(args.name) / "luma" / "plugins" / TITLE).mkdir(parents=True)
+    for title in (TITLE, MOON_TITLE):
+        (sdmc_dir(args.name) / "luma" / "plugins" / title).mkdir(parents=True)
+    (root / "game.txt").write_text(args.game + "\n")
     print(root)
+
+
+def cmd_game(args):
+    if not user_dir(args.name).is_dir():
+        sys.exit(f"no instance '{args.name}' (run create first)")
+    if args.game:
+        (instance_dir(args.name) / "game.txt").write_text(args.game + "\n")
+    print(game_of(args.name))
 
 
 def cmd_install(args):
@@ -156,10 +181,11 @@ def cmd_install(args):
         sys.exit(f"no plugin at {plugin} (run make first)")
     if not user_dir(args.name).is_dir():
         sys.exit(f"no instance '{args.name}' (run create first)")
-    dst = sdmc_dir(args.name) / "luma" / "plugins" / TITLE / "usum-onescreen.3gx"
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(plugin, dst)
-    print(dst)
+    for title in (TITLE, MOON_TITLE):
+        dst = sdmc_dir(args.name) / "luma" / "plugins" / title / "usum-onescreen.3gx"
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(plugin, dst)
+        print(dst)
 
 
 # --- processes (Win32 through ctypes, stdlib only) ---
@@ -267,6 +293,13 @@ def cmd_start(args):
         sys.exit(f"no instance '{args.name}' (run create first)")
     if running_pid(args.name):
         sys.exit(f"instance '{args.name}' is already running")
+    rom = Path(args.rom) if args.rom is not None else ROM
+    if args.rom is None and game_of(args.name) == "moon":
+        rom = sdmc_dir(args.name) / SD_ID / "title/00040000/001b5100/content/00000000.app"
+        if not rom.is_file():
+            sys.exit(f"missing Ultra Moon base content at {rom}; install the Ultra Moon base CIA "
+                     f"into this instance with {exe_path(args.name)} -i <base.cia>")
+    rom = rom.resolve()
     log = sdmc_dir(args.name) / "usum-onescreen.log"
     log.unlink(missing_ok=True)
     ini = user_dir(args.name) / "config" / "qt-config.ini"
@@ -278,7 +311,7 @@ def cmd_start(args):
     lock = None if args.no_queue else wait_for_slot(args.name)
     try:
         flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
-        proc = subprocess.Popen(command + [str(args.rom)], cwd=instance_dir(args.name),
+        proc = subprocess.Popen(command + [str(rom)], cwd=instance_dir(args.name),
                                 creationflags=flags, close_fds=True,
                                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         info = process_info(proc.pid)
@@ -345,14 +378,19 @@ def main():
     p = sub.add_parser("create")
     p.add_argument("name")
     p.add_argument("--force", action="store_true")
+    p.add_argument("--game", choices=("sun", "moon"), default="sun")
     p.set_defaults(func=cmd_create)
+    p = sub.add_parser("game")
+    p.add_argument("name")
+    p.add_argument("game", nargs="?", choices=("sun", "moon"))
+    p.set_defaults(func=cmd_game)
     p = sub.add_parser("install")
     p.add_argument("name")
     p.add_argument("plugin", nargs="?")
     p.set_defaults(func=cmd_install)
     p = sub.add_parser("start")
     p.add_argument("name")
-    p.add_argument("--rom", default=ROM)
+    p.add_argument("--rom", default=None)
     p.add_argument("--wait", type=float, default=0)
     p.add_argument("--movie")
     p.add_argument("--no-plugin", action="store_true")

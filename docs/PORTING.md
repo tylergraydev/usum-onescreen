@@ -17,7 +17,57 @@ CRO scene names (`FieldRo`, `Zukan`, `Battle`, `TitleMenu`) come from the module
 
 For Ultra Sun v1.2 the build-specific values are: text `0x100000`, rodata `0x5BC000`, data `0x669000` (size `0x3CD88`), bss `0x301BC`, image end `0x6D5F44` → `0x6D6000`.
 
+## Update version 0x0820 and Ultra Moon (checked 2026-11-03)
+
+**Genuine v1.2 is `0x0820`.** Three Ultra Sun v1.2 update files were compared:
+
+| File | TMD version | `code.bin` SHA-256 |
+|---|---|---|
+| `Pokemon Ultra Sun Update v1.2 (RF) ENC (Patch)-decrypted.cia` (the one the plugin was built and tested on) | `0x0800` (2048) | `421774f2…ce16200f` |
+| `0004000E001B5000 Pokemon Ultra Sun (CTR-U-A2AA) (v2.2.0) (W).piratelegit.cia` (Tyler's encrypted original) | `0x0820` (2080) | `421774f2…ce16200f` |
+| `Pokemon Ultra Sun (World) (Update v1.2 - v0820) Decrypted.cia` (another decrypted dump) | `0x0820` (2080) | `421774f2…ce16200f` |
+
+The code is byte-identical, so every hook target sits at the same address and the same offset table serves both. Only the patched copy's TMD says `0x0800`. `Game.cpp` therefore lists Ultra Sun twice: `0x0820` (genuine) and `0x0800` (that patched copy, still used by the test instances and start points).
+
+In Azahar (instance `us20`, genuine update installed): the plugin before this change logged `USUM One Screen: unsupported game 00040000001B5000 v2080 (0x0820)` and did nothing. With the `0x0820` entry it logs `Pokemon Ultra Sun 00040000001B5000 v2080 (0x0820)` and `hooks: all ok`.
+
+**The new-game stall was the patched update.** With the genuine `0x0820` update and no save, a new game passes the language screen (`LangSelect` → "Your settings have been saved." → Professor Kukui's intro, `scene: main:0064787C`). With the patched `0x0800` update it stalls there (docs/PLAYER-APP.md). Since the code is identical, the patched file's RomFS is the likely cause; it was not diffed further.
+
+**Azahar 2126.2 will not install encrypted CIAs.** Even with `aes_keys.txt` in `sysdata`, `azahar.exe -i` exits with code 7 and logs `… is encrypted! Aborting...`. `tools/extract_code.py` and `tools/romfs_text.py` also need NoCrypto content. For this check the encrypted CIAs were decrypted locally with the keys in `Y:\3ds\aes_keys.txt` (title key with the common key, then NCCH AES-CTR; the exheader SHA-256 in the NCCH header was checked). The script is not in the repo, and its output is under `analysis/private/`.
+
+**Ultra Moon USA v1.2:** base `00040000001B5100` (v0), update `0004000E001B5100` TMD version `0x0820`. The exheader layout is identical to Ultra Sun's (text `0x100000` size `0x4BB818`, rodata `0x5BC000`, data `0x669000` size `0x3CD88`, bss `0x301BC`, not compressed), so `CroArea`, `SnapStart`/`SnapEnd` and the vtscan rodata range need no change. `code.bin` SHA-256 is `8854abc9…6949084a`.
+
+- `sigscan.py` resolves every target uniquely, at the same address as Ultra Sun: gspSetFramebuffer `0x279BB4`, hidTouchRead `0x2826F0`, hidPadRead `0x282548`, sceneManager `0x6A599C`, Party `main:00647FCC`, Bag `main:006488C8`, with the same prologue words. `"umoon-1.2"` is now in each target's `known`.
+- A byte diff of the two `code.bin`s: `0x279000`–`0x283000` (all hook targets, gxDisplayTransfer `0x27A5BC`, gxTextureCopy `0x279E28`, the GX queue push) is identical. Elsewhere in text some functions moved by 4 bytes. In rodata and data, 3125 of the differing words are code pointers 4 higher and the rest are 58 small constants. No vtable, global or table moved. So every main-image address the plugin hardcodes (Party, Bag, Box, Pokédex, Rotom, sub-screen vtables, `GameManager` `0x6A59C4`, the message globals, `LanguageByte` `0x671A10`, `FormTable` `0x5D63DC`) holds on Ultra Moon. FormTable's neighbour at `0x5D6250`–`0x5D6268` differs, which looks like version-exclusive data; the plugin does not read it.
+- CROs (update RomFS, 132 modules, same file list): 123 are byte-identical, including `Battle`, `Bag`, `Box`, `WazaOshie` and `Kawaigari`. `FieldRo`, `FieldMenu`, `Zukan`, `TrainerPass`, `Live` and `SequencePlayer` differ only in the header hash (`0x20`–`0x3F`) and 1–10 single-byte immediates. `KisekaeData`, `MovieLib` and `Title` differ more. The plugin reads none of those three. So the CRO-relative offsets (Battle, Bag, FieldRo `+0xD735C`, WazaOshie) hold.
+- Scene IDs: CRO names come from the modules (same names). Party/Bag `main:` IDs are the same as Ultra Sun's, so the settings defaults need no Moon entries.
+
+`Game.cpp` has an Ultra Moon `0x0820` entry using the shared table.
+
+**Seed.** The Ultra Moon base CIA uses seed crypto (NCCH flag `0x20`). The seed came from Nintendo's public seed server (`kagiya-ctr.cdn.nintendo.net/title/0x00040000001B5100/ext_key?country=US`, 16 bytes, fetched by hand). It passed the NCCH seed check (`0x114`), every ExeFS file SHA-256 and the full RomFS IVFC hash tree (896160 level-3 blocks, 0 bad). The seed is kept in `analysis/private/seeddb/`.
+
+**In Azahar (instance `um1`, Moon base and update installed from local decrypted copies):**
+- Boot log: `USUM One Screen: Pokemon Ultra Moon 00040000001B5100 v2080 (0x0820)`, every hook `ok`, `hooks: all ok`. The game assets load (font, icons, moves, names from `a/0/3/2`). `instance.py start` needs `--rom` with the installed `.app`'s **absolute** path; a relative one fails, because Azahar runs from the instance folder.
+- **New game: reaches `FieldRo`, then stalls.** It goes LangSelect → Kukui intro → `HeroSelect` → name (game keyboard) → opening cutscene → `FieldRo`, but the opening bedroom scene never moves on. Meowth stays at the room's edge, field state 17, while frames keep running. This happened twice, once with the panel used and once without it. The same steps on Ultra Sun (genuine `0x0820`, also with the plugin) pass that scene (Meowth's "Mwaaawwwrrrrr!!!"). The RomFS checks out, so this isn't the decrypt. Not settled: whether it happens without the plugin. Driving the intro without the plugin needs a touch-capable input movie, and `tools/movie.py` has no touch input.
+- **Field through a Sun save:** USUM saves share one format, and Moon loaded a copy of the `pokecenter` start point's Ultra Sun save (title menu: Continue, Route 2). From there:
+  - Panel (`mode panel`): draws Moon's bottom screen (the Rotom map) with the cursor, GPU readback ok. The L+R key itself can't be tested with injected input (it reads the real pad).
+  - **Native X menu: needed a fix.** Ultra Moon's X-menu background is light blue (animated; measured 137..161 / 219..252 / 244..255 at (10,120)), not Sun's yellow, so the pixel probe never matched (`xmenu: … the native menu isn't waiting for input`). `Sources/Actions.cpp` now accepts either background. The Save bar, the Y corner, the page-2 arrow and the red game cursor are the same colours in both games. After the fix: `xmenu: shown (game page 1)`, the cursor moves, and Pokémon → `action: xmenu-pokemon ok`, `party-ui: shown`; B returns to the native menu, B closes it.
+  - Native Party (`main:00647FCC`): `party-ui: shown`, party read correctly (Torracat L17 … Buneary L12); the Party list probe colours match Sun's.
+  - Native Bag (`main:006488C8`): pocket icons, item descriptions and the party sidebar all shown.
+**Ultra Moon postgame save (start point `umoon-postgame`, 2026-11-03).** Tyler's own completed Ultra Moon save (`analysis/private/saves/umoon-postgame/main`, sha256 `ad57c17f…`) loads in the player's house (zone 35, Route 1 / Hau'oli Outskirts). The test kit now handles Moon: `instance.py create --game moon` / `game NAME moon` (then `start` boots the installed Moon base), start points record their game and only restore into an instance of that game, and `scenario.py --restore POINT` replaces every scenario's `restore` point.
+- `where`, `party` and `bag` read correctly. Party: Decidueye L100 (Decidium Z), Persian, Vikavolt, Mudsdale, Umbreon, Poipole. The bag has every pocket, including 18 Z-Crystals and Ultranecrozium Z.
+- **Native Rotom prompt:** a Rotom question popped up at load and was drawn, answered and replied to natively.
+- `scenario.py --instance um1 --restore umoon-postgame native-xmenu native-party native-bag native-pokedex native-map`: **all five FAIL, mostly on the Sun save's contents.** By scenario:
+  - native-party: the native Party screen showed the Moon party correctly. It failed at the line expecting the Sun party (Torracat L17 …).
+  - native-pokedex: the native Pokédex opened (Alola 14 caught; Melemele 8/94, Akala 7/68, Ula'ula 7/85, Poni 2/69). It failed at the Sun save's counts (22/38). **Display bug:** a 3-digit seen count is cut off ("1…") on the top level. The Sun test save never had more than 38 seen.
+  - native-map: the native map showed "Route 1, Hau'oli Outskirts, Melemele Island … Inside, facing S". It failed at the line expecting the Route 2 Pokémon Center.
+  - native-bag: failed at its first step, a walk out of the Route 2 Pokémon Center into grass. The native Bag itself was checked earlier.
+  - **native-xmenu found a real bug, not Moon-specific: the native X menu assumes the default layout of the game's X-menu entries.** This save's page 1 is Pokémon, Pokédex, Bag, **Photo Album**, Quick Link, Festival Plaza (Photo Album appears later in the game, and players can rearrange the entries). The Sun test save's page 1 is Pokémon, Pokédex, Bag, Quick Link, Festival Plaza, Trainer Passport. So picking Quick Link opened the Photo Album, and picking Trainer Passport opened Festival Plaza. The scenario's Quick Link step still passed, because it only checks that the menu hides and the panel shows. Any save with a different layout hits this, Ultra Sun included. The native menu needs to read the game's real layout.
+- Not reached on Moon: a wild battle and the PC boxes. Leaving the house runs two postgame story scenes (Mom, then Hau and the Ultra Recon Squad; dialogue only, nothing saved). On Route 1 the nearby grass was behind ledges and walls the stick-walking didn't get past, and the nearest PC is in Hau'oli City. Also not checked: keyboard, Ride Pager, battle screens.
+
 ## Ultra Moon checklist
+
+(Done for Ultra Moon v1.2; see the section above. Step 6's full play-check is not.)
 
 1. **Dump and extract.** Dump the base game and the v1.2 update as decrypted CIAs (no Ultra Moon dump exists yet). Extract the update's code:
    ```

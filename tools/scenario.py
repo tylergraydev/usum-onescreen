@@ -3,6 +3,8 @@
 Usage: py -3 -I tools/scenario.py --instance NAME [--keep] [-v] SCENARIO [SCENARIO ...]
        py -3 -I tools/scenario.py --check SCENARIO [...]   (parse only, no emulator)
 
+--restore POINT overrides every restore step's point, with one notice per run.
+
 SCENARIO is a file, or a name in scenarios/ (scenarios/NAME.txt). One step per
 line; # starts a comment (at the start of a line, or after a space; not in
 expect-log / reject-log lines, where # is part of the regex). Steps:
@@ -196,10 +198,12 @@ def last_match(pattern, text):
 
 
 class Runner:
-    def __init__(self, name, instance, verbose, guard=True):
+    def __init__(self, name, instance, verbose, guard=True, restore=None, restore_notices=None):
         self.name = name
         self.instance = instance
         self.verbose = verbose
+        self.restore = restore
+        self.restore_notices = restore_notices if restore_notices is not None else set()
         self.sdmc = emu.sdmc_path(instance)
         self.mark = 0
         self.shots = []
@@ -291,9 +295,13 @@ class Runner:
                 self.instance_py("stop", self.instance)
                 self.started = False
             elif op == "restore":
+                point = self.restore if self.restore is not None else args[0]
+                if self.restore is not None and not self.restore_notices:
+                    print(f"restore overridden: {args[0]} -> {point}", flush=True)
+                    self.restore_notices.add(point)
                 self.instance_py("stop", self.instance)
                 self.started = False
-                proc = subprocess.run([sys.executable, "-I", str(STARTPOINT_PY), "restore", self.instance, args[0]],
+                proc = subprocess.run([sys.executable, "-I", str(STARTPOINT_PY), "restore", self.instance, point],
                                       capture_output=True, text=True)
                 out = (proc.stdout + proc.stderr).strip()
                 if self.verbose and out:
@@ -390,7 +398,7 @@ class Runner:
                              f"now {describe_fingerprint(now)}")
 
 
-def run(path, instance, keep, verbose, guard=True):
+def run(path, instance, keep, verbose, guard=True, restore=None, restore_notices=None):
     name = path.stem
     print(f"scenario {name} ({path})")
     try:
@@ -398,7 +406,7 @@ def run(path, instance, keep, verbose, guard=True):
     except SyntaxError as e:
         print(f"FAIL {name}: {e}")
         return False
-    runner = Runner(name, instance, verbose, guard)
+    runner = Runner(name, instance, verbose, guard, restore, restore_notices)
     print(f"  real save: {describe_fingerprint(runner.save)}")
     t0 = time.time()
     try:
@@ -448,6 +456,7 @@ def resolve(arg):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--instance", help="instance name (tools/instance.py)")
+    parser.add_argument("--restore", metavar="POINT", help="override every restore step's start point")
     parser.add_argument("--check", action="store_true", help="only parse the scenarios (no emulator)")
     parser.add_argument("--keep", action="store_true", help="leave the instance running on failure")
     parser.add_argument("--no-guard", action="store_true", help="don't fail on crash/hook lines in the logs")
@@ -468,7 +477,9 @@ def main():
     if not emu.sdmc_path(args.instance).is_dir():
         sys.exit(f"no instance '{args.instance}' (see tools/instance.py)")
     paths = [resolve(s) for s in args.scenarios]
-    results = [(p.stem, run(p, args.instance, args.keep, args.verbose, not args.no_guard)) for p in paths]
+    restore_notices = set()
+    results = [(p.stem, run(p, args.instance, args.keep, args.verbose, not args.no_guard,
+                           args.restore, restore_notices)) for p in paths]
     if len(results) > 1:
         print("summary: " + ", ".join(f"{n} {'PASS' if ok else 'FAIL'}" for n, ok in results))
     sys.exit(0 if all(ok for _, ok in results) else 1)

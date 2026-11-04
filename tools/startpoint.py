@@ -17,7 +17,7 @@ server has no save/load request; that arrived in 2127.0-alpha4 with a fixed UDP
 port), so a start point is an in-game save: drive the instance there, save in
 the game (X, then Y: Save), `stop`, then `save`. Points live in
 analysis/private/startpoints/POINT/ (the save folder, the extdata folder and
-point.json) and can be restored into any instance of this checkout.
+point.json). Points are per game and can be restored into instances of that game.
 
 Kinds: `title` stops on the title screen; `field` goes on with Start, A
 (Continue) and waits for `scene: FieldRo`, where the save left the player.
@@ -40,11 +40,19 @@ import instance  # noqa: E402  (tools/instance.py)
 
 POINTS = instance.REPO / "analysis" / "private" / "startpoints"
 # The save folder and the extdata folder, under the SD ID folder.
-SAVE_DIRS = [Path("title/00040000/001b5000/data"), Path("extdata/00000000/00001B50")]
+SAVE_DIRS = {
+    "sun": [Path("title/00040000/001b5000/data"), Path("extdata/00000000/00001B50")],
+    "moon": [Path("title/00040000/001b5100/data"), Path("extdata/00000000/00001B50")],
+}
 REAL_SAVE = instance.APPDATA / "sdmc" / instance.SD_ID / "title/00040000/001b5000/data/00000001/main"
 # Seconds after the plugin's boot line before the title is up. Measured on 2126.2:
 # Start was taken 3 s after the boot line.
 TITLE_SETTLE = 6
+
+
+def save_dirs(game):
+    """Save and extdata paths for the game, under the SD ID folder."""
+    return SAVE_DIRS[game]
 
 
 def point_dir(point):
@@ -84,20 +92,21 @@ def read_point(point):
 def cmd_list(args):
     for meta in sorted(POINTS.glob("*/point.json")):
         info = json.loads(meta.read_text())
-        print(f"{meta.parent.name}: {info['kind']}, from '{info['instance']}' {info['saved']}"
+        print(f"{meta.parent.name}: {info.get('game', 'sun')}, {info['kind']}, from '{info['instance']}' {info['saved']}"
               f"{'  ' + info['note'] if info.get('note') else ''}")
 
 
 def cmd_save(args):
     need_stopped(args.instance)
+    game = instance.game_of(args.instance)
     dst = point_dir(args.point)
     if dst.exists():
         if not args.force:
             sys.exit(f"start point '{args.point}' exists (use --force to replace it)")
         shutil.rmtree(dst)
-    for rel in SAVE_DIRS:
+    for rel in save_dirs(game):
         shutil.copytree(sd_root(args.instance) / rel, dst / "sd" / rel)
-    info = {"kind": args.kind, "instance": args.instance, "note": args.note,
+    info = {"game": game, "kind": args.kind, "instance": args.instance, "note": args.note,
             "saved": datetime.now().isoformat(timespec="seconds"), "files": file_hashes(dst / "sd")}
     (dst / "point.json").write_text(json.dumps(info, indent=1) + "\n")
     print(f"saved '{args.point}' ({args.kind}) from '{args.instance}': {dst}")
@@ -106,17 +115,21 @@ def cmd_save(args):
 def restore(name, point):
     need_stopped(name)
     info = read_point(point)
+    game = info.get("game", "sun")
+    instance_game = instance.game_of(name)
+    if game != instance_game:
+        sys.exit(f"start point '{point}' is for {game}, but instance '{name}' is for {instance_game}")
     src = point_dir(point) / "sd"
     if file_hashes(src) != info["files"]:
         sys.exit(f"start point '{point}' does not match its point.json hashes")
-    for rel in SAVE_DIRS:
+    for rel in save_dirs(game):
         dst = sd_root(name) / rel
         if not inside(dst, instance.INSTANCES):
             sys.exit(f"refusing to write outside the instances folder: {dst}")
         if dst.exists():
             shutil.rmtree(dst)
         shutil.copytree(src / rel, dst)
-    if any(file_hashes(sd_root(name) / rel) != file_hashes(src / rel) for rel in SAVE_DIRS):
+    if any(file_hashes(sd_root(name) / rel) != file_hashes(src / rel) for rel in save_dirs(game)):
         sys.exit("restored files do not match the start point")
     return info
 
