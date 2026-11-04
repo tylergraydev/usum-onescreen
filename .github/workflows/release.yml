@@ -1,7 +1,7 @@
 name: Release
 
-# Pushing a tag like v0.1.0 builds the plugin and attaches usum-onescreen.3gx
-# to a draft GitHub Release for that tag. Publishing the draft is done by hand.
+# Pushing a tag like v0.1.0 builds the plugin and Windows player zip and attaches
+# both to a draft GitHub Release for that tag. Publishing the draft is done by hand.
 on:
   push:
     tags:
@@ -58,9 +58,67 @@ jobs:
           path: usum-onescreen.3gx
           if-no-files-found: error
 
+  windows:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: usum-onescreen
+
+      - name: Download and verify Azahar 2126.2
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'azahar.zip'
+          Invoke-WebRequest 'https://github.com/azahar-emu/azahar/releases/download/2126.2/azahar-windows-msvc-2126.2.zip' -OutFile $archive
+          $expected = '4412eac8d13123c8840f11890fc26e5b0e4c76d16aa28a608941377b948a9db0'
+          if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne $expected) {
+            throw 'Azahar SHA-256 mismatch; refusing to bundle.'
+          }
+          $unpacked = Join-Path $env:RUNNER_TEMP 'azahar-unpacked'
+          Expand-Archive -LiteralPath $archive -DestinationPath $unpacked
+          $exe = @(Get-ChildItem -LiteralPath $unpacked -Filter azahar.exe -File -Recurse)
+          if ($exe.Count -ne 1) { throw 'Expected exactly one azahar.exe in the archive.' }
+          "AZAHAR_DIR=$($exe[0].DirectoryName)" >> $env:GITHUB_ENV
+
+      - name: Download and verify Azahar licence
+        shell: pwsh
+        run: |
+          $license = Join-Path $env:RUNNER_TEMP 'azahar-license.txt'
+          Invoke-WebRequest 'https://raw.githubusercontent.com/azahar-emu/azahar/2126.2/license.txt' -OutFile $license
+          $bytes = [IO.File]::ReadAllBytes($license)
+          $header = [Text.Encoding]::ASCII.GetBytes("blob $($bytes.Length)`0")
+          $sha1 = [Security.Cryptography.SHA1]::Create()
+          try {
+            $hash = [BitConverter]::ToString($sha1.ComputeHash([byte[]]($header + $bytes))).Replace('-', '').ToLowerInvariant()
+          } finally {
+            $sha1.Dispose()
+          }
+          if ($hash -ne '7b0e5ad1bddc73ac44aca523174d22ee0d0dcc56') {
+            throw 'Azahar licence git blob hash mismatch; refusing to bundle.'
+          }
+          "AZAHAR_LICENSE=$license" >> $env:GITHUB_ENV
+
+      - name: Build and package Windows player
+        shell: pwsh
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          ./player/build.ps1 -AzaharDir $env:AZAHAR_DIR -AzaharLicense $env:AZAHAR_LICENSE
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Compress-Archive -Path player/dist/* -DestinationPath "usum-onescreen-$env:TAG-windows.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: usum-onescreen-windows
+          path: usum-onescreen-*-windows.zip
+          if-no-files-found: error
+
   # Runs outside the devkitARM container, where the gh CLI is preinstalled.
   release:
-    needs: build
+    needs: [build, windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -70,6 +128,10 @@ jobs:
         with:
           name: usum-onescreen
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: usum-onescreen-windows
+
       - name: Create or update the draft release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -77,9 +139,9 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           if gh release view "$TAG" > /dev/null 2>&1; then
-            gh release upload "$TAG" usum-onescreen.3gx --clobber
+            gh release upload "$TAG" usum-onescreen.3gx "usum-onescreen-$TAG-windows.zip" --clobber
           else
-            gh release create "$TAG" usum-onescreen.3gx --draft --verify-tag \
+            gh release create "$TAG" usum-onescreen.3gx "usum-onescreen-$TAG-windows.zip" --draft --verify-tag \
               --title "USUM One Screen $TAG" \
-              --notes "Install and controls: docs/PLAYING.md. Changes: CHANGELOG.md. Requires Pokémon Ultra Sun (USA) v1.2 and Azahar with the 3GX plugin loader."
+              --notes "Windows players: unzip usum-onescreen-$TAG-windows.zip and run UsumOneScreen.exe (Azahar 2126.2 included). Pick your own decrypted Pokémon Ultra Sun or Ultra Moon (USA) ROM and matching v1.2 update. No game files or keys provided. Manual install: usum-onescreen.3gx. Install and controls: docs/PLAYING.md. Changes: CHANGELOG.md."
           fi

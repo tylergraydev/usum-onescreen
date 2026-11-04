@@ -6,14 +6,14 @@ All notable changes for players are listed here. Versions follow [Semantic Versi
 
 ### v0.1.0 (planned first beta)
 
-Supports Pokémon Ultra Sun (USA) v1.2 (`00040000001B5000`, title version `0x0800`) in Azahar with the 3GX plugin loader. See [docs/PLAYING.md](docs/PLAYING.md).
+Supports Pokémon Ultra Sun and Ultra Moon (USA) v1.2 (`00040000001B5000` / `00040000001B5100`, title version `0x0820`; Sun also accepts rebuilt `0x0800` with a warning) in Azahar with the 3GX plugin loader. See [docs/PLAYING.md](docs/PLAYING.md).
 
 #### Added
 
 - Genuine Ultra Sun v1.2 updates (title version `0x0820`) are accepted. Before, only `0x0800`, a decrypted copy with a rewritten TMD, was. The code is identical.
 - Ultra Moon (USA) v1.2 (`00040000001B5100`, `0x0820`) is accepted, with the same addresses as Ultra Sun (checked statically, then in Azahar: boot, panel, native X menu, Party, Bag). The native X menu also recognises Ultra Moon's light-blue menu background.
 
-- **Windows launcher** (`player/`): checks your own Ultra Sun dump and v1.2 update, sets up its own portable copy of your Azahar (plugin loader on, top screen only, custom textures off), installs the plugin and update, and starts the game. Controller presets and plugin settings are in its window. A new game with no save does not start on the tested v1.2 setup; see [docs/PLAYER-APP.md](docs/PLAYER-APP.md).
+- **Windows launcher** (`player/`): one Windows release zip includes Azahar 2126.2, its licence/source notice, the launcher and plugin. Unzip, run `UsumOneScreen.exe`, pick your own decrypted Ultra Sun or Ultra Moon (USA) ROM and matching v1.2 update once, then play. Detects and remembers the game, installs the plugin under its title ID and refuses mismatched updates or Moon `0x0800`. Without a bundle it copies an installed Azahar as before. Controller presets and plugin settings are in its window. Release CI verifies the pinned Azahar SHA-256 and attaches the plugin and zip to a draft release; publishing stays manual. No game files or keys provided. See [docs/PLAYER-APP.md](docs/PLAYER-APP.md).
 
 Native top-screen menus (the panel is off while they show; the game's own screen keeps running on the hidden bottom screen and the plugin drives it). Details and controls per screen are in [docs/PLAYING.md](docs/PLAYING.md).
 
