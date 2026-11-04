@@ -19,6 +19,19 @@ namespace OneScreen
     static const int XMenuCols = 4;
     static const int XMenuRows = 4;
 
+    struct XMenuGameLayout
+    {
+        u8 ids[12] = { 0, 1, 2, 4, 5, 6, 8, 9, 10, 11, 3, 7 };
+        u16 unlocked = 0xF77;   // all but Photo Album and Poke Pelago
+        bool read = false;
+    };
+
+    // Invalid tables use the default. Returns true only when it changes.
+    bool XMenuSetLayout(const XMenuGameLayout &layout);
+    const XMenuGameLayout &XMenuCurrentLayout(void);
+    u32 XMenuLayoutVersion(void);
+    bool XMenuVisible(int index);
+
     struct XMenuEntry
     {
         const char *name;       // for commands and the log: "pokedex"
@@ -26,7 +39,7 @@ namespace OneScreen
         const char *line2;
         int page;               // the game's X menu page (0, 1) and slot
         int slot;               // (0-5, row-major, 2 columns); -1 if not in the grid
-        const char *button;     // LayoutButtons name to tap; nullptr if done with keys
+        const char *button;     // current slot button; nullptr if hidden or done with keys
         const char *opens;      // scene the entry opens; nullptr: the X menu just goes away
         int col, row, span;     // place on the native grid
         UI::Color color;        // pill colour, after the game's icons
@@ -55,7 +68,7 @@ namespace OneScreen
     class XMenuCursor
     {
     public:
-        int  Index(void) const { return m_index; }
+        int  Index(void) const;
         void Set(int index) { m_index = index; }
         // A reading of the game's cursor (page, slot). Returns true if the
         // native cursor moved because of it.
@@ -64,8 +77,9 @@ namespace OneScreen
         void Chosen(int index);
 
     private:
-        int m_index = 0;
-        int m_gamePage = -1, m_gameSlot = -1;   // last game cursor we know of
+        mutable int m_index = 0;
+        mutable u32 m_layoutVersion = ~0u;
+        mutable int m_gamePage = -1, m_gameSlot = -1;   // last game cursor we know of
     };
 
     // True if entry `index` opens a native top-screen screen

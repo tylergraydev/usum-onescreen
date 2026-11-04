@@ -13,22 +13,54 @@ the native menu drives it with taps through the action layer (`docs/ACTIONS.md`)
 
 ## What it shows
 
-The game's two pages side by side (page 1 on the left, page 2 on the right, in
-the game's slot order), and a bottom row with **Map** (the native map,
-`docs/MAP.md`) and
-**Save**:
+The game's two pages side by side (page 1 on the left, page 2 on the right),
+**in the game's own layout**, and a bottom row with **Map** (the native map,
+`docs/MAP.md`) and **Save**.
 
-| Page 1 | | Page 2 | |
-|---|---|---|---|
-| Pokémon | Pokédex | Pokémon Refresh | QR Scanner |
-| Bag | Quick Link | Battle Video | Options |
-| Festival Plaza | Trainer Passport | (empty) | (empty) |
-| Map (2 wide) | | Save (2 wide) | |
+The player can rearrange the game's X menu (drag an entry onto another slot on
+the bottom screen), and later unlocks add Photo Album and Poké Pelago, so the
+layout is read from the game, never assumed (see "Layout" below). Two examples:
 
-Poké Finder and Poké Pelago are not in this save's X menu (both pages checked
-by screenshot); where they show up later in the game was not checked. They are
-not entries; page 2's two empty slots are drawn as outlines. If a later save
-fills those slots, they need entries here (and measured taps in the layouts).
+| Save | Page 1 | Page 2 |
+|---|---|---|
+| Ultra Sun `pokecenter` (Route 2) | Pokémon, Pokédex, Bag, Quick Link, Festival Plaza, Trainer Passport | Pokémon Refresh, QR Scanner, Battle Video, Options, (empty), (empty) |
+| Ultra Moon `umoon-postgame` | Pokémon, Pokédex, Bag, Photo Album, Quick Link, Festival Plaza | Trainer Passport, Poké Pelago, Pokémon Refresh, QR Scanner, Battle Video, Options |
+
+Each page is 2 columns × 3 rows; Map (2 wide) and Save (2 wide) are the bottom
+row. A slot whose entry is still locked is drawn as an empty outline, as the
+game shows it.
+
+## Layout
+
+`Savedata::FieldMenu` (SaveData `+0x3AE0`, `docs/OFFSETS.md`) holds the
+layout: `+0x0C` is `u8 [2][6]`, page-major, entry id per slot, and the word at
+`+0x30` has one unlocked bit per entry (bit `15 + id`). Ids: 0 Pokémon,
+1 Pokédex, 2 Bag, 3 Photo Album, 4 Quick Link, 5 Festival Plaza, 6 Trainer
+Passport, 7 Poké Pelago, 8 Pokémon Refresh, 9 QR Scanner, 10 Battle Video,
+11 Options.
+
+- `XMenu.cpp` reads it when the native menu is about to show, every 30 frames
+  while it shows (an entry dragged on the bottom screen, through the panel or
+  by touch, shows up within half a second), and before an X menu action
+  starts. It never changes the layout while an action runs.
+- `XMenuSetLayout` (`XMenuGrid`) places each unlocked entry on the native grid
+  (column = page × 2 + slot mod 2, row = slot / 2). A table it can't use
+  (unreadable, an id ≥ 12 or twice) falls back to the default, the Ultra Sun
+  test save's layout. Log: `xmenu: layout p1 NAMES | p2 NAMES` (`-` for an
+  empty slot) once per change, and `xmenu: layout unreadable, using the
+  default`. `xmenu status` says `layout saved` or `layout default`.
+- Opening an entry, and the field actions `open-party`, `open-bag` and
+  `open-pokedex`, use one action step (`StepXMenuEntry`) that looks up the
+  entry's slot **when it runs**. It turns the game's page if needed and taps
+  that slot's button (`xmenu.slot1..6`, `xmenu_page2.slot1..6` in
+  `layouts/usum-v1.2.json`). A locked entry fails the action instead of
+  tapping. QR Scanner is refused as an entry, wherever it sits.
+
+Before this (up to PR #56), the entries had fixed slots. On a save with
+another layout, picking Quick Link opened the Photo Album, and Trainer
+Passport opened Festival Plaza.
+
+Photo Album (scene `MyAlbum`) and Poké Pelago (scene `main:0064787C`, starts with dialogue) show on the bottom screen.
 
 Options, Trainer Passport and Battle Video open native top-screen screens
 (`docs/NATIVE-SCREENS.md`; `XMenuOpensNative` lists them). With the cursor on
@@ -123,8 +155,8 @@ Festival Plaza's menu. So `XMenu.cpp` decides, without changing AutoPanel:
 
 `xmenu on|off` (default on), `xmenu status`, `xmenu select NAME` (moves the
 cursor; for tests), `xmenu open NAME` (as A on NAME). NAME: `pokemon pokedex
-bag quick_link festival_plaza trainer_passport pokemon_refresh qr_scanner
-battle_video options map save`. Log lines: `xmenu: shown (game page P)`,
+bag photo_album quick_link festival_plaza trainer_passport poke_pelago
+pokemon_refresh qr_scanner battle_video options map save`. Log lines: `xmenu: shown (game page P)`,
 `xmenu: hidden`, `xmenu: cursor NAME`, `xmenu: open NAME` (`... (native)` for
 an entry with a native screen), then the action's
 own `action: xmenu-NAME ok ...` / `FAILED ...`.
@@ -170,7 +202,11 @@ registered before the panel's, so screenshots (`tools/shot.py`) include it.
 
 ## Tests
 
-- `tests/xmenu_test.cpp`: the entry table (every grid entry's button exists and
+- `tests/xmenu_test.cpp` and `tests/action_queue_test.cpp`: the default and
+  Ultra Moon layouts, a swapped layout, locked entries, an invalid table, the
+  slot each entry taps (with the page turn) and the field `open-*` actions;
+  a Moon-layout preview `analysis/private/xmenu-preview-moon.ppm`. Also
+  the entry table (every grid entry's button exists and
   is verified, except QR Scanner), cells inside the area and not overlapping,
   every move and page flip, cursor memory, each action against a fake X menu
   from either page (one page tap only when needed), Save and Map, a page arrow
@@ -180,4 +216,10 @@ registered before the panel's, so screenshots (`tools/shot.py`) include it.
   every entry opened with A and backed out of (Save stops at the confirm
   dialog and backs out with B, then the same with Y); cursor memory after B;
   Festival Plaza in and out; B closes to the field with input given back.
-  `check-save` after Save and at the end.
+  `check-save` after Save and at the end. Ultra Sun only (it restores
+  `pokecenter`).
+- `scenarios/xmenu-entries-moon.txt` (Ultra Moon instance): on the postgame
+  save's moved layout, the layout log line, then every entry opened by name
+  with A and checked by the scene it opens (Photo Album `MyAlbum`, Quick Link
+  not `MyAlbum`, Battle Video and Options from page-2 slots 5 and 6), QR
+  Scanner refused, Poké Pelago last.

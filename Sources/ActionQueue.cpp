@@ -87,6 +87,7 @@ namespace OneScreen
         case StepKind::Wait:    return Format("wait %lu", (unsigned long)frames);
         case StepKind::WaitFor: return "wait-for " + until.Describe();
         case StepKind::SucceedIf: return "succeed-if " + until.Describe();
+        case StepKind::XMenuEntry: return Format("x-menu entry %d", entry);
         case StepKind::BackOut: return "back-out";
         }
         return "?";
@@ -98,6 +99,45 @@ namespace OneScreen
         s.kind = StepKind::Tap;
         s.button = button;
         s.frames = frames;
+        return s;
+    }
+
+    static void (*s_menuPrepare)(std::vector<std::string> &) = nullptr;
+
+    void ActionSetXMenuPrepare(void (*prepare)(std::vector<std::string> &))
+    {
+        s_menuPrepare = prepare;
+    }
+
+    static int s_menuSlots[12] = { 0, 1, 2, -1, 3, 4, 5, -1, 6, 7, 8, 9 };
+    static const char *const MenuButtons[12] = {
+        "xmenu.slot1", "xmenu.slot2", "xmenu.slot3", "xmenu.slot4", "xmenu.slot5", "xmenu.slot6",
+        "xmenu_page2.slot1", "xmenu_page2.slot2", "xmenu_page2.slot3",
+        "xmenu_page2.slot4", "xmenu_page2.slot5", "xmenu_page2.slot6",
+    };
+
+    void ActionSetXMenuSlots(const int slots[12])
+    {
+        for (int id = 0; id < 12; id++)
+            s_menuSlots[id] = slots[id] >= 0 && slots[id] < 12 ? slots[id] : -1;
+    }
+
+    int ActionXMenuSlot(int id)
+    {
+        return id >= 0 && id < 12 ? s_menuSlots[id] : -1;
+    }
+
+    const char *ActionXMenuButton(int id)
+    {
+        const int slot = ActionXMenuSlot(id);
+        return slot >= 0 ? MenuButtons[slot] : nullptr;
+    }
+
+    ActionStep StepXMenuEntry(int id)
+    {
+        ActionStep s;
+        s.kind = StepKind::XMenuEntry;
+        s.entry = id;
         return s;
     }
 
@@ -162,7 +202,7 @@ namespace OneScreen
             StepSucceedIf(InScene(SceneDex)),
             StepPress(ActionKeyX).SkipIf(xmenu),
             StepWaitFor(xmenu, 90),
-            StepTap("xmenu.pokedex"),
+            StepXMenuEntry(1),
             StepWaitFor(InScene(SceneDex), 240).Retry(5, 1),
         } });
         // The X menu remembers its cursor, so entries are tapped, never picked
@@ -170,13 +210,13 @@ namespace OneScreen
         list.push_back({ "open-party", "X menu: tap Pokemon", InScene(SceneField), {
             StepPress(ActionKeyX).SkipIf(xmenu),
             StepWaitFor(xmenu, 90),
-            StepTap("xmenu.pokemon"),
+            StepXMenuEntry(0),
             StepWaitFor(InScene(SceneParty), 240).Retry(2, 1),
         } });
         list.push_back({ "open-bag", "X menu: tap Bag", InScene(SceneField), {
             StepPress(ActionKeyX).SkipIf(xmenu),
             StepWaitFor(xmenu, 90),
-            StepTap("xmenu.bag"),
+            StepXMenuEntry(2),
             StepWaitFor(InScene(SceneBag), 240).Retry(2, 1),
         } });
         // Taps during the intro do nothing, so wait for the command menu and
@@ -249,6 +289,7 @@ namespace OneScreen
     {
         if (scene == SceneField)
             return nullptr;
+        if (scene == "MyAlbum")    return "xmenu.back";
         if (scene == SceneDex)     return "pokedex_top.back";
         if (scene == SceneParty)   return "party.back";
         if (scene == SceneBag)     return "bag.back";
@@ -266,6 +307,17 @@ namespace OneScreen
         for (u32 i = 0; i < def.steps.size(); i++)
         {
             const ActionStep &step = def.steps[i];
+            if (step.kind == StepKind::XMenuEntry)
+            {
+                if (step.entry == 9)
+                    return Format("step %lu: qr_scanner not available", (unsigned long)i + 1);
+                const char *name = ActionXMenuButton(step.entry);
+                if (name == nullptr)
+                    return Format("step %lu: x-menu entry %d locked or absent", (unsigned long)i + 1, step.entry);
+                const LayoutButton *button = FindLayoutButton(name);
+                if (button == nullptr || button->verified != LayoutVerified::Tap)
+                    return Format("step %lu: x-menu slot was never verified by a tap", (unsigned long)i + 1);
+            }
             if (step.kind == StepKind::Tap)
             {
                 const LayoutButton *button = step.button ? FindLayoutButton(step.button) : nullptr;
@@ -287,6 +339,13 @@ namespace OneScreen
             log.push_back(Format("action: %s refused: %s is running", def.name, m_def->name));
             return false;
         }
+        if (s_menuPrepare != nullptr)
+            for (const ActionStep &step : def.steps)
+                if (step.kind == StepKind::XMenuEntry)
+                {
+                    s_menuPrepare(log);
+                    break;
+                }
         const std::string bad = CheckAction(def);
         if (!bad.empty())
         {
@@ -388,6 +447,90 @@ namespace OneScreen
             }
             else if (frame + 1 >= step.frames + ActionGapFrames)
                 Next();
+            break;
+        }
+        case StepKind::XMenuEntry:
+        {
+            if (frame == 0)
+            {
+                const char *name = ActionXMenuButton(step.entry);
+                if (name == nullptr || step.entry == 9)
+                {
+                    Finish(false, "x-menu entry not available", world, log);
+                    break;
+                }
+                m_menuPage = ActionXMenuSlot(step.entry) / 6;
+                m_tapping = FindLayoutButton(name);
+                m_menuPhase = 0;
+                m_tapFrame = 0;
+                m_taps = 0;
+            }
+            // Page arrow, probe (45 frames, two retries), settle, then slot.
+            const bool page2 = (world.flags & WorldXMenuPage2) != 0;
+            if (m_menuPhase == 0)
+            {
+                if (m_tapFrame == 0 && world.scene == SceneField && (world.flags & WorldXMenu)
+                    && page2 == (m_menuPage == 1))
+                {
+                    m_menuPhase = 2;
+                    break;
+                }
+                const LayoutButton *arrow = FindLayoutButton(m_menuPage ? "xmenu.next_page" : "xmenu_page2.prev_page");
+                if (m_tapFrame < ActionHoldFrames)
+                {
+                    out.touching = true;
+                    out.x = (u16)arrow->tapX;
+                    out.y = (u16)arrow->tapY;
+                }
+                if (++m_tapFrame >= ActionHoldFrames + ActionGapFrames)
+                {
+                    m_menuPhase = 1;
+                    m_tapFrame = 0;
+                }
+            }
+            else if (m_menuPhase == 1)
+            {
+                if (world.scene == SceneField && (world.flags & WorldXMenu) && page2 == (m_menuPage == 1))
+                {
+                    m_menuPhase = 2;
+                    m_tapFrame = 0;
+                }
+                else if (++m_tapFrame >= 45)
+                {
+                    if (++m_taps > 2)
+                        Finish(false, "X menu page timeout", world, log);
+                    else
+                    {
+                        m_menuPhase = 0;
+                        m_tapFrame = 0;
+                    }
+                }
+            }
+            else if (m_menuPhase == 2)
+            {
+                if (++m_tapFrame >= 10)
+                {
+                    m_menuPhase = 3;
+                    m_tapFrame = 0;
+                }
+            }
+            else
+            {
+                if (m_tapFrame == 0 && (page2 != (m_menuPage == 1) || world.scene != SceneField
+                                        || !(world.flags & WorldXMenu)))
+                {
+                    Finish(false, "X menu page changed before tap", world, log);
+                    break;
+                }
+                if (m_tapFrame < ActionHoldFrames)
+                {
+                    out.touching = true;
+                    out.x = (u16)m_tapping->tapX;
+                    out.y = (u16)m_tapping->tapY;
+                }
+                if (++m_tapFrame >= ActionHoldFrames + ActionGapFrames)
+                    Next();
+            }
             break;
         }
         case StepKind::Press:

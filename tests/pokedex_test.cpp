@@ -4,6 +4,7 @@
 // images (<prefix>-top.ppm, -list.ppm, -grid.ppm, -entry.ppm).
 
 #include "Screens/PokedexList.hpp"
+#include "UI/Theme.hpp"
 
 #include <cstdio>
 #include <cstring>
@@ -208,6 +209,40 @@ static void WritePpm(const UI::Canvas &canvas, const std::string &path)
     std::fclose(f);
 }
 
+static void TestTopCounts(const char *prefix)
+{
+    DexView view;
+    view.screen = DexScreen::Top;
+    view.evaluation = true;
+    for (int row = 0; row < DexKinds; row++)
+    {
+        view.open[row] = true;
+        view.counts[row].caught = view.counts[row].seen = view.counts[row].total = 403;
+    }
+    CHECK(UI::Theme::MeasureText("403", UI::Theme::TextSize::Body) <= DexTopCountTextWidth());
+    CHECK(UI::Theme::MeasureText("999", UI::Theme::TextSize::Body) <= DexTopCountTextWidth());
+    CHECK(DexTopCountWidth() == DexTopCountTextWidth() + 18 + 6);
+    // The compact fallback keeps even the longest row labels whole.
+    UI::TextStyle compact;
+    compact.font = UI::Font::Small;
+    const int labelWidth = PokedexArea(DexScreen::Top).w - 22 - 12 - 2 * (26 / 5) - 18 - 6
+                           - 2 * DexTopCountWidth() - 8;
+    CHECK(UI::MeasureText("Melemele Pok\xC3\xA9" "dex", compact) <= labelWidth);
+    CHECK(UI::MeasureText("Ula'ula Pok\xC3\xA9" "dex", compact) <= labelWidth);
+
+    std::vector<u8> pixels(UI::ScreenW * UI::ScreenH * 4, 0);
+    const UI::Surface surface = { pixels.data(), 4, UI::ScreenW * 4, UI::PixelFormat::RGBA8,
+                                  UI::ScreenW, UI::ScreenH };
+    UI::Canvas canvas(surface);
+    for (int row = 0; row < DexKinds; row++)
+    {
+        view.topCursor = row;
+        DrawPokedex(canvas, view);
+    }
+    if (prefix != nullptr)
+        WritePpm(canvas, std::string(prefix) + "-top-403.ppm");
+}
+
 static void TestDraw(const char *prefix)
 {
     std::vector<DexRow> rows = DexRows(Records(), DexKind::Alola, 0);
@@ -272,6 +307,7 @@ int main(int argc, char **argv)
     TestWindow();
     TestScreens();
     TestDraw(argc > 1 ? argv[1] : nullptr);
+    TestTopCounts(argc > 1 ? argv[1] : nullptr);
     if (s_failures != 0)
     {
         std::printf("pokedex_test: %d failure(s)\n", s_failures);
