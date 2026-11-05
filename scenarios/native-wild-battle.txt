@@ -168,10 +168,24 @@ send press right
 expect-log ^battle-ui: page bag, Poké Balls, cursor 0 of 3 \(Poké Ball x\d+\)$ 10
 sleep 1
 shot balls
+mark
 send press a              # throw it
 expect-log ^battle-ui: page bag, Poké Balls, .*busy: Throwing Poké Ball 5
 expect-log ^battle-ui: step battle_bag_item_page\.use 15
 sleep 30                  # the throw, the shakes, the opponent's turn
+# Catch experience may level up Buneary: B through its messages (on the
+# question the native move-learn screen takes B: "Don't learn"), then A on
+# its choose and confirm pages, only if they showed since the throw.
+repeat 5
+  if-scene Battle send press b
+  sleep 2
+end
+if-log ^move-learn:\spage\schoose send press b   # B on the choose page: "Don't learn"
+sleep 1
+if-log ^move-learn:\spage\schoose send press a
+sleep 2
+if-log ^move-learn:\spage\sconfirm send press a
+sleep 10
 # Broke free: the same again (the Bag keeps its tab).
 repeat 12 until-scene Zukan
   expect-log ^battle-ui: page command, cursor 0 of 4 \(Fight\)$ 20
@@ -182,9 +196,23 @@ repeat 12 until-scene Zukan
   expect-log ^battle-ui: page bag, Poké Balls, cursor 0 of 3 \(Poké Ball x\d+\)$ 10
   sleep 1
   shot balls-again
+  mark
   send press a
   expect-log ^battle-ui: step battle_bag_item_page\.use 15
   sleep 30
+  # Catch experience may level up Buneary: B through its messages (on the
+  # question the native move-learn screen takes B: "Don't learn"), then A on
+  # its choose and confirm pages, only if they showed since the throw.
+  repeat 5
+    if-scene Battle send press b
+    sleep 2
+  end
+  if-log ^move-learn:\spage\schoose send press b   # B on the choose page: "Don't learn"
+  sleep 1
+  if-log ^move-learn:\spage\schoose send press a
+  sleep 2
+  if-log ^move-learn:\spage\sconfirm send press a
+  sleep 10
 end
 wait-scene Zukan 30
 expect-mode off           # the Pokédex scene straight after the battle

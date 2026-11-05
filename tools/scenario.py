@@ -27,6 +27,8 @@ expect-log / reject-log lines, where # is part of the regex). Steps:
   guard-reject REGEX            the log guard also fails on plugin log lines matching REGEX from here on
   check-save                   the real save is unchanged since the run began (also done at the end)
   if-scene SCENE STEP          run the one STEP only if the scene is SCENE now
+  if-log REGEX STEP            run the one STEP only if a log line since the mark matches REGEX now
+                               (one word: use \\s for spaces)
   include FILE                 the steps of FILE (next to this one, or in scenarios/; .txt optional)
   repeat N [until-scene SCENE] the steps up to the matching `end`, N times; with until-scene,
   ...                          stop as soon as that is the scene (checked before each step)
@@ -90,7 +92,7 @@ ARITY = {"start": (0, 1), "stop": (0, 0), "send": None, "sleep": (1, 1), "shot":
          "wait-scene": (1, 2), "expect-scene": (1, 1), "expect-mode": (1, 2), "mark": (0, 0),
          "expect-log": None, "reject-log": None, "guard-ignore": None, "guard-reject": None, "check-save": (0, 0),
          "repeat": (1, 3),
-         "include": (1, 1), "if-scene": None, "restore": (1, 1)}
+         "include": (1, 1), "if-scene": None, "if-log": None, "restore": (1, 1)}
 
 
 def include_path(name, base):
@@ -128,16 +130,17 @@ def parse_step(text, where):
             except re.error as e:
                 raise SyntaxError(f"{where}: bad regex: {e}")
         step.body = []
-    elif op == "if-scene":
-        scene, _, inner = rest.partition(" ")
-        if not inner.strip() or inner.split()[0] in ("repeat", "if-scene"):
-            raise SyntaxError(f"{where}: use 'if-scene SCENE STEP' with a single step")
-        step.args = [scene]
+    elif op in ("if-scene", "if-log"):
+        condition, _, inner = rest.partition(" ")
+        if not inner.strip() or inner.split()[0] in ("repeat", "if-scene", "if-log"):
+            form = "SCENE" if op == "if-scene" else "REGEX"
+            raise SyntaxError(f"{where}: use '{op} {form} STEP' with a single step")
+        step.args = [condition]
         step.body = [parse_step(inner.strip(), where)]
     elif op == "expect-log":
         m = re.fullmatch(r"(.*?)\s+(\d+(?:\.\d+)?)", rest)
         step.args = [m.group(1), m.group(2)] if m else [rest]
-    if op in ("expect-log", "reject-log", "guard-ignore", "guard-reject"):
+    if op in ("expect-log", "reject-log", "guard-ignore", "guard-reject", "if-log"):
         try:
             re.compile(step.args[0])
         except re.error as e:
@@ -146,7 +149,7 @@ def parse_step(text, where):
 
 
 def parse(path, seen=()):
-    """Return the scenario's steps; repeat and if-scene steps hold theirs in .body."""
+    """Return the scenario's steps; repeat, if-scene and if-log steps hold theirs in .body."""
     if path.resolve() in seen:
         raise SyntaxError(f"{path.name}: includes itself")
     seen = seen + (path.resolve(),)
@@ -346,6 +349,9 @@ class Runner:
             elif op == "if-scene":
                 if self.scene() == args[0]:
                     self.run_step(step.body[0], quiet)
+            elif op == "if-log":
+                if re.search(r"^.*(?:" + args[0] + r").*$", self.log()[self.mark:], re.M):
+                    self.run_step(step.body[0], quiet)
             elif op == "guard-ignore":
                 self.guard_ignore.append(args[0])
             elif op == "guard-reject":
@@ -373,7 +379,7 @@ class Runner:
                 if not quiet:
                     print(f"  {step.where}  end of repeat after {rounds} round(s)"
                           + (f", scene {until}" if until else "") + (", log matched" if log_re else ""), flush=True)
-            if op not in ("repeat", "if-scene"):  # their inner steps were checked
+            if op not in ("repeat", "if-scene", "if-log"):  # their inner steps were checked
                 self.check_logs()
         except emu.PluginTimeout as e:
             try:
