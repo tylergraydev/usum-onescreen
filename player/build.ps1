@@ -1,5 +1,5 @@
 # Builds the USUM One Screen app and puts what a player needs in dist\:
-# UsumOneScreen.exe, usum-onescreen.3gx (from the repo root, built with make)
+# UsumOneScreen.exe (plugin embedded), usum-onescreen.3gx (offline zip compatibility)
 # and README.txt, optionally with an unmodified Azahar distribution.
 param([string]$AzaharDir, [string]$AzaharLicense)
 

@@ -16,6 +16,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
+    <EmbeddedResource Include="..\usum-onescreen.3gx" LogicalName="UsumOneScreen.Plugin" Condition="Exists('..\usum-onescreen.3gx')" />
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
   </ItemGroup>
 

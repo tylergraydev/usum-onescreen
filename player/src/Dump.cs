@@ -105,7 +105,20 @@ namespace UsumOneScreen
             try
             {
                 using (var f = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
-                using (var r = new BinaryReader(f))
+                    return Read(f, path);
+            }
+            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException || e is EndOfStreamException || e is ArgumentException)
+            {
+                return Fail(info, "can't read it: " + e.Message);
+            }
+        }
+
+        public static DumpInfo Read(Stream f, string path)
+        {
+            var info = new DumpInfo { Path = path };
+            try
+            {
+                using (var r = new BinaryReader(f, System.Text.Encoding.UTF8, true))
                 {
                     if (f.Length < 0x400)
                         return Fail(info, "too small to be a 3DS dump");
@@ -129,7 +142,7 @@ namespace UsumOneScreen
                     return Fail(info, "not a 3DS ROM (.3ds, .cci, .cxi) or CIA");
                 }
             }
-            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException || e is EndOfStreamException || e is ArgumentException)
+            catch (Exception e) when (e is IOException || e is ArgumentException)
             {
                 return Fail(info, "can't read it: " + e.Message);
             }

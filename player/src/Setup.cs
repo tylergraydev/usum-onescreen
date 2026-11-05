@@ -10,8 +10,8 @@ namespace UsumOneScreen
         {
             public string Rom;
             public string Update;          // may be null when the update is already installed
-            public string AzaharSource;    // null: keep the app's copy, or find an install
-            public string Plugin;          // null: the one next to the app
+            public string AzaharSource;    // null: keep the portable copy, or download/discover
+            public string Plugin;          // null: adjacent file, then embedded resource
             public ControlPreset Controls = ControlPreset.Keyboard;
         }
 
@@ -20,6 +20,14 @@ namespace UsumOneScreen
         {
             if (string.IsNullOrEmpty(o.Rom))
                 throw new SetupException("Pick your Pokémon Ultra Sun or Ultra Moon (USA) ROM.");
+            if (GameFiles.IsZip(o.Rom))
+            {
+                var files = GameFiles.Expand(home, o.Rom, log);
+                o.Rom = GameFiles.Pick(files, DumpKind.Game);
+                if (string.IsNullOrEmpty(o.Update)) o.Update = GameFiles.Pick(files, DumpKind.Update, false);
+            }
+            if (GameFiles.IsZip(o.Update))
+                o.Update = GameFiles.Pick(GameFiles.Expand(home, o.Update, log), DumpKind.Update);
             var game = Dump.Check(o.Rom, DumpKind.Game);
             if (!game.Ok)
                 throw new SetupException(game.Message);
@@ -40,15 +48,21 @@ namespace UsumOneScreen
             {
                 string source = Home.BundledAzahar() ?? o.AzaharSource;
                 if (source == null)
-                    foreach (var c in home.AzaharCandidates()) { source = c; break; }
-                if (source == null)
-                    throw new SetupException("Azahar isn't installed where the app looks. Install Azahar, or pick its folder.");
-                home.InstallAzahar(source, log);
+                {
+                    try { AzaharDownload.Install(home, log); }
+                    catch (SetupException e)
+                    {
+                        log(e.Message);
+                        foreach (var c in home.AzaharCandidates()) { source = c; break; }
+                        if (source == null) throw;
+                    }
+                }
+                if (source != null) home.InstallAzahar(source, log);
             }
 
             home.WriteConfig(o.Controls);
             log("Azahar set up: plugin loader on, top screen only, custom textures off.");
-            home.InstallPlugin(o.Plugin ?? Home.BundledPlugin(), title, log);
+            home.InstallSelectedPlugin(o.Plugin, title, log);
 
             // A picked update replaces a different installed one (Azahar overwrites it).
             int installed = home.InstalledUpdateVersion(title);
