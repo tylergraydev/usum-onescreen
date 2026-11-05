@@ -175,6 +175,28 @@ namespace UsumOneScreen
         public static string BundledPlugin() =>
             Path.Combine(AppDomain.CurrentDomain.BaseDirectory, PluginName);
 
+        public void InstallSelectedPlugin(string explicitPlugin, ulong title, Action<string> log)
+        {
+            if (explicitPlugin != null || File.Exists(BundledPlugin()))
+            {
+                InstallPlugin(explicitPlugin ?? BundledPlugin(), title, log);
+                return;
+            }
+            using (var resource = typeof(Home).Assembly.GetManifestResourceStream("UsumOneScreen.Plugin"))
+            {
+                if (resource == null)
+                    throw new SetupException("The plugin is missing. Use a release exe with the embedded plugin, put usum-onescreen.3gx next to it, or pass --plugin FILE.");
+                Directory.CreateDirectory(Root);
+                string temp = Path.Combine(Root, "plugin-" + Guid.NewGuid().ToString("N") + ".tmp");
+                try
+                {
+                    using (var output = File.Create(temp)) resource.CopyTo(output);
+                    InstallPlugin(temp, title, log);
+                }
+                finally { if (File.Exists(temp)) File.Delete(temp); }
+            }
+        }
+
         public void InstallPlugin(string plugin, ulong title, Action<string> log)
         {
             if (!File.Exists(plugin))
