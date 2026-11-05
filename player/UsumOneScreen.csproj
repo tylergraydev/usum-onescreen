@@ -9,7 +9,7 @@
     <Nullable>disable</Nullable>
     <AssemblyName>UsumOneScreen</AssemblyName>
     <RootNamespace>UsumOneScreen</RootNamespace>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <Product>USUM One Screen</Product>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
