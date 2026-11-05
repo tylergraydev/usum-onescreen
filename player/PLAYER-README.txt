@@ -9,20 +9,24 @@ You need
   Ultra Sun: title 00040000001B5000; Ultra Moon: title 00040000001B5100.
 - Your own decrypted v1.2 update (.cia), version 0x0820, matching your ROM:
   Ultra Sun: 0004000E001B5000; Ultra Moon: 0004000E001B5100.
-Azahar 2126.2 is included in the Windows release zip. If your download has no
-azahar-bundled folder, install Azahar separately or pick its folder in the app.
+The plugin is built into the release exe. Azahar 2126.2 downloads on first
+setup (internet required). The offline Windows zip includes Azahar instead.
 Encrypted dumps are refused because Azahar 2126.2 can't install them.
 This app doesn't include, download or explain how to get game files or keys.
 
 Play
-1. Unzip this folder somewhere you can write to (not Program Files).
+1. Put UsumOneScreen.exe in a folder you can write to (not Program Files).
+   If using the offline zip, unzip the whole folder first.
 2. Run UsumOneScreen.exe.
-3. Browse for your ROM and the v1.2 update. Each file is checked as soon as
-   you pick it; anything else is refused with the reason.
-4. Press Play. The first time, the app copies bundled Azahar (or your
-   installed Azahar) into an "azahar" folder next to it, sets it up and
-   installs the update there (this takes a minute). After that, Play starts
-   the game straight away. The bundled folder is never modified.
+3. Drag your ROM and matching v1.2 update onto the window, or use Browse.
+   You can also drop a zip containing either or both, in any subfolder.
+   Files are checked automatically; zip contents go into the games folder.
+4. Press Play. First setup downloads and verifies Azahar, makes a portable
+   copy in the azahar folder and installs your update. Later starts reuse it.
+   Keep the extracted game files in games; the app remembers their paths.
+
+If the download fails, install Azahar 2126.2 yourself or use "Use another
+Azahar" to pick its folder. A bundled Azahar takes priority over selection.
 
 Your own Azahar and its settings and saves are never changed: the app plays
 with its own copy, and keeps its saves in azahar\user\sdmc.

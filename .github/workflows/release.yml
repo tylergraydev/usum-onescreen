@@ -1,7 +1,7 @@
 name: Release
 
-# Pushing a tag like v0.1.0 builds the plugin and Windows player zip and attaches
-# both to a draft GitHub Release for that tag. Publishing the draft is done by hand.
+# Pushing a tag like v0.1.0 builds the plugin, Windows player exe and offline zip,
+# and attaches them to a draft GitHub Release for that tag. Publishing the draft is done by hand.
 on:
   push:
     tags:
@@ -108,12 +108,17 @@ jobs:
         run: |
           ./player/build.ps1 -AzaharDir $env:AZAHAR_DIR -AzaharLicense $env:AZAHAR_LICENSE
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python player/test.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item player/dist/UsumOneScreen.exe "UsumOneScreen-$env:TAG.exe"
           Compress-Archive -Path player/dist/* -DestinationPath "usum-onescreen-$env:TAG-windows.zip"
 
       - uses: actions/upload-artifact@v4
         with:
           name: usum-onescreen-windows
-          path: usum-onescreen-*-windows.zip
+          path: |
+            usum-onescreen-*-windows.zip
+            UsumOneScreen-*.exe
           if-no-files-found: error
 
   # Runs outside the devkitARM container, where the gh CLI is preinstalled.
@@ -139,9 +144,9 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           if gh release view "$TAG" > /dev/null 2>&1; then
-            gh release upload "$TAG" usum-onescreen.3gx "usum-onescreen-$TAG-windows.zip" --clobber
+            gh release upload "$TAG" usum-onescreen.3gx "usum-onescreen-$TAG-windows.zip" "UsumOneScreen-$TAG.exe" --clobber
           else
-            gh release create "$TAG" usum-onescreen.3gx "usum-onescreen-$TAG-windows.zip" --draft --verify-tag \
+            gh release create "$TAG" usum-onescreen.3gx "usum-onescreen-$TAG-windows.zip" "UsumOneScreen-$TAG.exe" --draft --verify-tag \
               --title "USUM One Screen $TAG" \
-              --notes "Windows players: unzip usum-onescreen-$TAG-windows.zip and run UsumOneScreen.exe (Azahar 2126.2 included). Pick your own decrypted Pokémon Ultra Sun or Ultra Moon (USA) ROM and matching v1.2 update. No game files or keys provided. Manual install: usum-onescreen.3gx. Install and controls: docs/PLAYING.md. Changes: CHANGELOG.md."
+              --notes "Windows players: run UsumOneScreen-$TAG.exe (downloads Azahar 2126.2 on first run; drag your own decrypted ROM and v1.2 update onto it, or a zip of them). The plugin is embedded. Offline option: unzip usum-onescreen-$TAG-windows.zip and run UsumOneScreen.exe (Azahar included). Supports Pokemon Ultra Sun or Ultra Moon (USA). No game files or keys provided. Manual install: usum-onescreen.3gx. Install and controls: docs/PLAYING.md. Changes: CHANGELOG.md."
           fi
