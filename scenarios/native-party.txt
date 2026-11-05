@@ -137,16 +137,22 @@ repeat 40 until-scene Battle
 end
 sleep 14                  # battle intro, until the command menu shows
 shot battle
-repeat 2
+# Defense Curl until the foe has hurt Buneary (battle slot 0) at least once.
+repeat 6 until-log 0:0/427\s([1-9]|[12]\d|3[0-6])/37
   send move 285 120; tap 6  # Fight
   sleep 2
   send move 235 41; tap 6   # Defense Curl (no damage to the foe)
   sleep 16
 end
-# Running can fail ("You couldn't get away!"): keep trying.
-repeat 6 until-scene FieldRo
+# Wrap blocks Run without using a turn: use Defense Curl between attempts
+# so the trap can wear off. Wait for a successful flee to fade first.
+repeat 10 until-scene FieldRo
   send move 160 225; tap 6  # Run
-  sleep 18
+  sleep 12
+  if-scene Battle send move 285 120; tap 6  # Fight
+  sleep 2
+  if-scene Battle send move 235 41; tap 6   # Defense Curl
+  sleep 16
 end
 sleep 3
 mark
