@@ -61,6 +61,7 @@ namespace UsumOneScreen
             controls.SelectedIndexChanged += (s, e) => mapButtons.Enabled = SelectedPreset() == ControlPreset.Custom;
             AcceptButton = playButton;
 
+            EnableDrops(this);
             LoadValues();
         }
 
@@ -96,12 +97,12 @@ namespace UsumOneScreen
             g.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             g.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             AddFileRow(g, "Sun / Moon ROM", romBox, romCheck, DumpKind.Game,
-                       "Pokémon Ultra Sun / Ultra Moon (*.3ds;*.cci;*.cxi;*.cia)|*.3ds;*.cci;*.cxi;*.cia|All files|*.*");
+                       "Pokémon Ultra Sun / Ultra Moon (*.3ds;*.cci;*.cxi;*.cia;*.zip)|*.3ds;*.cci;*.cxi;*.cia;*.zip|All files|*.*");
             AddFileRow(g, "v1.2 update", updateBox, updateCheck, DumpKind.Update,
-                       "Ultra Sun / Ultra Moon update (*.cia)|*.cia|All files|*.*");
+                       "Ultra Sun / Ultra Moon update (*.cia;*.zip)|*.cia;*.zip|All files|*.*");
             var note = new Label
             {
-                Text = "Use your own dumps of Pokémon Ultra Sun or Ultra Moon (USA) and its matching v1.2 update. This app doesn't provide them.",
+                Text = "Drag your game files here, or use Browse\u2026\nUse your own dumps of Pokémon Ultra Sun or Ultra Moon (USA) and its matching v1.2 update. This app doesn't provide them.",
                 MaximumSize = new Size(600, 0),
                 AutoSize = true, ForeColor = SystemColors.GrayText,
             };
@@ -117,7 +118,7 @@ namespace UsumOneScreen
             box.Dock = DockStyle.Fill;
             box.Leave += (s, e) => ShowCheck(box, check, kind);
             var browse = new Button { Text = "Browse…", AutoSize = true };
-            browse.Click += (s, e) =>
+            browse.Click += async (s, e) =>
             {
                 using (var d = new OpenFileDialog { Filter = filter, Title = caption })
                 {
@@ -125,8 +126,7 @@ namespace UsumOneScreen
                         d.InitialDirectory = Path.GetDirectoryName(box.Text);
                     if (d.ShowDialog(this) == DialogResult.OK)
                     {
-                        box.Text = d.FileName;
-                        ShowCheck(box, check, kind);
+                        await AcceptFiles(new[] { d.FileName });
                     }
                 }
             };
@@ -216,11 +216,11 @@ namespace UsumOneScreen
         void ShowAzahar()
         {
             string dir = home.HasAzahar && azaharSource == null ? home.AzaharDir
-                         : Home.BundledAzahar() ?? azaharSource ?? home.AzaharCandidates().FirstOrDefault();
+                         : Home.BundledAzahar() ?? azaharSource;
             if (dir == null)
             {
-                azaharLabel.Text = "Not found. Install Azahar, or pick its folder.";
-                azaharLabel.ForeColor = Color.DarkRed;
+                azaharLabel.Text = "Downloads tested Azahar 2126.2 on first setup.";
+                azaharLabel.ForeColor = SystemColors.ControlText;
                 return;
             }
             string version = Home.AzaharVersion(dir) ?? "version unknown";
@@ -251,6 +251,48 @@ namespace UsumOneScreen
             }
             check.Text = (c.Ok ? "✓ " : "✗ ") + c.Message + (c.Warning != null ? " " + c.Warning : "");
             check.ForeColor = !c.Ok ? Color.DarkRed : c.Warning != null ? Color.DarkOrange : Color.DarkGreen;
+        }
+
+        void EnableDrops(Control control)
+        {
+            control.AllowDrop = true;
+            control.DragEnter += (s, e) =>
+                e.Effect = !busy && e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Copy : DragDropEffects.None;
+            control.DragDrop += async (s, e) =>
+            {
+                if (!busy && e.Data.GetDataPresent(DataFormats.FileDrop))
+                    await AcceptFiles((string[])e.Data.GetData(DataFormats.FileDrop));
+            };
+            foreach (Control child in control.Controls) EnableDrops(child);
+        }
+
+        async Task AcceptFiles(string[] paths)
+        {
+            if (busy) return;
+            busy = true;
+            UpdateButtons();
+            try
+            {
+                var files = await Task.Run(() => paths.SelectMany(p => GameFiles.Expand(home, p, Log)).ToList());
+                var errors = new System.Collections.Generic.List<string>();
+                foreach (var file in files)
+                {
+                    var check = GameFiles.Check(file);
+                    if (!check.Ok) { errors.Add(check.Message); continue; }
+                    if (Dump.IsGame(check.Info.TitleId)) romBox.Text = file;
+                    else updateBox.Text = file;
+                }
+                ShowCheck(romBox, romCheck, DumpKind.Game);
+                ShowCheck(updateBox, updateCheck, DumpKind.Update);
+                if (errors.Count > 0) { romCheck.Text = string.Join(Environment.NewLine, errors); romCheck.ForeColor = Color.DarkRed; }
+            }
+            catch (Exception e) when (e is SetupException || e is IOException || e is UnauthorizedAccessException)
+            {
+                romCheck.Text = e.Message;
+                romCheck.ForeColor = Color.DarkRed;
+                Log(e.Message);
+            }
+            finally { busy = false; UpdateButtons(); }
         }
 
         void ShowInstalledUpdate(ulong title)
@@ -346,6 +388,7 @@ namespace UsumOneScreen
             {
                 await Task.Run(() => Setup.Run(home, o, Log));
                 azaharSource = null;
+                romBox.Text = o.Rom;
                 updateBox.Clear();
                 home.SetState("fullscreen", fullscreen.Checked ? "on" : "off");
                 ShowAzahar();

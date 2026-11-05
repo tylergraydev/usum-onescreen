@@ -4,6 +4,8 @@ All notable changes for players are listed here. Versions follow [Semantic Versi
 
 ## [Unreleased]
 
+- Windows launcher ships as one exe with the plugin embedded and verified Azahar 2126.2 download on first setup. Drag your own decrypted ROM and v1.2 update onto the window, or a zip containing them. The existing bundled Windows zip remains available for offline setup.
+
 ## [0.1.0] - 2026-11-04
 
 First beta. Supports Pokémon Ultra Sun and Ultra Moon (USA) v1.2 (`00040000001B5000` / `00040000001B5100`, title version `0x0820`; Sun also accepts rebuilt `0x0800` with a warning) in Azahar with the 3GX plugin loader. See [docs/PLAYING.md](docs/PLAYING.md).

@@ -17,7 +17,7 @@ Written 2026-11-02. The question: how should a player get from "I have my own Ul
 | Effort to first version | Small: about 1 000 lines of C#, no emulator build. Done in this session. | Large: an Azahar build environment (MSVC, Qt 6, CMake, ~40 submodules), a Windows CI that builds it, then the UI work on top. Weeks, not days. |
 | Keeping up with Azahar | Only the config keys and two command-line flags (`-i`, `-f`) are relied on. They have been stable for years (they come from Citra). A new Azahar works unless it renames a key. | Every Azahar release is a rebase of our UI changes onto a moving Qt frontend (`citra_qt.cpp` alone is 4 400 lines). Falling behind means missing emulation fixes. |
 | Licence | The Windows zip bundles unmodified Azahar 2126.2 with its licence and a corresponding source notice (see below). The launcher copies it into a writable portable home. | Must publish the fork's complete source under the same licence with every binary, keep notices, mark changes. Must not call it "Azahar" in a way that suggests it is the official build. |
-| What the player installs | Our Windows zip (Azahar 2126.2 included) | Our build only |
+| What the player installs | One launcher exe (plugin embedded; downloads Azahar 2126.2), or the offline zip | Our build only |
 | Soft reset crash | Not fixable. Still crashes ([SOFT-RESET.md](SOFT-RESET.md)). | Fixable: clear the restored plugin loader context in `System::Reset`. |
 | Top screen only | Yes: Azahar's "Single Screen" layout (`layout_option = 1`), status bar and filter bar off, optional fullscreen. The menu bar stays in windowed mode (Azahar has no setting to hide it; fullscreen hides it). | Yes, and the menu bar can go too. |
 | Installing the update CIA | Through `azahar.exe -i`, which on Windows shows a "Success"/"Failure" box; the launcher closes it itself. | Can call the installer directly. |
@@ -35,7 +35,7 @@ Written 2026-11-02. The question: how should a player get from "I have my own Ul
 1. **Fix the soft reset crash** (L+R+Start). `System::Reset` restores the old `PluginLoaderContext` with a handle from the dead process; the fix is to clear `plugin_loaded`, `plugin_process_id`, `memory_changed_handle`, `memory_region` and `plg_event`/`plg_reply` after the restore. That also makes the plugin load again after the reset (upstream issue azahar-emu/azahar#2569). It is a few lines, which is why **an upstream PR beats a fork** here: every player gets it in the next Azahar, and we keep using stock builds.
 2. Hide the menu bar in windowed mode, and remove menus a player doesn't need (game list, multiplayer, movie, debugging).
 3. Install the update without a dialog box, and check ROMs inside the emulator.
-4. Ship one download with the plugin built in.
+4. Integrate the plugin directly into the emulator (the launcher now embeds the separate plugin in its exe).
 
 Items 2 to 4 are polish. None of them stops a player from playing, and the launcher covers the same ground (it hides the dialog itself, checks the dump before Azahar sees it, and runs fullscreen if asked).
 
@@ -45,12 +45,12 @@ Until Azahar has the fix, the plugin-side mitigation in [SOFT-RESET.md](SOFT-RES
 
 See [`player/README.md`](../player/README.md) for use and build. In short:
 
-Players unzip `usum-onescreen-<tag>-windows.zip`, run `UsumOneScreen.exe`, pick their own decrypted ROM and matching decrypted v1.2 update once, and press Play.
+Players run the single `UsumOneScreen-<tag>.exe`, drag their own decrypted ROM and matching v1.2 update onto it (or a zip of them), and press Play. It embeds the plugin and downloads verified Azahar 2126.2 on first setup. The existing Windows zip remains the offline option.
 
-1. **Azahar**: uses `azahar-bundled\azahar.exe` next to the launcher as its source, even with `--home`. If absent, finds or asks for the player's installed Azahar. Copies it to the home's `azahar\` and creates `azahar\user\` to make it portable. The source bundle/install is never modified.
+1. **Azahar**: uses `azahar-bundled\azahar.exe` next to the launcher as its source, even with `--home`. If absent, uses explicit `--azahar`, otherwise downloads tested 2126.2 before installed-Azahar discovery. Downloads verify the pinned archive SHA-256 before extraction and the licence git blob SHA-1; temporary files are removed. Failures explain how to select an installed copy. The licence is saved as `azahar\LICENSE-azahar.txt`. Copies it to the home's `azahar\` and creates `azahar\user\` to make it portable. The source bundle/install is never modified.
 2. **The dump**: detects Ultra Sun (USA), title `00040000001B5000`, or Ultra Moon (USA), `00040000001B5100`, from the ROM (`.3ds`, `.cci`, `.cxi` or `.cia`). Requires its matching update (`0004000E001B5000` / `0004000E001B5100`), version `0x0820`. Sun alone also accepts rebuilt `0x0800` with the existing new-game warning. Moon refuses `0x0800` and other versions. Encrypted dumps are refused because Azahar 2126.2 cannot install them; each refusal gives a reason.
 3. **Config**: plugin loader on, single-screen layout (top), custom textures off, update check off, status and filter bars off, close without confirming. Controller: Keyboard, Gamepad or Custom (map buttons in Azahar).
-4. **Plugin**: copies `usum-onescreen.3gx` into `sdmc\luma\plugins\<detected title>\`, and edits `sdmc\usum-onescreen.ini` in place, keeping comments.
+4. **Plugin**: uses explicit `--plugin`, then the adjacent `.3gx`, then the embedded resource via a temporary home file. Copies `usum-onescreen.3gx` into `sdmc\luma\plugins\<detected title>\`, and edits `sdmc\usum-onescreen.ini` in place, keeping comments.
 5. **Update**: installs the update CIA with `azahar.exe -i` (and a CIA base game the same way), then checks that game's installed TMD for the requested version.
 6. **Play**: remembers the ROM, boot path and selected `title_id` in `usum-onescreen-app.ini`; starts Azahar windowed or fullscreen. The window and CLI `check`, `setup`, `status` identify the game. Old Sun-only state files remain usable.
 
@@ -81,3 +81,7 @@ The Gamepad preset with a real controller, "Map buttons in Azahar", fullscreen, 
 ## Launcher regression checks (2026-11-03)
 
 The Release launcher builds on .NET Framework 4.8. `python player/test.py` passes using synthetic headers only, without game content or starting Azahar: Sun/Moon validation, encrypted dumps, supported/refused versions, cross-game update rejection, selected-title state and plugin paths, installed CIA boot paths, bundle priority and immutability, fallback source selection, and legacy Sun state. These checks do not replace the in-game and fresh release-zip checks above.
+
+## Single-exe regression coverage
+
+`dotnet build player/UsumOneScreen.csproj -c Release` and `python player/test.py` cover the single-exe changes using synthetic data and local `file:///` downloads only. Tests check archive and licence hash rejection, temporary-file cleanup, source fallback, embedded/adjacent/explicit plugin priority, nested game/update zips, zip-slip flattening into `games\`, reuse by size and parsed headers, and extracted ROM state. GUI setup and zip extraction run on workers so the window stays responsive. Browse, drag/drop and CLI share the extraction path. Download overrides are documented in [player/README.md](../player/README.md). Live GitHub download, interactive drag/drop and emulator execution are separate manual checks.

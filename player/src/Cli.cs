@@ -45,7 +45,7 @@ namespace UsumOneScreen
                 list.RemoveAt(0);
                 switch (command)
                 {
-                    case "check": return Check(list);
+                    case "check": return Check(home, list);
                     case "setup": return SetupCommand(home, list);
                     case "play": return Play(home, list);
                     case "set": return Set(home, list);
@@ -109,10 +109,10 @@ namespace UsumOneScreen
                 throw new SetupException("unexpected: " + string.Join(" ", args));
         }
 
-        static int Check(List<string> files)
+        static int Check(Home home, List<string> files)
         {
             int bad = 0;
-            foreach (var f in files)
+            foreach (var f in files.SelectMany(f => GameFiles.Expand(home, f, Console.WriteLine)))
             {
                 var info = Dump.Read(f);
                 var kind = Dump.IsUpdate(info.TitleId) ? DumpKind.Update : DumpKind.Game;
