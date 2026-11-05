@@ -216,7 +216,7 @@ try {
         downloadhome = root / 'downloadhome'
         installed_update(downloadhome)
         run(['setup', '--home', downloadhome, '--rom', games[SUN]], 0,
-            'Downloading Azahar: 100%', 'Ready to play')
+            'Downloading tested Azahar 2126.2', 'Ready to play')
         assert (downloadhome / 'azahar/azahar.exe').read_bytes() == b'synthetic executable marker'
         assert (downloadhome / 'azahar/LICENSE-azahar.txt').read_bytes() == license_bytes
         assert not list(downloadhome.glob('azahar-download-*'))
