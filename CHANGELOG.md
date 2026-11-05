@@ -4,6 +4,10 @@ All notable changes for players are listed here. Versions follow [Semantic Versi
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-05
+
+### Changed
+
 - Windows launcher ships as one exe with the plugin embedded and verified Azahar 2126.2 download on first setup. Drag your own decrypted ROM and v1.2 update onto the window, or a zip containing them. The existing bundled Windows zip remains available for offline setup.
 
 ## [0.1.0] - 2026-11-04

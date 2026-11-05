@@ -767,7 +767,7 @@ namespace CTRPluginFramework
         OneScreen::StartButtons(s_game->offsets.hidPadRead.address, buttonsReport);
         WriteLog(buttonsReport, false);
 
-        PluginMenu *menu = new PluginMenu("USUM One Screen", 0, 1, 0,
+        PluginMenu *menu = new PluginMenu("USUM One Screen", 0, 1, 1,
                                           "Top-screen-only play for Ultra Sun / Ultra Moon.");
 
         menu->SynchronizeWithFrame(true);
