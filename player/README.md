@@ -40,7 +40,15 @@ Plugin source order is explicit `--plugin`, `usum-onescreen.3gx` next to the exe
 
 Drop one or several `.3ds`, `.cci`, `.cia` or `.zip` files anywhere on the window, or use Browse. Headers classify games and updates; invalid files show a reason. Zip entries at any depth with `.3ds`, `.cci` or `.cia` extensions are flattened into `<home>\games\` using only their file names. Free space is checked first; name collisions get suffixes. Existing files with the same size and validated header fields are reused. State stores the extracted ROM path. `check`, `setup --rom` and `setup --update` accept zips; a ROM zip also supplies the update unless `--update` is given. Direct `.cxi` input remains supported.
 
-After building with the plugin available, run `python player/test.py` from the repository root. It uses synthetic headers, local archives and `file:///` downloads only; it never starts Azahar. It covers validation, title state, bundle priority, source fallback, download/hash refusal, zip traversal/reuse and embedded-plugin priority. `check`, `setup` and `status` identify the game. Older state files without `title_id` retain their Sun behaviour.
+After building with the plugin available, run `python player/test.py` from the repository root. It uses synthetic headers, local archives and `file:///` downloads only; it never starts Azahar. It covers widescreen sync and comment preservation, validation, title state, bundle priority, source fallback, download/hash refusal, zip traversal/reuse and embedded-plugin priority. `check`, `setup` and `status` identify the game. Older state files without `title_id` retain their Sun behaviour.
+
+The Plugin group's experimental Widescreen dropdown offers Auto, Original (5:3),
+16:9 and 21:9. Auto uses the primary monitor: ratios at least 2.2 select 21:9,
+at least 1.7 select 16:9, otherwise Original. The choice is saved in app state;
+setup and every launch write a concrete `[display] aspect` to
+`azahar/user/sdmc/usum-onescreen.ini` and sync `[Layout] screen_top_stretch`
+in `azahar/user/config/qt-config.ini`. Original turns stretch off. Existing custom
+float aspects are kept when saving the window's settings.
 
 ## Command line
 
@@ -53,3 +61,8 @@ UsumOneScreen status
 ```
 
 `--home DIR` works with any command and puts everything in DIR instead of next to the exe. For emulator tests in this repo, use a home under `analysis/private/instances/NAME/`: its `azahar\azahar.exe` then counts toward the `tools/instance.py` emulator queue, and `tools/cmd.py --instance NAME` / `tools/shot.py --instance NAME` work on it.
+
+`UsumOneScreen set aspect=16:9` changes both files immediately when Azahar is
+present, or applies stretch on later setup. Also accepts `auto`, `0`, `off`,
+`21:9` and positive finite floats (invariant culture); keys can be combined,
+for example `set aspect=21:9 size=2/3`. `status` marks Auto with `(auto)`.

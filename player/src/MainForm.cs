@@ -17,7 +17,8 @@ namespace UsumOneScreen
         readonly ComboBox panelKey = Combo(PluginSettings.KeyChoices, true), touchKey = Combo(PluginSettings.KeyChoices, true),
                           mapKey = Combo(PluginSettings.KeyChoices, true), cursorMove = Combo(PluginSettings.CursorMoves, false),
                           size = Combo(PluginSettings.Sizes, false), corner = Combo(PluginSettings.Corners, false),
-                          autoPanel = Combo(PluginSettings.OnOff, false);
+                          autoPanel = Combo(PluginSettings.OnOff, false), widescreen = Combo(PluginSettings.AspectChoices, false);
+        string customAspect;
         readonly NumericUpDown cursorSpeed = new NumericUpDown { Minimum = 1, Maximum = 20, Width = 60 };
         readonly CheckBox fullscreen = new CheckBox { Text = "Fullscreen (F11 or Esc leaves it)", AutoSize = true };
         readonly TextBox log = new TextBox { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Fill };
@@ -174,6 +175,8 @@ namespace UsumOneScreen
             Row(1, "Map", mapKey, "Cursor moves with", cursorMove);
             Row(2, "Cursor speed", cursorSpeed, "Panel size", size);
             Row(3, "Panel corner", corner, "Automatic view", autoPanel);
+            g.Controls.Add(Caption("Widescreen (experimental)"), 0, 4);
+            g.Controls.Add(widescreen, 1, 4);
             return Group("Plugin (usum-onescreen.ini)", g);
         }
 
@@ -198,6 +201,17 @@ namespace UsumOneScreen
             Select(size, ini.Get("size") == "half" ? "1/2" : ini.Get("size"));
             Select(corner, ini.Get("corner"));
             Select(autoPanel, new[] { "on", "true", "yes", "1" }.Contains(ini.Get("auto")?.ToLowerInvariant()) ? "on" : "off");
+
+            string aspect = string.Equals(home.GetState("aspect"), "auto", StringComparison.OrdinalIgnoreCase)
+                ? "auto" : PluginSettings.NormalizeAspect(ini.Get("aspect"));
+            int aspectIndex = Array.IndexOf(PluginSettings.AspectValues, aspect);
+            if (aspectIndex < 0)
+            {
+                customAspect = aspect;
+                widescreen.Items.Add($"Custom ({aspect})");
+                aspectIndex = widescreen.Items.Count - 1;
+            }
+            widescreen.SelectedIndex = aspectIndex;
 
             ShowAzahar();
             UpdateButtons();
@@ -321,11 +335,13 @@ namespace UsumOneScreen
         // Writes the plugin settings; returns false (and says why) if one is bad.
         bool SavePluginSettings()
         {
+            string aspect = widescreen.SelectedIndex < PluginSettings.AspectValues.Length
+                ? PluginSettings.AspectValues[widescreen.SelectedIndex] : customAspect;
             var values = new[]
             {
                 ("panel_key", panelKey.Text.Trim()), ("touch_key", touchKey.Text.Trim()), ("map_key", mapKey.Text.Trim()),
                 ("cursor_move", cursorMove.Text), ("cursor_speed", ((int)cursorSpeed.Value).ToString()),
-                ("size", size.Text), ("corner", corner.Text), ("auto", autoPanel.Text),
+                ("size", size.Text), ("corner", corner.Text), ("auto", autoPanel.Text), ("aspect", aspect),
             };
             foreach (var (key, value) in values)
             {
@@ -339,13 +355,16 @@ namespace UsumOneScreen
             var ini = PluginIni.Load(home.PluginIniPath);
             bool changed = false;
             foreach (var (key, value) in values)
-                if (!string.Equals(ini.Get(key), value, StringComparison.OrdinalIgnoreCase))
+                if (!(key == "aspect" && value == "auto") && !string.Equals(ini.Get(key), value, StringComparison.OrdinalIgnoreCase))
                 {
                     ini.Set(key, value);
                     changed = true;
                 }
             if (changed)
                 ini.Save(home.PluginIniPath);
+            home.SetState("aspect", aspect);
+            if (home.HasAzahar)
+                home.SyncWidescreen();
             return true;
         }
 

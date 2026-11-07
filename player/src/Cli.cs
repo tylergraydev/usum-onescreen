@@ -19,7 +19,7 @@ namespace UsumOneScreen
   play [--fullscreen] [--wait SECONDS]
                          start the game; --wait prints the plugin's boot log
   set KEY=VALUE...       plugin settings (panel_key touch_key map_key cursor_move
-                         cursor_speed size corner auto) and controls=PRESET
+                         cursor_speed size corner auto aspect) and controls=PRESET
   status                 show the setup
   snapshot PNG           draw the window into PNG and exit (for tests)
 
@@ -182,6 +182,8 @@ namespace UsumOneScreen
         {
             var ini = PluginIni.Load(home.PluginIniPath);
             bool pluginChanged = false;
+            string aspectChoice = null;
+            ControlPreset? controls = null;
             foreach (var a in args)
             {
                 int eq = a.IndexOf('=');
@@ -192,13 +194,18 @@ namespace UsumOneScreen
                 {
                     if (!home.HasAzahar)
                         throw new SetupException("run setup first");
-                    home.WriteConfig(ParsePreset(value));
+                    controls = ParsePreset(value);
                 }
                 else if (PluginIni.Keys.Contains(key))
                 {
                     string error = PluginSettings.Validate(key, value);
                     if (error != null)
                         throw new SetupException(error);
+                    if (key == "aspect")
+                    {
+                        aspectChoice = value.ToLowerInvariant();
+                        value = Home.ResolveAspect(aspectChoice);
+                    }
                     ini.Set(key, value);
                     pluginChanged = true;
                 }
@@ -207,6 +214,12 @@ namespace UsumOneScreen
             }
             if (pluginChanged)
                 ini.Save(home.PluginIniPath);
+            if (aspectChoice != null)
+                home.SetState("aspect", aspectChoice);
+            if (controls.HasValue)
+                home.WriteConfig(controls.Value);
+            else if (aspectChoice != null && home.HasAzahar)
+                home.SyncWidescreen();
             return 0;
         }
 
@@ -221,7 +234,7 @@ namespace UsumOneScreen
             Console.WriteLine($"update: {(v < 0 ? "not installed" : Dump.VersionText(v))}");
             Console.WriteLine($"controls: {home.CurrentControls()}");
             var ini = PluginIni.Load(home.PluginIniPath);
-            Console.WriteLine("plugin: " + string.Join(", ", PluginIni.Keys.Select(k => $"{k}={ini.Get(k)}")));
+            Console.WriteLine("plugin: " + string.Join(", ", PluginIni.Keys.Select(k => $"{k}={ini.Get(k)}" + (k == "aspect" && home.GetState("aspect") == "auto" ? " (auto)" : ""))));
             Console.WriteLine($"running: {(home.IsRunning() ? "yes, pid " + home.RunningPid() : "no")}");
             string notReady = Setup.NotReady(home);
             Console.WriteLine(notReady == null ? "ready to play" : "not ready: " + notReady);

@@ -97,17 +97,17 @@ namespace UsumOneScreen
     sealed class PluginIni
     {
         public static readonly string[] Keys =
-            { "panel_key", "touch_key", "map_key", "cursor_move", "cursor_speed", "size", "corner", "auto" };
+            { "panel_key", "touch_key", "map_key", "cursor_move", "cursor_speed", "size", "corner", "auto", "aspect" };
 
         public static string SectionOf(string key) =>
-            key == "size" || key == "corner" || key == "auto" ? "panel" : "controls";
+            key == "aspect" ? "display" : key == "size" || key == "corner" || key == "auto" ? "panel" : "controls";
 
         // The plugin's own defaults (Includes/Settings.hpp), used when the file
         // doesn't exist yet; the plugin writes its full commented file on first boot.
         public static readonly Dictionary<string, string> Defaults = new Dictionary<string, string>
         {
             ["panel_key"] = "L+R", ["touch_key"] = "ZL", ["map_key"] = "ZR", ["cursor_move"] = "cstick",
-            ["cursor_speed"] = "6", ["size"] = "1/2", ["corner"] = "bottom-right", ["auto"] = "off",
+            ["cursor_speed"] = "6", ["size"] = "1/2", ["corner"] = "bottom-right", ["auto"] = "off", ["aspect"] = "0",
         };
 
         readonly List<string> lines;

@@ -40,6 +40,12 @@ Settings
   the map (ZR), what moves the touch cursor, the panel's size and corner,
   and the automatic view. They are saved to
   azahar\user\sdmc\usum-onescreen.ini.
+- Widescreen (experimental): Auto, Original (5:3), 16:9 or 21:9.
+  Auto matches the primary monitor. This sets both the plugin's aspect in
+  azahar\user\sdmc\usum-onescreen.ini and Azahar's screen_top_stretch in
+  azahar\user\config\qt-config.ini. Original turns stretch off.
+  Command line: UsumOneScreen set aspect=16:9 (also auto, 0, off, 21:9 or
+  a positive float). Before Azahar is copied, stretch applies on setup.
 - Fullscreen: F11 switches, Esc leaves it.
 
 Known problems
