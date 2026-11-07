@@ -732,10 +732,27 @@ namespace CTRPluginFramework
     // scene (AutoPanel) and a hand choice holds until the next scene change.
     // C-stick moves the touch cursor and ZL touches (cursor_move, touch_key).
     // Scene and panel changes go to the log.
+    // True on the plugin's own threads, whose stacks are in the plugin's
+    // memory (0x06000000-0x07FFFFFF). CTRPF also runs the menu entries from
+    // its LoadCRO hook, on the game thread that loads a CRO; that thread's
+    // stack is small and sits in the game's heap. PanelEntry's work needs
+    // more stack than that: on a wild battle's Battle.cro load it overflowed
+    // into the game's ExpHeap mutex (gm + 0x15C) and the game froze
+    // (docs/PC-ANYWHERE.md, "The battle freeze").
+    static bool OnPluginStack(void)
+    {
+        u32 sp;
+        __asm__ volatile("mov %0, sp" : "=r"(sp));
+        return sp >= 0x06000000 && sp < 0x08000000;
+    }
+
     static void PanelEntry(MenuEntry *entry)
     {
         static u32 frames = 0;
         static std::string scene;
+
+        if (!OnPluginStack())
+            return;
 
         const u32 panelKey = OneScreen::GetSettings().panelKey;
         if (panelKey != 0 && Controller::IsKeysPressed(panelKey))
