@@ -95,6 +95,19 @@ namespace OneScreen
         mon.ability = plain[0x14];
         mon.nature = plain[0x1C];
         mon.gender = (plain[0x1D] >> 1) & 3;
+        // PK7 AbilityNumber is +0x15 (low 3 bits); +0x16 is markings.
+        mon.hiddenAbility = (plain[0x15] & 7) == 4;
+        const u32 pid = Get32(plain, 0x18);
+        mon.shiny = (Get16(plain, 0x0C) ^ Get16(plain, 0x0E) ^ (pid >> 16) ^ (pid & 0xFFFF)) < 16;
+        const u32 iv32 = Get32(plain, 0x74);
+        const u8 storedStat[6] = { 0, 1, 2, 4, 5, 3 };
+        for (u32 i = 0; i < 6; i++)
+        {
+            mon.ivs[i] = (iv32 >> (5 * storedStat[i])) & 31;
+            mon.evs[i] = plain[0x1E + storedStat[i]];
+            // Unlike IVs/EVs, HT bits already use display order.
+            mon.hyperTrained[i] = (plain[0xDE] >> i) & 1;
+        }
         for (u32 i = 0; i < 12; i++)
             mon.nickname[i] = Get16(plain, 0x40 + i * 2);
         mon.nickname[12] = 0;

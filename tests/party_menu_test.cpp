@@ -919,6 +919,7 @@ static void TestDraw(const char *listPreview, const char *summaryPreview)
     view.mons.push_back(Mon("Ledyba", "Ledyba", 13, 37, 37, "Oran Berry"));
     view.mons.push_back(Mon("Buneary", "Buneary", 12, 37, 37, ""));
     view.mons[2].status = 5;
+    view.mons[0].shiny = true;
     view.cursor = 3;
     canvas.FillRect(UI::Rect{ 0, 0, UI::ScreenW, UI::ScreenH }, UI::Rgb(0, 200, 0));
     DrawParty(canvas, view);
@@ -933,6 +934,9 @@ static void TestDraw(const char *listPreview, const char *summaryPreview)
 
     // Keys change with what is shown.
     const std::string key = PartyViewKey(view);
+    view.mons[0].shiny = false;
+    CHECK(PartyViewKey(view) != key);
+    view.mons[0].shiny = true;
     view.mons[0].hp = 27;
     CHECK(PartyViewKey(view) != key);
     const std::string key2 = PartyViewKey(view);
@@ -1004,6 +1008,8 @@ static void TestDraw(const char *listPreview, const char *summaryPreview)
     sum.mon.moves[2] = 497; sum.mon.pp[2] = 15; sum.mon.moveNames[2] = "Echoed Voice";
     sum.mon.moves[3] = 249; sum.mon.pp[3] = 15;
     sum.mon.ability = "Skill Link";
+    sum.mon.shiny = true;
+    sum.mon.hiddenAbility = true;
     sum.mon.nature = "Timid";
     sum.pos = 2;
     sum.count = 6;
@@ -1011,9 +1017,84 @@ static void TestDraw(const char *listPreview, const char *summaryPreview)
     DrawSummary(canvas, sum);
     CHECK(At(canvas, 2, 2).g == 200);
     const std::string skey = SummaryViewKey(sum);
+    sum.mon.hiddenAbility = false;
+    CHECK(SummaryViewKey(sum) != skey);
+    sum.mon.hiddenAbility = true;
     sum.hidden = true;
     CHECK(SummaryViewKey(sum) != skey);
     WritePpm(canvas, summaryPreview);
+
+    const char *const words[32] = {
+        "No good", "Decent", "Decent", "Decent", "Decent", "Decent", "Decent", "Decent",
+        "Decent", "Decent", "Decent", "Decent", "Decent", "Decent", "Decent", "Decent",
+        "Pretty good", "Pretty good", "Pretty good", "Pretty good", "Pretty good", "Pretty good",
+        "Pretty good", "Pretty good", "Pretty good", "Pretty good", "Very good", "Very good",
+        "Very good", "Very good", "Fantastic", "Best"
+    };
+    for (u8 iv = 0; iv < 32; iv++)
+    {
+        CHECK(std::strcmp(JudgeWord(iv), words[iv]) == 0);
+        CHECK(std::strcmp(JudgeWord(iv, true), "Hyper trained") == 0);
+    }
+    sum.hidden = false;
+    const std::string detailKey = SummaryViewKey(sum);
+    sum.judge = true;
+    CHECK(SummaryViewKey(sum) != detailKey);
+    const u8 ivs[6] = { 31, 30, 29, 16, 1, 0 };
+    const u8 evs[6] = { 0, 252, 6, 252, 0, 0 };
+    for (int i = 0; i < 6; i++)
+    {
+        sum.mon.ivs[i] = ivs[i];
+        sum.mon.evs[i] = evs[i];
+    }
+    sum.mon.hyperTrained[5] = true;
+    canvas.FillRect(UI::Rect{ 0, 0, UI::ScreenW, UI::ScreenH }, UI::Rgb(0, 200, 0));
+    DrawSummary(canvas, sum);
+    // Check EVERY pixel outside the summary's area, without clipping the
+    // canvas to it (the plugin layer would otherwise mask overflow).
+    for (int py = 0; py < UI::ScreenH; py++)
+        for (int px = 0; px < UI::ScreenW; px++)
+            if (px < PartyArea.x || px >= PartyArea.Right() || py < PartyArea.y || py >= PartyArea.Bottom())
+            {
+                const UI::Color c = At(canvas, px, py);
+                CHECK(c.r == 0 && c.g == 200 && c.b == 0);
+            }
+    if (summaryPreview)
+    {
+        std::string path = summaryPreview;
+        const size_t at = path.rfind("summary-preview");
+        if (at != std::string::npos)
+        {
+            path.replace(at, std::strlen("summary-preview"), "summary-judge-preview");
+            WritePpm(canvas, path.c_str());
+        }
+    }
+    // Each new field invalidates the cache even while staying on a page.
+    for (int i = 0; i < 6; i++)
+    {
+        std::string old = SummaryViewKey(sum);
+        sum.mon.ivs[i] ^= 1;
+        CHECK(SummaryViewKey(sum) != old);
+        old = SummaryViewKey(sum);
+        sum.mon.evs[i] ^= 1;
+        CHECK(SummaryViewKey(sum) != old);
+        old = SummaryViewKey(sum);
+        sum.mon.hyperTrained[i] = !sum.mon.hyperTrained[i];
+        CHECK(SummaryViewKey(sum) != old);
+    }
+    // Egg output must not depend on its secret fields or nickname/species.
+    sum.mon.egg = true;
+    canvas.FillRect(UI::Rect{ 0, 0, UI::ScreenW, UI::ScreenH }, UI::Rgb(0, 200, 0));
+    DrawSummary(canvas, sum);
+    const std::vector<u8> eggPixels(pixels, pixels + sizeof(pixels));
+    sum.mon.name = "SECRET"; sum.mon.species = "SECRET";
+    sum.mon.shiny = !sum.mon.shiny;
+    sum.mon.hiddenAbility = !sum.mon.hiddenAbility;
+    sum.mon.ivs[0] ^= 31; sum.mon.evs[0] ^= 252;
+    sum.mon.hyperTrained[0] = !sum.mon.hyperTrained[0];
+    canvas.FillRect(UI::Rect{ 0, 0, UI::ScreenW, UI::ScreenH }, UI::Rgb(0, 200, 0));
+    DrawSummary(canvas, sum);
+    CHECK(std::memcmp(eggPixels.data(), pixels, sizeof(pixels)) == 0);
 }
 
 int main(int argc, char **argv)

@@ -48,6 +48,7 @@ namespace OneScreen
         std::string party[BoxPartySlots];
         u8 slotBalls[BoxSlots] = {};        // Poké Ball per Pokémon (Pk7::ball; 0 = none drawn)
         u8 partyBalls[BoxPartySlots] = {};
+        bool slotShiny[BoxSlots] = {}, partyShiny[BoxPartySlots] = {};
         u32 cursor = 0;                     // the game's cursor (BoxData.hpp)
         BoxMode mode = BoxMode::Idle;
         std::string held;                   // carrying: what (empty: unknown)

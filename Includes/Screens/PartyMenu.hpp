@@ -31,6 +31,10 @@ namespace OneScreen
     {
         bool valid = false;         // decoded; otherwise drawn as "?"
         bool egg = false;
+        bool shiny = false, hiddenAbility = false;
+        // HP, Atk, Def, SpA, SpD, Spe (display order).
+        u8 ivs[6] = {}, evs[6] = {};
+        bool hyperTrained[6] = {};
         std::string name;           // nickname
         std::string species;
         u8  level = 0;
@@ -283,7 +287,10 @@ namespace OneScreen
         PartyMonView mon;
         int pos = 0, count = 0;
         bool hidden = false;                // Y: the game's own top screen shows instead
+        bool judge = false;                 // X: native details / Judge
     };
+
+    const char *JudgeWord(u8 iv, bool hyperTrained = false);
 
     // Same area as the native X menu.
     static constexpr UI::Rect PartyArea = { 12, 8, 376, 224 };

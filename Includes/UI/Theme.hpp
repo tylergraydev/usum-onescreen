@@ -192,6 +192,8 @@ namespace Theme
     void DrawCategoryIcon(Canvas &canvas, s32 x, s32 y, u8 category);
     // Gender sign, 12x12, top-left at (x, y).
     void DrawGender(Canvas &canvas, s32 x, s32 y, bool female);
+    // Red five-point shiny marker, 10x10; independent of font glyphs.
+    void DrawShiny(Canvas &canvas, s32 x, s32 y);
     // A Poké Ball icon (item IDs 1-16), 32x32 at (x, y). False if the game's
     // icon isn't loaded (nothing is drawn).
     bool DrawBall(Canvas &canvas, s32 x, s32 y, u16 ballItem);
