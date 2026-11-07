@@ -14,6 +14,8 @@
 #include <vector>
 
 #include "UI/Demo.hpp"
+#include "UI/ColumnMapping.hpp"
+#include <limits>
 #include "UI/Font.hpp"
 #include "UI/Icons.hpp"
 #include "UI/Layer.hpp"
@@ -496,6 +498,52 @@ static void TestLayer(void)
     SetSystemFont(nullptr);
 }
 
+// Sample a fully presented stock reference: this verifies rounded corners,
+// source-column selection, and skip edges together, including untouched pixels.
+static void TestLayerSqueeze(void)
+{
+    CHECK(SourceColumn(200, 1.4f) == 200);
+    CHECK(SourceColumn(100, 1.4f) == 60);
+    CHECK(SourceColumn(0, 2.0f) == -1);
+    CHECK(SourceColumn(399, 2.0f) == 400);
+    CHECK(SourceColumn(200, std::numeric_limits<float>::max()) == 200);
+    CHECK(SourceColumn(199, std::numeric_limits<float>::max()) == -1);
+    CHECK(SourceColumn(201, std::numeric_limits<float>::max()) == 400);
+    for (bool rotated : { true, false })
+        for (PixelFormat format : { PixelFormat::BGR8, PixelFormat::RGBA8, PixelFormat::RGB565 })
+            for (s32 width : { 400, 320 })
+                for (float factor : { 1.0f, 16.0f / 15.0f, 1.4f, 2.0f, 1000.0f })
+                    for (const Rect area : { Rect{ 8, 6, 73, 34 }, Rect{ 140, 17, 170, 61 } })
+                        for (const Rect skip : { Rect{}, Rect{ area.x + 11, area.y + 3, 27, 20 },
+                                                Rect{ area.x - 1, area.y - 5, 20, 200 } })
+                        {
+                            Buffer reference(format, rotated), output(format, rotated);
+                            reference.surface.width = output.surface.width = width;
+                            output.surface.squeeze = factor;
+                            Canvas ref(reference.surface), got(output.surface);
+                            ref.FillRect(Rect{ 0, 0, width, ScreenH }, Rgb(9, 17, 25));
+                            got.FillRect(Rect{ 0, 0, width, ScreenH }, Rgb(9, 17, 25));
+                            Layer layer;
+                            std::vector<u8> pixels(Layer::BytesFor(reference.surface, area));
+                            CHECK(layer.Setup(reference.surface, area, 9, pixels.data(), pixels.size()));
+                            Canvas source = layer.Begin();
+                            for (s32 x = area.x; x < area.Right(); x++)
+                                source.VLine(x, area.y, area.h, Rgb((u8)x, (u8)(x / 2), 201));
+                            layer.Present(reference.surface, skip);
+                            layer.Present(output.surface, skip);
+                            for (s32 dx = 0; dx < width; dx++)
+                            {
+                                const s32 sx = width == 400 ? SourceColumn(dx, factor) : dx;
+                                for (s32 y = 0; y < ScreenH; y++)
+                                {
+                                    const s32 sample = sx >= 0 && sx < width ? sx : 0;
+                                    CHECK(Same(At(got, dx, y), At(ref, sample, y)));
+                                }
+                            }
+                            CHECK(reference.GuardsIntact() && output.GuardsIntact());
+                        }
+}
+
 // --- PNG writer: stored (uncompressed) deflate, so no zlib is needed. ---
 
 static u32 Crc(const u8 *data, size_t n, u32 crc = 0xFFFFFFFFu)
@@ -571,6 +619,7 @@ int main(int argc, char **argv)
     TestText();
     TestFont();
     TestLayer();
+    TestLayerSqueeze();
 
     // The preview, as `uidemo shade` draws it: a fake scene on a 3DS-layout
     // BGR8 buffer, the shade drawn on it, the menu copied in from a Layer.

@@ -1,6 +1,8 @@
 #include "Settings.hpp"
 
 #include <cstdlib>
+#include <cerrno>
+#include <cmath>
 
 namespace OneScreen
 {
@@ -47,6 +49,26 @@ namespace OneScreen
             if (c != '-' && c != '_' && c != ' ' && c != '\t')
                 out += c;
         return out;
+    }
+
+    bool ParseAspect(const std::string &value, float &out)
+    {
+        const std::string v = Lower(Trim(value));
+        float aspect;
+        if (v == "off") aspect = 0.0f;
+        else if (v == "16:9") aspect = 16.0f / 9.0f;
+        else if (v == "21:9") aspect = 21.0f / 9.0f;
+        else
+        {
+            char *end = nullptr;
+            errno = 0;
+            aspect = std::strtof(v.c_str(), &end);
+            if (v.empty() || *end != '\0' || errno == ERANGE
+                || !std::isfinite(aspect) || aspect < 0.0f)
+                return false;
+        }
+        out = aspect;
+        return true;
     }
 
     static bool ParseKeys(const std::string &value, uint32_t &keys)
@@ -119,7 +141,12 @@ namespace OneScreen
         const std::string k = Lower(key);
         const std::string v = Squash(value);
 
-        if (k == "panel_key" || k == "touch_key" || k == "map_key")
+        if (k == "aspect")
+        {
+            if (!ParseAspect(value, s.aspect))
+                return "bad aspect '" + value + "' (use 0, off, a positive float, 16:9 or 21:9)";
+        }
+        else if (k == "panel_key" || k == "touch_key" || k == "map_key")
         {
             uint32_t keys = 0;
             if (!ParseKeys(value, keys))
@@ -206,7 +233,7 @@ namespace OneScreen
                     continue;
                 }
                 section = Lower(Trim(line.substr(1, line.size() - 2)));
-                sectionKnown = section == "controls" || section == "panel" || section == "scenes";
+                sectionKnown = section == "controls" || section == "panel" || section == "scenes" || section == "display";
                 if (!sectionKnown)
                     warnings.push_back(where + "unknown section [" + section + "], its keys are ignored");
                 continue;
@@ -253,6 +280,11 @@ namespace OneScreen
             "; USUM One Screen settings. Read once at boot; the plugin menu can reload it.\n"
             "; Delete this file to get the defaults back. Lines starting with ; or # are comments.\n"
             "; Problems with this file are listed in usum-onescreen.log.\n"
+            "\n"
+            "[display]\n"
+            "; Experimental 3D camera aspect: 0/off (original), 16:9, 21:9 or a positive float.\n"
+            "; Only new cameras change; see docs/WIDESCREEN.md.\n"
+            "aspect = 0\n"
             "\n"
             "[controls]\n"
             "; Cycles the bottom screen view: off, panel, full. Keys: A B X Y L R ZL ZR\n"
@@ -375,6 +407,7 @@ namespace OneScreen
                           + ", cursor_speed " + std::to_string(s.cursorSpeed) + "\n"
                           + "size " + sizes[(int)s.panelSize] + ", corner " + corners[(int)s.panelCorner]
                           + ", auto " + (s.autoPanel ? "on" : "off") + "\n"
+                          + "aspect " + (s.aspect == 0.0f ? std::string("off") : std::to_string(s.aspect)) + "\n"
                           + "scenes:";
         for (const auto &entry : s.scenes)
             out += " " + entry.first + "=" + SceneModeName(entry.second);

@@ -37,6 +37,7 @@ namespace OneScreen
         PanelSize    panelSize = PanelSize::Half;
         PanelCorner  panelCorner = PanelCorner::BottomRight;
         bool         autoPanel = false;                // native menus first; the panel is a fallback
+        float        aspect = 0.0f;                    // 0: original camera defaults
 
         // Mode per scene ID (SceneModule() names). Later entries win.
         // "FieldRo.xmenu" is the X menu overlay inside FieldRo; "default" is
@@ -64,6 +65,10 @@ namespace OneScreen
     // names, unknown keys and bad values skipped. Anything skipped is added to
     // `warnings` as "line N: ...". Missing keys keep their defaults.
     Settings ParseSettings(const std::string &text, std::vector<std::string> &warnings);
+
+    // Shared by [display] aspect and the live command. 0/off, positive finite
+    // floats, 16:9 and 21:9; invalid input leaves out unchanged.
+    bool ParseAspect(const std::string &value, float &out);
 
     // The commented file written when /usum-onescreen.ini is missing. Parses
     // back to Settings{} with no warnings.

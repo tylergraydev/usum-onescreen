@@ -22,8 +22,9 @@ namespace OneScreen
     void StartPanel(PanelMode initial, u32 displayTransfer, u32 textureCopy);
 
     // Copies the rect (x, y, w, h) of the bottom screen's last frame to
-    // (dx, dy) on the top screen with one TextureCopy on the GPU, for a native
-    // screen to show part of the hidden bottom screen (Screens/Map.cpp). Call
+    // (dx, dy) on the top screen with GPU TextureCopy, for a native
+    // screen to show part of the hidden bottom screen (Screens/Map.cpp). The
+    // destination uses the same widescreen column squeeze as UI::Layer. Call
     // from an OSD callback on the top screen. Framebuffer lines are screen
     // columns, so each column's run must be whole 16-byte units at 8-byte
     // aligned addresses: h a multiple of 16, and y and dy multiples of 8 from
