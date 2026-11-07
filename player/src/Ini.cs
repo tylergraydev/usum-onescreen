@@ -97,15 +97,16 @@ namespace UsumOneScreen
     sealed class PluginIni
     {
         public static readonly string[] Keys =
-            { "panel_key", "touch_key", "map_key", "cursor_move", "cursor_speed", "size", "corner", "auto", "aspect" };
+            { "panel_key", "touch_key", "map_key", "cursor_move", "cursor_speed", "size", "corner", "auto", "aspect", "glyphs", "layout", "instant_text", "battle_messages", "battle_bars" };
 
         public static string SectionOf(string key) =>
-            key == "aspect" ? "display" : key == "size" || key == "corner" || key == "auto" ? "panel" : "controls";
+            key == "layout" ? "battle" : key == "instant_text" || key == "battle_messages" || key == "battle_bars" ? "speed" : key == "aspect" ? "display" : key == "size" || key == "corner" || key == "auto" ? "panel" : "controls";
 
         // The plugin's own defaults (Includes/Settings.hpp), used when the file
         // doesn't exist yet; the plugin writes its full commented file on first boot.
         public static readonly Dictionary<string, string> Defaults = new Dictionary<string, string>
         {
+            ["glyphs"] = "3ds", ["layout"] = "classic", ["instant_text"] = "off", ["battle_messages"] = "normal", ["battle_bars"] = "normal",
             ["panel_key"] = "L+R", ["touch_key"] = "ZL", ["map_key"] = "ZR", ["cursor_move"] = "cstick",
             ["cursor_speed"] = "6", ["size"] = "1/2", ["corner"] = "bottom-right", ["auto"] = "off", ["aspect"] = "0",
         };
@@ -152,6 +153,8 @@ namespace UsumOneScreen
             }
             return -1;
         }
+
+        public bool Has(string key) => Find(key) >= 0;
 
         public string Get(string key)
         {

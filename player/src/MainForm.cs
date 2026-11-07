@@ -18,6 +18,11 @@ namespace UsumOneScreen
                           mapKey = Combo(PluginSettings.KeyChoices, true), cursorMove = Combo(PluginSettings.CursorMoves, false),
                           size = Combo(PluginSettings.Sizes, false), corner = Combo(PluginSettings.Corners, false),
                           autoPanel = Combo(PluginSettings.OnOff, false), widescreen = Combo(PluginSettings.AspectChoices, false);
+        readonly ComboBox graphics = Combo(new[] { "Keep Azahar's setting", "Native (1x)", "High (3x)", "Ultra (5x)" }, false),
+                          battle = Combo(new[] { "Classic", "Bar", "Rail" }, false),
+                          speed = Combo(new[] { "Normal", "Fast", "Instant" }, false),
+                          glyphs = Combo(new[] { "Auto", "Xbox", "PlayStation", "Nintendo", "3DS" }, false);
+        bool customSpeed;
         string customAspect;
         readonly NumericUpDown cursorSpeed = new NumericUpDown { Minimum = 1, Maximum = 20, Width = 60 };
         readonly CheckBox fullscreen = new CheckBox { Text = "Fullscreen (F11 or Esc leaves it)", AutoSize = true };
@@ -34,21 +39,26 @@ namespace UsumOneScreen
             Text = "USUM One Screen - Ultra Sun / Ultra Moon";
             Font = SystemFonts.MessageBoxFont;
             AutoScaleMode = AutoScaleMode.Dpi;
-            MinimumSize = new Size(640, 600);
-            Size = new Size(720, 720);
+            MinimumSize = new Size(760, 680);
+            Size = new Size(800, 860);
             StartPosition = FormStartPosition.CenterScreen;
 
-            var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, Padding = new Padding(12) };
+            var scroll = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+            Controls.Add(scroll);
+            var root = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, Padding = new Padding(12) };
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            Controls.Add(root);
+            scroll.Controls.Add(root);
 
             root.Controls.Add(GameGroup());
             root.Controls.Add(EmulatorGroup());
             root.Controls.Add(PluginGroup());
+            root.Controls.Add(OptionsGroup());
+            log.MinimumSize = new Size(0, 70);
             root.Controls.Add(log);
             var buttons = new FlowLayoutPanel { FlowDirection = FlowDirection.RightToLeft, Dock = DockStyle.Fill, AutoSize = true };
             buttons.Controls.Add(playButton);
@@ -175,9 +185,33 @@ namespace UsumOneScreen
             Row(1, "Map", mapKey, "Cursor moves with", cursorMove);
             Row(2, "Cursor speed", cursorSpeed, "Panel size", size);
             Row(3, "Panel corner", corner, "Automatic view", autoPanel);
-            g.Controls.Add(Caption("Widescreen (experimental)"), 0, 4);
-            g.Controls.Add(widescreen, 1, 4);
+
             return Group("Plugin (usum-onescreen.ini)", g);
+        }
+
+        Control OptionsGroup()
+        {
+            var g = Grid(4);
+            graphics.Width = 185;
+            glyphs.Width = 185;
+            void Row(int row, string a, Control ca, string b, Control cb)
+            {
+                g.Controls.Add(Caption(a), 0, row); g.Controls.Add(ca, 1, row);
+                g.Controls.Add(Caption(b), 2, row); g.Controls.Add(cb, 3, row);
+            }
+            Row(0, "Widescreen", widescreen, "Graphics", graphics);
+            Row(1, "Battle menu", battle, "Text and battle speed", speed);
+            g.Controls.Add(Caption("Button icons"), 0, 2); g.Controls.Add(glyphs, 1, 2);
+            var hint = Caption("21:9 widescreen looks best on High or Ultra.");
+            g.Controls.Add(hint, 0, 3); g.SetColumnSpan(hint, 4);
+            var buttons = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill };
+            var backups = new Button { Text = "Backups\u2026", AutoSize = true };
+            var cheats = new Button { Text = "Cheats\u2026", AutoSize = true };
+            backups.Click += (s, e) => { if (!busy) OptionDialogs.ShowBackups(this, home); };
+            cheats.Click += (s, e) => { if (!busy) OptionDialogs.ShowCheats(this, home); };
+            buttons.Controls.Add(backups); buttons.Controls.Add(cheats);
+            g.Controls.Add(buttons, 0, 4); g.SetColumnSpan(buttons, 4);
+            return Group("Game options", g);
         }
 
         // --- values ---
@@ -213,10 +247,31 @@ namespace UsumOneScreen
             }
             widescreen.SelectedIndex = aspectIndex;
 
+            graphics.SelectedIndex = Array.IndexOf(GameOptions.Graphics, GameOptions.CurrentGraphics(home));
+            Select(battle, ini.Get("layout"));
+            string messages = ini.Get("battle_messages"), bars = ini.Get("battle_bars");
+            string text = ini.Get("instant_text");
+            customSpeed = messages != bars || (messages == "normal" ? text != "off" : text != "on") ||
+                          !new[] { "normal", "fast", "instant" }.Contains(messages);
+            if (customSpeed) { speed.Items.Add("Custom (keep)"); speed.SelectedIndex = 3; }
+            else Select(speed, messages);
+            glyphs.SelectedIndex = Math.Max(0, Array.IndexOf(GameOptions.Glyphs, GameOptions.CurrentGlyphs(home)));
+            UpdateGlyphLabel();
+            controls.SelectedIndexChanged += (s, e) => UpdateGlyphLabel();
             ShowAzahar();
             UpdateButtons();
             string notReady = Setup.NotReady(home);
             Log(notReady == null ? "Ready. Press Play." : "Pick your ROM and update, then press Play.");
+        }
+
+        void UpdateGlyphLabel()
+        {
+            string detected = Win32.DetectGlyphs(SelectedPreset());
+            string label = detected == "3ds" ? "3DS" : detected == "playstation" ? "PlayStation" : detected == "nintendo" ? "Nintendo" : "Xbox";
+            int selected = glyphs.SelectedIndex;
+            glyphs.Items[0] = "Auto (detected: " + label + ")";
+            glyphs.DropDownWidth = 240;
+            glyphs.SelectedIndex = selected;
         }
 
         static void Select(ComboBox c, string value)
@@ -337,12 +392,21 @@ namespace UsumOneScreen
         {
             string aspect = widescreen.SelectedIndex < PluginSettings.AspectValues.Length
                 ? PluginSettings.AspectValues[widescreen.SelectedIndex] : customAspect;
-            var values = new[]
+            var values = new System.Collections.Generic.List<(string key, string value)>
             {
                 ("panel_key", panelKey.Text.Trim()), ("touch_key", touchKey.Text.Trim()), ("map_key", mapKey.Text.Trim()),
                 ("cursor_move", cursorMove.Text), ("cursor_speed", ((int)cursorSpeed.Value).ToString()),
                 ("size", size.Text), ("corner", corner.Text), ("auto", autoPanel.Text), ("aspect", aspect),
             };
+            values.Add(("layout", battle.Text.ToLowerInvariant()));
+            if (!(customSpeed && speed.SelectedIndex == 3))
+            {
+                string pace = speed.Text.ToLowerInvariant();
+                values.Add(("instant_text", pace == "normal" ? "off" : "on"));
+                values.Add(("battle_messages", pace)); values.Add(("battle_bars", pace));
+            }
+            string glyphChoice = GameOptions.Glyphs[Math.Max(0, glyphs.SelectedIndex)];
+            values.Add(("glyphs", glyphChoice == "auto" ? Win32.DetectGlyphs(SelectedPreset()) : glyphChoice));
             foreach (var (key, value) in values)
             {
                 string error = PluginSettings.Validate(key, value);
@@ -362,6 +426,8 @@ namespace UsumOneScreen
                 }
             if (changed)
                 ini.Save(home.PluginIniPath);
+            home.SetState("glyphs", glyphChoice);
+            GameOptions.SetGraphics(home, GameOptions.Graphics[Math.Max(0, graphics.SelectedIndex)]);
             home.SetState("aspect", aspect);
             if (home.HasAzahar)
                 home.SyncWidescreen();
