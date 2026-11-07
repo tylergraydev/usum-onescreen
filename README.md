@@ -57,6 +57,7 @@ At boot the plugin reads `usum-onescreen.ini` at the emulated SD root (next to t
 panel_key = L+R         ; cycles off / panel / full; A B X Y L R ZL ZR Start Select Up Down Left Right, L+R for a combo, or none
 touch_key = ZL          ; touches at the cursor while held
 map_key = ZR            ; opens and closes the top-screen map (B closes it too)
+pc_key = none           ; opens the PC boxes in the field (docs/PC-ANYWHERE.md), e.g. R+X
 cursor_move = cstick    ; cstick, dpad or circlepad (dpad / circlepad still reach the game too)
 cursor_speed = 6        ; top speed in px/frame, 1-20; starts at 1, then 3 (or less), then this
 
