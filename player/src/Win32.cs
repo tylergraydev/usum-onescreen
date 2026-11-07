@@ -19,6 +19,55 @@ namespace UsumOneScreen
         [DllImport("kernel32.dll")] static extern bool AttachConsole(int pid);
         [DllImport("kernel32.dll")] static extern IntPtr GetStdHandle(int which);
 
+        [StructLayout(LayoutKind.Sequential)]
+        struct RawDevice { public IntPtr Handle; public uint Type; }
+        [StructLayout(LayoutKind.Explicit, Size = 32)]
+        struct DeviceInfo
+        {
+            [FieldOffset(0)] public uint Size;
+            [FieldOffset(4)] public uint Type;
+            [FieldOffset(8)] public uint Vendor;
+            [FieldOffset(20)] public ushort UsagePage;
+            [FieldOffset(22)] public ushort Usage;
+        }
+        [DllImport("user32.dll")] static extern uint GetRawInputDeviceList([Out] RawDevice[] list, ref uint count, uint size);
+        [DllImport("user32.dll", EntryPoint = "GetRawInputDeviceInfoW")]
+        static extern uint GetRawInputDeviceInfo(IntPtr device, uint command, ref DeviceInfo info, ref uint size);
+
+        // Only Generic Desktop joystick/gamepad/multi-axis HID devices count;
+        // a Microsoft keyboard or Sony audio device must not select the icons.
+        public static string GlyphsForVendors(uint[] vendors, ControlPreset preset)
+        {
+            foreach (uint vendor in vendors)
+            {
+                if (vendor == 0x045E) return "xbox";
+                if (vendor == 0x054C) return "playstation";
+                if (vendor == 0x057E) return "nintendo";
+            }
+            return preset == ControlPreset.Keyboard ? "3ds" : "xbox";
+        }
+        public static string DetectGlyphs(ControlPreset preset)
+        {
+            var vendors = new System.Collections.Generic.List<uint>();
+            uint count = 0, stride = (uint)Marshal.SizeOf(typeof(RawDevice));
+            if (GetRawInputDeviceList(null, ref count, stride) != uint.MaxValue && count > 0)
+            {
+                var devices = new RawDevice[count];
+                uint received = GetRawInputDeviceList(devices, ref count, stride);
+                if (received != uint.MaxValue)
+                    for (int i = 0; i < received; i++)
+                    {
+                        if (devices[i].Type != 2) continue;
+                        uint size = 32;
+                        var info = new DeviceInfo { Size = size };
+                        if (GetRawInputDeviceInfo(devices[i].Handle, 0x2000000b, ref info, ref size) != uint.MaxValue &&
+                            info.Type == 2 && info.UsagePage == 1 && (info.Usage == 4 || info.Usage == 5 || info.Usage == 8))
+                            vendors.Add(info.Vendor);
+                    }
+            }
+            return GlyphsForVendors(vendors.ToArray(), preset);
+        }
+
         const uint WM_CLOSE = 0x0010;
         const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
 

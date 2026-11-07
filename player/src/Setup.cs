@@ -92,6 +92,7 @@ namespace UsumOneScreen
             home.SetState("rom", Path.GetFullPath(o.Rom));
             home.SetState("game", boot);
             home.SetState("title_id", Dump.Title(title));
+            Cheats.Sync(home);
             log($"Ready to play {Dump.GameName(title)}.");
             return boot;
         }
