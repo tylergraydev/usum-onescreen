@@ -4,6 +4,12 @@ All notable changes for players are listed here. Versions follow [Semantic Versi
 
 ## [Unreleased]
 
+### Added
+
+- Windows launcher: automatic save backups before Play (ten per game), Backups dialog with restore and folder access, and backup/list/restore CLI commands. Portable saves only; extdata is excluded.
+- Game options for graphics resolution (Keep, 1x, 3x, 5x), battle layout, text/battle speed and automatic or manual controller icon families. Controller icon drawing follows in a future plugin update.
+- Cheats dialog and CLI with six embedded own-code cheats, separate Sun/Moon selections, preserved boot safety guards and exclusive shiny/undo choices. Back up first; changes apply next start.
+
 ## [0.1.1] - 2026-11-05
 
 ### Changed

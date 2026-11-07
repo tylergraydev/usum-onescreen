@@ -49,6 +49,15 @@ namespace UsumOneScreen
             string v = Squash(value);
             switch (key)
             {
+                case "glyphs":
+                    return new[] { "xbox", "playstation", "nintendo", "3ds" }.Contains(value.ToLowerInvariant()) ? null : "bad glyphs";
+                case "layout":
+                    return new[] { "classic", "bar", "rail" }.Contains(v) ? null : "bad layout";
+                case "battle_messages":
+                case "battle_bars":
+                    return new[] { "normal", "fast", "instant" }.Contains(v) ? null : "bad battle speed";
+                case "instant_text":
+                    return new[] { "on", "off" }.Contains(v) ? null : "bad instant_text";
                 case "aspect":
                     string aspect = value.Trim().ToLowerInvariant();
                     return new[] { "auto", "0", "off", "16:9", "21:9" }.Contains(aspect) ||

@@ -37,6 +37,8 @@ namespace UI
         Canvas Begin(void);
         // Copies the layer onto screen (which Matches it). Top (400px)
         // surfaces use screen.squeeze about x=200, sampling source corners.
+        // Full-screen areas also write cached pillarbox columns outside their
+        // mapped horizontal extent, according to screen.pillarbox.
         void   Present(const Surface &screen) const;
         // The same, leaving the pixels inside `skip` (screen coordinates)
         // alone, for something else to fill (a GPU copy, Screens/Map.cpp).
