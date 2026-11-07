@@ -18,6 +18,20 @@ namespace Screens
         return type < 18 ? names[type] : "?";
     }
 
+    const char *BattleCategoryName(u8 category)
+    {
+        static const char *const names[] = { "Status", "Physical", "Special" };
+        return category < 3 ? names[category] : "\xE2\x80\x94";
+    }
+
+    std::string MoveDetailsText(const MoveRow &row)
+    {
+        const char *dash = "\xE2\x80\x94";
+        const std::string power = row.category == 0 || row.power == 0 ? dash : std::to_string(row.power);
+        const std::string accuracy = row.accuracy == 0 || row.accuracy > 100 ? dash : std::to_string(row.accuracy);
+        return "Power " + power + "  Acc " + accuracy;
+    }
+
     UI::Color TypeColor(u8 type)
     {
         using UI::Rgb;
