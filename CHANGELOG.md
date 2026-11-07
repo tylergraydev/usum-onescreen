@@ -4,6 +4,10 @@ All notable changes for players are listed here. Versions follow [Semantic Versi
 
 ## [Unreleased]
 
+### Added
+
+- The native PC boxes show each Pokémon's own box icon (the game's, read from your ROM) next to its name, in the box, the party row and under the cursor while moving one.
+
 ## [0.1.1] - 2026-11-05
 
 ### Changed

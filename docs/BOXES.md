@@ -18,17 +18,20 @@ and drives it with taps through the action layer (`docs/ACTIONS.md`).
 
 ## What it shows
 
-A small red shape star in the upper-right corner of an occupied box or party
-cell marks a shiny Pokémon. The native grid uses name plates rather than
-Pokémon sprites, so the corner mark sits on that plate. Eggs have no star.
+Every occupied box and party cell shows the game's own box icon of the
+Pokémon (its 40x30 "menu sprite", the one the game's Box shows; see
+"Icons" below) on the left and its name along the top right. A small red
+shape star in the upper-right corner of the cell marks a shiny Pokémon (the
+icons themselves are not shiny-coloured; the game's aren't either). Eggs
+show the egg icon and have no star.
 The marker only changes drawing; moving, carrying and cursor controls are
 unchanged. HA is shown only in the native Party summary, not in Boxes.
 `analysis/private/boxes-preview.ppm` includes synthetic shiny box/party cells.
 
 ```
   ◀ (     Box 1    1/8 ) ▶   [(ball) Ledyba          ]   the Pokémon at the cursor
-  [Buneary][Ledyba ][Yungoos][Pikipek][Yungoos][Caterpie]
-  [Meowth ][Grubbin][Magnem…][Wingull][Mime Jr][Abra    ]
+  [@ Buneary][@  Ledyba][@ Yungoos][@ Pikipek][@ Yungoos][@ Caterpie]   @ = the game's icon
+  [@  Meowth][@ Grubbin][@Magnemite][@ Wingull][@ Mime Jr.][@     Abra]
   ...                                  (5 rows of 6, empty slots as outlines)
   (Torracat)(Zorua )(Pikipek)(Pichu  )(Ledyba )(Buneary )   the party
   (A) Move  (Y) Details  (L)(R) Box  (B) Exit
@@ -46,9 +49,14 @@ loaded (`UI::RequestAssets` on show, a redraw when they arrive):
   small, at the tab's right end (the game doesn't show it).
 - Beside it, in the dark message window: the ball and name of the Pokémon at
   the cursor, or the held one in orange while carrying.
-- Box Pokémon on dark green plates with white outlined names (the game shows
-  their icons there, which the plugin doesn't load); the party as the
-  theme's green list rows on the game's dark green party panel `#208318`.
+- Box Pokémon on dark green plates: the game's icon 1:1 on the left (its
+  feet on the plate's bottom edge, reaching 2 px into the gaps, never into
+  a neighbour), the white outlined name along the top right; a long name
+  runs over the top of the icon, whose picture sits low. The party as the
+  theme's green list rows on the game's dark green party panel `#208318`,
+  with the same icon and name (dark, with a light rim over the icon). A
+  cell whose icon isn't decoded yet (or failed) shows the name centred, as
+  before.
 - Button prompt chips at the bottom; a message window there instead while
   an action runs or the game is busy.
 
@@ -60,8 +68,8 @@ loaded (`UI::RequestAssets` on show, a redraw when they arrive):
   selected Party plate); it is also on the box name when the game's cursor
   is there.
 - Holding a Pokémon: the frame turns red, an empty cell under it shows the
-  held Pokémon's name, its old slot is dimmed, and the window at the top
-  shows what is held.
+  held Pokémon's icon and name, its old slot is dimmed (icon faded too),
+  and the window at the top shows what is held.
 - While an action runs, the footer window says what it does ("Picking up
   Ledyba...").
 
@@ -111,12 +119,19 @@ screen hides and lets AutoPanel decide.
 
 ## Commands and log
 
-`boxes on|off` (default on), `boxes status`, `boxes details`, `boxes
-pick|drop|prev|next` (as A / L / R, for tests), `box [N]` (the box data and
+`boxes on|off` (default on), `boxes status` (also: icons on/off, how many
+cached, the last redraw's time), `boxes details`, `boxes
+pick|drop|prev|next` (as A / L / R, for tests), `boxes icons on|off`
+(default on; off: names only, nothing loaded), `box [N]` (the box data and
 the screen's state). Log lines: `boxes: shown (box 1 "Box 1", idle, cursor slot
-0 (Buneary))`, `boxes: cursor …`, `boxes: mode idle|modal|carrying`,
+0 (Buneary))`, `boxes: icons: a/0/6/2, 1154 entries, table 0x005BFD50, egg
+1153, opened in 31.0 ms (6 KB)`, `boxes: icons: 21 decoded over 7 frames, 60.5
+ms (worst frame 8.7 ms), cache 21 (49 KB), slowest redraw 56.7 ms`, `mem:
+boxes icons in, ...`, `boxes: cursor …`, `boxes: mode idle|modal|carrying`,
 `boxes: box N`, `boxes: pick …`, `boxes: drop at …`, `boxes: details on|off`,
 `boxes: hidden`, then the action's own `action: box-… ok …` / `FAILED …`.
+If the icons can't be had: `boxes: icons not loaded (why), names only`, or
+`boxes: icon N not loaded (why)` for one.
 
 ## Drawing
 
@@ -127,8 +142,55 @@ time the screen shows. The slots are read again every 30 frames and whenever
 the box or mode changes. The OSD callback is registered before the panel's,
 so screenshots include it.
 
+## Icons
+
+The game's own box icons (`docs/GAME-ASSETS.md`, "Pokémon box icons"):
+`Includes/UI/PokeIcons.hpp`, `Sources/UI/PokeIcons.cpp`, glue in
+`Sources/Screens/Boxes.cpp`.
+
+- **Which**: on show, the game's icon lookup table is found in its code
+  (function `0x30CC1C`, checked; table `0x5BFD50`) and each Pokémon's icon
+  index is looked up from its species, form (PK7 `0x1D` >> 3), sex and egg
+  flag, as the game does it, every time the slots are read (every 30 frames
+  and on a box or mode change): 16 + 2 bytes of game memory per Pokémon.
+- **Loading**: on show, the RomFS is opened (`ARCHIVE_ROMFS`) and the GARC's
+  entry table read once (18 KB read, 6 KB kept: start and size per entry).
+  Then on the plugin thread, 3 icons a frame: read the entry (~400 bytes),
+  LZ11, decode the BFLIM, keep the 40x30 as RGBA5551 (2.4 KB). Only icons on
+  screen are wanted (box, party, the held one: 37 at most, duplicates once);
+  the cache holds 40, each its own small allocation, and drops the least
+  recently wanted one when a new box needs room. A redraw shows what came
+  in when a batch is complete, or at most every 8 frames while it loads (a
+  redraw costs ~50 ms of the game thread, below). Until then the cell shows
+  the name alone.
+- **Freed** when the screen hides (PC closed, panel turned on by hand): the
+  icons, the entry table, the RomFS handle.
+- **Drawing**: 1:1, opaque pixels only, under a lock shared with the loader
+  (which takes it only to add an icon or to clear).
+
+Measured in Azahar (instance `lrtoggle`, start point `pc`, 2026-11-07):
+
+| What | Cost |
+|---|---|
+| open (lookup check, RomFS, entry table) | 31-34 ms, plugin thread |
+| Box 1 + party (21 distinct icons) | decoded over 7 frames, 60-68 ms in all, worst frame 8.7-13.6 ms (plugin thread) |
+| a redraw of the screen (game thread, emulated) | 50 ms without icons, 57 ms with them |
+| heap: shown, then icons in | 1991 KB, then 2041 KB used (+50 KB: 21 icons, 49 KB); largest free block 756, then 742 KB |
+| heap after hiding | 1984 KB, the same as after a show with icons off in the same boot; 3 more open/close rounds: 1991 / 2041 / 1984 KB each time |
+
+The first show of a boot costs ~235 KB more (1749 to 1984 KB), with or
+without icons: the text caches filling on the first draw, kept for the
+plugin's life.
+
 ## Tests
 
+- `tests/poke_icons_test.cpp`: the lookup (fake game memory with the
+  function's words and a table: forms, a form past the count, female icon,
+  egg, species 808 / 809 / out of range, another build refused), an icon
+  GARC in a fake RomFS (LZ11 BFLIM, 64x32 RGBA5551 transposed, decoded
+  pixel for pixel; a broken entry; the entry table in one read), the cache
+  (budget per call, failures not retried, least recently wanted dropped,
+  more wanted than fit), drawing (opaque only, clipped).
 - `tests/boxes_test.cpp`: save layout and cursor values, modes, names and
   labels (with encrypted test Pokémon, an egg, an empty and a corrupt slot);
   every slot button exists, is tap-verified and doesn't overlap; every action
@@ -136,7 +198,10 @@ so screenshots include it.
   mode; pick / drop / swap / box turn against a fake Box screen, a game that
   ignores taps (retried once, then failed without tapping Move), a refused
   drop (one tap, no tap into the message); cells, footer, cursor frame
-  (orange, red while holding), wallpaper, plates and party rows.
+  (orange, red while holding), wallpaper, plates and party rows; icons
+  (synthetic): drawn 1:1 on the cell's left, never into the gap beside it,
+  a cell without a decoded icon drawn exactly as without icons, the held
+  Pokémon's icon under the cursor. The preview has them.
 - `scenarios/native-boxes.txt`: see README (Testing → Scenarios).
 
 ## Not done
@@ -144,9 +209,13 @@ so screenshots include it.
 - Summary, Held Item, Marking, Release, the box list, team/battle box tabs,
   box names and wallpapers: not native (the panel, L+R, shows them).
 - Levels of box Pokémon (the box data has experience, not levels).
-- The game's Pokémon icons in the slots (not among the loaded assets), its
-  red hand cursor, the party's two-column layout on the right, and the
-  wallpapers (always grass here; the test save's Box 2 is stone in the
-  game): names on plates, the orange frame and one party row
-  instead. Balls other than items 1-16 (Beast, Apricorn and Dream Balls) have
+- The game's red hand cursor, the party's two-column layout on the right,
+  and the wallpapers (always grass here; the test save's Box 2 is stone in
+  the game): the orange frame and one party row instead. No icon in the
+  window at the top (ball and name there). The right-facing icon variants
+  (the game's lookup has them for Pikachu's caps, Unown, Magearna) aren't
+  used: the Box shows icons facing left.
+- Not seen in the game yet: eggs, shinies, megas or forms other than Alolan
+  Meowth and Furfrou (the test save has none); the lookup follows the
+  game's own table for them (`docs/GAME-ASSETS.md`). Balls other than items 1-16 (Beast, Apricorn and Dream Balls) have
   no icon loaded, so none is drawn.

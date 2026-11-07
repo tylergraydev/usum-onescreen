@@ -37,6 +37,7 @@ namespace OneScreen
         u8  ability = 0;            // ability ID (0x14)
         u8  nature = 0;             // nature (0x1C)
         u8  gender = 0;             // 0 male, 1 female, 2 genderless (0x1D bits 1-2)
+        u8  altForm = 0;            // alternate form (0x1D bits 3-7)
         // Arrays use display order: HP, Atk, Def, SpA, SpD, Spe.
         u8 ivs[6] = {}, evs[6] = {};
         bool hyperTrained[6] = {};
