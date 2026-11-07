@@ -4,7 +4,9 @@ Run after building: python player/test.py
 """
 from pathlib import Path
 from contextlib import contextmanager
+import configparser
 import hashlib
+import math
 import os
 import zipfile
 import shutil
@@ -162,6 +164,127 @@ try {
         bundle.rename(fallback)
         run(['setup', '--home', home, '--rom', games[MOON], '--plugin', plugin,
              '--azahar', fallback], 0, 'Ultra Moon')
+        # Widescreen changes both INIs, preserving plugin comments.
+        def widescreen_files(target):
+            return (target / 'azahar/user/sdmc/usum-onescreen.ini',
+                    target / 'azahar/user/config/qt-config.ini')
+
+        def is_widescreen(value):
+            if value in ('16:9', '21:9'):
+                return True
+            try:
+                ratio = float(value)
+                return math.isfinite(ratio) and ratio > 0
+            except ValueError:
+                return False
+
+        def check_widescreen(target, expected):
+            plugin_ini, qt_ini = widescreen_files(target)
+            plugin_config = configparser.ConfigParser(inline_comment_prefixes=(';', '#'))
+            plugin_config.read(plugin_ini)
+            aspect = plugin_config['display']['aspect']
+            assert aspect in expected, aspect
+            qt_config = configparser.ConfigParser()
+            qt_config.read(qt_ini)
+            stretch = 'true' if is_widescreen(aspect) else 'false'
+            assert qt_config['Layout'][r'screen_top_stretch\default'] == 'false'
+            assert qt_config['Layout']['screen_top_stretch'] == stretch
+            lines = qt_ini.read_text().splitlines()
+            assert lines.count(r'screen_top_stretch\default=false') == 1
+            assert lines.count('screen_top_stretch=' + stretch) == 1
+
+        plugin_ini, qt_ini = widescreen_files(home)
+        comment = '; Experimental widescreen: 0/off, 16:9, 21:9, or a positive float.'
+        trailing = '; keep this aspect comment'
+        plugin_ini.write_text('[display]\n' + comment + '\naspect = 0  ' + trailing + '\n')
+        for choice in ('16:9', '21:9', '0', 'off', 'auto'):
+            run(['set', '--home', home, 'aspect=' + choice, 'size=2/3'], 0)
+            expected = {'0', '16:9', '21:9'} if choice == 'auto' else {'0' if choice == 'off' else choice}
+            check_widescreen(home, expected)
+            assert comment in plugin_ini.read_text() and trailing in plugin_ini.read_text()
+            assert 'aspect=' + choice + '\n' in (home / 'usum-onescreen-app.ini').read_text()
+            if choice == 'auto':
+                run(['status', '--home', home], 0, '(auto)')
+            # Setup repairs stretch and strips per-game overrides every time.
+            qt_ini.write_text('[Layout]\nscreen_top_stretch\\default=true\nscreen_top_stretch=false\n')
+            custom = home / 'azahar/user/config/custom/game.ini'
+            custom.parent.mkdir(exist_ok=True)
+            custom.write_text('[Layout]\nscreen_top_stretch\\default=false\nscreen_top_stretch=true\nkeep=1\n')
+            run(['setup', '--home', home, '--rom', games[MOON], '--plugin', plugin], 0, 'Ready to play')
+            check_widescreen(home, expected)
+            assert 'screen_top_stretch' not in custom.read_text()
+            assert 'keep=1' in custom.read_text()
+            assert comment in plugin_ini.read_text() and trailing in plugin_ini.read_text()
+
+        tracked = (plugin_ini, qt_ini, home / 'usum-onescreen-app.ini')
+        for bad in ('wide', '-2.1', '0.0', 'NaN', 'Infinity', '1e40', '2,1'):
+            before = {p: p.read_bytes() for p in tracked}
+            run(['set', '--home', home, 'size=1/2', 'aspect=' + bad], 1, 'bad aspect')
+            assert {p: p.read_bytes() for p in tracked} == before
+        for choice in ('2.1', '1e-1'):
+            run(['set', '--home', home, 'aspect=' + choice], 0)
+            check_widescreen(home, {choice})
+
+        # Auto thresholds are monitor-independent; custom UI values survive save.
+        script = root / 'aspect-test.ps1'
+        script.write_text(r"""param($executable, $target, $expectedAspect)
+$ErrorActionPreference = 'Stop'
+$assembly = [Reflection.Assembly]::LoadFile($executable)
+$resolve = $assembly.GetType('UsumOneScreen.PluginSettings').GetMethod('ResolveAspect')
+foreach ($case in @(@(1600, 1000, '0'), @(1700, 1000, '16:9'), @(2199, 1000, '16:9'), @(2200, 1000, '21:9'), @(3440, 1440, '21:9'))) {
+    $actual = $resolve.Invoke($null, [object[]]@('auto', [int]$case[0], [int]$case[1]))
+    if ($actual -ne $case[2]) { throw "Bad Auto resolution: $actual" }
+}
+$isWide = $assembly.GetType('UsumOneScreen.PluginSettings').GetMethod('IsWidescreen')
+foreach ($value in @('16:9', '21:9', '2.1', '1e-1')) {
+    if (!$isWide.Invoke($null, [object[]]@($value))) { throw "Expected widescreen: $value" }
+}
+foreach ($value in @('0', 'off', '0.0', '', 'wide', 'NaN', 'Infinity', '-2.1', '2,1')) {
+    if ($isWide.Invoke($null, [object[]]@($value))) { throw "Expected widescreen off: $value" }
+}
+$launcherHome = [Activator]::CreateInstance($assembly.GetType('UsumOneScreen.Home'), [object[]]@($target))
+$form = [Activator]::CreateInstance($assembly.GetType('UsumOneScreen.MainForm'), [object[]]@($launcherHome))
+try {
+    $flags = [Reflection.BindingFlags]'Instance, NonPublic'
+    $dropdown = $form.GetType().GetField('widescreen', $flags).GetValue($form)
+    if ($dropdown.Text -ne $expectedAspect) { throw "Wrong aspect loaded: $($dropdown.Text)" }
+    if (!$form.GetType().GetMethod('SavePluginSettings', $flags).Invoke($form, @())) { throw 'Save failed' }
+} finally { $form.Dispose() }
+""")
+        run(['set', '--home', home, 'aspect=2.1', 'controls=custom'], 0)
+        # An unlisted aspect read from the plugin INI must survive unchanged too.
+        state = home / 'usum-onescreen-app.ini'
+        state.write_text('\n'.join(line for line in state.read_text().splitlines()
+                                   if not line.startswith('aspect=')) + '\n')
+        def save_form(expected):
+            result = subprocess.run(['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass',
+                                     '-File', str(script), str(exe), str(home), expected],
+                                    capture_output=True, encoding='utf-8', env=env, timeout=30)
+            assert result.returncode == 0, result.stdout + result.stderr
+
+        save_form('Custom (2.1)')
+        check_widescreen(home, {'2.1'})
+        assert comment in plugin_ini.read_text() and trailing in plugin_ini.read_text()
+
+        # Concrete state must not overwrite a hand-edited plugin aspect.
+        run(['set', '--home', home, 'aspect=16:9'], 0)
+        plugin_ini.write_text('[display]\naspect = 21:9\n')
+        save_form('21:9')
+        check_widescreen(home, {'21:9'})
+
+        # Numeric zero and bad hand-written values disable stretch on setup.
+        for value in ('0.0', 'off', 'wide', 'NaN', 'Infinity', ''):
+            plugin_ini.write_text('[display]\naspect = ' + value + '\n')
+            run(['setup', '--home', home, '--rom', games[MOON], '--plugin', plugin], 0, 'Ready to play')
+            check_widescreen(home, {value})
+
+        # A choice saved before Azahar is copied applies on later setup.
+        earlyhome = root / 'earlyhome'
+        run(['set', '--home', earlyhome, 'aspect=16:9'], 0)
+        early_plugin, early_qt = widescreen_files(earlyhome)
+        assert 'aspect = 16:9' in early_plugin.read_text()
+        assert not early_qt.exists()
+
         # Headers in nested zip entries classify both files; backslash traversal
         # is flattened to a basename inside games, never written outside it.
         archive = root / 'games.zip'
@@ -183,6 +306,12 @@ try {
             content = target / 'azahar/user/sdmc/Nintendo 3DS/0/0/title/0004000e/001b5000/content'
             content.mkdir(parents=True, exist_ok=True)
             (content / '0.tmd').write_bytes(tmd(SUN | 0xE00000000, 0x0820))
+
+        installed_update(earlyhome)
+        for _ in range(2):
+            run(['setup', '--home', earlyhome, '--rom', games[SUN], '--azahar', fallback,
+                 '--plugin', plugin], 0, 'Ready to play')
+            check_widescreen(earlyhome, {'16:9'})
 
         installed_update(ziphome)
         run(['setup', '--home', ziphome, '--rom', archive, '--azahar', fallback],
@@ -274,7 +403,7 @@ try {
         state.write_text('\n'.join(line for line in state.read_text().splitlines()
                                    if not line.startswith('title_id=')))
         run(['status', '--home', home], 0, 'game: Ultra Sun', 'ready to play')
-    print('PASS: validation, cross-game rejection, title state/paths, bundled source priority and immutability, installed-update checks, fallback source; offline pinned download and hash refusal; zip classification, traversal safety, reuse and state; embedded/adjacent/explicit plugin priority.')
+    print('PASS: validation, cross-game rejection, title state/paths, bundled source priority and immutability, installed-update checks, fallback source; offline pinned download and hash refusal; zip classification, traversal safety, reuse and state; embedded/adjacent/explicit plugin priority; widescreen choices, Auto thresholds, custom UI preservation, comment retention, invalid-value immutability, stretch sync, stale-state preservation, numeric-zero/bad-value handling and per-game cleanup.')
 
 
 if __name__ == '__main__':

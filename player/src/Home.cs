@@ -133,7 +133,7 @@ namespace UsumOneScreen
         }
 
         // Plugin loader on, top screen only, custom textures off, no update
-        // check, no bars around the game, and the chosen controls.
+        // check, no bars around the game, chosen controls and widescreen stretch.
         public void WriteConfig(ControlPreset controls)
         {
             var ini = QtIni.Load(ConfigPath);
@@ -156,6 +156,7 @@ namespace UsumOneScreen
             ControlPresets.Apply(ini, controls);
             ini.Save(ConfigPath);
             SetState("controls", controls.ToString());
+            SyncWidescreen();
 
             // A per-game file could turn custom textures or another layout back on.
             string custom = Path.Combine(User, "config", "custom");
@@ -164,9 +165,34 @@ namespace UsumOneScreen
                 {
                     var g = QtIni.Load(game);
                     g.Remove("Utility", k => k == "custom_textures" || k == "preload_textures");
-                    g.Remove("Layout", k => k == "layout_option" || k == "swap_screen");
+                    g.Remove("Layout", k => k == "layout_option" || k == "swap_screen" || k == "screen_top_stretch");
                     g.Save(game);
                 }
+        }
+
+        public static string ResolveAspect(string choice)
+        {
+            if (!string.Equals(choice, "auto", StringComparison.OrdinalIgnoreCase))
+                return PluginSettings.NormalizeAspect(choice);
+            var bounds = System.Windows.Forms.Screen.PrimaryScreen.Bounds;
+            return PluginSettings.ResolveAspect(choice, bounds.Width, bounds.Height);
+        }
+
+        public void SyncWidescreen()
+        {
+            var plugin = PluginIni.Load(PluginIniPath);
+            if (string.Equals(GetState("aspect"), "auto", StringComparison.OrdinalIgnoreCase))
+            {
+                string aspect = ResolveAspect("auto");
+                if (plugin.Get("aspect") != aspect)
+                {
+                    plugin.Set("aspect", aspect);
+                    plugin.Save(PluginIniPath);
+                }
+            }
+            var ini = QtIni.Load(ConfigPath);
+            ini.Set("Layout", "screen_top_stretch", PluginSettings.IsWidescreen(plugin.Get("aspect")) ? "true" : "false");
+            ini.Save(ConfigPath);
         }
 
         public ControlPreset CurrentControls() =>
