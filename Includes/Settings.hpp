@@ -30,6 +30,11 @@ namespace OneScreen
     // column of pills; Bar and Rail are the horizontal layouts (docs/BATTLE-UI.md).
     enum class BattleLayout : uint8_t { Classic, Bar, Rail };
 
+    enum class BattleSpeed : uint8_t { Normal, Fast, Instant };
+    bool ParseBattleSpeed(const std::string &value, BattleSpeed &out);
+    const char *BattleSpeedName(BattleSpeed speed);
+    const char *BattleSpeedTitle(BattleSpeed speed);
+
     struct Settings
     {
         uint32_t     panelKey = KeyBits::L | KeyBits::R;   // cycles off / panel / full
@@ -42,6 +47,9 @@ namespace OneScreen
         bool         autoPanel = false;                // native menus first; the panel is a fallback
         float        aspect = 0.0f;                    // 0: original camera defaults
         BattleLayout battleLayout = BattleLayout::Classic;
+        bool         instantText = false;
+        BattleSpeed  battleMessages = BattleSpeed::Normal;
+        BattleSpeed  battleBars = BattleSpeed::Normal;
 
         // Mode per scene ID (SceneModule() names). Later entries win.
         // "FieldRo.xmenu" is the X menu overlay inside FieldRo; "default" is

@@ -72,6 +72,36 @@ namespace OneScreen
         return true;
     }
 
+    bool ParseBattleSpeed(const std::string &value, BattleSpeed &out)
+    {
+        const std::string v = Lower(Trim(value));
+        if (v == "normal") out = BattleSpeed::Normal;
+        else if (v == "fast") out = BattleSpeed::Fast;
+        else if (v == "instant") out = BattleSpeed::Instant;
+        else return false;
+        return true;
+    }
+
+    const char *BattleSpeedName(BattleSpeed speed)
+    {
+        switch (speed)
+        {
+        case BattleSpeed::Fast: return "fast";
+        case BattleSpeed::Instant: return "instant";
+        default: return "normal";
+        }
+    }
+
+    const char *BattleSpeedTitle(BattleSpeed speed)
+    {
+        switch (speed)
+        {
+        case BattleSpeed::Fast: return "Fast";
+        case BattleSpeed::Instant: return "Instant";
+        default: return "Normal";
+        }
+    }
+
     static bool ParseKeys(const std::string &value, uint32_t &keys)
     {
         const std::string v = Squash(value);
@@ -142,7 +172,18 @@ namespace OneScreen
         const std::string k = Lower(key);
         const std::string v = Squash(value);
 
-        if (k == "aspect")
+        if (k == "instant_text")
+        {
+            if (v != "on" && v != "off")
+                return "bad instant_text '" + value + "' (use on or off)";
+            s.instantText = v == "on";
+        }
+        else if (k == "battle_messages" || k == "battle_bars")
+        {
+            if (!ParseBattleSpeed(value, k == "battle_messages" ? s.battleMessages : s.battleBars))
+                return "bad " + key + " '" + value + "' (use normal, fast or instant)";
+        }
+        else if (k == "aspect")
         {
             if (!ParseAspect(value, s.aspect))
                 return "bad aspect '" + value + "' (use 0, off, a positive float, 16:9 or 21:9)";
@@ -240,7 +281,7 @@ namespace OneScreen
                 }
                 section = Lower(Trim(line.substr(1, line.size() - 2)));
                 sectionKnown = section == "controls" || section == "panel" || section == "scenes" || section == "display"
-                           || section == "battle";
+                           || section == "battle" || section == "speed";
                 if (!sectionKnown)
                     warnings.push_back(where + "unknown section [" + section + "], its keys are ignored");
                 continue;
@@ -297,6 +338,13 @@ namespace OneScreen
             "; Native battle menu look: classic, bar or rail. The plugin menu's\n"
             "; \"Battle layout\" entry changes it and saves it here.\n"
             "layout = classic\n"
+            "\n"
+            "[speed]\n"
+            "; Remove typing delays; page ends still need a button press.\n"
+            "instant_text = off\n"
+            "; Battle message waits and HP/EXP bars: normal, fast or instant.\n"
+            "battle_messages = normal\n"
+            "battle_bars = normal\n"
             "\n"
             "[controls]\n"
             "; Cycles the bottom screen view: off, panel, full. Keys: A B X Y L R ZL ZR\n"
@@ -421,6 +469,9 @@ namespace OneScreen
                           + ", auto " + (s.autoPanel ? "on" : "off") + "\n"
                           + "aspect " + (s.aspect == 0.0f ? std::string("off") : std::to_string(s.aspect))
                           + ", battle layout " + BattleLayoutName(s.battleLayout) + "\n"
+                          + "instant text " + (s.instantText ? "on" : "off")
+                          + ", battle messages " + BattleSpeedName(s.battleMessages)
+                          + ", battle bars " + BattleSpeedName(s.battleBars) + "\n"
                           + "scenes:";
         for (const auto &entry : s.scenes)
             out += " " + entry.first + "=" + SceneModeName(entry.second);

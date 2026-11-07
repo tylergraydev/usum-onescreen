@@ -25,7 +25,7 @@ $(OUT)/field_settle_test: field_settle_test.cpp ../Includes/FieldSettle.hpp
 SETTINGS_SRCS := ../Sources/Settings.cpp ../Sources/SettingsFile.cpp
 SETTINGS_HDRS := ../Includes/Settings.hpp ../Includes/SettingsFile.hpp
 
-$(OUT)/settings_test: settings_test.cpp $(SETTINGS_SRCS) $(SETTINGS_HDRS)
+$(OUT)/settings_test: settings_test.cpp $(SETTINGS_SRCS) $(SETTINGS_HDRS) ../Includes/FastTextPatches.hpp
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) settings_test.cpp $(SETTINGS_SRCS) -o $@
 

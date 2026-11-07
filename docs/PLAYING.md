@@ -47,7 +47,7 @@ These work everywhere:
 | **L+R** | Show the bottom screen on the top screen when you need it: off → corner panel → full view → off. It stays as you set it. |
 | **C-stick** | Move the touch cursor (a crosshair on the panel or full view). It starts slow for precise taps and speeds up while you hold it. |
 | **ZL** | Touch the bottom screen at the cursor, for as long as you hold it. The crosshair turns red while touching. |
-| **Select** | Open the plugin's own menu (CTRPF's default hotkey): Bottom screen on top, Auto panel, Battle layout, View settings, Reload settings file. |
+| **Select** | Open the plugin's own menu (CTRPF's default hotkey): Bottom screen on top, Auto panel, Battle layout, Instant text, Battle speed, View settings, Reload settings file. |
 
 Every other button works as normal. Each native screen below also takes the buttons listed for it.
 
@@ -139,9 +139,19 @@ On the first run the plugin writes a commented `usum-onescreen.ini` in the root 
 layout = bar
 ```
 
-**Battle layout** in the plugin menu (**Select**) cycles Classic → Bar → Rail → Classic with **A**. The change shows at once and is saved to `usum-onescreen.ini`, so it lasts after a restart. This is the first setting the plugin writes back to the file: only the `layout` line changes (or is added, with a `[battle]` section if the file has none); every other line, comment and line ending stays as it was. The other menu toggles, such as **Auto panel**, still last only until the next boot. The log says `settings: saved [battle] layout = bar`, or why it could not save.
+**Battle layout** in the plugin menu (**Select**) cycles Classic → Bar → Rail → Classic with **A**. The change shows at once and is saved to `usum-onescreen.ini`, so it lasts after a restart. Only the `layout` line changes (or is added, with a `[battle]` section if the file has none); every other line, comment and line ending stays as it was. The other menu toggles, such as **Auto panel**, still last only until the next boot. The log says `settings: saved [battle] layout = bar`, or why it could not save.
 
 For testing, the `/usum-cmd.txt` command `battlelayout` logs the current layout, and `battlelayout classic|bar|rail` sets it and saves it, as the menu does.
+
+### Text and battle speed
+
+All speed options default to off/normal. In `[speed]`, `instant_text = on` removes
+field/battle typing delays; `battle_messages = fast|instant` shortens message waits
+to 8/1 frames, and `battle_bars = fast|instant` speeds up HP/EXP bars. Use `normal`
+for stock battle timing. **Instant text** and **Battle speed** in the plugin menu
+apply live and save these settings; Battle speed cycles both battle options together.
+Page ends can still need a button press, and animations/cut-scene timers keep their
+own timing. See [FAST-TEXT.md](FAST-TEXT.md) for commands, limits and patch details.
 
 ## Known gaps
 

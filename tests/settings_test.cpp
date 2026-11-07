@@ -2,6 +2,8 @@
 // Build and run: make -C tests   (any C++17 compiler: g++, clang++, MSVC)
 
 #include "Settings.hpp"
+#include "SettingsFile.hpp"
+#include "FastTextPatches.hpp"
 
 #include <cstdio>
 #include <string>
@@ -27,6 +29,7 @@ static bool SameSettings(const Settings &a, const Settings &b)
 {
     return a.panelKey == b.panelKey && a.touchKey == b.touchKey && a.mapKey == b.mapKey && a.cursorSource == b.cursorSource
         && a.cursorSpeed == b.cursorSpeed && a.panelSize == b.panelSize && a.panelCorner == b.panelCorner
+        && a.instantText == b.instantText && a.battleMessages == b.battleMessages && a.battleBars == b.battleBars
         && a.autoPanel == b.autoPanel && a.aspect == b.aspect && a.battleLayout == b.battleLayout && a.scenes == b.scenes;
 }
 
@@ -273,6 +276,88 @@ static void TestBattleLayout(void)
     CHECK(DescribeSettings(rail).find("battle layout rail") != std::string::npos);
 }
 
+static void TestSpeedSettings(void)
+{
+    std::vector<std::string> warnings;
+    const Settings defaults;
+    CHECK(!defaults.instantText);
+    CHECK(defaults.battleMessages == BattleSpeed::Normal);
+    CHECK(defaults.battleBars == BattleSpeed::Normal);
+    Settings s = Parse("[SpEeD]\ninstant_text = ON\nbattle_messages = FaSt\nbattle_bars = INSTANT\n", warnings);
+    CHECK(warnings.empty());
+    CHECK(s.instantText && s.battleMessages == BattleSpeed::Fast && s.battleBars == BattleSpeed::Instant);
+    CHECK(DescribeSettings(s).find("instant text on, battle messages fast, battle bars instant") != std::string::npos);
+    s = Parse("[speed]\ninstant_text = yes\nbattle_messages = 0\nbattle_bars = turbo\n", warnings);
+    CHECK(warnings.size() == 3);
+    CHECK(SameSettings(s, defaults));
+    s = Parse("[speed]\ninstant_text = on\ninstant_text = bad\nbattle_messages = instant\n"
+              "battle_messages = bad\nbattle_bars = fast\nbattle_bars = bad\n", warnings);
+    CHECK(warnings.size() == 3);
+    CHECK(s.instantText && s.battleMessages == BattleSpeed::Instant && s.battleBars == BattleSpeed::Fast);
+    BattleSpeed speed = BattleSpeed::Fast;
+    CHECK(!ParseBattleSpeed("bad", speed) && speed == BattleSpeed::Fast);
+    for (const auto mode : {BattleSpeed::Normal, BattleSpeed::Fast, BattleSpeed::Instant})
+    {
+        CHECK(ParseBattleSpeed(BattleSpeedName(mode), speed) && speed == mode);
+        std::string text = "; keep me\r\n[battle]\r\nlayout = rail\r\n";
+        text = SetIniValue(text, "speed", "instant_text", "on");
+        text = SetIniValue(text, "speed", "battle_messages", BattleSpeedName(mode));
+        text = SetIniValue(text, "speed", "battle_bars", BattleSpeedName(mode));
+        const auto saved = Parse(text, warnings);
+        CHECK(warnings.empty());
+        CHECK(saved.instantText && saved.battleMessages == mode && saved.battleBars == mode);
+        CHECK(saved.battleLayout == BattleLayout::Rail);
+        CHECK(text.find("; keep me\r\n") == 0);
+    }
+}
+
+static void TestSpeedPatches(void)
+{
+    namespace P = FastTextPatches;
+    static_assert(sizeof(P::TextStock) == 96, "text tables are 24 u32 words");
+    CHECK(P::TextAddress + (P::TextStock.size() - 1) * 4 == 0x5D60B8);
+    CHECK(P::BattleWords(BattleSpeed::Normal, BattleSpeed::Normal) == P::BattleStock);
+    CHECK(P::MessageFrames(BattleSpeed::Fast) == 8);
+    CHECK(P::MessageFrames(BattleSpeed::Instant) == 1);
+    const auto fast = P::BattleWords(BattleSpeed::Fast, BattleSpeed::Fast);
+    const auto instant = P::BattleWords(BattleSpeed::Instant, BattleSpeed::Instant);
+    CHECK(fast[0] == 0xE3A02008 && fast[1] == 0xE3A02008 && fast[2] == 0xE3500008);
+    CHECK(fast[3] == 0xB2800004 && fast[4] == 0xE2800008);
+    CHECK(instant[0] == 0xE3A02001 && instant[1] == 0xE3A02001 && instant[2] == 0xE3500001);
+    CHECK(instant[3] == 0xB1A00001 && instant[4] == 0xE2800064);
+    CHECK(P::BattleWords(BattleSpeed::Normal, BattleSpeed::Instant)[0] == P::BattleStock[0]);
+    CHECK(P::BattleWords(BattleSpeed::Fast, BattleSpeed::Normal)[3] == P::BattleStock[3]);
+    for (unsigned i = 0; i < 24; ++i)
+        CHECK(P::TextInstant[i] == ((i < 4 || (i >= 8 && i < 12)) ? 0u : 255u));
+
+    // Any mismatching/unreadable word rejects the whole plan before writes.
+    // Previously applied words are accepted only when they are our expected values.
+    auto memory = P::BattleStock;
+    uint32_t bad = 0;
+    int reads = 0;
+    bool readable = true;
+    auto read = [&](uint32_t offset, uint32_t &value) {
+        ++reads;
+        for (unsigned i = 0; i < P::BattleOffsets.size(); ++i)
+            if (offset == P::BattleOffsets[i]) { value = memory[i]; return readable; }
+        return false;
+    };
+    CHECK(P::Preflight(P::BattleOffsets, P::BattleStock, read, bad));
+    CHECK(reads == 5);
+    for (unsigned i = 0; i < memory.size(); ++i)
+    {
+        memory = P::BattleStock;
+        memory[i] ^= 1;
+        CHECK(!P::Preflight(P::BattleOffsets, P::BattleStock, read, bad));
+        CHECK(bad == P::BattleOffsets[i]);
+    }
+    memory = fast;
+    CHECK(!P::Preflight(P::BattleOffsets, P::BattleStock, read, bad));
+    CHECK(P::Preflight(P::BattleOffsets, fast, read, bad));
+    readable = false;
+    CHECK(!P::Preflight(P::BattleOffsets, fast, read, bad));
+}
+
 static void TestCurrentSettings(void)
 {
     Settings s;
@@ -298,6 +383,8 @@ int main(void)
     TestDescribe();
     TestBattleLayout();
     TestCurrentSettings();
+    TestSpeedSettings();
+    TestSpeedPatches();
 
     std::printf("%d checks, %d failed\n", s_checks, s_failures);
     return s_failures == 0 ? 0 : 1;
