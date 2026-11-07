@@ -2,7 +2,10 @@
 #include <CTRPluginFramework.hpp>
 
 #include "Game.hpp"
+#include <cmath>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <vector>
 
 #include "Actions.hpp"
@@ -32,6 +35,7 @@
 #include "Shot.hpp"
 #include "UI/Device.hpp"
 #include "Where.hpp"
+#include "Widescreen.hpp"
 
 namespace CTRPluginFramework
 {
@@ -104,6 +108,7 @@ namespace CTRPluginFramework
         OneScreen::SetSettings(settings);
         OneScreen::AutoPanelSetEnabled(settings.autoPanel);
         WriteLog("settings: " + OneScreen::DescribeSettings(settings), false);
+        WriteLog(OneScreen::SetWidescreenAspect(settings.aspect), false);
     }
 
     // Test commands, one per line, in /usum-cmd.txt on the SD card. The file is
@@ -114,8 +119,11 @@ namespace CTRPluginFramework
     //   stick X Y [FRAMES]   (circle pad, up is +Y, ~156 full tilt; default 30 frames)
     //   snap NAME   (dump global data to /usum-snap-NAME.bin)
     //   peek ADDR [COUNT]   (log COUNT words at hex ADDR, default 4)
+    //   poke ADDR VALUE | pokef ADDR FLOAT   (write data memory; hex ADDR/VALUE, decimal FLOAT)
     //   vtscan NAME   (global -> object -> vtable scan to /usum-vt-NAME.bin)
     //   scene   (log the current scene's module name)
+    //   aspect [VALUE|off]   (inspect / set perspective aspect; docs/WIDESCREEN.md)
+    //   cullnames            (log culled pane names for the next frame, max 32)
     //   battle   (log the battle state, docs/RE1-battle.md; also logged on change)
     //   where   (log the zone, position and facing, docs/RE4-map.md)
     //   party | bag   (log the party / the bag pockets, docs/RE3-party-bag.md)
@@ -274,6 +282,17 @@ namespace CTRPluginFramework
             WriteLog(OneScreen::MemoryMap(), false);
         else if (std::sscanf(line.c_str(), "dump %x %x %15s", &a, &b, word) == 3)
             WriteLog(OneScreen::DumpMemory(a, b, word), false);
+        else if (line == "aspect")
+            WriteLog(OneScreen::DescribeWidescreenAspect(), false);
+        else if (line == "cullnames")
+            OneScreen::RequestWidescreenCullNames();
+        else if (line.compare(0, 7, "aspect ") == 0 || line.compare(0, 7, "aspect\t") == 0)
+        {
+            float aspect;
+            WriteLog(OneScreen::ParseAspect(line.substr(7), aspect)
+                ? OneScreen::SetWidescreenAspect(aspect)
+                : "widescreen: invalid aspect (use 0, off, a positive float, 16:9 or 21:9)", false);
+        }
         else if (line == "scene")
             WriteLog("scene: " + OneScreen::SceneModule(s_game->offsets.sceneManager), false);
         else if (line.compare(0, 7, "uidemo ") == 0)
@@ -447,6 +466,48 @@ namespace CTRPluginFramework
                 return;
             }
         }
+        else if (line.compare(0, 5, "poke ") == 0 && std::sscanf(line.c_str(), "poke %x %x", &a, &b) == 2)
+        {
+            u32 old = 0, value = 0;
+            if (a < 0x08000000)
+                WriteLog("poke: refusing code address", false);
+            else if (!Process::CheckAddress(a, MEMPERM_WRITE)
+                || !Process::Read32(a, old) || !Process::Write32(a, b)
+                || !Process::Read32(a, value))
+                WriteLog(Utils::Format("poke: %08X not writable", a), false);
+            else
+                WriteLog(Utils::Format("poke: %08X old %08lX -> new %08lX", a, old, value), false);
+        }
+        else if (int offset = 0; std::sscanf(line.c_str(), "pokef %x %n", &a, &offset) == 1)
+        {
+            if (a < 0x08000000)
+                WriteLog("poke: refusing code address", false);
+            else
+            {
+                const char *start = line.c_str() + offset;
+                char *end = nullptr;
+                const float target = std::strtof(start, &end);
+                if (end == start || !std::isfinite(target)
+                    || line.find_first_not_of(" \t\r\n", end - line.c_str()) != std::string::npos)
+                    WriteLog("pokef: invalid float", false);
+                else
+                {
+                    u32 bits = 0, old = 0, value = 0;
+                    std::memcpy(&bits, &target, sizeof(bits));
+                    if (!Process::CheckAddress(a, MEMPERM_WRITE)
+                        || !Process::Read32(a, old) || !Process::Write32(a, bits)
+                        || !Process::Read32(a, value))
+                        WriteLog(Utils::Format("pokef: %08X not writable", a), false);
+                    else
+                    {
+                        float oldFloat = 0.0f, newFloat = 0.0f;
+                        std::memcpy(&oldFloat, &old, sizeof(oldFloat));
+                        std::memcpy(&newFloat, &value, sizeof(newFloat));
+                        WriteLog(Utils::Format("pokef: %08X %f -> %f", a, oldFloat, newFloat), false);
+                    }
+                }
+            }
+        }
         else if ((fields = std::sscanf(line.c_str(), "peek %x %u", &a, &b)) >= 1)
         {
             // Logs COUNT words (default 4) at ADDR, if readable.
@@ -546,6 +607,10 @@ namespace CTRPluginFramework
 
         OneScreen::CursorUpdate();
         OneScreen::ButtonsUpdate();
+
+        const std::string cullLog = OneScreen::WidescreenFrame();
+        if (!cullLog.empty())
+            WriteLog(cullLog, false);
 
         std::vector<std::string> actionLog;
         OneScreen::ActionsUpdate(s_game->offsets.sceneManager, actionLog);
@@ -766,6 +831,10 @@ namespace CTRPluginFramework
         std::string buttonsReport;
         OneScreen::StartButtons(s_game->offsets.hidPadRead.address, buttonsReport);
         WriteLog(buttonsReport, false);
+
+        std::string widescreenReport;
+        OneScreen::StartWidescreen(widescreenReport);
+        WriteLog(widescreenReport, false);
 
         PluginMenu *menu = new PluginMenu("USUM One Screen", 0, 1, 1,
                                           "Top-screen-only play for Ultra Sun / Ultra Moon.");

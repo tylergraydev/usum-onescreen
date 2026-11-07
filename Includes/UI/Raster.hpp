@@ -59,6 +59,8 @@ namespace UI
         PixelFormat format;
         s32         width;
         s32         height;
+        // Presentation only: top-screen stretch, supplied by UI/Device.
+        float       squeeze = 1.0f;
     };
 
     u32  BytesPerPixel(PixelFormat format);
