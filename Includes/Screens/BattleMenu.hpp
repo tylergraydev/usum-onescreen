@@ -42,6 +42,8 @@ namespace Screens
         u8 type = 0xFF;
         u8 effect = 0xFF;
         u8 pp = 0, maxPp = 0;
+        u8 power = 0, accuracy = 0; // raw move-table values; accuracy 101 = never misses
+        u8 category = 0xFF;        // 0 status, 1 physical, 2 special; 0xFF unknown
         std::string typeName;   // the game's name for the type, if known (else TypeName)
     };
 
@@ -314,6 +316,9 @@ namespace Screens
 
     // Gen 7 type order: 0 Normal ... 17 Fairy. "?" if unknown.
     const char *TypeName(u8 type);
+    // Selected-move details (UTF-8 em dash for absent power / always-hit accuracy).
+    std::string MoveDetailsText(const MoveRow &row);
+    const char *BattleCategoryName(u8 category);
     // A flat colour per type (the move-learning screen's chips).
     UI::Color TypeColor(u8 type);
     // "Super effective", "Not very effective", "No effect"; "" for plain

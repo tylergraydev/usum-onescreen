@@ -146,13 +146,16 @@ namespace OneScreen
         {
             Screens::MoveRow &row = snap.moves[i];
             row.name = Cached(s_moveNames, row.move, LookupMove, state);
-            // Before the game's list is up its types aren't read; the game's
-            // move table has them (W7-0 assets).
-            if (row.type == 0xFF)
+            // Details always come from the loaded move table; list type and
+            // effectiveness still take precedence over the table's type.
+            const UI::MoveInfo info = UI::AssetMove(row.move);
+            if (info.valid)
             {
-                const UI::MoveInfo info = UI::AssetMove(row.move);
-                if (info.valid)
+                if (row.type == 0xFF)
                     row.type = info.type;
+                row.power = info.power;
+                row.accuracy = info.accuracy;
+                row.category = info.category;
             }
             if (row.type != 0xFF)
                 row.typeName = UI::AssetTypeName(row.type);

@@ -30,7 +30,7 @@ namespace Screens
     static constexpr Rect CommandArea  = { 222, 48, 174, 188 };
     static constexpr Rect MovesArea    = { 186, 36, 210, 202 };
     static constexpr Rect BarCommandArea = { 170, 182, 226, 54 };
-    static constexpr Rect BarMovesArea   = { 170, 106, 226, 132 };
+    static constexpr Rect BarMovesArea   = { 170, 74, 226, 164 };
     static constexpr Rect RailCommandArea = { 202, 52, 194, 186 };
     static constexpr Rect RailMovesArea  = { 170, 38, 226, 200 };
     static constexpr Rect QuestionArea = { 186, 60, 210, 118 };
@@ -105,6 +105,10 @@ namespace Screens
 
     // --- Move list ---
 
+    static void CompactText(Canvas &canvas, const std::string &text, const Rect &box,
+                            Color color, Align align = Align::Left);
+    static void DrawMoveDetails(Canvas &canvas, const BattleMenu &menu, const BattleSnapshot &snap, const Rect &area);
+
     static void DrawMoves(Canvas &canvas, const BattleMenu &menu, const BattleSnapshot &snap)
     {
         const Rect area = MovesArea;
@@ -114,8 +118,7 @@ namespace Screens
         {
             const MoveRow &row = snap.moves[i];
             const u8 type = row.type < Theme::TypeCount ? row.type : 0;
-            const Rect b = { area.x + 6, top + i * 44, area.w - 12, 42 };
-            const Theme::TypeColors c = Theme::TypeColor(type);
+            const Rect b = { area.x + 6, top + i * 36, area.w - 12, 34 };
             const bool on = i == menu.Cursor();
             Theme::DrawMoveButton(canvas, b, type, on);
 
@@ -125,30 +128,28 @@ namespace Screens
             s32 effectW = 0;
             if (effect[0] != '\0')
             {
-                Theme::TextStyle note = White(Theme::TextSize::Small, Align::Right);
-                note.color = row.effect == 2 ? Theme::OptionGlint : Theme::WindowText;
-                note.outline = c.lineDark;
                 effectW = Theme::MeasureText(effect, Theme::TextSize::Small) + 4;
-                Theme::DrawText(canvas, effect, Rect{ b.Right() - effectW - 6, b.y + 4, effectW, 16 }, note);
+                if (effectW > b.w / 2)
+                    effectW = b.w / 2;
+                CompactText(canvas, effect, Rect{ b.Right() - effectW - 6, b.y + 1, effectW, 15 },
+                            row.effect == 2 ? Theme::OptionGlint : Theme::WindowText, Align::Right);
             }
-            Theme::TextStyle name = White();
-            name.outline = c.lineDark;
             std::string label = row.name.empty() ? Format("Move %u", row.move) : row.name;
             if (on && menu.Pending())
                 label += "...";
-            Theme::DrawText(canvas, label, Rect{ b.x + 22, b.y + 2, b.w - 32 - effectW, 19 }, name);
+            CompactText(canvas, label, Rect{ b.x + 22, b.y + 1, b.w - 32 - effectW, 15 }, Theme::WindowText);
 
             const std::string typeName = Theme::Upper(row.typeName.empty() ? TypeName(type) : row.typeName);
-            Theme::DrawTypePlate(canvas, Rect{ b.x + 14, b.y + 24, Theme::TypePlateW + 6, Theme::TypePlateH + 2 }, type,
-                                 typeName);
-            Theme::TextStyle pp = White(Theme::TextSize::Small);
-            pp.color = Theme::PpTextColor(row.pp, row.maxPp);
-            pp.outline = c.lineDark;
-            Theme::DrawText(canvas, Format("PP %u / %u", row.pp, row.maxPp), Rect{ b.x + 78, b.y + 23, b.w - 84, 16 }, pp);
+            const Rect plate = { b.x + 14, b.y + 17, Theme::TypePlateW + 6, Theme::TypePlateH + 2 };
+            Theme::DrawTypePlate(canvas, plate, type, "");
+            CompactText(canvas, typeName, Inset(plate, 3, 0, 3, 0), Theme::WindowText, Align::Center);
+            CompactText(canvas, Format("PP %u / %u", row.pp, row.maxPp),
+                        Rect{ b.x + 78, b.y + 17, b.w - 84, 16 }, Theme::PpTextColor(row.pp, row.maxPp));
             if (on)
-                Theme::DrawCursor(canvas, b.x + 12, b.y + 32);
+                Theme::DrawCursor(canvas, b.x + 12, b.y + 26);
         }
-        const Rect foot = { area.x + 4, area.Bottom() - Theme::PromptHeight - 6, area.w - 8, Theme::PromptHeight + 2 };
+        DrawMoveDetails(canvas, menu, snap, area);
+        const Rect foot = { area.x + 4, area.Bottom() - 24, area.w - 8, Theme::PromptHeight + 2 };
         if (!Notice(canvas, foot, menu.Note()))
             Prompts(canvas, foot.x, foot.y + 1, { { Theme::Button::A, "Use" }, { Theme::Button::B, "Back" } });
     }
@@ -158,12 +159,15 @@ namespace Screens
     // Compact regions keep every label readable even without the game font.
     // Prefer the game's small text; the 5x7 fallback is for narrow/short boxes.
     static void CompactText(Canvas &canvas, const std::string &text, const Rect &box,
-                            Color color, Align align = Align::Left)
+                            Color color, Align align)
     {
         std::string shown = text;
         if (!Theme::UsingGameFont())
         {
             // The bitmap fallback is ASCII; keep Pokemon readable there.
+            size_t dash;
+            while ((dash = shown.find("\xE2\x80\x94")) != std::string::npos)
+                shown.replace(dash, 3, "-");
             size_t accent;
             while ((accent = shown.find("\xC3\xA9")) != std::string::npos)
                 shown.replace(accent, 2, "e");
@@ -179,12 +183,30 @@ namespace Screens
         }
         else
         {
+            // The measured game text may also need the ASCII fallback.
+            size_t dash;
+            while ((dash = shown.find("\xE2\x80\x94")) != std::string::npos)
+                shown.replace(dash, 3, "-");
             UI::TextStyle style;
             style.font = Font::Small;
             style.color = color;
             style.align = align;
             UI::DrawText(canvas, shown, box, style);
         }
+    }
+
+    // Reserve 30 px above the existing prompts. Both text lines use the
+    // measured game Small font when it fits, otherwise CompactText's 5x7.
+    static void DrawMoveDetails(Canvas &canvas, const BattleMenu &menu, const BattleSnapshot &snap, const Rect &area)
+    {
+        const MoveRow empty;
+        const MoveRow &row = menu.Cursor() < snap.moveCount && menu.Cursor() < 4 ? snap.moves[menu.Cursor()] : empty;
+        const Rect strip = { area.x + 6, area.Bottom() - 54, area.w - 12, 30 };
+        if (row.category < 3)
+            Theme::DrawCategoryIcon(canvas, strip.x, strip.y + 5, row.category);
+        const Rect text = { strip.x + 46, strip.y, strip.w - 46, 15 };
+        CompactText(canvas, MoveDetailsText(row), text, Theme::WindowText);
+        CompactText(canvas, BattleCategoryName(row.category), Rect{ text.x, text.y + 15, text.w, 15 }, Theme::WindowText);
     }
 
     // Slants lean right at the top, with both tips inside r. These are
@@ -272,7 +294,7 @@ namespace Screens
             const Theme::TypeColors colors = Theme::TypeColor(type);
             const bool on = i == menu.Cursor();
             const Rect b = bar ? Rect{ area.x + 4 + (i % 2) * 110, area.y + 4 + (i / 2) * 54, 108, 52 }
-                               : Rect{ area.x + 14 - i * 3, area.y + 4 + i * 44, area.w - 18, 43 };
+                               : Rect{ area.x + 14 - i * 3, area.y + 4 + i * 35, area.w - 18, 35 };
             if (bar)
             {
                 Theme::DrawMoveButton(canvas, b, type, false);
@@ -291,20 +313,21 @@ namespace Screens
             std::string label = row.name.empty() ? Format("Move %u", row.move) : row.name;
             if (on && menu.Pending())
                 label += "...";
-            CompactText(canvas, label, Rect{ b.x + inset, b.y + 2, b.w - inset - 6, 15 }, Theme::WindowText);
+            CompactText(canvas, label, Rect{ b.x + inset, b.y + 1, b.w - inset - 6, 15 }, Theme::WindowText);
             const std::string typeName = Theme::Upper(row.typeName.empty() ? TypeName(type) : row.typeName);
-            const Rect plate = { b.x + inset, b.y + 19, 58, 14 };
+            const Rect plate = { b.x + inset, b.y + (bar ? 19 : 16), 58, bar ? 14 : 11 };
             Theme::DrawTypePlate(canvas, plate, type, "");
             CompactText(canvas, typeName, Inset(plate, 3, 0, 3, 0), Theme::WindowText, Align::Center);
             const Rect pp = bar ? Rect{ b.x + 5, b.y + 35, b.w - 24, 13 }
-                                : Rect{ b.x + 88, b.y + 18, b.w - 100, 14 };
+                                : Rect{ b.x + 88, b.y + 16, b.w - 100, 11 };
             CompactText(canvas, Format("PP %u/%u", row.pp, row.maxPp), pp, Theme::PpTextColor(row.pp, row.maxPp));
             if (bar)
                 EffectMarker(canvas, Rect{ b.Right() - 16, b.y + 36, 10, 10 }, row.effect);
             else
-                CompactText(canvas, EffectLabel(row.effect), Rect{ b.x + inset, b.y + 33, b.w - inset - 12, 9 },
+                CompactText(canvas, EffectLabel(row.effect), Rect{ b.x + inset, b.y + 27, b.w - inset - 12, 8 },
                             row.effect == 2 ? Theme::OptionGlint : Theme::WindowText);
         }
+        DrawMoveDetails(canvas, menu, snap, area);
         const Rect foot = { area.x + 5, area.Bottom() - 19, area.w - 10, 13 };
         if (menu.Note().empty())
             CompactText(canvas, "A Use   B Back", foot, Theme::WindowText);
@@ -594,7 +617,8 @@ namespace Screens
             {
                 const MoveRow &row = snap.moves[i];
                 key += "|" + row.name + row.typeName + Format(" %u %u", row.move, row.type)
-                       + Format(" %u %u", row.effect, row.pp) + Format(" %u", row.maxPp);
+                       + Format(" %u %u", row.effect, row.pp) + Format(" %u", row.maxPp)
+                       + Format(" %u %u", row.power, row.accuracy) + Format(" %u", row.category);
             }
             break;
         case BattlePage::Party:
