@@ -151,6 +151,14 @@ Full write-up: [RE6-boxes.md](RE6-boxes.md). Read by the `box [N]` command (`Sou
 - Box data: SaveData (RE3) `+0x3B98` Savedata::BOX (vtable `0x64F364`; data at +4 = the save's block `0x4C00`: names `0x22` × 32, unlocked count u8 at data `+0x5E1`), `+0x4184` Savedata::BoxPokemon (vtable `0x64F044`; data at +4 = the save's block `0x5200`: 32 × 30 PK7 cores of `0xE8`, stored format). Compared byte for byte with the save file; a drop writes it at once.
 - Box screen (Box CRO; offsets from its load address): `App::Box::BoxLowBgDraw` (vtable Box+`0x2F4D8`) is one of the scene manager's first eight words. `+0x8C` listener: Box+`0x2F6F0` idle, Box+`0x2F6B0` slot menu / message, Box+`0x2FA80` holding a Pokémon. `+0xDC` u32 cursor (0-29 slots, 30-35 party, 36 box name, 38 box list). `+0xC0` → parameter block (`+0` BOX*, `+4` BoxPokemon*, `+0x60` u32 box on screen). `+0xC4` → → work: `+0x1C` 6 PokemonParam* = the screen's own copy of the party (the real party changes when the PC closes).
 
+## Pokémon box icons (static, checked at runtime 2026-11-07)
+
+Read by the native Boxes (`Sources/UI/PokeIcons.cpp`, [GAME-ASSETS.md](GAME-ASSETS.md) "Pokémon box icons"). Same bytes on Ultra Moon v1.2.
+
+- `0x30CC1C`: the icon lookup (species, form, sex, egg, facing right) → index in `a/0/6/2`; first words `E92D41F0 E3500FCA E1A04001 E59D6018`, checked before use. Literal pool `0x30CCE8` = 1153 (egg icon), `0x30CCEC` = `0x5BFD50`.
+- `0x5BFD50` (rodata): 808 × 16 bytes, species 0-807: u16 icon, u16 female icon, u32 → u16 form icons, u32 → u16 right-facing form icons, u16 form count.
+- Callers: `0x30CD44` (unpacks a SimpleParam: u16 species, u8 form +2, u8 sex +3, s8 egg +5), from `App::Tool::PokeIconTexPool` (`0x2D490C`; ARC ID `0x3E` set in its constructor `0x2D4E40`).
+
 ## Player location (runtime, 2026-11-02)
 
 Full write-up: [RE4-map.md](RE4-map.md). Read by the `where` command (`Sources/Where.cpp`).
