@@ -1,3 +1,5 @@
+using System;
+using System.Globalization;
 using System.Linq;
 
 namespace UsumOneScreen
@@ -17,6 +19,28 @@ namespace UsumOneScreen
         public static readonly string[] Corners = { "bottom-right", "bottom-left", "top-right", "top-left" };
         public static readonly string[] OnOff = { "off", "on" };
 
+        public static readonly string[] AspectChoices = { "Auto", "Original (5:3)", "16:9", "21:9" };
+        public static readonly string[] AspectValues = { "auto", "0", "16:9", "21:9" };
+
+        public static string NormalizeAspect(string value) =>
+            string.Equals(value, "off", StringComparison.OrdinalIgnoreCase) ? "0" : value.Trim().ToLowerInvariant();
+
+        public static bool IsWidescreen(string value)
+        {
+            string v = value?.Trim();
+            return v == "16:9" || v == "21:9" ||
+                   (float.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out float ratio) &&
+                    ratio > 0 && !float.IsInfinity(ratio) && !float.IsNaN(ratio));
+        }
+
+        public static string ResolveAspect(string choice, int width, int height)
+        {
+            if (!string.Equals(choice, "auto", StringComparison.OrdinalIgnoreCase))
+                return NormalizeAspect(choice);
+            double ratio = height > 0 ? (double)width / height : 0;
+            return ratio >= 2.2 ? "21:9" : ratio >= 1.7 ? "16:9" : "0";
+        }
+
         static string Squash(string s) => new string(s.ToLowerInvariant().Where(c => c != '-' && c != '_' && c != ' ').ToArray());
 
         // An error message, or null if the plugin will accept the value.
@@ -25,6 +49,12 @@ namespace UsumOneScreen
             string v = Squash(value);
             switch (key)
             {
+                case "aspect":
+                    string aspect = value.Trim().ToLowerInvariant();
+                    return new[] { "auto", "0", "off", "16:9", "21:9" }.Contains(aspect) ||
+                           (float.TryParse(aspect, NumberStyles.Float, CultureInfo.InvariantCulture, out float ratio) &&
+                            ratio > 0 && !float.IsInfinity(ratio) && !float.IsNaN(ratio)) ? null
+                         : $"bad aspect '{value}' (use auto, 0, off, 16:9, 21:9 or a positive finite float)";
                 case "panel_key":
                 case "touch_key":
                 case "map_key":

@@ -87,6 +87,17 @@ Desktop Azahar 2126.2 ignores `aspect_ratio` (Android-only). Match the camera
 aspect to the stretched top-screen viewport (16:9 or 21:9) to counter the
 otherwise widened world.
 
+## Launcher
+
+The launcher's experimental Widescreen setting writes both `[display] aspect`
+in the plugin INI and Azahar's `[Layout] screen_top_stretch`. Auto selects a
+concrete aspect from the primary monitor; Original (5:3) turns stretch off.
+The CLI also accepts `set aspect=16:9`, `21:9`, `0`, `off`, `auto` or a positive float.
+
+21:9 looks best with a higher Azahar internal resolution scale (Emulation >
+Configure > Graphics > Internal Resolution), since the 400x240 render is
+stretched wider.
+
 ## Game layout templates
 
 For active aspect A, k = A / (400/240). Setting the aspect at boot from the
