@@ -1,5 +1,6 @@
 #include "UI/Layer.hpp"
 #include "UI/ColumnMapping.hpp"
+#include "UI/Theme.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -15,6 +16,54 @@ namespace UI
     {
         const s32 bpp = (s32)BytesPerPixel(s.format);
         return s.stepY == bpp || s.stepY == -bpp;
+    }
+
+    // Shared by all layers; OSD callbacks are serial (ScreenBuffer.hpp).
+    // Eight diagonal phases, one solid base, three soft edge columns.
+    // No heap allocation and no framebuffer reads, including on cache rebuild.
+    static void PresentBands(const Surface &screen, const ColumnRange &range)
+    {
+        if (!range.active) return;
+        static u8 columns[12][ScreenH * 4];
+        static int cachedFormat = -1;
+        static bool cachedReverse = false;
+        const bool reverse = screen.stepY < 0;
+        const s32 bpp = (s32)BytesPerPixel(screen.format);
+        if (cachedFormat != (int)screen.format || cachedReverse != reverse)
+        {
+            const Color fill = Theme::WindowFill;
+            for (int phase = 0; phase < 12; phase++)
+                for (int y = 0; y < ScreenH; y++)
+                {
+                    // Half-bright window olive; stripes differ by just 3 levels.
+                    const int extra = phase < 8 ? (((phase + y) & 7) < 2 ? 3 : 0)
+                                    : phase == 8 ? 0 : (phase - 8) * 4;
+                    u8 *pixel = columns[phase] + (reverse ? ScreenH - 1 - y : y) * bpp;
+                    WritePixel(pixel, screen.format, (u8)(fill.r / 2 + extra),
+                               (u8)(fill.g / 2 + extra), (u8)(fill.b / 2 + extra));
+                }
+            cachedFormat = (int)screen.format;
+            cachedReverse = reverse;
+        }
+        const bool columnar = Columnar(screen);
+        const auto band = [&](int begin, int end, bool left) {
+            for (int x = begin; x < end; x++)
+            {
+                const int distance = left ? range.begin - 1 - x : x - range.end;
+                const int phase = distance < 3 ? 11 - distance
+                                : screen.pillarbox == Pillarbox::Pattern ? x & 7 : 8;
+                u8 *dst = screen.origin + x * screen.stepX;
+                if (columnar)
+                    std::memcpy(dst + (reverse ? ScreenH - 1 : 0) * screen.stepY,
+                                columns[phase], (size_t)(ScreenH * bpp));
+                else
+                    for (int y = 0; y < ScreenH; y++)
+                        std::memcpy(dst + y * screen.stepY,
+                                    columns[phase] + (reverse ? ScreenH - 1 - y : y) * bpp, (size_t)bpp);
+            }
+        };
+        band(0, range.begin, true);
+        band(range.end, ScreenW, false);
     }
 
     size_t Layer::BytesFor(const Surface &like, const Rect &area)
@@ -97,6 +146,7 @@ namespace UI
     {
         if (!Matches(screen))
             return;
+        PresentBands(screen, PillarboxColumns(screen, m_area));
         const s32 bpp = (s32)BytesPerPixel(screen.format);
         const bool columnar = Columnar(screen);
         // Rows [y0, y1) of column i (area coordinates).

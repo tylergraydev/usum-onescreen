@@ -30,7 +30,7 @@ static bool SameSettings(const Settings &a, const Settings &b)
     return a.panelKey == b.panelKey && a.touchKey == b.touchKey && a.mapKey == b.mapKey && a.cursorSource == b.cursorSource
         && a.cursorSpeed == b.cursorSpeed && a.panelSize == b.panelSize && a.panelCorner == b.panelCorner
         && a.instantText == b.instantText && a.battleMessages == b.battleMessages && a.battleBars == b.battleBars
-        && a.autoPanel == b.autoPanel && a.aspect == b.aspect && a.battleLayout == b.battleLayout && a.scenes == b.scenes;
+        && a.pillarbox == b.pillarbox && a.autoPanel == b.autoPanel && a.aspect == b.aspect && a.battleLayout == b.battleLayout && a.scenes == b.scenes;
 }
 
 static Settings Parse(const std::string &text, std::vector<std::string> &warnings)
@@ -368,6 +368,26 @@ static void TestCurrentSettings(void)
     CHECK(!GetSettings().autoPanel);
 }
 
+static void TestPillarbox(void)
+{
+    std::vector<std::string> warnings;
+    CHECK(Settings{}.pillarbox == Pillarbox::Tint);
+    for (const auto &entry : { std::make_pair("TiNt", Pillarbox::Tint),
+                              std::make_pair("PATTERN", Pillarbox::Pattern),
+                              std::make_pair("off", Pillarbox::Off) })
+    {
+        const Settings s = Parse(std::string("[display]\npillarbox = ") + entry.first, warnings);
+        CHECK(warnings.empty());
+        CHECK(s.pillarbox == entry.second);
+        CHECK(DescribeSettings(s).find(std::string("pillarbox ") +
+              (entry.second == Pillarbox::Tint ? "tint" : entry.second == Pillarbox::Pattern ? "pattern" : "off")) != std::string::npos);
+    }
+    CHECK(Parse("[display]\npillarbox = transparent", warnings).pillarbox == Pillarbox::Tint);
+    CHECK(warnings.size() == 1);
+    CHECK(Parse("[display]\npillarbox = pattern\npillarbox = invalid", warnings).pillarbox == Pillarbox::Pattern);
+    CHECK(warnings.size() == 1);
+}
+
 int main(void)
 {
     TestDefaultsMatchOldBehaviour();
@@ -383,6 +403,7 @@ int main(void)
     TestDescribe();
     TestBattleLayout();
     TestCurrentSettings();
+    TestPillarbox();
     TestSpeedSettings();
     TestSpeedPatches();
 
