@@ -5,6 +5,8 @@
 
 #include <CTRPluginFramework.hpp>
 
+#include "Settings.hpp"
+
 namespace OneScreen
 {
     // The native battle menu in the plugin (P2-1). Screens/BattleMenu.hpp is
@@ -27,6 +29,12 @@ namespace OneScreen
     // panel (the [scenes] Battle setting).
     void BattleScreenSetEnabled(bool enabled);
     bool BattleScreenEnabled(void);
+
+    // [battle] layout, at boot, from the plugin menu and from the
+    // `battlelayout classic|bar|rail` command. Takes effect on the next drawn
+    // frame (the menu is redrawn and its layer set up again for the new area).
+    void BattleScreenSetLayout(BattleLayout layout);
+    BattleLayout BattleScreenLayout(void);
 
     // `battleui`: on/off, the page, and what the menu sees.
     std::string BattleScreenStatus(void);

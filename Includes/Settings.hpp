@@ -26,6 +26,9 @@ namespace OneScreen
     enum class CursorSource : uint8_t { CStick, DPad, CirclePad };
     enum class PanelSize : uint8_t { Half, TwoThirds };
     enum class PanelCorner : uint8_t { BottomRight, BottomLeft, TopRight, TopLeft };
+    // Native battle menu look ([battle] layout): Classic is the original
+    // column of pills; Bar and Rail are the horizontal layouts (docs/BATTLE-UI.md).
+    enum class BattleLayout : uint8_t { Classic, Bar, Rail };
 
     struct Settings
     {
@@ -38,6 +41,7 @@ namespace OneScreen
         PanelCorner  panelCorner = PanelCorner::BottomRight;
         bool         autoPanel = false;                // native menus first; the panel is a fallback
         float        aspect = 0.0f;                    // 0: original camera defaults
+        BattleLayout battleLayout = BattleLayout::Classic;
 
         // Mode per scene ID (SceneModule() names). Later entries win.
         // "FieldRo.xmenu" is the X menu overlay inside FieldRo; "default" is

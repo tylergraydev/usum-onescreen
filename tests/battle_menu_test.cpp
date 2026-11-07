@@ -850,6 +850,219 @@ static void TestDrawing(void)
     CHECK(menu.DrawKey(snap) != key);
 }
 
+
+static bool SameRect(const UI::Rect &a, const UI::Rect &b)
+{
+    return a.x == b.x && a.y == b.y && a.w == b.w && a.h == b.h;
+}
+
+static void TestLayouts(void)
+{
+    for (BattleLayout layout : { BattleLayout::Classic, BattleLayout::Bar, BattleLayout::Rail })
+    {
+        BattleMenu menu;
+        CHECK(menu.Layout() == BattleLayout::Classic);
+        menu.SetLayout(layout); // works before entering battle
+        CHECK(menu.Layout() == layout);
+        BattleSnapshot snap = CommandSnap();
+        Idle(menu, snap, BattleMenu::CommandSettleFrames);
+        const std::string firstStatus = menu.Status(snap);
+        CHECK(firstStatus == "battle-ui: page command, cursor 0 of 4 (Fight)");
+        menu.Update(snap, BattleKeys::DDown);
+        menu.Update(snap, BattleKeys::CPadDown);
+        CHECK(menu.Cursor() == 2); // native-wild-battle: down, down = Pokemon
+        menu.Update(snap, BattleKeys::DUp);
+        menu.Update(snap, BattleKeys::CPadUp);
+        menu.Update(snap, BattleKeys::DUp);
+        CHECK(menu.Cursor() == 3); // up wraps to Run
+        menu.Update(snap, BattleKeys::DDown);
+        menu.Update(snap, BattleKeys::DLeft);
+        CHECK(menu.Cursor() == (layout == BattleLayout::Bar ? 3 : 0));
+        menu.Update(snap, BattleKeys::CPadRight);
+        CHECK(menu.Cursor() == 0);
+        if (layout == BattleLayout::Bar)
+        {
+            for (u8 i = 1; i <= 4; i++)
+            {
+                menu.Update(snap, BattleKeys::DRight);
+                CHECK(menu.Cursor() == i % 4);
+            }
+        }
+        const char *fight = menu.Update(snap, BattleKeys::A).action;
+        CHECK(fight != nullptr && std::strcmp(fight, "battle-fight") == 0);
+
+        for (u8 count = 1; count <= 4; count++)
+        {
+            BattleMenu moves;
+            moves.SetLayout(layout);
+            snap = MovesSnap();
+            snap.moveCount = count;
+            Idle(moves, snap, BattleMenu::MovesSettleFrames);
+            for (u8 i = 1; i <= count; i++)
+            {
+                moves.Update(snap, BattleKeys::DDown);
+                CHECK(moves.Cursor() == i % count);
+            }
+            moves.Update(snap, BattleKeys::DUp);
+            CHECK(moves.Cursor() == count - 1);
+            moves.Update(snap, BattleKeys::DDown);
+            moves.Update(snap, BattleKeys::DRight);
+            const u8 right = layout == BattleLayout::Bar && count > 1 ? 1 : 0;
+            CHECK(moves.Cursor() == right);
+            moves.Update(snap, BattleKeys::DLeft);
+            CHECK(moves.Cursor() == 0);
+            if (layout == BattleLayout::Bar && count >= 3)
+            {
+                moves.Update(snap, BattleKeys::DDown);
+                moves.Update(snap, BattleKeys::DDown);
+                moves.Update(snap, BattleKeys::CPadRight);
+                CHECK(moves.Cursor() == (count == 4 ? 3 : 2));
+                moves.Update(snap, BattleKeys::CPadLeft);
+                CHECK(moves.Cursor() == 2);
+            }
+            const BattleMenuOutput back = moves.Update(snap, BattleKeys::B);
+            CHECK(back.action != nullptr && std::strcmp(back.action, "battle-moves-back") == 0);
+        }
+        // Changing a visible menu preserves its selection and scenario log,
+        // changes the draw key and area, and survives leaving/reentering battle.
+        BattleMenu changing;
+        changing.Update(CommandSnap(), 0);
+        changing.Update(CommandSnap(), BattleKeys::DDown);
+        const std::string key = changing.DrawKey(CommandSnap());
+        const std::string status = changing.Status(CommandSnap());
+        const UI::Rect area = changing.Area();
+        changing.SetLayout(layout);
+        CHECK((changing.DrawKey(CommandSnap()) == key) == (layout == BattleLayout::Classic));
+        CHECK(SameRect(changing.Area(), area) == (layout == BattleLayout::Classic));
+        CHECK(changing.Status(CommandSnap()) == status && changing.Cursor() == 1);
+        changing.Update(BattleSnapshot{}, 0);
+        changing.Update(CommandSnap(), 0);
+        CHECK(changing.Layout() == layout);
+    }
+}
+
+// Full frames show the protected HUD regions in context. Check every pixel
+// outside Area() against its original background, without clipping Draw().
+static void TestLayoutDrawing(void)
+{
+    std::vector<u8> pixels(UI::ScreenW * UI::ScreenH * 3, 0);
+    UI::Surface surface = {};
+    surface.origin = pixels.data();
+    surface.format = UI::PixelFormat::BGR8;
+    surface.stepX = 3;
+    surface.stepY = UI::ScreenW * 3;
+    surface.width = UI::ScreenW;
+    surface.height = UI::ScreenH;
+    UI::Canvas canvas(surface);
+    for (BattleLayout layout : { BattleLayout::Classic, BattleLayout::Bar, BattleLayout::Rail })
+    {
+        for (bool moves : { false, true })
+        {
+            BattleSnapshot snap = moves ? MovesSnap() : CommandSnap();
+            // Only the new composition previews use these effects; keep the
+            // established Classic preview fixtures byte-for-byte unchanged.
+            if (layout != BattleLayout::Classic)
+            {
+                snap.moves[1].effect = 2;
+                snap.moves[2].effect = 3;
+                snap.moves[3].effect = 1;
+            }
+            BattleMenu menu;
+            menu.SetLayout(layout);
+            Idle(menu, snap, BattleMenu::CommandSettleFrames);
+            const UI::Rect area = menu.Area();
+            CHECK(area.x >= 0 && area.y >= 0 && area.Right() <= 400 && area.Bottom() <= 240);
+            CHECK(UI::Intersect(area, UI::Rect{ 240, 0, 160, 36 }).Empty());
+            CHECK(UI::Intersect(area, UI::Rect{ 0, 180, 166, 60 }).Empty());
+            for (u8 cursor = 0; cursor < 6; cursor++)
+            {
+                if (cursor == 4 && moves)
+                {
+                    snap.moves[0].pp = 0;
+                    snap.moves[0].effect = 0; // exercise the no-effect X
+                    CHECK(menu.Update(snap, BattleKeys::A).action == nullptr);
+                    CHECK(!menu.Note().empty());
+                }
+                if (cursor == 5)
+                {
+                    if (moves)
+                        for (MoveRow &row : snap.moves) row.pp = 0;
+                    CHECK(menu.Update(snap, BattleKeys::A).action != nullptr);
+                    CHECK(menu.Pending());
+                }
+                canvas.FillRect(UI::Rect{ 0, 0, 400, 240 }, UI::Rgb(105, 124, 125));
+                canvas.FillRoundRect(UI::Rect{ 240, 2, 158, 32 }, 5, UI::Rgb(230, 236, 223));
+                canvas.FillRect(UI::Rect{ 258, 23, 116, 5 }, UI::Rgb(60, 180, 70));
+                canvas.FillRoundRect(UI::Rect{ 4, 182, 158, 34 }, 5, UI::Rgb(230, 236, 223));
+                canvas.FillRect(UI::Rect{ 30, 204, 112, 5 }, UI::Rgb(60, 180, 70));
+                canvas.FillRect(UI::Rect{ 4, 220, 158, 16 }, UI::Rgb(55, 60, 54));
+                const std::vector<u8> before = pixels;
+                menu.Draw(canvas, snap);
+                u32 outside = 0;
+                s32 firstX = -1, firstY = -1;
+                for (s32 y = 0; y < 240; y++)
+                    for (s32 x = 0; x < 400; x++)
+                        if (x < area.x || x >= area.Right() || y < area.y || y >= area.Bottom())
+                        {
+                            const size_t p = (y * 400 + x) * 3;
+                            if (std::memcmp(&pixels[p], &before[p], 3) != 0)
+                            {
+                                outside++;
+                                if (firstX < 0) { firstX = x; firstY = y; }
+                            }
+                        }
+                if (outside)
+                    std::printf("layout %u moves %u cursor %u: %u pixels outside, first %d,%d\n",
+                                (unsigned)layout, moves ? 1u : 0u, cursor, outside, firstX, firstY);
+                CHECK(outside == 0);
+                if (cursor == 0 && layout != BattleLayout::Classic && s_previewDir != nullptr)
+                {
+                    const std::string name = layout == BattleLayout::Bar ? "battle-bar-" : "battle-rail-";
+                    WritePreview(pixels, std::string(s_previewDir) + "/" + name + (moves ? "moves" : "command") + ".ppm");
+                }
+                menu.Update(snap, BattleKeys::DDown);
+            }
+        }
+        // All other pages keep exactly the same area and pixels.
+        FakeGame fake;
+        BattleSnapshot other[7] = { fake.snap, fake.snap, fake.snap, {}, CommandSnap(), fake.snap, CommandSnap() };
+        other[0].menu = GameMenu::Pokemon;
+        other[1].menu = GameMenu::Bag;
+        other[2].menu = GameMenu::Question;
+        other[2].question = QuestionNextPokemon;
+        other[3].afterCatch = true;
+        other[4].menu = GameMenu::Other;
+        other[5].menu = GameMenu::Bag;
+        other[5].bagPick = true;
+        other[5].bagPickCursor = 1;
+        other[6].menu = GameMenu::Other;
+        for (const BattleSnapshot &snap : other)
+        {
+            BattleMenu classic, styled;
+            styled.SetLayout(layout);
+            if (&snap == &other[6])
+            {
+                const BattleSnapshot moves = MovesSnap();
+                Idle(classic, moves, BattleMenu::MovesSettleFrames);
+                Idle(styled, moves, BattleMenu::MovesSettleFrames);
+                classic.Update(moves, BattleKeys::A);
+                styled.Update(moves, BattleKeys::A);
+            }
+            classic.Update(snap, 0);
+            styled.Update(snap, 0);
+            if (&snap == &other[6])
+                CHECK(classic.Page() == BattlePage::Target && styled.Page() == BattlePage::Target);
+            CHECK(SameRect(classic.Area(), styled.Area()));
+            canvas.FillRect(UI::Rect{ 0, 0, 400, 240 }, UI::Rgb(0, 0, 0));
+            classic.Draw(canvas, snap);
+            const std::vector<u8> expected = pixels;
+            canvas.FillRect(UI::Rect{ 0, 0, 400, 240 }, UI::Rgb(0, 0, 0));
+            styled.Draw(canvas, snap);
+            CHECK(pixels == expected);
+        }
+    }
+}
+
 int main(int argc, char **argv)
 {
     if (argc > 1)
@@ -866,6 +1079,8 @@ int main(int argc, char **argv)
     TestTarget();
     TestButtons();
     TestDrawing();
+    TestLayouts();
+    TestLayoutDrawing();
     if (s_failures != 0)
     {
         std::printf("battle_menu_test: %d failure(s)\n", s_failures);
