@@ -10,6 +10,9 @@
 #include "Settings.hpp"
 #include "Shot.hpp"
 #include "UI/Device.hpp"
+#include "UI/ColumnMapping.hpp"
+#include "Widescreen.hpp"
+#include <cmath>
 
 namespace OneScreen
 {
@@ -268,6 +271,29 @@ namespace OneScreen
         s_textureCopy(in, out, run * runs, run / 16, 0, run / 16, (outStride - run) / 16, FlagTextureCopy);
     }
 
+    // Final top-screen copy only: source columns and cursor sprites remain in
+    // unsqueezed coordinates. One aligned vertical run per destination column
+    // handles arbitrary aspects without reading either framebuffer on the CPU.
+    static void CopyTopColumns(u32 in, u32 inStride, u32 run, u32 columns,
+                               const FbLayout &fb, const Placement &p)
+    {
+        const float squeeze = WidescreenSqueeze();
+        if (!(squeeze > 1.0f))
+        {
+            s_textureCopy(in, BoxLineStart(fb, p, p.left), run * columns,
+                          run / 16, (inStride - run) / 16,
+                          run / 16, ((u32)fb.stepX - run) / 16, FlagTextureCopy);
+            return;
+        }
+        for (u32 dx = 0; dx < TopWidth; dx++)
+        {
+            const s32 sx = UI::SourceColumn(dx, squeeze) - (s32)p.left;
+            if (sx < 0 || sx >= (s32)columns)
+                continue;
+            CopyRuns(in + sx * inStride, BoxLineStart(fb, p, dx), run, 1, fb.stepX);
+        }
+    }
+
     // Allocates the scratch block once. False (the panel then reads and
     // draws with the CPU, the slow way) if the game's framebuffers aren't
     // BGR8 or linear memory is short.
@@ -379,10 +405,24 @@ namespace OneScreen
     // x, y): costs a download of the top framebuffer a frame (see above).
     static void CpuCursor(const Screen &screen, u32 x, u32 y, bool touching)
     {
-        screen.DrawRect(x - 6, y - 1, 13, 3, Color::Black);
-        screen.DrawRect(x - 1, y - 6, 3, 13, Color::Black);
-        screen.DrawRect(x - 5, y, 11, 1, touching ? Color::Red : Color::White);
-        screen.DrawRect(x, y - 5, 1, 11, touching ? Color::Red : Color::White);
+        const float squeeze = WidescreenSqueeze();
+        const auto rect = [&](s32 left, s32 top, s32 width, s32 height, Color color) {
+            if (!(squeeze > 1.0f))
+            {
+                screen.DrawRect(left, top, width, height, color);
+                return;
+            }
+            for (s32 dx = 0; dx < (s32)TopWidth; dx++)
+            {
+                const s32 sx = UI::SourceColumn(dx, squeeze);
+                if (sx >= left && sx < left + width)
+                    screen.DrawRect(dx, top, 1, height, color);
+            }
+        };
+        rect((s32)x - 6, (s32)y - 1, 13, 3, Color::Black);
+        rect((s32)x - 1, (s32)y - 6, 3, 13, Color::Black);
+        rect((s32)x - 5, y, 11, 1, touching ? Color::Red : Color::White);
+        rect(x, (s32)y - 5, 1, 11, touching ? Color::Red : Color::White);
     }
 
     static void GpuFull(const Screen &screen, const Placement &p)
@@ -393,7 +433,17 @@ namespace OneScreen
         const bool touching = CursorGet(cx, cy);
         Transfer(s_bottomFb, full, ScreenHeight, BottomWidth, Flags(Rgb8, Rgba8));
         GpuCursor(full, ScreenHeight, BottomWidth, cx, LineIndex(fb, cy, ScreenHeight), touching);
-        Transfer(full, BoxLineStart(fb, p, p.left), ScreenHeight, BottomWidth, Flags(Rgba8, Rgb8));
+        const float squeeze = WidescreenSqueeze();
+        if (!(squeeze > 1.0f))
+            Transfer(full, BoxLineStart(fb, p, p.left), ScreenHeight, BottomWidth, Flags(Rgba8, Rgb8));
+        else
+            for (u32 dx = 0; dx < TopWidth; dx++)
+            {
+                const s32 sx = UI::SourceColumn(dx, squeeze) - (s32)p.left;
+                if (sx >= 0 && sx < (s32)BottomWidth)
+                    Transfer(full + sx * ScreenHeight * 4, BoxLineStart(fb, p, dx),
+                             ScreenHeight, 1, Flags(Rgba8, Rgb8));
+            }
     }
 
     static void GpuHalf(const Screen &screen, const Placement &p)
@@ -416,7 +466,7 @@ namespace OneScreen
         CopyRuns(full, wide + (WideEdge * WideLen + WideEdge) * 4, ScreenHeight * 4, BottomWidth,
                  WideLen * 4);
         Transfer(wide, out, WideLen, WideLines, Flags(Rgba8, Rgb8, FlagScaleXY));
-        CopyRuns(out, BoxLineStart(fb, p, p.left), HalfLen * 3, HalfLines, screen.Stride);
+        CopyTopColumns(out, HalfLen * 3, HalfLen * 3, HalfLines, fb, p);
 
         u32 cx, cy;
         const bool touching = CursorGet(cx, cy);
@@ -537,7 +587,7 @@ namespace OneScreen
             }
 
         ToGpu(two, twoGpu, TwoLen, TwoLines, Rgb8, s_bottomFb, ScreenHeight, Rgb8);
-        CopyRuns(twoGpu, BoxLineStart(fb, p, p.left), TwoLen * 3, TwoLines, screen.Stride);
+        CopyTopColumns(twoGpu, TwoLen * 3, TwoLen * 3, TwoLines, fb, p);
     }
 
     // Fallback without the GPU path: reads the framebuffer pixel by pixel
@@ -549,13 +599,17 @@ namespace OneScreen
         const Source src = FramebufferSource(fb);
         const u32 den = p.den == 1 ? 1 : 2;
         const u32 h = ScreenHeight / den, w = BottomWidth / den;
+        const float squeeze = WidescreenSqueeze();
         for (u32 y = 0; y < h; y++)
         {
-            u8 *out = fb.origin + (s32)(p.top + p.border + y) * fb.stepY + (s32)(p.left + p.border) * fb.stepX;
-            for (u32 x = 0; x < w; x++, out += fb.stepX)
+            for (u32 dx = 0; dx < TopWidth; dx++)
             {
+                const s32 x = UI::SourceColumn(dx, squeeze) - (s32)(p.left + p.border);
+                if (x < 0 || x >= (s32)w)
+                    continue;
                 u8 r, g, b;
                 src.Pixel(x * den, y * den, r, g, b);
+                u8 *out = fb.origin + (s32)(p.top + p.border + y) * fb.stepY + (s32)dx * fb.stepX;
                 EncodePixel(out, fb.format, r, g, b);
             }
         }
@@ -575,9 +629,16 @@ namespace OneScreen
         const FbLayout fb = GetLayout(screen);
         const u32 den = gpu ? p.den : (p.den == 1 ? 1 : 2), num = gpu ? p.num : 1;
         const u32 w = BottomWidth * num / den, h = ScreenHeight * num / den;
-        const u32 qx = w / 4, qy = h / 4;
+        const float squeeze = WidescreenSqueeze();
+        const s32 sourceX = p.left + p.border + w / 4;
+        const s32 destinationX = squeeze > 1.0f
+            ? (s32)std::floor(200.0f + (sourceX - 200) / squeeze + 0.5f) : sourceX;
+        const s32 sampledX = UI::SourceColumn(destinationX, squeeze) - (s32)(p.left + p.border);
+        if (sampledX < 0 || sampledX >= (s32)w)
+            return; // Extremely narrow output may have no sample inside this picture.
+        const u32 qx = sampledX, qy = h / 4;
         u8 r, g, b;
-        DecodePixel(fb.origin + (s32)(p.top + p.border + qy) * fb.stepY + (s32)(p.left + p.border + qx) * fb.stepX,
+        DecodePixel(fb.origin + (s32)(p.top + p.border + qy) * fb.stepY + destinationX * fb.stepX,
                     fb.format, r, g, b);
 
         u32 er = 0, eg = 0, eb = 0;
@@ -668,8 +729,7 @@ namespace OneScreen
         const u32 out = BoxLineStart(fb, { dx, dy, w, h, 0, 1, 1 }, dx);
         if (run % 16 != 0 || in % 8 != 0 || out % 8 != 0 || (u32)fb.stepX != s_bottomStride)
             return false;
-        s_textureCopy(in, out, run * w, run / 16, (s_bottomStride - run) / 16, run / 16,
-                      ((u32)fb.stepX - run) / 16, FlagTextureCopy);
+        CopyTopColumns(in, s_bottomStride, run, w, fb, { dx, dy, w, h, 0, 1, 1 });
         return true;
     }
 
