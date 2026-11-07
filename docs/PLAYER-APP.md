@@ -56,6 +56,44 @@ Players run the single `UsumOneScreen-<tag>.exe`, drag their own decrypted ROM a
 
 It never ships, downloads or explains how to get game files or keys.
 
+## Save protection and game options
+
+The launcher now backs up the selected game's portable save before every Play,
+with a Backups dialog and `backup`, `backups`, `restore NAME` CLI commands.
+It follows Home.cs's existing ID0/ID1 enumeration under
+`azahar/user/sdmc/Nintendo 3DS/<id0>/<id1>/title/00040000/<001b5000 or 001b5100>/data/`.
+Snapshots live in `<home>/backups/<UPPERCASE TITLEID>/<yyyyMMdd-HHmmss>/`, with
+`data/` and a relative source path. Ten newest are retained per title. Restore
+requires Azahar to be closed, stages the chosen snapshot, takes a fresh backup,
+and replaces the save with rollback on a failed swap. Missing saves are skipped;
+ambiguous or linked paths are refused. Extdata is excluded because Home.cs has
+no known extdata path. The real `%APPDATA%/Azahar` remains unused.
+
+A Game options group holds Widescreen, Battle menu, Text and battle speed,
+Graphics and Button icons; Backups and Cheats buttons sit below them. The layout
+uses autosizing and scrolling for smaller windows and high DPI. Options read back
+from the INIs on opening. Mixed speed settings remain Custom until changed.
+Graphics defaults to Keep (no resolution writes); Native/High/Ultra set
+`[Renderer] resolution_factor` to 1/3/5 with its `\default=false` flag, clearing
+per-game resolution overrides. The key/section were checked against upstream
+Azahar 2126.2 `config.cpp` and `settings.h`. 21:9 benefits from High/Ultra.
+
+Controller Auto uses Raw Input's HID vendor IDs, restricted to Generic Desktop
+joystick/gamepad/multi-axis usages: Microsoft 045E, Sony 054C, Nintendo 057E.
+Unknown/no pad falls back to Xbox for Gamepad/Custom and 3DS for Keyboard.
+Setup and Play refresh `[controls] glyphs`; explicit choices persist. Drawing
+these icons is a later plugin feature. Real USB/Bluetooth controllers remain
+unverified. Battle writes `[battle] layout`; speed writes `[speed] instant_text`,
+`battle_messages`, `battle_bars` using the existing plugin values.
+
+Own-code cheat files are embedded in the launcher and installed per title in
+`azahar/user/cheats/<UPPERCASE TITLEID>.txt`. The dialog and CLI only change
+`*citra_enabled` markers, preserving the drafted guards and codes. Always shiny
+and undo are mutually exclusive. Edits require a closed Azahar and apply next
+start; the dialog warns players to back up first. Turning off save-data cheats
+does not revert their changes. Moon cheats need in-game validation. Synthetic
+launcher tests exercise the new file operations and options without starting Azahar.
+
 ## Tested (2026-11-03, Azahar 2126.2, test homes under `analysis/private/instances/`)
 
 - `check` against real files: the decrypted `.cci` is accepted; the genuine decrypted v1.2 update (`0x0820`) is accepted; the rebuilt `0x0800` copy is accepted with a warning; the encrypted base `.cia` and encrypted update are refused (encrypted); Fire Emblem ROMs, a DLC CIA, a text file and the `.3gx` are refused with the title or reason.
