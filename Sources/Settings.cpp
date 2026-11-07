@@ -1,4 +1,5 @@
 #include "Settings.hpp"
+#include "SettingsFile.hpp"
 
 #include <cstdlib>
 #include <cerrno>
@@ -191,6 +192,11 @@ namespace OneScreen
             if (!ParseBool(value, s.autoPanel))
                 return "bad auto '" + value + "' (use on or off)";
         }
+        else if (k == "layout")
+        {
+            if (!ParseBattleLayout(value, s.battleLayout))
+                return "bad layout '" + value + "' (use classic, bar or rail)";
+        }
         else
             return "unknown key '" + key + "'";
         return "";
@@ -233,7 +239,8 @@ namespace OneScreen
                     continue;
                 }
                 section = Lower(Trim(line.substr(1, line.size() - 2)));
-                sectionKnown = section == "controls" || section == "panel" || section == "scenes" || section == "display";
+                sectionKnown = section == "controls" || section == "panel" || section == "scenes" || section == "display"
+                           || section == "battle";
                 if (!sectionKnown)
                     warnings.push_back(where + "unknown section [" + section + "], its keys are ignored");
                 continue;
@@ -285,6 +292,11 @@ namespace OneScreen
             "; Experimental 3D camera aspect: 0/off (original), 16:9, 21:9 or a positive float.\n"
             "; Only new cameras change; see docs/WIDESCREEN.md.\n"
             "aspect = 0\n"
+            "\n"
+            "[battle]\n"
+            "; Native battle menu look: classic, bar or rail. The plugin menu's\n"
+            "; \"Battle layout\" entry changes it and saves it here.\n"
+            "layout = classic\n"
             "\n"
             "[controls]\n"
             "; Cycles the bottom screen view: off, panel, full. Keys: A B X Y L R ZL ZR\n"
@@ -407,7 +419,8 @@ namespace OneScreen
                           + ", cursor_speed " + std::to_string(s.cursorSpeed) + "\n"
                           + "size " + sizes[(int)s.panelSize] + ", corner " + corners[(int)s.panelCorner]
                           + ", auto " + (s.autoPanel ? "on" : "off") + "\n"
-                          + "aspect " + (s.aspect == 0.0f ? std::string("off") : std::to_string(s.aspect)) + "\n"
+                          + "aspect " + (s.aspect == 0.0f ? std::string("off") : std::to_string(s.aspect))
+                          + ", battle layout " + BattleLayoutName(s.battleLayout) + "\n"
                           + "scenes:";
         for (const auto &entry : s.scenes)
             out += " " + entry.first + "=" + SceneModeName(entry.second);

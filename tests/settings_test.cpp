@@ -27,7 +27,7 @@ static bool SameSettings(const Settings &a, const Settings &b)
 {
     return a.panelKey == b.panelKey && a.touchKey == b.touchKey && a.mapKey == b.mapKey && a.cursorSource == b.cursorSource
         && a.cursorSpeed == b.cursorSpeed && a.panelSize == b.panelSize && a.panelCorner == b.panelCorner
-        && a.autoPanel == b.autoPanel && a.scenes == b.scenes;
+        && a.autoPanel == b.autoPanel && a.aspect == b.aspect && a.battleLayout == b.battleLayout && a.scenes == b.scenes;
 }
 
 static Settings Parse(const std::string &text, std::vector<std::string> &warnings)
@@ -230,6 +230,49 @@ static void TestDescribe(void)
     std::printf("  %s\n", d.c_str());
 }
 
+static void TestBattleLayout(void)
+{
+    std::vector<std::string> warnings;
+    CHECK(Settings{}.battleLayout == BattleLayout::Classic);
+
+    CHECK(Parse("[battle]\nlayout = classic\n", warnings).battleLayout == BattleLayout::Classic);
+    CHECK(warnings.empty());
+    CHECK(Parse("[battle]\nlayout = bar\n", warnings).battleLayout == BattleLayout::Bar);
+    CHECK(warnings.empty());
+    CHECK(Parse("[battle]\nlayout = rail\n", warnings).battleLayout == BattleLayout::Rail);
+    CHECK(warnings.empty());
+
+    // Case-insensitive section, key and value; spacing and comments as elsewhere.
+    CHECK(Parse("[ Battle ]\r\n  LAYOUT\t=  RaIl  ; mine\r\n", warnings).battleLayout == BattleLayout::Rail);
+    CHECK(warnings.empty());
+    CHECK(Parse("[BATTLE]\nLayout = BAR\n", warnings).battleLayout == BattleLayout::Bar);
+    CHECK(warnings.empty());
+    // Later lines win, as for every key.
+    CHECK(Parse("[battle]\nlayout = bar\nlayout = rail\n", warnings).battleLayout == BattleLayout::Rail);
+
+    // A bad value warns and keeps the default (or the value set before it).
+    Settings s = Parse("[battle]\nlayout = sideways\n", warnings);
+    CHECK(s.battleLayout == BattleLayout::Classic);
+    CHECK(warnings.size() == 1);
+    CHECK(warnings.size() == 1 && warnings[0].find("line 2: bad layout 'sideways'") == 0);
+    CHECK(warnings.size() == 1 && warnings[0].find("classic, bar or rail") != std::string::npos);
+    s = Parse("[battle]\nlayout = bar\nlayout = 2\n", warnings);
+    CHECK(s.battleLayout == BattleLayout::Bar);
+    CHECK(warnings.size() == 1);
+
+    // [battle] is a known section: no "unknown section" warning.
+    Parse("[battle]\n", warnings);
+    CHECK(warnings.empty());
+
+    // The default file says classic, and DescribeSettings names the layout.
+    CHECK(DefaultSettingsText().find("[battle]\n") != std::string::npos);
+    CHECK(DefaultSettingsText().find("layout = classic\n") != std::string::npos);
+    CHECK(DescribeSettings(Settings{}).find("battle layout classic") != std::string::npos);
+    Settings rail;
+    rail.battleLayout = BattleLayout::Rail;
+    CHECK(DescribeSettings(rail).find("battle layout rail") != std::string::npos);
+}
+
 static void TestCurrentSettings(void)
 {
     Settings s;
@@ -253,6 +296,7 @@ int main(void)
     TestXMenuOnlyInField();
     TestKeyNames();
     TestDescribe();
+    TestBattleLayout();
     TestCurrentSettings();
 
     std::printf("%d checks, %d failed\n", s_checks, s_failures);
