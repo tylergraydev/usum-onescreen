@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "Framebuffer.hpp"
+#include "Widescreen.hpp"
 #include "UI/Demo.hpp"
 #include "UI/Font.hpp"
 #include "UI/Layer.hpp"
@@ -27,6 +28,7 @@ namespace OneScreen
         surface.format = (UI::PixelFormat)fb.format;
         surface.width = screen.IsTop ? (s32)TopWidth : (s32)BottomWidth;
         surface.height = ScreenHeight;
+        surface.squeeze = screen.IsTop ? WidescreenSqueeze() : 1.0f;
         return surface;
     }
 
@@ -136,7 +138,7 @@ namespace OneScreen
         // Move the highlight about once a second so redraws can be seen.
         const s32 selected = (s32)((s_demoFrames++ / 60) % UI::DemoRows);
 
-        if (mode == UiDemoMode::Direct)
+        if (mode == UiDemoMode::Direct && !(fb.squeeze > 1.0f))
         {
             UI::Canvas canvas(fb);
             UI::DrawDemoShade(canvas);
@@ -145,7 +147,9 @@ namespace OneScreen
         }
         else
         {
-            if (mode == UiDemoMode::Shade)
+            // Keep the full-screen shade; widescreen Direct uses the layer
+            // for its menu so it receives the same squeeze as native screens.
+            if (mode == UiDemoMode::Shade || mode == UiDemoMode::Direct)
             {
                 UI::Canvas canvas(fb);
                 UI::DrawDemoShade(canvas);

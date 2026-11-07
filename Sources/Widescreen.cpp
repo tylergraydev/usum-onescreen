@@ -1,0 +1,188 @@
+#include "Widescreen.hpp"
+
+#include <CTRPluginFramework.hpp>
+#include <cmath>
+#include <cstring>
+
+namespace OneScreen
+{
+    using namespace CTRPluginFramework;
+
+    static constexpr u32 PerspectiveAddress = 0x3631CC;
+    static constexpr u32 CalculateMtxAddress = 0x2A22EC;
+    static Hook s_perspectiveHook;
+    static Hook s_calculateMtxHook;
+    static volatile float s_aspect = 0.0f;
+    static volatile u32 s_rewritten = 0;
+    static volatile u32 s_culled = 0;
+
+    // Debug capture only: never allocate or log from the game hook.
+    struct CulledPane
+    {
+        const void *pane;
+        char name[24];
+        float gx;
+    };
+    static CulledPane s_cullNames[32];
+    static volatile bool s_captureCullNames = false;
+    static unsigned s_cullNameCount = 0;
+
+    static u32 FloatBits(float value)
+    {
+        u32 bits;
+        std::memcpy(&bits, &value, sizeof(bits));
+        return bits;
+    }
+
+    // Preflight BOTH templates before writing either. Only the horizontal
+    // bounds may differ from stock, and only by an exact pair we last wrote.
+    static std::string PatchLayoutTemplates(float halfWidth)
+    {
+        static const u32 addresses[] = { 0x5C3180, 0x5E8468 };
+        static const u32 stock[][7] = {
+            { 2, 0xC3480000, 0x43480000, 0xC2F00000, 0x42F00000, 0x3F800000, 0x447A0000 },
+            { 2, 0xC3480000, 0x43480000, 0xC2F00000, 0x42F00000, 0x3DCCCCCD, 0x44480000 }
+        };
+        static u32 last[2][2] = {
+            { 0xC3480000, 0x43480000 }, { 0xC3480000, 0x43480000 }
+        };
+        for (unsigned i = 0; i < 2; i++)
+        {
+            u32 current[7];
+            for (unsigned j = 0; j < 7; j++)
+                if (!Process::Read32(addresses[i] - 4 + j * 4, current[j]))
+                    return "widescreen: 2d templates MISMATCH (unreadable); no writes";
+            const bool stockPair = current[1] == stock[i][1] && current[2] == stock[i][2];
+            const bool lastPair = current[1] == last[i][0] && current[2] == last[i][1];
+            if ((!stockPair && !lastPair) || current[0] != stock[i][0]
+                || std::memcmp(current + 3, stock[i] + 3, 4 * sizeof(u32)) != 0)
+                return Utils::Format("widescreen: 2d templates MISMATCH at 0x%lX; no writes", addresses[i]);
+        }
+        u32 bounds[] = { FloatBits(-halfWidth), FloatBits(halfWidth) };
+        for (unsigned i = 0; i < 2; i++)
+        {
+            if (!Process::Patch(addresses[i], bounds, sizeof(bounds)))
+                return Utils::Format("widescreen: 2d templates PATCH FAILED at 0x%lX (may be partial)", addresses[i]);
+            std::memcpy(last[i], bounds, sizeof(bounds));
+        }
+        return Utils::Format("widescreen: 2d templates 0x5C3180 0x5E8468 left/right ±%.7g", (double)halfWidth);
+    }
+
+    float WidescreenSqueeze(void)
+    {
+        const float aspect = s_aspect;
+        return aspect == 0.0f ? 1.0f : aspect / (400.0f / 240.0f);
+    }
+
+    // Opaque output matrix: the hook only forwards the game's pointer.
+    struct Matrix34or44;
+
+    // Plain C++ preserves the game's hard-float ABI: out/pivot in r0/r1,
+    // fovy/aspect/near/far in s0-s3 (including the typed original call).
+    static void PerspectiveHook(Matrix34or44 *out, u32 pivot, float fovy,
+                                float aspect, float near, float far)
+    {
+        const float active = s_aspect;
+        if (active != 0.0f && std::fabs(aspect - 400.0f / 240.0f) <= 0.001f)
+        {
+            aspect = active;
+            s_rewritten++;
+        }
+        HookContext::GetCurrent().OriginalFunction<void>(out, pivot, fovy, aspect, near, far);
+    }
+
+    struct DrawInfo;
+
+    static void CalculateMtxHook(u8 *pane, const DrawInfo *info, u32 dirty)
+    {
+        HookContext::GetCurrent().OriginalFunction<void>(pane, info, dirty);
+        if (WidescreenSqueeze() <= 1.0f)
+            return;
+
+        const float gx = *reinterpret_cast<const float *>(pane + 0x54);
+        const float sx = std::fabs(*reinterpret_cast<const float *>(pane + 0x48));
+        const float sy = std::fabs(*reinterpret_cast<const float *>(pane + 0x4C));
+        const float width = *reinterpret_cast<const float *>(pane + 0x3C) * sx;
+        if (sy > 0.01f * sx || width < 1.0f)
+            return;
+
+        const u8 anchor = pane[0x47] & 3;
+        const float left = gx - (anchor == 1 ? 0.0f : anchor == 2 ? width : width * 0.5f);
+        const float right = left + width;
+        const float clippedLeft = left > -200.0f ? left : -200.0f;
+        const float clippedRight = right < 200.0f ? right : 200.0f;
+        const float inside = clippedRight > clippedLeft ? clippedRight - clippedLeft : 0.0f;
+        // Hand check (sx=1, sy=0): inside/W for Totaltime=43/188,
+        // Battle_BaseTimer_02=0/76, TexTime_00=3/80, Battle_BaseTimer_01=0/64:
+        // all < 30%, so cull (anchor 9 & 3 = left).
+        // Battle_Hpgauge_01=86/86, Battle_Hpgauge_02=86/86, TextBox_00=198/370,
+        // Gauge_Exp=38/38, IconBall_00=10/10: all >= 30%, so keep.
+        if (!(inside < 0.3f * width))
+            return;
+        pane[0x46] = 0;
+        s_culled++;
+
+        if (!s_captureCullNames || s_cullNameCount == 32)
+            return;
+        for (unsigned i = 0; i < s_cullNameCount; i++)
+            if (s_cullNames[i].pane == pane)
+                return;
+        CulledPane &entry = s_cullNames[s_cullNameCount++];
+        entry.pane = pane;
+        std::memcpy(entry.name, pane + 0x80, sizeof(entry.name));
+        entry.gx = gx;
+    }
+
+    void RequestWidescreenCullNames(void)
+    {
+        s_captureCullNames = false;
+        s_cullNameCount = 0;
+        s_captureCullNames = true;
+    }
+
+    std::string WidescreenFrame(void)
+    {
+        if (!s_captureCullNames)
+            return {};
+        s_captureCullNames = false;
+        std::string report;
+        for (unsigned i = 0; i < s_cullNameCount; i++)
+        {
+            const CulledPane &entry = s_cullNames[i];
+            if (!report.empty())
+                report += '\n';
+            report += Utils::Format("widescreen: culled %.24s gx=%.7g", entry.name, (double)entry.gx);
+        }
+        return report;
+    }
+
+    bool StartWidescreen(std::string &report)
+    {
+        s_perspectiveHook.InitializeForMitm(PerspectiveAddress, (u32)PerspectiveHook);
+        const HookResult result = s_perspectiveHook.Enable();
+        report = Utils::Format("widescreen: perspective hook at %08lX -> %d",
+                               PerspectiveAddress, (int)result);
+        s_calculateMtxHook.InitializeForMitm(CalculateMtxAddress, (u32)CalculateMtxHook);
+        const HookResult cullResult = s_calculateMtxHook.Enable();
+        report += Utils::Format("\nwidescreen: pane CalculateMtx hook at %08lX -> %d",
+                                CalculateMtxAddress, (int)cullResult);
+        return result == HookResult::Success && cullResult == HookResult::Success;
+    }
+
+    std::string DescribeWidescreenAspect(void)
+    {
+        return Utils::Format("widescreen: aspect %.7g; rewritten %lu since boot; culled %lu panes since boot",
+                             (double)s_aspect, s_rewritten, s_culled);
+    }
+
+    std::string SetWidescreenAspect(float aspect)
+    {
+        const float halfWidth = aspect == 0.0f ? 200.0f : 200.0f * (aspect / (400.0f / 240.0f));
+        if (!std::isfinite(aspect) || aspect < 0.0f || !std::isfinite(halfWidth) || halfWidth <= 0.0f)
+            return "widescreen: invalid aspect";
+        s_aspect = aspect;
+        const std::string status = aspect == 0.0f ? "widescreen: off"
+            : Utils::Format("widescreen: aspect %.7g", (double)aspect);
+        return status + "\n" + PatchLayoutTemplates(halfWidth);
+    }
+}

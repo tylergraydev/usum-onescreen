@@ -1,4 +1,5 @@
 #include "UI/Layer.hpp"
+#include "UI/ColumnMapping.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -99,11 +100,11 @@ namespace UI
         const s32 bpp = (s32)BytesPerPixel(screen.format);
         const bool columnar = Columnar(screen);
         // Rows [y0, y1) of column i (area coordinates).
-        const auto copy = [&](s32 i, s32 y0, s32 y1) {
+        const auto copy = [&](s32 destination, s32 i, s32 y0, s32 y1) {
             if (y1 <= y0)
                 return;
             const u8 *src = m_surface.origin + i * m_surface.stepX;
-            u8 *dst = screen.origin + (m_area.x + i) * screen.stepX + m_area.y * screen.stepY;
+            u8 *dst = screen.origin + destination * screen.stepX + m_area.y * screen.stepY;
             if (columnar)
             {
                 // The run starts at whichever end of the column is lower in memory.
@@ -114,18 +115,24 @@ namespace UI
             for (s32 y = y0; y < y1; y++)
                 std::memcpy(dst + y * screen.stepY, src + y * m_surface.stepY, (size_t)bpp);
         };
-        for (s32 i = 0; i < m_area.w; i++)
+        const float squeeze = screen.width == ScreenW ? screen.squeeze : 1.0f;
+        const s32 begin = squeeze > 1.0f ? 0 : m_area.x;
+        const s32 end = squeeze > 1.0f ? screen.width : m_area.Right();
+        for (s32 destination = begin; destination < end; destination++)
         {
+            const s32 x = SourceColumn(destination, squeeze);
+            if (x < m_area.x || x >= m_area.Right())
+                continue;
+            const s32 i = x - m_area.x;
             const s32 y0 = m_top[i], y1 = m_area.h - m_top[i];
-            const s32 x = m_area.x + i;
             if (skip.Empty() || x < skip.x || x >= skip.Right())
             {
-                copy(i, y0, y1);
+                copy(destination, i, y0, y1);
                 continue;
             }
             const s32 s0 = skip.y - m_area.y, s1 = skip.Bottom() - m_area.y;
-            copy(i, y0, s0 < y1 ? s0 : y1);
-            copy(i, s1 > y0 ? s1 : y0, y1);
+            copy(destination, i, y0, s0 < y1 ? s0 : y1);
+            copy(destination, i, s1 > y0 ? s1 : y0, y1);
         }
     }
 }

@@ -303,8 +303,9 @@ def cmd_start(args):
     log = sdmc_dir(args.name) / "usum-onescreen.log"
     log.unlink(missing_ok=True)
     ini = user_dir(args.name) / "config" / "qt-config.ini"
-    ini.write_text(set_ini(ini.read_text(encoding="utf-8"), "System", "plugin_loader",
-                           "false" if args.no_plugin else "true"), encoding="utf-8")
+    text = set_ini(ini.read_text(encoding="utf-8"), "System", "plugin_loader",
+                   "false" if args.no_plugin else "true")
+    ini.write_text(set_ini(text, "Audio", "volume", "0"), encoding="utf-8")  # test emulators run muted
     command = [str(exe_path(args.name))]
     if args.movie:
         command += ["-p", str(Path(args.movie).resolve())]

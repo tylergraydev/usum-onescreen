@@ -35,10 +35,12 @@ namespace UI
         // A canvas in screen coordinates, clipped to the area and cleared to
         // black (what antialiased edges at the corners blend against).
         Canvas Begin(void);
-        // Copies the layer onto screen (which Matches it).
+        // Copies the layer onto screen (which Matches it). Top (400px)
+        // surfaces use screen.squeeze about x=200, sampling source corners.
         void   Present(const Surface &screen) const;
         // The same, leaving the pixels inside `skip` (screen coordinates)
         // alone, for something else to fill (a GPU copy, Screens/Map.cpp).
+        // skip is unsqueezed: test the same source column as the layer.
         void   Present(const Surface &screen, const Rect &skip) const;
 
     private:
