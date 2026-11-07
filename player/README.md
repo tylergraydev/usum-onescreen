@@ -42,7 +42,7 @@ Drop one or several `.3ds`, `.cci`, `.cia` or `.zip` files anywhere on the windo
 
 After building with the plugin available, run `python player/test.py` from the repository root. It uses synthetic headers, local archives and `file:///` downloads only; it never starts Azahar. It covers widescreen sync and comment preservation, validation, title state, bundle priority, source fallback, download/hash refusal, zip traversal/reuse and embedded-plugin priority. `check`, `setup` and `status` identify the game. Older state files without `title_id` retain their Sun behaviour.
 
-The Plugin group's experimental Widescreen dropdown offers Auto, Original (5:3),
+The Game options group's experimental Widescreen dropdown offers Auto, Original (5:3),
 16:9 and 21:9. Auto uses the primary monitor: ratios at least 2.2 select 21:9,
 at least 1.7 select 16:9, otherwise Original. The choice is saved in app state;
 setup and every launch write a concrete `[display] aspect` to
@@ -66,3 +66,73 @@ UsumOneScreen status
 present, or applies stretch on later setup. Also accepts `auto`, `0`, `off`,
 `21:9` and positive finite floats (invariant culture); keys can be combined,
 for example `set aspect=21:9 size=2/3`. `status` marks Auto with `(auto)`.
+
+
+## Saves and game options
+
+`Backups?` lists dated save snapshots with sizes, **Back up now**, **Restore**
+(with confirmation) and **Open folder**. Every Play backs up first. Missing/empty
+saves are skipped; a backup failure stops Play. Restore refuses a running portable
+Azahar and first backs up the current save. Ten newest snapshots per title are
+kept in `<home>\backups\<16-digit TITLEID>\yyyyMMdd-HHmmss\` (same-second
+requests get unique increasing timestamps). Restore stages the selected data before
+retention can remove it, replaces the whole data folder, and rolls back a failed
+swap. Linked paths and multiple matching saves are refused.
+
+Save discovery follows `Home.ContentDir`'s existing ID0/ID1 enumeration:
+`azahar\user\sdmc\Nintendo 3DS\<id0>\<id1>\title\00040000\<lowercase title low>\data\`
+(`001b5000` Sun / `001b5100` Moon). Each snapshot contains `data/` plus a portable
+relative `source.txt` for restoring a missing save. **Extdata is not included**:
+Home.cs has no known extdata path. Nothing uses `%APPDATA%\Azahar`.
+
+Game options reads existing INIs when the window opens and saves through the same
+comment-preserving plugin editor:
+
+- Graphics: Keep Azahar's setting (default; no resolution writes), Native (1x),
+  High (3x), Ultra (5x). Presets set `[Renderer] resolution_factor` and
+  `resolution_factor\default=false`, and remove per-game resolution overrides.
+  Keep preserves the last Azahar value; it does not reset it. 21:9 looks best
+  on High or Ultra. Verified against Azahar 2126.2's
+  [config.cpp](https://github.com/azahar-emu/azahar/blob/2126.2/src/citra_qt/configuration/config.cpp)
+  and [settings.h](https://github.com/azahar-emu/azahar/blob/2126.2/src/common/settings.h).
+- Battle menu: Classic / Bar / Rail writes `[battle] layout`.
+- Text and battle speed: Normal / Fast / Instant writes `[speed] instant_text`
+  (off/on/on), `battle_messages` and `battle_bars` (normal/fast/instant).
+  Mixed hand-edited speeds show Custom (keep) and survive saving.
+- Button icons: Auto (with detected family), Xbox, PlayStation, Nintendo, 3DS.
+  Auto refreshes `[controls] glyphs` on setup and Play. Raw Input HID controller
+  vendor IDs select Microsoft `045E`, Sony `054C`, Nintendo `057E`; unknown/absent
+  controllers fall back to Xbox for Gamepad/Custom, 3DS for Keyboard. Multiple
+  recognised devices use the first enumerated one. Icon drawing is future plugin
+  work; this launcher only writes the key. No additional packages are needed.
+
+`Cheats?` ships six own-code cheats, disabled initially, embedded from `cheats/`.
+Only enabled markers change: code lines and boot safety guards remain intact.
+Files go to `azahar\user\cheats\<UPPERCASE TITLEID>.txt`; Sun and Moon retain
+independent selections, synced at setup and Play. Always shiny and its undo
+cannot be enabled together. Changes apply on the next game start; close Azahar
+before saving cheats. Back up first. Money/BP and item changes remain after
+turning a cheat off. Item cheats require an existing slot and clear its NEW badge
+and Free Space position. Disable Always shiny and restart to undo the memory patch,
+or select its undo for the next start. Moon cheats still need in-game validation.
+
+Additional CLI commands (all accept `--home DIR`):
+
+```
+UsumOneScreen backup
+UsumOneScreen backups
+UsumOneScreen restore yyyyMMdd-HHmmss
+UsumOneScreen cheats
+UsumOneScreen cheats on "Max money (9,999,999)"
+UsumOneScreen cheats off "Max money (9,999,999)"
+UsumOneScreen set graphics=keep|native|high|ultra
+UsumOneScreen set glyphs=auto|xbox|playstation|nintendo|3ds
+UsumOneScreen set layout=rail instant_text=on battle_messages=fast battle_bars=fast
+```
+
+CLI restore is an explicit restore request and does not prompt; the window asks
+for confirmation. Synthetic tests cover save discovery, retention, pre-restore
+backup, missing-save recovery, title isolation, cheat code preservation and shiny
+exclusion, resolution presets/Keep, vendor mapping/fallbacks, option readback,
+battle/speed writes and layout at 100%/150%. Source-only builds without the optional
+embedded plugin use a synthetic adjacent plugin in tests. No emulator is started.
