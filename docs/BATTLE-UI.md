@@ -16,6 +16,16 @@ In battle the top screen shows the game's choices itself, so a battle is played 
 
 Where it draws: the command bar, move list and question right of x 166 and below y 36 (the after-catch helper above y 86), so the opponent's HP box (top right), the player's HP box (bottom left) and the battle messages (bottom, only shown while no menu is up) stay readable. The Pokémon list and the Bag cover the scene (376x224 at 12,8, as the field screens), as the game's own cover the bottom screen. Pages are drawn into a `UI::Layer` when what they show changes and copied every frame (`docs/UI.md`); the plugin never reads the top framebuffer for them.
 
+## Layouts
+
+`[battle] layout` selects `classic` (the default), `bar`, or `rail`; see [Playing: Battle menu layout](PLAYING.md#battle-menu-layout) for the ini, plugin menu and `battlelayout` command. A change also takes effect during a battle without resetting the selection.
+
+- **Classic** keeps the original right-hand command column and move list, with the original pixels and Up/Down navigation.
+- **Bar** puts a small caption above one horizontal row of rounded, colour-coded Fight / Bag / Pok?mon / Run pills at x 170?396, y 182?236. Its moves are a 2?2 grid at x 170?396, y 106?238, with type plates, PP and triangle markers (up: super effective, down: not very effective; X: no effect). Left/Right cycle commands; on moves they switch columns within the same row (a lone final move stays put). Up/Down cycle all entries in list order on both pages.
+- **Rail** stacks slanted pills along the right edge, each lower command shifted left, with coloured tabs and light bodies. Commands occupy x 202?396, y 52?238; type-coloured move bars occupy x 170?396, y 38?238 and spell out effectiveness. Up/Down cycle entries as in Classic.
+
+The command order is always Fight, Bag, Pok?mon, Run: Down twice selects Pok?mon and Up from Fight wraps to Run. A chooses/uses and B backs out of moves in every layout. PP uses the same colour thresholds as Classic. All three leave the opponent HP box (x ? 240, y < 36) and player HP/message region (x < 166, y ? 180) clear. Each command/moves page is one small opaque window in a `UI::Layer`; changing layout invalidates its draw key and rebuilds the layer when its rectangle changes. Party, Bag, Question, Target and after-catch helpers are identical in every layout.
+
 ## How a choice is carried out
 
 The menu follows the game's bottom-screen menu (RE1 `ReadBattle`, read every 2 frames) and acts by tapping the game's own button through the action layer: `battle-fight`, `battle-bag`, `battle-pokemon`, `battle-flee`, `battle-move1..4`, `battle-moves-back` (`docs/ACTIONS.md`). Rules, each from a run:

@@ -682,14 +682,17 @@ namespace Screens
 
         if (m_queued == nullptr)
         {
-            if (pressed & (BattleKeys::Up | BattleKeys::Down))
+            if (pressed & (BattleKeys::Up | BattleKeys::Down)
+                || (m_layout == BattleLayout::Bar && (pressed & (BattleKeys::Left | BattleKeys::Right))))
                 m_note.clear();
             if (m_page == BattlePage::Command)
             {
                 const u8 count = (u8)BattleCommand::Count;
-                if (pressed & BattleKeys::Up)
+                if (pressed & BattleKeys::Up
+                    || (m_layout == BattleLayout::Bar && (pressed & BattleKeys::Left)))
                     m_cursor = StepCursor(m_cursor, count, -1);
-                else if (pressed & BattleKeys::Down)
+                else if (pressed & BattleKeys::Down
+                         || (m_layout == BattleLayout::Bar && (pressed & BattleKeys::Right)))
                     m_cursor = StepCursor(m_cursor, count, 1);
                 else if (pressed & BattleKeys::A)
                     m_queued = CommandActions[m_cursor];
@@ -700,6 +703,14 @@ namespace Screens
                     m_cursor = StepCursor(m_cursor, snap.moveCount, -1);
                 else if (pressed & BattleKeys::Down)
                     m_cursor = StepCursor(m_cursor, snap.moveCount, 1);
+                else if (m_layout == BattleLayout::Bar && (pressed & (BattleKeys::Left | BattleKeys::Right)))
+                {
+                    // Horizontal movement stays in the grid row; an odd final
+                    // row with a single move stays put. Up/Down retain list order.
+                    const u8 adjacent = m_cursor ^ 1;
+                    if (adjacent < snap.moveCount)
+                        m_cursor = adjacent;
+                }
                 else if (pressed & BattleKeys::B)
                     m_queued = MoveBack;
                 else if ((pressed & BattleKeys::A) && m_cursor < snap.moveCount)

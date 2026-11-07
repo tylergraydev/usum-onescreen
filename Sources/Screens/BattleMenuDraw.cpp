@@ -29,6 +29,10 @@ namespace Screens
     // and the Bag cover the scene, as the game's own do on the bottom screen.
     static constexpr Rect CommandArea  = { 222, 48, 174, 188 };
     static constexpr Rect MovesArea    = { 186, 36, 210, 202 };
+    static constexpr Rect BarCommandArea = { 170, 182, 226, 54 };
+    static constexpr Rect BarMovesArea   = { 170, 106, 226, 132 };
+    static constexpr Rect RailCommandArea = { 202, 52, 194, 186 };
+    static constexpr Rect RailMovesArea  = { 170, 38, 226, 200 };
     static constexpr Rect QuestionArea = { 186, 60, 210, 118 };
     static constexpr Rect GameArea     = { 166, 158, 230, 78 };
     // After a catch the Pokédex scene asks its question along the bottom,
@@ -150,6 +154,165 @@ namespace Screens
     }
 
     // --- Pokémon list ---
+
+    // Compact regions keep every label readable even without the game font.
+    // Prefer the game's small text; the 5x7 fallback is for narrow/short boxes.
+    static void CompactText(Canvas &canvas, const std::string &text, const Rect &box,
+                            Color color, Align align = Align::Left)
+    {
+        std::string shown = text;
+        if (!Theme::UsingGameFont())
+        {
+            // The bitmap fallback is ASCII; keep Pokemon readable there.
+            size_t accent;
+            while ((accent = shown.find("\xC3\xA9")) != std::string::npos)
+                shown.replace(accent, 2, "e");
+        }
+        if (Theme::MeasureText(shown, Theme::TextSize::Small) <= box.w
+            && Theme::LineHeight(Theme::TextSize::Small) <= box.h)
+        {
+            Theme::TextStyle style = White(Theme::TextSize::Small, align);
+            style.color = color;
+            if (color.r || color.g || color.b)
+                style.outline = Theme::WindowLine;
+            Theme::DrawText(canvas, shown, box, style);
+        }
+        else
+        {
+            UI::TextStyle style;
+            style.font = Font::Small;
+            style.color = color;
+            style.align = align;
+            UI::DrawText(canvas, shown, box, style);
+        }
+    }
+
+    // Slants lean right at the top, with both tips inside r. These are
+    // opaque shapes on the window: a Layer presents its entire rectangle.
+    static void Slant(Canvas &canvas, const Rect &r, Color color)
+    {
+        const s32 skew = 8;
+        canvas.FillRect(Rect{ r.x + skew, r.y, r.w - 2 * skew, r.h }, color);
+        const float x = (float)r.x, y = (float)r.y, right = (float)r.Right(), bottom = (float)r.Bottom();
+        canvas.FillTriangle(x, bottom, x + skew, y, x + skew, bottom, color);
+        canvas.FillTriangle(right - skew, y, right, y, right - skew, bottom, color);
+    }
+
+    static Color CommandColor(u8 index)
+    {
+        static constexpr Color colors[] = { Theme::BattleFight, Theme::BattleBag,
+                                            Theme::BattlePokemon, Theme::BattleRun };
+        return colors[index];
+    }
+
+    static void DrawNewCommand(Canvas &canvas, const BattleMenu &menu, const BattleSnapshot &snap)
+    {
+        const Rect area = menu.Area();
+        const bool bar = menu.Layout() == BattleLayout::Bar;
+        Theme::DrawWindow(canvas, area);
+        const std::string who = snap.activeName.empty() ? "you" : snap.activeName;
+        const std::string caption = menu.Note().empty() ? "What will " + who + " do?" : menu.Note();
+        CompactText(canvas, caption, Rect{ area.x + 6, area.y + 3, area.w - 12, 17 }, Theme::WindowText);
+        const s32 widths[] = { 48, 40, 80, 44 };
+        s32 x = area.x + 3;
+        for (u8 i = 0; i < 4; i++)
+        {
+            const bool on = i == menu.Cursor();
+            Rect pill = bar ? Rect{ x, 204, widths[i], 29 }
+                            : Rect{ area.x + 20 - 5 * i, area.y + 28 + 33 * i, area.w - 24, 30 };
+            if (bar)
+            {
+                canvas.FillRoundRect(pill, 12, Theme::OptionLine);
+                canvas.FillRoundRect(Inset(pill, 2), 10, CommandColor(i));
+                if (on)
+                    Theme::DrawHighlightFrame(canvas, pill, 12);
+            }
+            else
+            {
+                Slant(canvas, pill, on ? Theme::Highlight : Theme::OptionLine);
+                Slant(canvas, Inset(pill, 2), Theme::OptionTop);
+                Slant(canvas, Rect{ pill.x + 3, pill.y + 3, 26, pill.h - 6 }, CommandColor(i));
+                if (on)
+                    Theme::DrawCursor(canvas, pill.x + 18, pill.y + pill.h / 2);
+            }
+            std::string label = CommandLabel((BattleCommand)i);
+            if (on && menu.Pending())
+                label += "...";
+            CompactText(canvas, label, Rect{ pill.x + (bar ? 3 : 31), pill.y + (bar ? 7 : 4),
+                        pill.w - (bar ? 6 : 43), bar ? 15 : pill.h - 8 }, Theme::OptionText, Align::Center);
+            x += widths[i] + 3;
+        }
+        if (!bar)
+            CompactText(canvas, "A Choose", Rect{ area.x + 12, area.Bottom() - 20, area.w - 24, 16 }, Theme::WindowText);
+    }
+
+    static void EffectMarker(Canvas &canvas, const Rect &r, u8 effect)
+    {
+        const float x = (float)r.x, y = (float)r.y, right = (float)r.Right(), bottom = (float)r.Bottom();
+        if (effect == 2)
+            canvas.FillTriangle(x, bottom, (x + right) / 2, y, right, bottom, Theme::OptionGlint);
+        else if (effect == 3)
+            canvas.FillTriangle(x, y, right, y, (x + right) / 2, bottom, Theme::WindowText);
+        else if (effect == 0)
+        {
+            canvas.Line(x + 1, y + 1, right - 1, bottom - 1, 2, Theme::WindowText);
+            canvas.Line(right - 1, y + 1, x + 1, bottom - 1, 2, Theme::WindowText);
+        }
+    }
+
+    static void DrawNewMoves(Canvas &canvas, const BattleMenu &menu, const BattleSnapshot &snap)
+    {
+        const Rect area = menu.Area();
+        const bool bar = menu.Layout() == BattleLayout::Bar;
+        Theme::DrawWindow(canvas, area);
+        for (u8 i = 0; i < snap.moveCount && i < 4; i++)
+        {
+            const MoveRow &row = snap.moves[i];
+            const u8 type = row.type < Theme::TypeCount ? row.type : 0;
+            const Theme::TypeColors colors = Theme::TypeColor(type);
+            const bool on = i == menu.Cursor();
+            const Rect b = bar ? Rect{ area.x + 4 + (i % 2) * 110, area.y + 4 + (i / 2) * 54, 108, 52 }
+                               : Rect{ area.x + 14 - i * 3, area.y + 4 + i * 44, area.w - 18, 43 };
+            if (bar)
+            {
+                Theme::DrawMoveButton(canvas, b, type, false);
+                if (on)
+                    Theme::DrawHighlightFrame(canvas, b, 6);
+            }
+            else
+            {
+                Slant(canvas, b, on ? Theme::Highlight : colors.lineDark);
+                Slant(canvas, Inset(b, 2), colors.dark);
+                Slant(canvas, Rect{ b.x + 3, b.y + 2, b.w - 6, 19 }, colors.light);
+                if (on)
+                    Theme::DrawCursor(canvas, b.x + 12, b.y + 12);
+            }
+            const s32 inset = bar ? 5 : 24;
+            std::string label = row.name.empty() ? Format("Move %u", row.move) : row.name;
+            if (on && menu.Pending())
+                label += "...";
+            CompactText(canvas, label, Rect{ b.x + inset, b.y + 2, b.w - inset - 6, 15 }, Theme::WindowText);
+            const std::string typeName = Theme::Upper(row.typeName.empty() ? TypeName(type) : row.typeName);
+            const Rect plate = { b.x + inset, b.y + 19, 58, 14 };
+            Theme::DrawTypePlate(canvas, plate, type, "");
+            CompactText(canvas, typeName, Inset(plate, 3, 0, 3, 0), Theme::WindowText, Align::Center);
+            const Rect pp = bar ? Rect{ b.x + 5, b.y + 35, b.w - 24, 13 }
+                                : Rect{ b.x + 88, b.y + 18, b.w - 100, 14 };
+            CompactText(canvas, Format("PP %u/%u", row.pp, row.maxPp), pp, Theme::PpTextColor(row.pp, row.maxPp));
+            if (bar)
+                EffectMarker(canvas, Rect{ b.Right() - 16, b.y + 36, 10, 10 }, row.effect);
+            else
+                CompactText(canvas, EffectLabel(row.effect), Rect{ b.x + inset, b.y + 33, b.w - inset - 12, 9 },
+                            row.effect == 2 ? Theme::OptionGlint : Theme::WindowText);
+        }
+        const Rect foot = { area.x + 5, area.Bottom() - 19, area.w - 10, 13 };
+        if (menu.Note().empty())
+            CompactText(canvas, "A Use   B Back", foot, Theme::WindowText);
+        else
+            CompactText(canvas, menu.Note(), foot, Theme::WindowText);
+    }
+
+    // --- Pok?mon list ---
 
     static void DrawPartyPage(Canvas &canvas, const BattleMenu &menu, const BattleSnapshot &snap)
     {
@@ -377,8 +540,10 @@ namespace Screens
     {
         switch (m_page)
         {
-        case BattlePage::Command:  return CommandArea;
-        case BattlePage::Moves:    return MovesArea;
+        case BattlePage::Command:  return m_layout == BattleLayout::Bar ? BarCommandArea
+                                        : m_layout == BattleLayout::Rail ? RailCommandArea : CommandArea;
+        case BattlePage::Moves:    return m_layout == BattleLayout::Bar ? BarMovesArea
+                                        : m_layout == BattleLayout::Rail ? RailMovesArea : MovesArea;
         case BattlePage::Party:    return PartyArea;
         case BattlePage::Bag:      return BagArea;
         case BattlePage::Question: return QuestionArea;
@@ -397,8 +562,14 @@ namespace Screens
     {
         switch (m_page)
         {
-        case BattlePage::Command:  DrawCommand(canvas, *this, snap); break;
-        case BattlePage::Moves:    DrawMoves(canvas, *this, snap); break;
+        case BattlePage::Command:
+            if (m_layout == BattleLayout::Classic) DrawCommand(canvas, *this, snap);
+            else DrawNewCommand(canvas, *this, snap);
+            break;
+        case BattlePage::Moves:
+            if (m_layout == BattleLayout::Classic) DrawMoves(canvas, *this, snap);
+            else DrawNewMoves(canvas, *this, snap);
+            break;
         case BattlePage::Party:    DrawPartyPage(canvas, *this, snap); break;
         case BattlePage::Bag:      DrawBagPage(canvas, *this, snap); break;
         case BattlePage::Question: DrawQuestion(canvas, *this, snap); break;
@@ -412,6 +583,7 @@ namespace Screens
     {
         std::string key = Format("%u %u", (unsigned)m_page, m_cursor) + (m_pending ? "p" : "") + "|" + m_note + "|"
                           + m_busyText;
+        key += Format("|layout %u", (unsigned)m_layout);
         switch (m_page)
         {
         case BattlePage::Command:

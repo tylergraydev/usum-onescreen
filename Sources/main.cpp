@@ -32,6 +32,7 @@
 #include "UI/Assets.hpp"
 #include "UI/ScreenBuffer.hpp"
 #include "Settings.hpp"
+#include "SettingsFile.hpp"
 #include "Shot.hpp"
 #include "UI/Device.hpp"
 #include "Where.hpp"
@@ -109,6 +110,79 @@ namespace CTRPluginFramework
         OneScreen::AutoPanelSetEnabled(settings.autoPanel);
         WriteLog("settings: " + OneScreen::DescribeSettings(settings), false);
         WriteLog(OneScreen::SetWidescreenAspect(settings.aspect), false);
+        OneScreen::BattleScreenSetLayout(settings.battleLayout);
+    }
+
+    // Sets `key = value` in [section] of /usum-onescreen.ini (SetIniValue:
+    // every other line and comment is kept) and writes the file back. A
+    // missing file starts from the commented defaults. Logs the result;
+    // `text` is the file as written, for the caller to check.
+    static bool SaveSetting(const std::string &section, const std::string &key, const std::string &value,
+                            std::string &text)
+    {
+        const std::string what = "[" + section + "] " + key + " = " + value;
+        text.clear();
+        if (File::Exists(SettingsPath) == 1)
+        {
+            File file;
+            if (File::Open(file, SettingsPath, File::READ) != File::SUCCESS)
+            {
+                WriteLog(Utils::Format("settings: can't open %s, %s not saved", SettingsPath, what.c_str()), false);
+                return false;
+            }
+            text.resize(file.GetSize());
+            const int read = text.empty() ? (int)File::SUCCESS : file.Read(&text[0], text.size());
+            file.Close();
+            if (read != File::SUCCESS)
+            {
+                WriteLog(Utils::Format("settings: can't read %s (%d), %s not saved", SettingsPath, read, what.c_str()),
+                         false);
+                return false;
+            }
+        }
+        else
+            text = OneScreen::DefaultSettingsText();
+
+        text = OneScreen::SetIniValue(text, section, key, value);
+
+        File file;
+        if (File::Open(file, SettingsPath, File::WRITE | File::CREATE | File::TRUNCATE | File::SYNC) != File::SUCCESS)
+        {
+            WriteLog(Utils::Format("settings: can't write %s, %s not saved", SettingsPath, what.c_str()), false);
+            return false;
+        }
+        const int written = file.Write(text.data(), text.size());
+        file.Close();
+        if (written != File::SUCCESS)
+        {
+            WriteLog(Utils::Format("settings: write to %s failed (%d), %s may not be saved", SettingsPath, written,
+                                   what.c_str()),
+                     false);
+            return false;
+        }
+        WriteLog("settings: saved " + what, false);
+        return true;
+    }
+
+    // Menu entry and `battlelayout NAME`: shows `layout` now, keeps it in
+    // the settings in use (View settings) and saves it to the file.
+    static void SetBattleLayout(OneScreen::BattleLayout layout, const char *source)
+    {
+        OneScreen::BattleScreenSetLayout(layout);
+        OneScreen::Settings settings = OneScreen::GetSettings();
+        settings.battleLayout = layout;
+        OneScreen::SetSettings(settings);
+        WriteLog(Utils::Format("battle layout: %s (%s)", OneScreen::BattleLayoutName(layout), source), false);
+
+        std::string text;
+        if (!SaveSetting("battle", "layout", OneScreen::BattleLayoutName(layout), text))
+            return;
+        // A second `layout` line later in the file would win at the next boot.
+        std::vector<std::string> warnings;
+        if (OneScreen::ParseSettings(text, warnings).battleLayout != layout)
+            WriteLog(Utils::Format("settings: another layout line in %s overrides it at the next boot; "
+                                   "remove the extra one", SettingsPath + 1),
+                     false);
     }
 
     // Test commands, one per line, in /usum-cmd.txt on the SD card. The file is
@@ -138,6 +212,8 @@ namespace CTRPluginFramework
     //     screen: open-pokedex, open-party, open-bag, battle-run, close; Actions.hpp)
     //   battleui on | battleui off | battleui   (native battle menu on the top screen,
     //     Screens/BattleScreen.hpp; on by default)
+    //   battlelayout | battlelayout classic|bar|rail   (log / set the battle menu's look;
+    //     setting it also saves [battle] layout to /usum-onescreen.ini)
     //   xmenu on|off|status | xmenu select NAME | xmenu open NAME   (native X menu,
     //     Screens/XMenu.hpp; NAME as in XMenuGrid.cpp: pokemon, pokedex, ..., map, save)
     //   keyboard on|off|status|read   (native keyboard, Screens/Keyboard.hpp; read
@@ -315,6 +391,19 @@ namespace CTRPluginFramework
             OneScreen::BattleScreenSetEnabled(line == "battleui on");
         else if (line == "battleui")
             WriteLog(OneScreen::BattleScreenStatus(), false);
+        else if (line == "battlelayout")
+            WriteLog(std::string("battle layout: ") + OneScreen::BattleLayoutName(OneScreen::BattleScreenLayout()),
+                     false);
+        else if (line.compare(0, 13, "battlelayout ") == 0)
+        {
+            OneScreen::BattleLayout layout = OneScreen::BattleLayout::Classic;
+            if (!OneScreen::ParseBattleLayout(line.substr(13), layout))
+            {
+                WriteLog("cmd: unknown battle layout in '" + line + "' (use classic, bar or rail)", false);
+                return;
+            }
+            SetBattleLayout(layout, "cmd");
+        }
         else if (line == "auto on" || line == "auto off")
             OneScreen::AutoPanelSetEnabled(line == "auto on");
         else if (line == "perf on" || line == "perf off")
@@ -716,11 +805,15 @@ namespace CTRPluginFramework
     // Select, CTRPF's default menu hotkey) runs them. Their names show the
     // current state and are refreshed each time the menu opens.
     static MenuEntry *s_autoEntry = nullptr;
+    static MenuEntry *s_layoutEntry = nullptr;
 
     static void RefreshMenuNames(void)
     {
         if (s_autoEntry != nullptr)
             s_autoEntry->Name() = std::string("Auto panel: ") + (OneScreen::AutoPanelEnabled() ? "on" : "off");
+        if (s_layoutEntry != nullptr)
+            s_layoutEntry->Name() = std::string("Battle layout: ")
+                                    + OneScreen::BattleLayoutTitle(OneScreen::BattleScreenLayout());
     }
 
     static bool OnMenuOpening(void)
@@ -735,6 +828,14 @@ namespace CTRPluginFramework
         OneScreen::AutoPanelSetEnabled(!OneScreen::AutoPanelEnabled());
         RefreshMenuNames();
         WriteLog(OneScreen::AutoPanelStatus() + " (menu)", false);
+    }
+
+    // Classic -> Bar -> Rail -> Classic; saved to the file (the first setting
+    // the plugin writes back).
+    static void CycleBattleLayout(MenuEntry *entry)
+    {
+        SetBattleLayout(OneScreen::NextBattleLayout(OneScreen::BattleScreenLayout()), "menu");
+        RefreshMenuNames();
     }
 
     static void ShowSettings(MenuEntry *entry)
@@ -767,6 +868,9 @@ namespace CTRPluginFramework
                                     "A: switch between following the scene and staying as set. "
                                     "Lasts until the next boot; set auto in usum-onescreen.ini to keep it.");
         menu += s_autoEntry;
+        s_layoutEntry = new MenuEntry("Battle layout", nullptr, CycleBattleLayout,
+                                      "A: change how the battle menu looks. Saved to usum-onescreen.ini.");
+        menu += s_layoutEntry;
         menu += new MenuEntry("View settings", nullptr, ShowSettings,
                               "A: show the settings in use, read from /usum-onescreen.ini at boot.");
         menu += new MenuEntry("Reload settings file", nullptr, ReloadSettings,

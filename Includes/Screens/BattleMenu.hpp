@@ -16,6 +16,7 @@
 #include <string>
 
 #include "UI/Raster.hpp"
+#include "Settings.hpp"
 
 namespace OneScreen
 {
@@ -190,6 +191,9 @@ namespace Screens
         // `pressed`: keys newly pressed this frame (real input, before capture).
         BattleMenuOutput Update(const BattleSnapshot &snap, u32 pressed);
 
+        void SetLayout(BattleLayout layout) { m_layout = layout; }
+        BattleLayout Layout(void) const { return m_layout; }
+
         BattlePage Page(void) const { return m_page; }
         u8 Cursor(void) const { return m_cursor; }
         bool Pending(void) const { return m_pending; }
@@ -263,6 +267,7 @@ namespace Screens
         void PressB(BattleMenuOutput &out);
         u32 GameSignature(const BattleSnapshot &snap) const;
 
+        BattleLayout m_layout = BattleLayout::Classic;
         BattlePage m_page = BattlePage::Hidden;
         GameMenu m_menu = GameMenu::None;
         bool m_afterCatch = false;
