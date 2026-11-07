@@ -191,8 +191,8 @@ The first ARM word is `0xE92D43F0` (`push {r4-r8,sb,lr}`).
 as presentation metadata on top surfaces only. `Layer::Present` uses it for
 400-pixel top output when k > 1: each destination column d samples the nearest
 source column `200 + (d - 200)*k` (ties toward increasing x). Out-of-area sources
-leave the destination untouched. The source column's original `m_top` range
-preserves rounded corners. Copies still only write the framebuffer, with one
+leave the destination untouched except for eligible pillarbox bands (below).
+The source column's original `m_top` range preserves rounded corners. Copies still only write the framebuffer, with one
 memcpy per copied column on rotated screens. No redraw is needed for a live
 change. Bottom surfaces remain unchanged. Positive aspects at or below 5:3
 retain native presentation at 1:1; native expansion is outside this change.
@@ -230,6 +230,56 @@ in original game/bottom coordinates. `CaptureRealTouch` has no call sites;
 there is no native top-screen pointer hit-test or top-to-UI touch conversion to
 undo. Only the cursor's rendered top image changes. Any future top-screen
 hit-testing must map destination x back through the same source-column rule.
+
+## Native menu pillarbox art
+
+```ini
+[display]
+aspect = 21:9
+pillarbox = tint
+```
+
+`pillarbox` accepts `tint` (default), `pattern`, or `off`, case-insensitively.
+It applies at boot and on settings reload, including menus already open.
+Tint is an opaque dark olive, half the native `Theme::WindowFill` colour
+(`#2B2A19`), with a three-destination-column gradient towards the menu.
+It never samples or blends with the game's framebuffer. Pattern adds subtle
+diagonal stripes (eight-column/row repeat, only three RGB levels brighter)
+on the same base. Off leaves the game's scene visible in the side bands.
+
+Only top-screen layers containing the standard full-screen inset
+`{12, 8, 376, 224}` qualify, and only with squeeze greater than one.
+This includes Party, Bag, Boxes, X menu, keyboard, Map and full-size native
+pages; compact Options, battle command bars, prompts and badges do not.
+The bottom screen is unchanged. The bands cover the full 240-pixel height,
+but only columns outside the layer's mapped horizontal extent. Rounded
+corners and the top/bottom inset inside that extent still show the game.
+
+`PillarboxColumns` binary-searches the same `SourceColumn` mapping used by
+`Layer::Present`: the menu covers `[begin, end)`, and bands cover
+`[0, begin)` and `[end, 400)`. For the 376x224 inset these are `[24, 376)`
+at 16:9 and `[66, 334)` at 21:9. No band overlaps a sampled layer column;
+skipped Map pixels and rounded corners keep their existing behaviour.
+
+Cost reasoning (not an emulator measurement): a shared static 11.25 KiB
+cache holds eight stripe phases, one solid column and three gradient columns,
+encoded for the output format and vertical direction. It rebuilds only when
+those change, with no heap allocation. Each rotated BGR8 band column costs
+one 720-byte memcpy: 48 copies / 33.75 KiB at 16:9, or 132 copies /
+92.81 KiB at 21:9 for the standard inset. This is about 12% / 33% of a
+400x240 BGR8 framebuffer. Both modes have the same per-frame copy cost;
+there is no per-pixel shading on the framebuffer. Row-major host surfaces
+use a pixel-copy fallback. See docs/UI.md and docs/PERF.md: this avoids reads
+and tiny framebuffer writes that trigger GPU downloads, but additional CPU
+writes may still cost host upload bandwidth. Actual Azahar speed needs user
+measurement; no emulated-time or wall-clock performance is claimed here.
+
+`tests/pillarbox_test.cpp` checks exact boundaries at 16:9 and 21:9,
+unit squeeze, off, compact areas, bottom surfaces, all five pixel formats,
+both column directions and row-major storage, corner/skip preservation and
+guard bytes. It also renders the actual native X menu at 21:9 to
+`analysis/private/pillarbox-tint.ppm` and `pillarbox-pattern.ppm`; the matching
+`*-stretched.ppm` files resample the destination frame to 560x240.
 
 ## Verification and open work
 
