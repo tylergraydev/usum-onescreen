@@ -37,6 +37,7 @@
 #include "UI/Device.hpp"
 #include "Where.hpp"
 #include "Widescreen.hpp"
+#include "FastText.hpp"
 
 namespace CTRPluginFramework
 {
@@ -111,6 +112,7 @@ namespace CTRPluginFramework
         WriteLog("settings: " + OneScreen::DescribeSettings(settings), false);
         WriteLog(OneScreen::SetWidescreenAspect(settings.aspect), false);
         OneScreen::BattleScreenSetLayout(settings.battleLayout);
+        WriteLog(OneScreen::ApplyFastTextSettings(s_game->offsets.sceneManager), false);
     }
 
     // Sets `key = value` in [section] of /usum-onescreen.ini (SetIniValue:
@@ -185,6 +187,40 @@ namespace CTRPluginFramework
                      false);
     }
 
+    static void SaveSpeedSetting(const std::string &key, const std::string &value)
+    {
+        std::string text;
+        if (!SaveSetting("speed", key, value, text)) return;
+        std::vector<std::string> warnings;
+        const auto saved = OneScreen::ParseSettings(text, warnings);
+        const auto &current = OneScreen::GetSettings();
+        const bool matches = key == "instant_text" ? saved.instantText == current.instantText
+            : key == "battle_messages" ? saved.battleMessages == current.battleMessages
+            : saved.battleBars == current.battleBars;
+        if (!matches)
+            WriteLog("settings: another " + key + " line overrides it at next boot; remove the extra one", false);
+    }
+
+    static void SetInstantText(bool enabled)
+    {
+        auto settings = OneScreen::GetSettings();
+        settings.instantText = enabled;
+        OneScreen::SetSettings(settings);
+        WriteLog(OneScreen::ApplyFastTextSettings(s_game->offsets.sceneManager), false);
+        SaveSpeedSetting("instant_text", enabled ? "on" : "off");
+    }
+
+    static void SetBattleSpeed(OneScreen::BattleSpeed speed)
+    {
+        auto settings = OneScreen::GetSettings();
+        settings.battleMessages = settings.battleBars = speed;
+        OneScreen::SetSettings(settings);
+        WriteLog(OneScreen::ApplyFastTextSettings(s_game->offsets.sceneManager), false);
+        WriteLog(std::string("battle speed: ") + OneScreen::BattleSpeedName(speed), false);
+        SaveSpeedSetting("battle_messages", OneScreen::BattleSpeedName(speed));
+        SaveSpeedSetting("battle_bars", OneScreen::BattleSpeedName(speed));
+    }
+
     // Test commands, one per line, in /usum-cmd.txt on the SD card. The file is
     // removed once read, and each command plus the resulting state is logged:
     //   move X Y | touch on | touch off | tap FRAMES | mode off|panel|full | status
@@ -212,6 +248,7 @@ namespace CTRPluginFramework
     //     screen: open-pokedex, open-party, open-bag, battle-run, close; Actions.hpp)
     //   battleui on | battleui off | battleui   (native battle menu on the top screen,
     //     Screens/BattleScreen.hpp; on by default)
+    //   fasttext [on|off] | battlespeed normal|fast|instant (apply and save [speed])
     //   battlelayout | battlelayout classic|bar|rail   (log / set the battle menu's look;
     //     setting it also saves [battle] layout to /usum-onescreen.ini)
     //   xmenu on|off|status | xmenu select NAME | xmenu open NAME   (native X menu,
@@ -391,6 +428,20 @@ namespace CTRPluginFramework
             OneScreen::BattleScreenSetEnabled(line == "battleui on");
         else if (line == "battleui")
             WriteLog(OneScreen::BattleScreenStatus(), false);
+        else if (line == "fasttext")
+            WriteLog(OneScreen::FastTextStatus(), false);
+        else if (line == "fasttext on" || line == "fasttext off")
+            SetInstantText(line == "fasttext on");
+        else if (line.compare(0, 12, "battlespeed ") == 0)
+        {
+            OneScreen::BattleSpeed speed;
+            if (!OneScreen::ParseBattleSpeed(line.substr(12), speed))
+            {
+                WriteLog("cmd: use battlespeed normal|fast|instant", false);
+                return;
+            }
+            SetBattleSpeed(speed);
+        }
         else if (line == "battlelayout")
             WriteLog(std::string("battle layout: ") + OneScreen::BattleLayoutName(OneScreen::BattleScreenLayout()),
                      false);
@@ -697,6 +748,10 @@ namespace CTRPluginFramework
         OneScreen::CursorUpdate();
         OneScreen::ButtonsUpdate();
 
+        const std::string speedLog = OneScreen::FastTextFrame(s_game->offsets.sceneManager);
+        if (!speedLog.empty())
+            WriteLog(speedLog, false);
+
         const std::string cullLog = OneScreen::WidescreenFrame();
         if (!cullLog.empty())
             WriteLog(cullLog, false);
@@ -806,9 +861,18 @@ namespace CTRPluginFramework
     // current state and are refreshed each time the menu opens.
     static MenuEntry *s_autoEntry = nullptr;
     static MenuEntry *s_layoutEntry = nullptr;
+    static MenuEntry *s_textEntry = nullptr;
+    static MenuEntry *s_speedEntry = nullptr;
 
     static void RefreshMenuNames(void)
     {
+        const auto &settings = OneScreen::GetSettings();
+        if (s_textEntry)
+            s_textEntry->Name() = std::string("Instant text: ") + (settings.instantText ? "on" : "off");
+        if (s_speedEntry)
+            s_speedEntry->Name() = std::string("Battle speed: ")
+                + (settings.battleMessages == settings.battleBars
+                    ? OneScreen::BattleSpeedTitle(settings.battleMessages) : "Custom");
         if (s_autoEntry != nullptr)
             s_autoEntry->Name() = std::string("Auto panel: ") + (OneScreen::AutoPanelEnabled() ? "on" : "off");
         if (s_layoutEntry != nullptr)
@@ -835,6 +899,23 @@ namespace CTRPluginFramework
     static void CycleBattleLayout(MenuEntry *entry)
     {
         SetBattleLayout(OneScreen::NextBattleLayout(OneScreen::BattleScreenLayout()), "menu");
+        RefreshMenuNames();
+    }
+
+    static void ToggleInstantText(MenuEntry *entry)
+    {
+        SetInstantText(!OneScreen::GetSettings().instantText);
+        RefreshMenuNames();
+    }
+
+    static void CycleBattleSpeed(MenuEntry *entry)
+    {
+        const auto &s = OneScreen::GetSettings();
+        const auto next = s.battleMessages != s.battleBars ? OneScreen::BattleSpeed::Normal
+            : s.battleMessages == OneScreen::BattleSpeed::Normal ? OneScreen::BattleSpeed::Fast
+            : s.battleMessages == OneScreen::BattleSpeed::Fast ? OneScreen::BattleSpeed::Instant
+            : OneScreen::BattleSpeed::Normal;
+        SetBattleSpeed(next);
         RefreshMenuNames();
     }
 
@@ -871,6 +952,12 @@ namespace CTRPluginFramework
         s_layoutEntry = new MenuEntry("Battle layout", nullptr, CycleBattleLayout,
                                       "A: change how the battle menu looks. Saved to usum-onescreen.ini.");
         menu += s_layoutEntry;
+        s_textEntry = new MenuEntry("Instant text", nullptr, ToggleInstantText,
+            "A: toggle instant typing. Page ends still need a press. Saved to usum-onescreen.ini.");
+        menu += s_textEntry;
+        s_speedEntry = new MenuEntry("Battle speed", nullptr, CycleBattleSpeed,
+            "A: cycle Normal, Fast, Instant for message waits and HP/EXP bars. Saved to usum-onescreen.ini.");
+        menu += s_speedEntry;
         menu += new MenuEntry("View settings", nullptr, ShowSettings,
                               "A: show the settings in use, read from /usum-onescreen.ini at boot.");
         menu += new MenuEntry("Reload settings file", nullptr, ReloadSettings,
