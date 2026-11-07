@@ -38,6 +38,24 @@ If the notice says `unsupported game …`, the game or its update version doesn'
 
 If you use an HD texture pack, turn off **Emulation → Configure… → Graphics → Enhancements → Use custom textures**. With the HD texture pack we tested, Ultra Sun crashes at boot when custom textures are on (`Surface is not suitable for custom upload` in Azahar's log). This happens with or without the plugin.
 
+## Widescreen menu side bands
+
+With experimental widescreen enabled, full-screen native menus get dark olive
+side bands by default. In the SD-root `usum-onescreen.ini`, choose:
+
+```ini
+[display]
+aspect = 21:9
+pillarbox = tint
+```
+
+Use `tint` for a solid dark fill with a soft edge, `pattern` for subtle diagonal
+stripes, or `off` to show the game's scene beside menus. Reload settings from
+the plugin menu after editing. Bands appear only above the original 5:3 aspect
+and only for full-screen native menus; smaller menus and the bottom screen
+keep their existing appearance. Match Azahar's stretched top-screen viewport
+to `aspect`; see [WIDESCREEN.md](WIDESCREEN.md) for setup and limitations.
+
 ## Controls
 
 These work everywhere:
