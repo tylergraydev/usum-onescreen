@@ -27,6 +27,7 @@ namespace OneScreen
                   && Screens::BattleKeys::CPadDown == (u32)Key::CPadDown, "battle menu key bits");
 
     static bool s_enabled = true;
+    static bool s_layoutLog = false;
     static Screens::BattleMenu s_menu;
     static Screens::BattleSnapshot s_snap;
     static u32 s_frames = 0;
@@ -218,6 +219,13 @@ namespace OneScreen
     void BattleScreenUpdate(u32 sceneManager, const std::string &scene, std::vector<std::string> &log)
     {
         s_frames++;
+        if (s_layoutLog)
+        {
+            const BattleLayout layout = s_menu.Layout();
+            log.push_back(std::string("battle-ui: layout ") + (layout == BattleLayout::Bar ? "bar"
+                          : layout == BattleLayout::Rail ? "rail" : "classic"));
+            s_layoutLog = false;
+        }
         // A catch ends in the Pokédex scene (Zukan) with the nickname
         // question; the helper stays up there until the next scene.
         static std::string lastScene;
@@ -358,6 +366,19 @@ namespace OneScreen
     {
         s_enabled = enabled;
         AutoPanelSetNativeBattle(enabled);
+    }
+
+    void BattleScreenSetLayout(BattleLayout layout)
+    {
+        s_menu.SetLayout(layout);
+        s_layoutLog = true;
+        // DrawKey hands the updated menu to the OSD callback on the next
+        // update; its existing area comparison rebuilds the layer there.
+    }
+
+    BattleLayout BattleScreenLayout(void)
+    {
+        return s_menu.Layout();
     }
 
     bool BattleScreenEnabled(void)

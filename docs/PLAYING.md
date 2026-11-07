@@ -47,7 +47,7 @@ These work everywhere:
 | **L+R** | Show the bottom screen on the top screen when you need it: off → corner panel → full view → off. It stays as you set it. |
 | **C-stick** | Move the touch cursor (a crosshair on the panel or full view). It starts slow for precise taps and speeds up while you hold it. |
 | **ZL** | Touch the bottom screen at the cursor, for as long as you hold it. The crosshair turns red while touching. |
-| **Select** | Open the plugin's own menu (CTRPF's default hotkey): Bottom screen on top, Auto panel, View settings, Reload settings file. |
+| **Select** | Open the plugin's own menu (CTRPF's default hotkey): Bottom screen on top, Auto panel, Battle layout, View settings, Reload settings file. |
 
 Every other button works as normal. Each native screen below also takes the buttons listed for it.
 
@@ -128,7 +128,20 @@ The defaults in the settings file's `[scenes]` section are: off for the title sc
 
 ## Settings file
 
-On the first run the plugin writes a commented `usum-onescreen.ini` in the root of the emulated SD card (`%APPDATA%\Azahar\sdmc\usum-onescreen.ini`). It sets the keys (`panel_key`, `touch_key`, `map_key`, cursor speed), the panel `size` and `corner`, `auto`, and the per-scene views. Unknown keys and bad values are skipped and logged. **Reload settings file** in the plugin menu (**Select**) reads it again without restarting. The full list is in the "Settings" section of [README.md](../README.md).
+On the first run the plugin writes a commented `usum-onescreen.ini` in the root of the emulated SD card (`%APPDATA%\Azahar\sdmc\usum-onescreen.ini`). It sets the keys (`panel_key`, `touch_key`, `map_key`, cursor speed), the panel `size` and `corner`, `auto`, the battle menu `layout`, and the per-scene views. Unknown keys and bad values are skipped and logged. **Reload settings file** in the plugin menu (**Select**) reads it again without restarting. The full list is in the "Settings" section of [README.md](../README.md).
+
+### Battle menu layout
+
+`[battle] layout` picks how the native battle menu looks: `classic` (the default, the original column on the right of the top screen), `bar` or `rail` (horizontal layouts, see [BATTLE-UI.md](BATTLE-UI.md)). Case doesn't matter; a bad value is logged and the default is kept.
+
+```ini
+[battle]
+layout = bar
+```
+
+**Battle layout** in the plugin menu (**Select**) cycles Classic → Bar → Rail → Classic with **A**. The change shows at once and is saved to `usum-onescreen.ini`, so it lasts after a restart. This is the first setting the plugin writes back to the file: only the `layout` line changes (or is added, with a `[battle]` section if the file has none); every other line, comment and line ending stays as it was. The other menu toggles, such as **Auto panel**, still last only until the next boot. The log says `settings: saved [battle] layout = bar`, or why it could not save.
+
+For testing, the `/usum-cmd.txt` command `battlelayout` logs the current layout, and `battlelayout classic|bar|rail` sets it and saves it, as the menu does.
 
 ## Known gaps
 

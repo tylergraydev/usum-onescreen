@@ -77,6 +77,12 @@ namespace Theme
     constexpr Color PromptFill = Rgb(0x00, 0x00, 0x00, 0xA0);
     constexpr Color PromptText = Rgb(0xFF, 0xFF, 0xFF);
 
+    // Battle command colours, close to the game's red / gold / green / blue.
+    constexpr Color BattleFight = Rgb(0xE8, 0x48, 0x43);
+    constexpr Color BattleBag = Rgb(0xF4, 0xB5, 0x35);
+    constexpr Color BattlePokemon = Rgb(0x59, 0xB8, 0x62);
+    constexpr Color BattleRun = Rgb(0x42, 0xA6, 0xE0);
+
     // --- Sizes (top screen pixels; the game's menus are drawn 1:1) ---
 
     constexpr s32 RowHeight    = 26;    // Bag rows are 26 px plus a 2 px shadow line
