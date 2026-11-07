@@ -314,12 +314,18 @@ try {
             check_widescreen(earlyhome, {'16:9'})
 
         installed_update(ziphome)
+        # A source-only build may omit the optional embedded plugin.
+        release_plugin = PLAYER.parent / 'usum-onescreen.3gx'
+        adjacent = app / 'usum-onescreen.3gx'
+        if not release_plugin.exists():
+            run(['setup', '--home', ziphome, '--rom', archive, '--azahar', fallback], 1, 'plugin is missing')
+            adjacent.write_bytes(b'synthetic adjacent plugin')
         run(['setup', '--home', ziphome, '--rom', archive, '--azahar', fallback],
             0, 'Ultra Sun update v1.2', 'Ready to play')
         assert f'rom={extracted / "game.3ds"}' in (ziphome / 'usum-onescreen-app.ini').read_text()
         # The copied launcher has no adjacent plugin: require actual embedded bytes.
         embedded = ziphome / 'azahar/user/sdmc/luma/plugins/00040000001B5000/usum-onescreen.3gx'
-        assert embedded.read_bytes() == (PLAYER.parent / 'usum-onescreen.3gx').read_bytes()
+        assert embedded.read_bytes() == (release_plugin if release_plugin.exists() else adjacent).read_bytes()
         assert not list(ziphome.glob('plugin-*.tmp'))
         # Adjacent and explicit plugin sources override the embedded one.
         adjacent = app / 'usum-onescreen.3gx'
@@ -328,7 +334,8 @@ try {
         assert embedded.read_bytes() == adjacent.read_bytes()
         run(['setup', '--home', ziphome, '--rom', games[SUN], '--plugin', plugin], 0, 'Ready to play')
         assert embedded.read_bytes() == plugin.read_bytes()
-        adjacent.unlink()
+        if release_plugin.exists():
+            adjacent.unlink()
 
         download = root / 'download.zip'
         with zipfile.ZipFile(download, 'w') as z:
@@ -403,7 +410,176 @@ try {
         state.write_text('\n'.join(line for line in state.read_text().splitlines()
                                    if not line.startswith('title_id=')))
         run(['status', '--home', home], 0, 'game: Ultra Sun', 'ready to play')
-    print('PASS: validation, cross-game rejection, title state/paths, bundled source priority and immutability, installed-update checks, fallback source; offline pinned download and hash refusal; zip classification, traversal safety, reuse and state; embedded/adjacent/explicit plugin priority; widescreen choices, Auto thresholds, custom UI preservation, comment retention, invalid-value immutability, stretch sync, stale-state preservation, numeric-zero/bad-value handling and per-game cleanup.')
+        # Portable saves: discovery, no-save skip, retention, restoration and isolation.
+        options = root / 'options'
+        installed_update(options)
+        run(['setup', '--home', options, '--rom', games[SUN], '--azahar', fallback,
+             '--plugin', plugin], 0, 'Ready to play')
+        run(['backup', '--home', options], 0, 'No save yet')
+        assert not (options / 'backups').exists()
+        save = options / 'azahar/user/sdmc/Nintendo 3DS/custom-id0/custom-id1/title/00040000/001b5000/data'
+        save.mkdir(parents=True)
+        (save / 'nested').mkdir()
+        (save / 'nested/extra').write_bytes(b'synthetic nested save')
+        for number in range(12):
+            (save / 'main').write_bytes(f'synthetic save {number}'.encode())
+            run(['backup', '--home', options], 0)
+        backups = options / f'backups/{SUN:016X}'
+        names = sorted(p.name for p in backups.iterdir())
+        assert len(names) == 10 and len(set(names)) == 10
+        run(['backups', '--home', options], 0, names[0], 'bytes')
+        oldest = (backups / names[0] / 'data/main').read_bytes()
+        (save / 'obsolete').write_bytes(b'remove on restore')
+        run(['restore', '--home', options, names[0]], 0, 'Save restored')
+        assert (save / 'main').read_bytes() == oldest
+        assert not (save / 'obsolete').exists()
+        newest = sorted(backups.iterdir())[-1]
+        assert (newest / 'data/main').read_bytes() == b'synthetic save 11'
+        assert len(list(backups.iterdir())) == 10
+        run(['restore', '--home', options, '../escape'], 1, 'backup name')
+        metadata = newest / 'source.txt'
+        original = metadata.read_text()
+        metadata.write_text(r'..\outside')
+        run(['restore', '--home', options, newest.name], 1, 'Invalid backup save path')
+        metadata.write_text(original)
+        # Missing current save is recovered using the recorded portable relative path.
+        shutil.rmtree(save)
+        run(['restore', '--home', options, newest.name], 0)
+        assert (save / 'main').read_bytes() == b'synthetic save 11'
+        second = options / 'azahar/user/sdmc/Nintendo 3DS/other/id/title/00040000/001b5000/data'
+        second.mkdir(parents=True)
+        run(['backup', '--home', options], 1, 'Multiple save folders')
+        second.rmdir()
+
+        op_plugin, op_qt = widescreen_files(options)
+        # Keep does not touch Qt config, including existing default flags.
+        op_qt.write_text('[Renderer]\nresolution_factor\\default=true\nresolution_factor=7\n')
+        original = op_qt.read_bytes()
+        run(['set', '--home', options, 'graphics=keep'], 0)
+        assert op_qt.read_bytes() == original
+        for choice, factor in [('native', 1), ('high', 3), ('ultra', 5)]:
+            custom = options / 'azahar/user/config/custom/game.ini'
+            custom.parent.mkdir(exist_ok=True)
+            custom.write_text('[Renderer]\nresolution_factor\\default=false\nresolution_factor=2\nkeep=1\n')
+            run(['set', '--home', options, f'graphics={choice}'], 0)
+            config = configparser.ConfigParser()
+            config.read(op_qt)
+            assert config['Renderer']['resolution_factor'] == str(factor)
+            assert config['Renderer'][r'resolution_factor\default'] == 'false'
+            assert 'resolution_factor' not in custom.read_text() and 'keep=1' in custom.read_text()
+        for bad in ('invalid', '2'):
+            before = op_qt.read_bytes()
+            run(['set', '--home', options, 'graphics=' + bad], 1, 'bad graphics')
+            assert op_qt.read_bytes() == before
+        # Plugin comments and sections are retained; CLI values load in the window.
+        op_plugin.write_text('[battle]\nlayout = rail ; keep battle comment\n[speed]\ninstant_text = on # keep speed comment\nbattle_messages = fast\nbattle_bars = fast\n[controls]\nglyphs = nintendo\n')
+        run(['set', '--home', options, 'layout=bar', 'glyphs=playstation'], 0)
+        assert '; keep battle comment' in op_plugin.read_text()
+        assert '# keep speed comment' in op_plugin.read_text()
+
+        script = root / 'options-test.ps1'
+        script.write_text(r"""param($executable, $target)
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Windows.Forms
+$assembly = [Reflection.Assembly]::LoadFile($executable)
+$presetType = $assembly.GetType('UsumOneScreen.ControlPreset')
+$resolve = $assembly.GetType('UsumOneScreen.Win32').GetMethod('GlyphsForVendors')
+foreach ($case in @(@(0x045E, 'xbox'), @(0x054C, 'playstation'), @(0x057E, 'nintendo'), @(0xFFFF, '3ds'))) {
+    $actual = $resolve.Invoke($null, [object[]]@([System.UInt32[]]@($case[0]), [Enum]::Parse($presetType, 'Keyboard')))
+    if ($actual -ne $case[1]) { throw "Bad vendor mapping: $actual" }
+}
+foreach ($case in @(@('Keyboard', '3ds'), @('Gamepad', 'xbox'), @('Custom', 'xbox'))) {
+    $actual = $resolve.Invoke($null, [object[]]@([System.UInt32[]]@(), [Enum]::Parse($presetType, $case[0])))
+    if ($actual -ne $case[1]) { throw "Bad no-device fallback: $actual" }
+}
+$launcherHome = [Activator]::CreateInstance($assembly.GetType('UsumOneScreen.Home'), [object[]]@($target))
+$form = [Activator]::CreateInstance($assembly.GetType('UsumOneScreen.MainForm'), [object[]]@($launcherHome))
+$flags = [Reflection.BindingFlags]'Instance, NonPublic'
+function Field($name) { $form.GetType().GetField($name, $flags).GetValue($form) }
+try {
+    foreach ($case in @(@('graphics', 3), @('battle', 1), @('speed', 1), @('glyphs', 2))) {
+        if ((Field $case[0]).SelectedIndex -ne $case[1]) { throw "Wrong ini readback: $($case[0])" }
+    }
+    foreach ($index in @(0, 1, 2)) {
+        (Field 'speed').SelectedIndex = $index
+        if (!$form.GetType().GetMethod('SavePluginSettings', $flags).Invoke($form, @())) { throw 'Save failed' }
+        $ini = $assembly.GetType('UsumOneScreen.PluginIni').GetMethod('Load').Invoke($null, @($launcherHome.PluginIniPath))
+        $expected = @('normal','fast','instant')[$index]
+        foreach ($key in @('battle_messages', 'battle_bars')) {
+            if ($ini.Get($key) -ne $expected) { throw "Speed not saved: $key" }
+        }
+        if ($ini.Get('instant_text') -ne @('off','on','on')[$index]) { throw 'Wrong instant text' }
+    }
+    # An explicit default-valued icon choice must survive a missing glyph key.
+    $content = [IO.File]::ReadAllText($launcherHome.PluginIniPath) -replace '(?m)^glyphs[^\r\n]*[\r\n]*', ''
+    [IO.File]::WriteAllText($launcherHome.PluginIniPath, $content)
+    $launcherHome.SetState('glyphs', '3ds')
+    # Run the exact preparation used by Play, without any Process.Start.
+    $before = [IO.Directory]::GetDirectories([IO.Path]::Combine($target, 'backups', '00040000001B5000'))
+    $previous = [IO.File]::ReadAllText([IO.Path]::Combine(($before | Sort-Object | Select-Object -Last 1), 'source.txt'))
+    $source = [IO.Path]::Combine($launcherHome.Sdmc, $previous, 'main')
+    [IO.File]::WriteAllText($source, 'before Play synthetic save')
+    $assembly.GetType('UsumOneScreen.Home').GetMethod('PrepareLaunch').Invoke($launcherHome, @())
+    $after = [IO.Directory]::GetDirectories([IO.Path]::Combine($target, 'backups', '00040000001B5000')) | Sort-Object
+    if ([IO.File]::ReadAllText([IO.Path]::Combine($after[-1], 'data', 'main')) -ne 'before Play synthetic save') { throw 'Play did not back up' }
+    $ini = $assembly.GetType('UsumOneScreen.PluginIni').GetMethod('Load').Invoke($null, @($launcherHome.PluginIniPath))
+    if (!$ini.Has('glyphs') -or $ini.Get('glyphs') -ne '3ds') { throw 'Explicit 3DS reverted to Auto' }
+    $launcherHome.SetState('glyphs', 'auto')
+    $assembly.GetType('UsumOneScreen.Home').GetMethod('PrepareLaunch').Invoke($launcherHome, @())
+    $ini = $assembly.GetType('UsumOneScreen.PluginIni').GetMethod('Load').Invoke($null, @($launcherHome.PluginIniPath))
+    $detected = $assembly.GetType('UsumOneScreen.Win32').GetMethod('DetectGlyphs').Invoke($null, @($launcherHome.CurrentControls()))
+    if ($ini.Get('glyphs') -ne $detected) { throw 'Auto did not refresh at Play' }
+    $form.Show()
+    [Windows.Forms.Application]::DoEvents()
+    foreach ($scale in @(1.0, 1.5)) {
+        if ($scale -gt 1) { $form.Scale([Drawing.SizeF]::new(1.5, 1.5)) }
+        $form.PerformLayout()
+        foreach ($name in @('graphics','battle','speed','glyphs','widescreen')) {
+            $c = Field $name
+            if (!$c.Visible -or $c.Width -lt 140 * $scale -or $c.Right -gt $c.Parent.ClientSize.Width) { throw "Clipped control at scale ${scale}: $name" }
+        }
+    }
+} finally { $form.Dispose() }
+""")
+        result = subprocess.run(['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass',
+                                 '-File', str(script), str(exe), str(options)],
+                                capture_output=True, encoding='utf-8', env=env, timeout=30)
+        assert result.returncode == 0, result.stdout + result.stderr
+
+        # Embedded own codes never change: only enabled markers may change.
+        def cheat_sections(path):
+            result, name = {}, None
+            for line in path.read_text(encoding='utf-8-sig').splitlines():
+                if line.startswith('['):
+                    name = line[1:-1]
+                    result[name] = []
+                elif name and line.strip() and line != '*citra_enabled':
+                    result[name].append(line)
+            return result
+        drafted = PLAYER / f'cheats/{SUN:016X}.txt'
+        names = list(cheat_sections(drafted))
+        output = run(['cheats', '--home', options], 0)
+        assert output.count('off ') == len(names) == 6
+        shiny, undo = [name for name in names if name.startswith('Always shiny')]
+        cheat_file = options / f'azahar/user/cheats/{SUN:016X}.txt'
+        for name in names:
+            run(['cheats', '--home', options, 'on', name], 0, 'on  ' + name)
+            assert cheat_sections(cheat_file) == cheat_sections(drafted)
+        output = run(['cheats', '--home', options], 0, 'off ' + shiny, 'on  ' + undo)
+        run(['cheats', '--home', options, 'on', shiny], 0, 'off ' + undo)
+        run(['cheats', '--home', options, 'off', shiny], 0, 'off ' + shiny)
+        run(['cheats', '--home', options, 'on', 'nonexistent'], 1, 'Unknown cheat')
+        sun_bytes = cheat_file.read_bytes()
+        moon_content = options / 'azahar/user/sdmc/Nintendo 3DS/0/0/title/0004000e/001b5100/content'
+        moon_content.mkdir(parents=True)
+        (moon_content / '0.tmd').write_bytes(tmd(MOON | 0xE00000000, 0x0820))
+        run(['setup', '--home', options, '--rom', games[MOON], '--plugin', plugin], 0)
+        moon_cheats = options / f'azahar/user/cheats/{MOON:016X}.txt'
+        assert moon_cheats.exists() and '*citra_enabled' not in moon_cheats.read_text()
+        assert cheat_file.read_bytes() == sun_bytes
+        run(['backup', '--home', options], 0, 'No save yet')
+        assert not (options / f'backups/{MOON:016X}').exists()
+    print('PASS: save discovery/retention/restore/isolation; graphics keep/presets; cheat resources, code preservation and mutual exclusion; controller vendor/fallback mapping; options ini readback and DPI layout; battle/speed writes; validation, cross-game rejection, title state/paths, bundled source priority and immutability, installed-update checks, fallback source; offline pinned download and hash refusal; zip classification, traversal safety, reuse and state; embedded/adjacent/explicit plugin priority; widescreen choices, Auto thresholds, custom UI preservation, comment retention, invalid-value immutability, stretch sync, stale-state preservation, numeric-zero/bad-value handling and per-game cleanup.')
 
 
 if __name__ == '__main__':

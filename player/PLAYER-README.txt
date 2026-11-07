@@ -46,6 +46,20 @@ Settings
   azahar\user\config\qt-config.ini. Original turns stretch off.
   Command line: UsumOneScreen set aspect=16:9 (also auto, 0, off, 21:9 or
   a positive float). Before Azahar is copied, stretch applies on setup.
+- Game options: Battle menu (Classic, Bar, Rail), Text and battle speed
+  (Normal, Fast, Instant), Graphics (Keep, Native 1x, High 3x, Ultra 5x).
+  21:9 widescreen looks best on High or Ultra. Keep leaves Azahar's scale alone.
+- Button icons: Auto detects Xbox, PlayStation or Nintendo controllers;
+  you can override it, including 3DS icons. Icon drawing needs a future plugin.
+- Backups...: Play backs up your save automatically, keeping the newest ten
+  per game in backups\TITLEID. Back up now, restore or open that folder here.
+  Restore asks first and backs up the current save. Close Azahar first.
+  Backups include save data only, not extdata. No save yet means no backup.
+- Cheats...: Back up first. Tick cheats, then Save; changes apply next start.
+  Close Azahar before saving cheats. Shiny and its undo cannot both be on.
+  Money/items stay changed after disabling cheats. Item cheats need an existing
+  slot and clear its NEW badge and Free Space position. Restart with shiny off
+  to undo its memory patch. Sun and Moon keep separate selections.
 - Fullscreen: F11 switches, Esc leaves it.
 
 Known problems
