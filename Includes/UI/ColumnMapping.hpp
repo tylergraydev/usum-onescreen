@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include "UI/Raster.hpp"
 
 namespace OneScreen
 {
@@ -18,5 +19,33 @@ namespace UI
         if (source >= 399.5) return 400;
         return (int)std::floor(source + 0.5);
     }
+
+    struct ColumnRange
+    {
+        int begin, end; // Menu coverage [begin, end); bands are its complement.
+        bool active;
+    };
+
+    inline ColumnRange PillarboxColumns(const Surface &screen, const Rect &area)
+    {
+        // Full-screen native areas contain the standard 376x224 inset.
+        // Compact Options, battle controls, badges and bottom output don't qualify.
+        if (screen.width != ScreenW || screen.height != ScreenH || !(screen.squeeze > 1.0f)
+            || screen.pillarbox == Pillarbox::Off || area.Empty()
+            || area.x > 12 || area.y > 8 || area.Right() < 388 || area.Bottom() < 232)
+            return { 0, 0, false };
+        const auto lowerBound = [&](int source) {
+            int lo = 0, hi = ScreenW;
+            while (lo < hi)
+            {
+                const int mid = lo + (hi - lo) / 2;
+                if (SourceColumn(mid, screen.squeeze) < source) lo = mid + 1;
+                else hi = mid;
+            }
+            return lo;
+        };
+        return { lowerBound(area.x), lowerBound(area.Right()), true };
+    }
+
 }
 }

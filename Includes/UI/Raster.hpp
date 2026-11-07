@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include "Settings.hpp"
 
 // Drawing primitives for plugin-drawn menus. Nothing here depends on CTRPF or
 // libctru, so the same code builds for the 3DS and for the PC host test.
@@ -61,6 +62,7 @@ namespace UI
         s32         height;
         // Presentation only: top-screen stretch, supplied by UI/Device.
         float       squeeze = 1.0f;
+        Pillarbox   pillarbox = Pillarbox::Tint;
     };
 
     u32  BytesPerPixel(PixelFormat format);

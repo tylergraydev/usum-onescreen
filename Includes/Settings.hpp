@@ -24,6 +24,7 @@ namespace OneScreen
     enum class SceneMode : uint8_t { Off, Panel, Full };
 
     enum class CursorSource : uint8_t { CStick, DPad, CirclePad };
+    enum class Pillarbox : uint8_t { Tint, Pattern, Off };
     enum class PanelSize : uint8_t { Half, TwoThirds };
     enum class PanelCorner : uint8_t { BottomRight, BottomLeft, TopRight, TopLeft };
     // Native battle menu look ([battle] layout): Classic is the original
@@ -45,6 +46,7 @@ namespace OneScreen
         PanelSize    panelSize = PanelSize::Half;
         PanelCorner  panelCorner = PanelCorner::BottomRight;
         bool         autoPanel = false;                // native menus first; the panel is a fallback
+        Pillarbox    pillarbox = Pillarbox::Tint;
         float        aspect = 0.0f;                    // 0: original camera defaults
         BattleLayout battleLayout = BattleLayout::Classic;
         bool         instantText = false;
