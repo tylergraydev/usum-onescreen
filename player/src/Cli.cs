@@ -20,6 +20,10 @@ namespace UsumOneScreen
                          start the game; --wait prints the plugin's boot log
   set KEY=VALUE...       plugin settings (panel_key touch_key map_key cursor_move
                          cursor_speed size corner auto aspect) and controls=PRESET
+  backup / backups       create / list save backups
+  restore NAME           restore a backup (backs up the current save first)
+  cheats [on NAME|off NAME]  list / change cheats
+  set graphics=keep|native|high|ultra  set rendering resolution
   status                 show the setup
   snapshot PNG           draw the window into PNG and exit (for tests)
 
@@ -49,6 +53,17 @@ namespace UsumOneScreen
                     case "setup": return SetupCommand(home, list);
                     case "play": return Play(home, list);
                     case "set": return Set(home, list);
+                    case "backup":
+                        Leftover(list);
+                        Console.WriteLine(Backups.Create(home) ?? "No save yet; skipped."); return 0;
+                    case "backups":
+                        Leftover(list);
+                        foreach (var path in Backups.List(home)) Console.WriteLine(System.IO.Path.GetFileName(path) + "  " + Backups.Size(home, path) + " bytes");
+                        return 0;
+                    case "restore":
+                        if (list.Count != 1) throw new SetupException("restore needs one backup NAME");
+                        Backups.Restore(home, list[0]); Console.WriteLine("Save restored."); return 0;
+                    case "cheats": return CheatCommand(home, list);
                     case "status": return Status(home);
                     case "snapshot": return Snapshot(home, list);
                     default:
@@ -56,7 +71,7 @@ namespace UsumOneScreen
                         return command == "help" || command == "--help" || command == "-h" ? 0 : 2;
                 }
             }
-            catch (SetupException e)
+            catch (Exception e) when (e is SetupException || e is System.IO.IOException || e is UnauthorizedAccessException)
             {
                 Console.Error.WriteLine("error: " + e.Message);
                 return 1;
@@ -178,11 +193,36 @@ namespace UsumOneScreen
             }
         }
 
+        static int CheatCommand(Home home, List<string> args)
+        {
+            var entries = Cheats.Load(home);
+            if (args.Count > 0)
+            {
+                if (args.Count < 2 || (args[0] != "on" && args[0] != "off")) throw new SetupException("cheats on NAME|off NAME");
+                string name = string.Join(" ", args.Skip(1));
+                // The exact name, else the one cheat whose name starts with it ("max money").
+                var entry = entries.FirstOrDefault(e => e.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+                if (entry == null)
+                {
+                    var matches = entries.Where(e => e.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase)).ToList();
+                    if (matches.Count > 1)
+                        throw new SetupException("More than one cheat starts with that; use more of the name: "
+                                                 + string.Join(", ", matches.Select(e => e.Name)));
+                    entry = matches.SingleOrDefault();
+                }
+                if (entry == null) throw new SetupException("Unknown cheat name; use cheats to list names.");
+                Cheats.Enable(entries, entry, args[0] == "on");
+                Cheats.Save(home, entries);
+            }
+            foreach (var entry in entries) Console.WriteLine((entry.Enabled ? "on  " : "off ") + entry.Name);
+            return 0;
+        }
+
         static int Set(Home home, List<string> args)
         {
             var ini = PluginIni.Load(home.PluginIniPath);
             bool pluginChanged = false;
-            string aspectChoice = null;
+            string aspectChoice = null, graphicsChoice = null, glyphChoice = null;
             ControlPreset? controls = null;
             foreach (var a in args)
             {
@@ -196,6 +236,12 @@ namespace UsumOneScreen
                         throw new SetupException("run setup first");
                     controls = ParsePreset(value);
                 }
+                else if (key == "graphics")
+                {
+                    if (!GameOptions.Graphics.Contains(value.ToLowerInvariant())) throw new SetupException("bad graphics");
+                    graphicsChoice = value.ToLowerInvariant();
+                }
+                else if (key == "glyphs" && value.Equals("auto", StringComparison.OrdinalIgnoreCase)) glyphChoice = "auto";
                 else if (PluginIni.Keys.Contains(key))
                 {
                     string error = PluginSettings.Validate(key, value);
@@ -206,6 +252,7 @@ namespace UsumOneScreen
                         aspectChoice = value.ToLowerInvariant();
                         value = Home.ResolveAspect(aspectChoice);
                     }
+                    if (key == "glyphs") glyphChoice = value.ToLowerInvariant();
                     ini.Set(key, value);
                     pluginChanged = true;
                 }
@@ -214,12 +261,15 @@ namespace UsumOneScreen
             }
             if (pluginChanged)
                 ini.Save(home.PluginIniPath);
+            if (glyphChoice != null) home.SetState("glyphs", glyphChoice);
+            if (graphicsChoice != null) GameOptions.SetGraphics(home, graphicsChoice);
             if (aspectChoice != null)
                 home.SetState("aspect", aspectChoice);
             if (controls.HasValue)
                 home.WriteConfig(controls.Value);
             else if (aspectChoice != null && home.HasAzahar)
                 home.SyncWidescreen();
+            if (glyphChoice != null && home.HasAzahar) GameOptions.Sync(home);
             return 0;
         }
 
