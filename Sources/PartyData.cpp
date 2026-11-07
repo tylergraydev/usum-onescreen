@@ -95,6 +95,7 @@ namespace OneScreen
         mon.ability = plain[0x14];
         mon.nature = plain[0x1C];
         mon.gender = (plain[0x1D] >> 1) & 3;
+        mon.altForm = plain[0x1D] >> 3;
         // PK7 AbilityNumber is +0x15 (low 3 bits); +0x16 is markings.
         mon.hiddenAbility = (plain[0x15] & 7) == 4;
         const u32 pid = Get32(plain, 0x18);
