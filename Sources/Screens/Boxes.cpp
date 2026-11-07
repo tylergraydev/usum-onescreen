@@ -178,12 +178,14 @@ namespace OneScreen
             const Pk7 mon = ReadBoxMon(storage, s_game.tray, i);
             s_view.slots[i] = BoxMonLabel(mon);
             s_view.slotBalls[i] = mon.ball;
+            s_view.slotShiny[i] = mon.shiny && !mon.isEgg && mon.form != Pk7Form::Invalid;
         }
         for (u32 i = 0; i < BoxPartySlots; i++)
         {
             const Pk7 mon = s_game.partyValid ? ReadParam(s_game.party[i]) : Pk7();
             s_view.party[i] = s_game.partyValid ? BoxMonLabel(mon) : "";
             s_view.partyBalls[i] = mon.ball;
+            s_view.partyShiny[i] = mon.shiny && !mon.isEgg && mon.form != Pk7Form::Invalid;
         }
         s_refreshedAt = s_frames;
         s_dirty = true;

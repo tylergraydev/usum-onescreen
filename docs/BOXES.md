@@ -18,6 +18,13 @@ and drives it with taps through the action layer (`docs/ACTIONS.md`).
 
 ## What it shows
 
+A small red shape star in the upper-right corner of an occupied box or party
+cell marks a shiny Pokémon. The native grid uses name plates rather than
+Pokémon sprites, so the corner mark sits on that plate. Eggs have no star.
+The marker only changes drawing; moving, carrying and cursor controls are
+unchanged. HA is shown only in the native Party summary, not in Boxes.
+`analysis/private/boxes-preview.ppm` includes synthetic shiny box/party cells.
+
 ```
   ◀ (     Box 1    1/8 ) ▶   [(ball) Ledyba          ]   the Pokémon at the cursor
   [Buneary][Ledyba ][Yungoos][Pikipek][Yungoos][Caterpie]

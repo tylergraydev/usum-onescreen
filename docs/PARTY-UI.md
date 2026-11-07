@@ -79,8 +79,28 @@ is not captured.
 
 Summary: the game keeps its keys (Up/Down change Pokémon, Left/Right its pages,
 A its move check, B back to the list). **Y** hides the native page to show the
-game's own top page (stats hexagon, memo) and shows it again; only Y is
-captured.
+game's own top page (stats hexagon, memo) and shows it again.
+
+**X** toggles the native Details / **Judge** page (X and Y are captured in
+the summary). X also restores the native view if Y hid it. Left/Right still
+switch the game's pages; Up/Down still follow its Pokémon selection. Leaving
+the summary resets the native view to Details.
+
+Judge shows HP, Atk, Def, SpA, SpD, Spe: each raw IV number and judge word,
+each EV number and a bar out of 252, plus EV total / 510. Words: 31 Best,
+30 Fantastic, 26-29 Very good, 16-25 Pretty good, 1-15 Decent, 0 No good.
+A Hyper Training flag replaces the word with "Hyper trained" while retaining
+the original IV number. Eggs show only "Egg" with no stats or markers.
+
+A small red shape star beside a name marks shininess in the native Party list
+and summary header. A small **HA** pill beside the summary's ability marks
+the hidden ability slot. These markers do not change cursor or action logic.
+PK7 layout verification, including the corrected ability-number offset
+**0x15** (0x16 is markings), is recorded in `docs/RE3-party-bag.md`.
+
+Host drawing tests write `analysis/private/summary-judge-preview.ppm` as well
+as the existing party/summary previews; the synthetic examples include shiny
+and HA markers and a Hyper Trained Speed row.
 
 ## Carrying a choice out
 

@@ -475,7 +475,12 @@ static void TestDraw(const char *preview)
     for (u32 i = 0; i < 5; i++)
         view.party[i] = party[i];
     view.cursor = 8;
+    view.slotShiny[8] = true;
+    view.partyShiny[2] = true;
     DrawBoxes(canvas, view);
+    const UI::Rect shinyCell = BoxesCellRect(8);
+    const UI::Color shinyRed = At(canvas, shinyCell.Right() - 6, shinyCell.y + 6);
+    CHECK(shinyRed.r > 200 && shinyRed.g < 40 && shinyRed.b < 40);
 
     // Nothing outside the area is touched (the Layer copies only it).
     const UI::Color outside = At(canvas, BoxesArea.x - 1, BoxesArea.y + 50);

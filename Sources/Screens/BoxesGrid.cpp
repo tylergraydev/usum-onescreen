@@ -383,6 +383,12 @@ namespace OneScreen
                                 && (party || view.heldTray == (int)view.tray);
             DrawCell(canvas, BoxesCellRect(i), label, party, i == view.cursor, carrying,
                      source || !view.busy.empty(), view.held);
+            const bool shiny = party ? view.partyShiny[i - BoxSlots] : view.slotShiny[i];
+            if (shiny && !label.empty())
+            {
+                const UI::Rect cell = BoxesCellRect(i);
+                Theme::DrawShiny(canvas, cell.Right() - 11, cell.y + 1);
+            }
         }
 
         // Footer: the button prompts while the screen takes keys, else what
