@@ -150,6 +150,67 @@ pixel (x, y) is texel (texW - 1 - y, x). Every icon below has it.
   by decoding entries 0-39 and in the demo. Higher item IDs were not
   mapped (USUM has ~960 items and 769 icons, so the game uses a table).
 
+## Pokémon box icons: `a/0/6/2`
+
+The 40x30 "menu sprites" the game's Box shows. Read on demand by the
+native Boxes (`docs/BOXES.md`, "Icons"), not by the shared service:
+`Includes/UI/PokeIcons.hpp`, `Sources/UI/PokeIcons.cpp` (pure, host-tested
+in `tests/poke_icons_test.cpp`).
+
+- **Archive**: `a/0/6/2` (469 KB, not in the v1.2 update), GARC v6, 1154
+  entries, one variant each. Every entry is LZ11 (194-758 bytes packed) of
+  a 4136-byte BFLIM: 64x32, format 7 (RGBA5551), flag 4 (stored
+  transposed, a 32x64 texture). The picture is the 40x30 at (12, 1): the
+  union of every icon's opaque pixels is exactly x 12-51, y 1-30 (checked
+  on all 1154). Typical content: x 9-31, y 6-28 of the 40x30 (median),
+  feet on the bottom rows.
+- **Order**: by species, each species' forms next to it, but not in form
+  order (Alolan Rattata 25 before Rattata 26; Raticate 27 Alolan, 28, 29
+  Totem), with extra entries for female icons and right-facing variants.
+  Entry 0 is the "no Pokémon" ball, 1153 the egg. So the index can't be
+  computed; the game looks it up.
+- **The game's lookup** (code.bin, both games at the same address,
+  checked byte for byte): `0x30CC1C` (`stmdb sp!, {r4-r8, lr}`,
+  `cmp r0, #0x328`, ...), called through `0x30CD44` with a
+  `PokeTool::SimpleParam`-like struct (u16 species +0, u8 form +2, u8
+  sex +3, s8 egg +5) by `App::Tool::PokeIconTexPool` (ARC ID 62 =
+  `a/0/6/2`, the index of `"a/0/6/2"` in code.bin's `a/x/y/z` path
+  table). Its literal pool: `+0xCC` = 1153 (the egg icon), `+0xD0` =
+  `0x5BFD50`, the table: 808 entries (species 0-807) of 16 bytes:
+
+  | Offset | Field |
+  |---|---|
+  | +0 | u16 icon |
+  | +2 | u16 female icon (= icon when there is no female picture) |
+  | +4 | u32 pointer to u16 form icons, or 0 |
+  | +8 | u32 pointer to u16 right-facing form icons, or 0 (Pikachu, Unown, Magearna) |
+  | +12 | u16 form count of those arrays |
+
+  The function: egg flag set, or species 808 / 809 → the egg icon
+  (1153); species above 807 → species 0; then, with the "facing right"
+  argument and a right-facing array, that array; else form < count →
+  `forms[form]`; else sex 1 (female) → the female icon; else the icon.
+  The plugin does the same with the "facing right" argument 0 (the Box
+  shows icons facing left). Examples: Venusaur `{3, 4}`, Charizard
+  `{7, 8, 9}`, Rattata `{26, 25}`, Raticate `{28, 27, 29}`, Pikachu 8
+  forms `{34, 40, 37, 39, 38, 43, 42, 35}`, Unfezant (521) icon 696,
+  female 695, Arceus all 18 forms 664 (one icon), Scatterbug and Spewpa
+  all 20 forms one icon, Vivillon 885-904, Magearna `{1143, 1142}`. The
+  1153 distinct indices of the table plus the egg cover all 1154 entries.
+- **Form and sex** come from the Pokémon's data: PK7 `0x1D` bits 3-7
+  (form) and bits 1-2 (sex), `Pk7::altForm` / `Pk7::gender`.
+- **Found by**: the RTTI names `N3App4Tool15PokeIconTexDataE` /
+  `...PokeIconTexPoolE` → their vtables → the pool's constructor storing
+  `0x3E`, its loader `0x2D490C` calling `0x30CD44` (Ghidra,
+  `tools/ghidra/decompile.sh`). A model index table in `a/1/4/0` (a `BD`
+  pack: u16 first model per species, then per-model flags) has a similar
+  order but fewer entries (1029; no female or cap icons) and is not used.
+
+The plugin checks the function's first four words and that the table's
+species 1 entry is `{1, 1, 0, 0, 0}` before using it; on another build it
+logs `boxes: icons not loaded (icon lookup not found ...)` and the Boxes
+show names only.
+
 ## Data
 
 - **Move table**: `a/0/1/1` entry 0 is a `WD` pack of 729 entries (one per
