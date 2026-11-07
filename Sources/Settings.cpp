@@ -183,6 +183,13 @@ namespace OneScreen
             if (!ParseBattleSpeed(value, k == "battle_messages" ? s.battleMessages : s.battleBars))
                 return "bad " + key + " '" + value + "' (use normal, fast or instant)";
         }
+        else if (k == "pillarbox")
+        {
+            if (v == "tint") s.pillarbox = Pillarbox::Tint;
+            else if (v == "pattern") s.pillarbox = Pillarbox::Pattern;
+            else if (v == "off") s.pillarbox = Pillarbox::Off;
+            else return "bad pillarbox '" + value + "' (use tint, pattern or off)";
+        }
         else if (k == "aspect")
         {
             if (!ParseAspect(value, s.aspect))
@@ -333,6 +340,8 @@ namespace OneScreen
             "; Experimental 3D camera aspect: 0/off (original), 16:9, 21:9 or a positive float.\n"
             "; Only new cameras change; see docs/WIDESCREEN.md.\n"
             "aspect = 0\n"
+            "; Side bands for full-screen native menus in widescreen: tint, pattern or off.\n"
+            "pillarbox = tint\n"
             "\n"
             "[battle]\n"
             "; Native battle menu look: classic, bar or rail. The plugin menu's\n"
@@ -457,6 +466,7 @@ namespace OneScreen
 
     std::string DescribeSettings(const Settings &s)
     {
+        static const char *pillarboxes[] = { "tint", "pattern", "off" };
         static const char *sources[] = { "cstick", "dpad", "circlepad" };
         static const char *sizes[] = { "1/2", "2/3" };
         static const char *corners[] = { "bottom-right", "bottom-left", "top-right", "top-left" };
@@ -468,6 +478,7 @@ namespace OneScreen
                           + "size " + sizes[(int)s.panelSize] + ", corner " + corners[(int)s.panelCorner]
                           + ", auto " + (s.autoPanel ? "on" : "off") + "\n"
                           + "aspect " + (s.aspect == 0.0f ? std::string("off") : std::to_string(s.aspect))
+                          + ", pillarbox " + pillarboxes[(int)s.pillarbox]
                           + ", battle layout " + BattleLayoutName(s.battleLayout) + "\n"
                           + "instant text " + (s.instantText ? "on" : "off")
                           + ", battle messages " + BattleSpeedName(s.battleMessages)
