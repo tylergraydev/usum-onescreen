@@ -151,6 +151,15 @@ Full write-up: [RE6-boxes.md](RE6-boxes.md). Read by the `box [N]` command (`Sou
 - Box data: SaveData (RE3) `+0x3B98` Savedata::BOX (vtable `0x64F364`; data at +4 = the save's block `0x4C00`: names `0x22` × 32, unlocked count u8 at data `+0x5E1`), `+0x4184` Savedata::BoxPokemon (vtable `0x64F044`; data at +4 = the save's block `0x5200`: 32 × 30 PK7 cores of `0xE8`, stored format). Compared byte for byte with the save file; a drop writes it at once.
 - Box screen (Box CRO; offsets from its load address): `App::Box::BoxLowBgDraw` (vtable Box+`0x2F4D8`) is one of the scene manager's first eight words. `+0x8C` listener: Box+`0x2F6F0` idle, Box+`0x2F6B0` slot menu / message, Box+`0x2FA80` holding a Pokémon. `+0xDC` u32 cursor (0-29 slots, 30-35 party, 36 box name, 38 box list). `+0xC0` → parameter block (`+0` BOX*, `+4` BoxPokemon*, `+0x60` u32 box on screen). `+0xC4` → → work: `+0x1C` 6 PokemonParam* = the screen's own copy of the party (the real party changes when the PC closes).
 
+## Events: PC anywhere (static + runtime, 2026-11-07)
+
+Full write-up: [PC-ANYWHERE.md](PC-ANYWHERE.md). Used by `Sources/PcAnywhere.cpp`.
+
+- `GameEventManager` = `*(*(0x6A59C4) + 0x20)`: `+0` top event, `+8` queued event, `+0xC` event active. `Main(manager)` `0x404350` (Ultra Moon `0x404354`), once per frame from `0x402B44`; push `0x4044A8`.
+- `Field::EventAppCall` (vtable `0x64BCD0`): start `0x37F54C(gm, type, flag)`; `+0x30` callback between field close and reopen, `+0x2C` after reopen, argument `ev + 0x34`. Field close / open events: vtables `0x64BFFC` / `0x64BF80`.
+- `App::Event::BoxEvent` (vtable `0x647F58`): start `0x2DE91C(gm)`; `+0x54` u8 mode (0 = the PC), `+0xB4` listener. The PC script's command is `0x384DC4`.
+- Game ExpHeap at `gm + 0x104` (magic `EXPH` at `+0x18`), its mutex at `gm + 0x15C` (1 = free): the one CTRPF's LoadCRO-hook run of `PanelEntry` overwrote (PC-ANYWHERE.md, "The battle freeze").
+
 ## Player location (runtime, 2026-11-02)
 
 Full write-up: [RE4-map.md](RE4-map.md). Read by the `where` command (`Sources/Where.cpp`).

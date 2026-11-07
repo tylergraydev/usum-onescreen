@@ -40,6 +40,7 @@ namespace OneScreen
         uint32_t     panelKey = KeyBits::L | KeyBits::R;   // cycles off / panel / full
         uint32_t     touchKey = KeyBits::ZL;            // cursor touches while held
         uint32_t     mapKey = KeyBits::ZR;              // opens / closes the native map (Screens/Map.hpp)
+        uint32_t     pcKey = 0;                         // opens the PC boxes in the field (PcAnywhere.hpp); 0 = none
         CursorSource cursorSource = CursorSource::CStick;
         uint32_t     cursorSpeed = 6;                   // pixels per frame once the stick has been held a while
         PanelSize    panelSize = PanelSize::Half;
