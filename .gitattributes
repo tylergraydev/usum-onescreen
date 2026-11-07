@@ -5,3 +5,6 @@
 Makefile text eol=lf
 *.ld     text eol=lf
 *.yml    text eol=lf
+
+# Azahar cheat files: code lines must be exactly 17 characters; keep the bytes as tested (LF).
+player/cheats/*.txt -text

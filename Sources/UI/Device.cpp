@@ -29,6 +29,7 @@ namespace OneScreen
         surface.width = screen.IsTop ? (s32)TopWidth : (s32)BottomWidth;
         surface.height = ScreenHeight;
         surface.squeeze = screen.IsTop ? WidescreenSqueeze() : 1.0f;
+        surface.pillarbox = GetSettings().pillarbox;
         return surface;
     }
 

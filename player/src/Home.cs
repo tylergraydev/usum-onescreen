@@ -157,6 +157,7 @@ namespace UsumOneScreen
             ini.Save(ConfigPath);
             SetState("controls", controls.ToString());
             SyncWidescreen();
+            GameOptions.Sync(this);
 
             // A per-game file could turn custom textures or another layout back on.
             string custom = Path.Combine(User, "config", "custom");
@@ -326,13 +327,21 @@ namespace UsumOneScreen
             return 0;
         }
 
-        public Process Launch(string game, bool fullscreen)
+        // Shared launch preparation can be verified without starting an emulator.
+        public void PrepareLaunch()
         {
             if (IsRunning())
                 throw new SetupException("USUM One Screen is already running.");
             // Again on every start: the player may have changed these in
             // Azahar's own windows (or a test turned the loader off).
             WriteConfig(CurrentControls());
+            Cheats.Sync(this);
+            Backups.Create(this);
+        }
+
+        public Process Launch(string game, bool fullscreen)
+        {
+            PrepareLaunch();
             var log = PluginLogPath;
             if (File.Exists(log))
                 File.Delete(log);
