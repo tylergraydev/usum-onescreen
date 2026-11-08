@@ -51,7 +51,15 @@ windows each):
 | fix | open, 16:9 | 1 | 1.74 ± 0.02 |
 | fix | open, 21:9 | 1 | 1.73 ± 0.01 |
 
-The map costs ~2-4% either way. The panel's own half/two-thirds/full paths
+The map costs ~2-4% either way.
+
+After merging PR #75 (`LayerGpu`, map frame presented by the GPU, picture copy
+after it), same method: closed 1.86 ± 0.00, open off 1.80 ± 0.02, 16:9
+1.79 ± 0.01, 21:9 1.78 ± 0.01. `layergpu status` with the map open: most GX
+commands per present 11 (plus the map's one copy), queue depth 0, fallbacks 0;
+ran 3.2 min at 21:9 and 16:9, and 1 min at 21:9 with `layergpu off`. A window
+capture of Azahar at 21:9 shows the map picture at the internal resolution
+with `layergpu on` and at 1x with `layergpu off`. The panel's own half/two-thirds/full paths
 still send one command per column at widescreen and were not tested here.
 
 ## P1-6: GPU copy
