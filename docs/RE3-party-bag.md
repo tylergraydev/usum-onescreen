@@ -44,6 +44,27 @@ myItem   = save + 0x08                    Savedata::MyItem, vtable 0x64F3C4 (che
 
 Decoded fields (PK7 offsets, after unshuffling):
 
+Judge/marker additions (#12/#13), verified against the existing decrypt /
+unshuffle path and [PKHeX's PK7 field accessors](https://github.com/kwsch/PKHeX/blob/master/PKHeX.Core/PKM/PK7.cs):
+
+- TID/SID: little-endian u16 at `0x0C` / `0x0E`; PID: u32 at `0x18`.
+  Shiny when `(TID ^ SID ^ PID_high ^ PID_low) < 16`, consistent with
+  [G6PKM's TSV/PSV computation](https://github.com/kwsch/PKHeX/blob/master/PKHeX.Core/PKM/Shared/G6PKM.cs).
+- Ability-number flags are the low three bits at **`0x15`**, with 4 meaning
+  hidden; **`0x16` is marking data**, not the ability number. Ability ID remains
+  `0x14` as already decoded.
+- EV bytes `0x1E..0x23`: HP, Atk, Def, **Spe**, SpA, SpD.
+- IV u32 `0x74`: six 5-bit fields in that same order, then egg bit 30
+  (already decoded) and nickname bit 31. Neither flag contributes to IVs.
+- Hyper Training `0xDE`, bits 0..5: HP, Atk, Def, **SpA, SpD, Spe**.
+  This differs from IV/EV order. All exposed arrays use display order
+  HP, Atk, Def, SpA, SpD, Spe. Hyper Training never overwrites the raw IV.
+
+Synthetic host tests spell out the bytes, test all 24 shuffles in encrypted
+and accessor-decrypted forms, each HT bit separately, both normal ability
+slots and HA (with misleading `0x16` markings), and shiny XOR 15 / non-shiny
+XOR 16. These additions have not been checked in the running game.
+
 | Offset | Field | Checked against |
 |---|---|---|
 | `0x08` | u16 species | all six (Torracat 726 … Buneary 427), Party screen |

@@ -10,7 +10,7 @@ OUT      := build
 PYTHON   ?= python3
 CODE_BIN ?=
 
-TESTS    := $(OUT)/pillarbox_test $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/settings_file_test $(OUT)/ui_host_test $(OUT)/party_data_test $(OUT)/action_queue_test $(OUT)/xmenu_test $(OUT)/battle_menu_test $(OUT)/keyboard_test $(OUT)/pokedex_test $(OUT)/native_screens_test $(OUT)/bag_test $(OUT)/map_test $(OUT)/party_menu_test $(OUT)/boxes_test $(OUT)/field_settle_test $(OUT)/move_learn_test $(OUT)/rotom_prompt_test $(OUT)/theme_test $(OUT)/screen_buffer_test
+TESTS    := $(OUT)/pillarbox_test $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/settings_file_test $(OUT)/ui_host_test $(OUT)/party_data_test $(OUT)/action_queue_test $(OUT)/xmenu_test $(OUT)/battle_menu_test $(OUT)/keyboard_test $(OUT)/pokedex_test $(OUT)/native_screens_test $(OUT)/bag_test $(OUT)/map_test $(OUT)/party_menu_test $(OUT)/boxes_test $(OUT)/field_settle_test $(OUT)/move_learn_test $(OUT)/rotom_prompt_test $(OUT)/theme_test $(OUT)/screen_buffer_test $(OUT)/poke_icons_test
 
 all: run
 
@@ -94,8 +94,14 @@ $(OUT)/party_menu_test: party_menu_test.cpp ../Sources/Screens/PartyMenu.cpp ../
 
 BOXES_PREVIEW := ../analysis/private/boxes-preview.ppm
 
-BOXES_SRCS := ../Sources/BoxData.cpp ../Sources/PartyData.cpp ../Sources/Screens/BoxesGrid.cpp ../Sources/ActionQueue.cpp $(addprefix ../Sources/UI/,GameAssets.cpp Theme.cpp) ../Sources/RomfsText.cpp
-BOXES_HDRS := ../Includes/BoxData.hpp ../Includes/PartyData.hpp ../Includes/Screens/BoxesGrid.hpp ../Includes/ActionQueue.hpp ../Includes/Layouts.hpp
+BOXES_SRCS := ../Sources/BoxData.cpp ../Sources/PartyData.cpp ../Sources/Screens/BoxesGrid.cpp ../Sources/ActionQueue.cpp $(addprefix ../Sources/UI/,GameAssets.cpp Theme.cpp PokeIcons.cpp) ../Sources/RomfsText.cpp
+BOXES_HDRS := ../Includes/UI/PokeIcons.hpp ../Includes/BoxData.hpp ../Includes/PartyData.hpp ../Includes/Screens/BoxesGrid.hpp ../Includes/ActionQueue.hpp ../Includes/Layouts.hpp
+
+ICONS_SRCS := $(addprefix ../Sources/UI/,PokeIcons.cpp GameAssets.cpp) ../Sources/RomfsText.cpp ../Sources/PartyData.cpp
+
+$(OUT)/poke_icons_test: poke_icons_test.cpp $(ICONS_SRCS) $(UI_SRCS) $(UI_HDRS)
+	@mkdir -p $(OUT)
+	$(CXX) $(CXXFLAGS) poke_icons_test.cpp $(ICONS_SRCS) $(UI_SRCS) -o $@
 
 $(OUT)/boxes_test: boxes_test.cpp $(BOXES_SRCS) $(BOXES_HDRS) $(UI_SRCS) $(UI_HDRS)
 	@mkdir -p $(OUT)
@@ -169,6 +175,7 @@ run: $(TESTS)
 	./$(OUT)/bag_test $(BAG_PREVIEW)
 	./$(OUT)/map_test $(MAP_PREVIEW) $(PLACE_GARC)
 	./$(OUT)/party_menu_test $(PARTY_PREVIEW)
+	./$(OUT)/poke_icons_test
 	./$(OUT)/boxes_test $(BOXES_PREVIEW)
 	./$(OUT)/move_learn_test $(LEARN_PREVIEW) $(MOVE_GARC)
 	./$(OUT)/rotom_prompt_test $(ROTOM_PREVIEW) $(PLACE_GARC)

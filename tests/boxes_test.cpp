@@ -417,6 +417,32 @@ static UI::Color At(const UI::Canvas &canvas, int x, int y)
 }
 
 // The theme's orange highlight frame (UI::Theme::Highlight).
+// A stand-in for a game icon: a round body in the icon's colour with a
+// dark outline and an eye, feet on the picture's bottom row, clear around.
+static UI::PokeIcon FakeIcon(u32 index, u8 r, u8 g, u8 b)
+{
+    UI::PokeIcon icon;
+    icon.index = index;
+    const auto pack = [](u8 cr, u8 cg, u8 cb) { return (u16)((cr >> 3) << 11 | (cg >> 3) << 6 | (cb >> 3) << 1 | 1); };
+    const int cx = 20, cy = 18, rad = 11;
+    for (int y = 0; y < UI::PokeIconH; y++)
+        for (int x = 0; x < UI::PokeIconW; x++)
+        {
+            const int d = (x - cx) * (x - cx) + (y - cy) * (y - cy);
+            u16 v = 0;
+            if (d <= rad * rad)
+                v = pack(r, g, b);
+            if (d <= rad * rad && d > (rad - 1) * (rad - 1))
+                v = pack(r / 4, g / 4, b / 4);
+            if ((x - cx + 4) * (x - cx + 4) + (y - cy + 3) * (y - cy + 3) <= 2)
+                v = pack(16, 16, 16);
+            if (y >= cy + rad - 1 && (x == cx - 5 || x == cx - 4 || x == cx + 4 || x == cx + 5))
+                v = pack(r / 4, g / 4, b / 4);
+            icon.px[y * UI::PokeIconW + x] = v;
+        }
+    return icon;
+}
+
 static bool IsRing(UI::Color c)
 {
     return c.r > 200 && c.g > 60 && c.g < 130 && c.b < 60;
@@ -475,7 +501,50 @@ static void TestDraw(const char *preview)
     for (u32 i = 0; i < 5; i++)
         view.party[i] = party[i];
     view.cursor = 8;
-    DrawBoxes(canvas, view);
+    view.slotShiny[8] = true;
+    view.partyShiny[2] = true;
+    // Synthetic icons (the game's are read at runtime): one per Pokémon,
+    // except slot 18, whose icon isn't decoded yet (name only).
+    UI::PokeIconCache icons(48);
+    for (u32 i = 1; i < sizeof(box) / sizeof(box[0]); i++)
+    {
+        view.slotIcons[i] = (u16)(100 + i);
+        if (i != 18)
+            CHECK(icons.Store(FakeIcon(100 + i, (u8)(60 + i * 37 % 190), (u8)(200 - i * 23 % 150), (u8)(40 + i * 53 % 200))));
+    }
+    for (u32 i = 0; i < 5; i++)
+    {
+        view.partyIcons[i] = (u16)(200 + i);
+        CHECK(icons.Store(FakeIcon(200 + i, (u8)(220 - i * 30), (u8)(90 + i * 30), 60)));
+    }
+    DrawBoxes(canvas, view, &icons);
+    // The icon sits on the cell's left, 1:1; the name stays on the right.
+    const UI::Rect iconCell = BoxesCellRect(11);    // Abra: a short name, clear of the icon's left
+    const UI::Color body = At(canvas, iconCell.x - 6 + 10, iconCell.Bottom() + 2 - UI::PokeIconH + 18);
+    const UI::Color want = UI::Rgb((u8)(60 + 11 * 37 % 190), (u8)(200 - 11 * 23 % 150), (u8)(40 + 11 * 53 % 200));
+    CHECK(body.r >> 3 == want.r >> 3 && body.g >> 3 == want.g >> 3 && body.b >> 3 == want.b >> 3);
+    // Never into the gap on the left.
+    const UI::Color gapAt = At(canvas, iconCell.x - 1, iconCell.y + iconCell.h / 2);
+    CHECK(!(gapAt.r >> 3 == want.r >> 3 && gapAt.g >> 3 == want.g >> 3));
+    // No icon decoded (Zubat): the cell is drawn as without any icons.
+    {
+        std::vector<u8> bare(pixels.size(), 0);
+        UI::Canvas bareCanvas(UI::Surface{ bare.data(), bpp, UI::ScreenW * bpp, UI::PixelFormat::RGBA8,
+                                           UI::ScreenW, UI::ScreenH });
+        DrawBoxes(bareCanvas, view);
+        const UI::Rect plain = BoxesCellRect(18);
+        bool same = true;
+        for (int y = plain.y; y < plain.Bottom(); y++)
+            for (int x = plain.x; x < plain.Right(); x++)
+            {
+                const UI::Color a = At(canvas, x, y), b = At(bareCanvas, x, y);
+                same = same && a.r == b.r && a.g == b.g && a.b == b.b;
+            }
+        CHECK(same);
+    }
+    const UI::Rect shinyCell = BoxesCellRect(8);
+    const UI::Color shinyRed = At(canvas, shinyCell.Right() - 6, shinyCell.y + 6);
+    CHECK(shinyRed.r > 200 && shinyRed.g < 40 && shinyRed.b < 40);
 
     // Nothing outside the area is touched (the Layer copies only it).
     const UI::Color outside = At(canvas, BoxesArea.x - 1, BoxesArea.y + 50);
@@ -503,10 +572,14 @@ static void TestDraw(const char *preview)
     view.heldTray = 0;
     view.heldIndex = 33;
     view.cursor = 26;
-    DrawBoxes(canvas, view);
+    view.heldIcon = 203;
+    DrawBoxes(canvas, view, &icons);
     const UI::Rect hold = BoxesCellRect(26);
     const UI::Color red = At(canvas, hold.x + hold.w / 2, hold.y - 1);
     CHECK(red.r > 200 && red.g < 40 && red.b < 40);
+    // The held Pokémon's icon in the empty cell under the cursor.
+    const UI::Color heldBody = At(canvas, hold.x - 6 + 10, hold.Bottom() + 2 - UI::PokeIconH + 18);
+    CHECK(heldBody.r >> 3 == (220 - 3 * 30) >> 3 && heldBody.g >> 3 == (90 + 3 * 30) >> 3);
 
     if (preview != nullptr)
     {
