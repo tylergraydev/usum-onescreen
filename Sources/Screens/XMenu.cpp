@@ -123,13 +123,17 @@ namespace OneScreen
         }
         if (!s_shown)
         {
+            s_layer.Hide();
             UI::ScreenBuffer::GiveBack(Owner);
             return false;
         }
         bool fresh = false;
         u8 *const pixels = UI::ScreenBuffer::Borrow(Owner, fresh);
         if (pixels == nullptr)
+        {
+            s_layer.Hide();
             return false;   // another screen holds it: next frame
+        }
 
         UiInitFont();
         const UI::Surface fb = SurfaceFromScreen(screen);
@@ -141,7 +145,7 @@ namespace OneScreen
         // fresh: another screen drew in the buffer since we last held it.
         if (fresh || !s_layer.Matches(fb))
         {
-            if (!s_layer.Setup(fb, XMenuArea, XMenuRadius, pixels, UI::ScreenBuffer::Bytes))
+            if (!s_layer.SetupHiRes(fb, XMenuArea, XMenuRadius, UI::MenuSlot, pixels, UI::ScreenBuffer::Bytes))
                 return false;
             redraw = true;
         }

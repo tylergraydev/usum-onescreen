@@ -76,6 +76,7 @@ namespace UI
         static constexpr s32 InkGap = 3;
         // Valid until the next Get call on this cache. nullptr if no font.
         const Glyph *Get(u32 codePoint);
+        void Draw(Canvas &canvas, u32 codePoint, s32 x, s32 y, s32 scale, Color color);
 
         // Counters for the host test and the `uifont` log line.
         u32 hits = 0, misses = 0;

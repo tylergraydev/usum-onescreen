@@ -2,6 +2,7 @@
 // (Sources/Screens/KeyboardGrid.cpp). Build and run: make -C tests. With a
 // path argument, also writes a preview of the keyboard there as a PPM image.
 
+#include "hires_screen_smoke.hpp"
 #include "Screens/KeyboardGrid.hpp"
 
 #include <cstdio>
@@ -322,6 +323,7 @@ static void TestDraw(const char *preview)
     std::memcpy(view.game.text, bobo, sizeof(bobo));
     view.game.shift = true;
     DrawKeyboard(canvas, view);
+    CHECK(HiResScreenSmoke::Run(KeyboardArea, KeyboardRadius, [&](UI::Canvas &hi) { DrawKeyboard(hi, view); }));
 
     // Nothing outside the keyboard's area is touched (the Layer copies only it).
     const UI::Color outside = At(canvas, KeyboardArea.x - 1, KeyboardArea.y + 50);

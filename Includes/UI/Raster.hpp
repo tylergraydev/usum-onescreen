@@ -63,6 +63,18 @@ namespace UI
         // Presentation only: top-screen stretch, supplied by UI/Device.
         float       squeeze = 1.0f;
         Pillarbox   pillarbox = Pillarbox::Tint;
+        bool        transparent = false; // straight-alpha RGBA target; legacy surfaces stay opaque
+    };
+
+    enum class ImageFilter : u8 { Nearest, Bilinear };
+    enum class ImageFormat : u8 { RGBA8, RGB5A1 };
+    // Immutable row-major art. RGBA8 uses ordinary R,G,B,A byte order;
+    // RGB5A1 is the little-endian packed box-icon format, expanded to 0..255.
+    struct ImageView
+    {
+        const u8 *pixels;
+        s32 width, height, stride;
+        ImageFormat format = ImageFormat::RGBA8;
     };
 
     u32  BytesPerPixel(PixelFormat format);
@@ -79,7 +91,18 @@ namespace UI
         // Surface pixel (0, 0) is drawn as point (originX, originY), so code
         // that draws in screen coordinates can draw into an off-screen Layer
         // that covers only part of the screen.
-        Canvas(const Surface &surface, s32 originX, s32 originY);
+        Canvas(const Surface &surface, s32 originX, s32 originY, float scale = 1.0f);
+        float Scale(void) const { return m_scale; }
+        // Smooth mask with fractional screen dimensions (native font sheets).
+        void DrawMaskSized(float x, float y, const u8 *mask, s32 w, s32 h, s32 stride,
+                           float width, float height, Color c);
+        // Samples once per physical destination pixel, preventing seams at
+        // fractional Canvas scales. Bilinear filtering interpolates premultiplied
+        // colours so transparent texels cannot produce dark fringes. Rotate
+        // turns the source a quarter left before fitting it into dst.
+        void DrawImage(const ImageView &image, const Rect &src, const Rect &dst,
+                       ImageFilter filter = ImageFilter::Bilinear,
+                       Color tint = Rgb(255, 255, 255), bool rotate = false);
 
         const Surface &GetSurface(void) const { return m_surface; }
         const Rect    &GetClip(void) const { return m_clip; }
@@ -110,6 +133,11 @@ namespace UI
         void DrawMask(s32 x, s32 y, const u8 *mask, s32 w, s32 h, s32 stride, s32 scale, Color c);
 
     private:
+        Canvas DeviceCanvas(void) const;
+        float DeviceX(float x) const { return (x - m_ox) * m_scale; }
+        float DeviceY(float y) const { return (y - m_oy) * m_scale; }
+        void ScaledRound(const Rect &r, s32 radius, Color c, s32 thickness);
+        float m_scale = 1.0f;
         void Span(s32 x0, s32 x1, s32 y, Color c);
         u8  *At(s32 x, s32 y) const
         {

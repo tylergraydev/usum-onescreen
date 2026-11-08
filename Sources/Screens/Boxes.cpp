@@ -106,17 +106,25 @@ namespace OneScreen
             return false;
         if (!s_shown)
         {
+            s_layer.Hide();
+            s_badge.Hide();
             UI::ScreenBuffer::GiveBack(Owner);
             return false;
         }
         bool fresh = false;
         u8 *pixels = UI::ScreenBuffer::Borrow(Owner, fresh);
         if (pixels == nullptr)
+        {
+            s_layer.Hide();
+            s_badge.Hide();
             return false;
+        }
         UiInitFont();
         const UI::Surface fb = SurfaceFromScreen(screen);
         if (fresh)
         {
+            s_badge.Hide();
+            s_layer.Hide();
             s_badge = UI::Layer();
             s_layer = UI::Layer();
         }
@@ -125,9 +133,10 @@ namespace OneScreen
         bool drew = false;
         if (s_details)
         {
+            s_layer.Hide();
             if (!s_badge.Matches(fb))
             {
-                if (!s_badge.Setup(fb, BoxesBadgeArea, 8, pixels + PixelBytes, BadgeBytes))
+                if (!s_badge.SetupHiRes(fb, BoxesBadgeArea, 8, UI::BadgeSlot, pixels + PixelBytes, BadgeBytes))
                     return false;
                 s_badgeDrawn = false;
             }
@@ -141,10 +150,11 @@ namespace OneScreen
             return drew;
         }
 
+        s_badge.Hide();
         bool redraw = s_sharedVersion != s_drawnVersion;
         if (!s_layer.Matches(fb))
         {
-            if (!s_layer.Setup(fb, BoxesArea, BoxesRadius, pixels, PixelBytes))
+            if (!s_layer.SetupHiRes(fb, BoxesArea, BoxesRadius, UI::MenuSlot, pixels, PixelBytes))
                 return false;
             redraw = true;
         }
@@ -373,28 +383,36 @@ namespace OneScreen
     // Reads the box on screen and the screen's party.
     static void Refresh(void)
     {
+        // Polling the game is cheap compared with a 960x570 redraw/upload.
+        // Publish only when a displayed field actually changes.
+        const auto update = [](auto &old, const auto &value) {
+            if (old != value)
+            {
+                old = value;
+                s_dirty = true;
+            }
+        };
         const BoxStorage storage = ReadBoxStorage();
-        s_view.tray = s_game.tray;
-        s_view.unlocked = storage.valid ? storage.unlocked : 1;
-        s_view.boxName = BoxName(storage, s_game.tray);
+        update(s_view.tray, s_game.tray);
+        update(s_view.unlocked, storage.valid ? storage.unlocked : 1u);
+        update(s_view.boxName, BoxName(storage, s_game.tray));
         for (u32 i = 0; i < BoxSlots; i++)
         {
             const Pk7 mon = ReadBoxMon(storage, s_game.tray, i);
-            s_view.slots[i] = BoxMonLabel(mon);
-            s_view.slotBalls[i] = mon.ball;
-            s_view.slotShiny[i] = mon.shiny && !mon.isEgg && mon.form != Pk7Form::Invalid;
-            s_view.slotIcons[i] = IconFor(mon);
+            update(s_view.slots[i], BoxMonLabel(mon));
+            update(s_view.slotBalls[i], mon.ball);
+            update(s_view.slotShiny[i], mon.shiny && !mon.isEgg && mon.form != Pk7Form::Invalid);
+            update(s_view.slotIcons[i], IconFor(mon));
         }
         for (u32 i = 0; i < BoxPartySlots; i++)
         {
             const Pk7 mon = s_game.partyValid ? ReadParam(s_game.party[i]) : Pk7();
-            s_view.party[i] = s_game.partyValid ? BoxMonLabel(mon) : "";
-            s_view.partyBalls[i] = mon.ball;
-            s_view.partyShiny[i] = mon.shiny && !mon.isEgg && mon.form != Pk7Form::Invalid;
-            s_view.partyIcons[i] = s_game.partyValid ? IconFor(mon) : 0;
+            update(s_view.party[i], s_game.partyValid ? BoxMonLabel(mon) : "");
+            update(s_view.partyBalls[i], mon.ball);
+            update(s_view.partyShiny[i], mon.shiny && !mon.isEgg && mon.form != Pk7Form::Invalid);
+            update(s_view.partyIcons[i], s_game.partyValid ? IconFor(mon) : (u16)0);
         }
         s_refreshedAt = s_frames;
-        s_dirty = true;
     }
 
     static std::string Where(u32 cursor)

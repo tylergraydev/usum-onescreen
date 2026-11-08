@@ -506,20 +506,24 @@ namespace OneScreen
             return false;
         if (!s_shown)
         {
+            s_layer.Hide();
             UI::ScreenBuffer::GiveBack(Owner);
             return false;
         }
         bool fresh = false;
         u8 *const pixels = UI::ScreenBuffer::Borrow(Owner, fresh);
         if (pixels == nullptr)
+        {
+            s_layer.Hide();
             return false;   // another screen still has it: next frame
+        }
         UiInitFont();
         const UI::Surface fb = SurfaceFromScreen(screen);
         const u32 version = s_viewVersion;
         bool redraw = version != s_drawnVersion;
         if (fresh || !s_layer.Matches(fb))
         {
-            if (!s_layer.Setup(fb, BagArea, BagRadius, pixels, UI::ScreenBuffer::Bytes))
+            if (!s_layer.SetupHiRes(fb, BagArea, BagRadius, UI::MenuSlot, pixels, UI::ScreenBuffer::Bytes))
                 return false;
             redraw = true;
         }

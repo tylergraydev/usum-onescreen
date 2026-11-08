@@ -198,9 +198,14 @@ namespace UI
             s32 pen = x;
             for (size_t i = 0; i < fit.size();)
             {
-                const Glyph *g = cache->Get(NextCodePoint(fit.data(), fit.size(), i));
+                const u32 cp = NextCodePoint(fit.data(), fit.size(), i);
+                const Glyph *g = cache->Get(cp);
                 if (g->w > 0)
-                    canvas.DrawMask(pen + g->left * scale, y, g->mask, g->w, g->h, g->w, scale, style.color);
+                {
+                    if (canvas.Scale() == 1.f)
+                        canvas.DrawMask(pen + g->left * scale, y, g->mask, g->w, g->h, g->w, scale, style.color);
+                    else cache->Draw(canvas, cp, pen, y, scale, style.color);
+                }
                 pen += g->advance * scale;
             }
             return width;

@@ -339,7 +339,6 @@ namespace OneScreen
     static constexpr UI::Color SunRay    = Rgb(0xFF, 0xF4, 0x8C, 0x70);
     static constexpr UI::Color Frame     = Rgb(0xA0, 0x8B, 0x36);   // the dark gold of the sun's rings
     static constexpr UI::Color PillRim   = Rgb(0xFB, 0xFB, 0xFF);
-    static constexpr UI::Color LabelDark = Rgb(0x25, 0x25, 0x25);   // the game's labels under its pills
     static constexpr UI::Color Disabled  = Rgb(0x8A, 0x86, 0x7A);
 
     // Grid geometry inside XMenuArea: 4 columns (a wider gap between the

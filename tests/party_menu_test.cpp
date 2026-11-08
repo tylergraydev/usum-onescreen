@@ -5,6 +5,7 @@
 // of the party list and the summary there (PPM), and of the menu and the
 // teaching question next to the first.
 
+#include "hires_screen_smoke.hpp"
 #include "Screens/PartyMenu.hpp"
 #include "UI/Layout.hpp"
 
@@ -923,6 +924,7 @@ static void TestDraw(const char *listPreview, const char *summaryPreview)
     view.cursor = 3;
     canvas.FillRect(UI::Rect{ 0, 0, UI::ScreenW, UI::ScreenH }, UI::Rgb(0, 200, 0));
     DrawParty(canvas, view);
+    CHECK(HiResScreenSmoke::Run(PartyArea, PartyRadius, [&](UI::Canvas &hi) { DrawParty(hi, view); }));
     // Outside the area untouched; the selected plate has the game's orange
     // frame, the others don't.
     CHECK(At(canvas, 2, 2).g == 200);
@@ -1015,6 +1017,7 @@ static void TestDraw(const char *listPreview, const char *summaryPreview)
     sum.count = 6;
     canvas.FillRect(UI::Rect{ 0, 0, UI::ScreenW, UI::ScreenH }, UI::Rgb(0, 200, 0));
     DrawSummary(canvas, sum);
+    CHECK(HiResScreenSmoke::Run(PartyArea, PartyRadius, [&](UI::Canvas &hi) { DrawSummary(hi, sum); }));
     CHECK(At(canvas, 2, 2).g == 200);
     const std::string skey = SummaryViewKey(sum);
     sum.mon.hiddenAbility = false;
