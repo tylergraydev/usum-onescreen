@@ -39,11 +39,25 @@ namespace UI
         // surfaces use screen.squeeze about x=200, sampling source corners.
         // Full-screen areas also write cached pillarbox columns outside their
         // mapped horizontal extent, according to screen.pillarbox.
-        void   Present(const Surface &screen) const;
+        // Both return true if the CPU wrote to the screen (false: nothing
+        // written, or a GPU present, so the OSD callback can report no
+        // CPU drawing and CTRPF leaves the framebuffer alone).
+        bool   Present(const Surface &screen) const;
         // The same, leaving the pixels inside `skip` (screen coordinates)
         // alone, for something else to fill (a GPU copy, Screens/Map.cpp).
         // skip is unsqueezed: test the same source column as the layer.
-        void   Present(const Surface &screen, const Rect &skip) const;
+        bool   Present(const Surface &screen, const Rect &skip) const;
+
+        // The layer's own pixels and the rows copied per column, for a GPU
+        // present (UI/LayerGpu.cpp).
+        const Surface &Pixels(void) const { return m_surface; }
+        u8 TopRows(s32 column) const { return m_top[column]; }
+
+        // Set by the plugin (UI/LayerGpu.cpp): presents the layer with GPU
+        // transfers instead of CPU writes, so Azahar keeps the frame at its
+        // internal resolution. Returns false to fall back to the CPU copy.
+        using GpuPresentFn = bool (*)(const Layer &layer, const Surface &screen, const Rect &skip);
+        static GpuPresentFn s_gpuPresent;
 
     private:
         static constexpr s32 MaxW = ScreenW;
