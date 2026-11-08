@@ -56,6 +56,36 @@ static void TestRanges()
     CHECK(r.begin == 66 && r.end == 334);
 }
 
+static void TestSqueezedColumns()
+{
+    const float squeezes[] = { 1.0f, 1.0667f, 1.4f };
+    const int begins[] = { 70, 78, 107 };
+    const int ends[] = { 330, 322, 293 };
+    for (unsigned i = 0; i < 3; i++)
+    {
+        const float k = squeezes[i];
+        const auto r = SqueezedColumns(70, 330, k);
+        CHECK(r.active && r.begin == begins[i] && r.end == ends[i]);
+        for (int d = 0; d < ScreenW; d++)
+        {
+            const int source = SourceColumn(d, k);
+            CHECK((d >= r.begin && d < r.end) == (source >= 70 && source < 330));
+            if (d >= r.begin && d < r.end)
+            {
+                // One-to-one source offset stays within the bottom map rect.
+                const int bottom = 30 + d - 70;
+                CHECK(bottom >= 30 && bottom < 290);
+                CHECK(bottom - 160 == d - 200);
+            }
+        }
+        CHECK(SourceColumn(r.begin - 1, k) < 70);
+        CHECK(SourceColumn(r.end, k) >= 330);
+    }
+    CHECK(!SqueezedColumns(70, 70, 1.4f).active);
+    const auto full = SqueezedColumns(0, 400, 1.0f);
+    CHECK(full.begin == 0 && full.end == 400);
+}
+
 static void TestPixels()
 {
     for (const auto format : { PixelFormat::BGR8, PixelFormat::RGBA8, PixelFormat::RGB565, PixelFormat::RGB5A1, PixelFormat::RGBA4 })
@@ -139,6 +169,7 @@ static void Preview(const std::string &directory, Pillarbox mode, const char *na
 int main(int argc, char **argv)
 {
     TestRanges();
+    TestSqueezedColumns();
     TestPixels();
     if (argc > 1)
     {

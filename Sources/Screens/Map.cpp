@@ -20,6 +20,7 @@
 #include "UI/ScreenBuffer.hpp"
 #include "UI/Theme.hpp"
 #include "Where.hpp"
+#include "Widescreen.hpp"
 
 namespace OneScreen
 {
@@ -30,6 +31,14 @@ namespace OneScreen
     static const u32 LanguageByte = 0x671A10;
     // Place names: message file 72 of that GARC (docs/RE2-text.md, RE4-map.md).
     static const u32 PlaceNamesFile = 72;
+
+    // Rotom map layout, USUM v1.2 (same pane vtables on Ultra Sun/Moon).
+    // map view -> object -> layout -> nw::lyt layout -> RootPane -> first child All.
+    static const u32 VtMapView = 0x64786C, VtMapPane = 0x646B28;
+    static const u32 MapViewObject = 0x20, ObjectLayout = 4;
+    static const u32 LayoutNwLayout = 0x10, NwLayoutRoot = 0x10;
+    static const u32 PaneFirstChild = 0x14, ChildNodeOffset = 4, PaneName = 0x80;
+    static const u32 PaneNameSize = 16;
 
     // Field readings while the map is open, every this many frames.
     static const u32 ReadEvery = 4;
@@ -58,6 +67,8 @@ namespace OneScreen
     static u32  s_requestUntil = 0;
     static const char *s_requestHow = "X menu";
     static MapView s_view;
+    static bool s_paneMissing = false;
+    static bool s_loggedPaneMissing = false;    // once per open
     static bool s_logged = false;               // the current view's zone was logged
     static MapZoneFilter s_zones;
     static bool s_namesTried = false;
@@ -216,6 +227,61 @@ namespace OneScreen
         }
     }
 
+    static u32 ReadPointer(u32 object, u32 offset = 0)
+    {
+        u32 value = 0;
+        if (object == 0 || !Process::Read32(object + offset, value))
+            return 0;
+        return value;
+    }
+
+    static bool IsMapPane(u32 pane, const char *name)
+    {
+        if (ReadPointer(pane) != VtMapPane)
+            return false;
+        for (u32 i = 0; i < PaneNameSize; i++)
+        {
+            u8 ch = 0;
+            if (!Process::Read8(pane + PaneName + i, ch) || ch != (u8)name[i])
+                return false;
+            if (ch == 0)
+                return true;
+        }
+        return false;
+    }
+
+    static void UpdateBottomSqueeze(bool shown, std::vector<std::string> &log)
+    {
+        const float squeeze = WidescreenSqueeze();
+        s_paneMissing = false;
+        if (!shown || !s_view.picture || s_copyFailed || !(squeeze > 1.0f))
+        {
+            ClearGamePaneScaleX();
+            return;
+        }
+        // Re-read every update: scenes can free or rebuild the map layout.
+        const u32 view = ReadWhere().mapView;
+        const u32 object = ReadPointer(view) == VtMapView ? ReadPointer(view, MapViewObject) : 0;
+        const u32 layout = ReadPointer(object, ObjectLayout);
+        const u32 nwLayout = ReadPointer(layout, LayoutNwLayout);
+        const u32 root = ReadPointer(nwLayout, NwLayoutRoot);
+        const u32 node = IsMapPane(root, "RootPane") ? ReadPointer(root, PaneFirstChild) : 0;
+        const u32 all = node >= ChildNodeOffset ? node - ChildNodeOffset : 0;
+        if (IsMapPane(all, "All"))
+        {
+            const u32 nameWord = (u32)'A' | ((u32)'l' << 8) | ((u32)'l' << 16) | ((u32)'\0' << 24);
+            SetGamePaneScaleX(all, VtMapPane, nameWord, 1.0f / squeeze);
+            return;
+        }
+        ClearGamePaneScaleX();
+        s_paneMissing = true;
+        if (!s_loggedPaneMissing)
+        {
+            log.push_back("map: bottom pane not found");
+            s_loggedPaneMissing = true;
+        }
+    }
+
     static void Open(const char *how, std::vector<std::string> &log)
     {
         LoadNames(log);
@@ -224,6 +290,7 @@ namespace OneScreen
         UI::RequestAssets();
         s_open = true;
         s_logged = false;
+        s_loggedPaneMissing = false;
         s_copyFailed = false;
         s_view = MapView();
         s_zones.Reset();
@@ -235,6 +302,8 @@ namespace OneScreen
 
     static void Close(const char *why, std::vector<std::string> &log)
     {
+        ClearGamePaneScaleX();
+        s_paneMissing = false;
         if (!s_open)
             return;
         s_open = false;
@@ -338,6 +407,7 @@ namespace OneScreen
             log.push_back(UI::ScreenBuffer::HeapLog("map hidden"));
         }
 
+        UpdateBottomSqueeze(shown, log);
         s_shown = shown;
 
 
@@ -397,8 +467,9 @@ namespace OneScreen
 
     std::string MapStatus(void)
     {
-        return Utils::Format("map: %s, %s%s%s, %s | %s", s_enabled ? "on" : "off", s_open ? "open" : "closed",
+        return Utils::Format("map: %s, %s%s%s, %s | %s | %s", s_enabled ? "on" : "off", s_open ? "open" : "closed",
                              s_shown ? ", shown" : "", s_capturing ? ", input captured" : "",
-                             s_view.known ? DescribeMapView(s_view).c_str() : "no reading", s_namesStatus.c_str());
+                             s_view.known ? DescribeMapView(s_view).c_str() : "no reading", s_namesStatus.c_str(),
+                             s_paneMissing ? "bottom pane not found" : DescribeGamePaneScaleX().c_str());
     }
 }

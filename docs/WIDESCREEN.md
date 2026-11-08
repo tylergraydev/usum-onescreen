@@ -199,9 +199,32 @@ retain native presentation at 1:1; native expansion is outside this change.
 
 The skip rectangle remains in unsqueezed coordinates and is tested against the
 same sampled source column. Map's skipped `MapWindow` is filled by
-`PanelCopyBottomRect` from the hidden bottom framebuffer (`MapSource`). Its GPU
-copy now uses the identical mapping for its destination and source columns.
-There is no separate unsqueezed map-image hole.
+`PanelCopyBottomRect` from the hidden bottom framebuffer (`MapSource`).
+
+**The map picture is squeezed by the game, not by the copy.** A copy that
+squeezes on the GPU needs one TextureCopy per run of consecutive source
+columns (Azahar keeps only copies whose strides match the framebuffer on the
+GPU), and many GX commands in a frame crash the game (`docs/PERF.md`, "Map at
+widescreen"). So while the map shows with k > 1, `Map.cpp` finds the Rotom
+map layout's `All` pane (every tile, the player icon and the goal flag; its
+origin is the map window's centre, bottom x 160) and `CalculateMtxHook` sets
+its scale x to 1/k right before the game calculates its matrix (the game resets
+it to 1 every frame, so it has to be applied in the hook). When the override is
+cleared, the hook writes back the game's own last value on that pane's next
+matrix calculation and marks it dirty (the game would also put it back by
+itself; verified both ways). Override and restore only touch a pane whose
+address, vtable and first name bytes (`All `) all match, so a freed layout
+whose address is reused is never written; the hook never waits on the plugin
+thread (it skips a frame if the lock is busy). The bottom screen then shows the map
+squeezed about x 160, and one 1:1 TextureCopy puts the columns the squeezed
+window covers (`UI::SqueezedColumns`) onto the top screen: top column d shows
+bottom column d - 40, the same offset as unsqueezed. `MapWindow` is centred on
+top x 200 and `MapSource` on bottom x 160, so the two line up
+(`tests/map_test.cpp`). The override is cleared when the map hides or closes,
+the picture is off, the pane isn't found, or k <= 1. Pane chain and offsets:
+`docs/OFFSETS.md`. If the pane is not found, the copy stays one command and
+the picture shows unsqueezed (wider than the rest of the game's 2D);
+`map status` says `bottom pane not found`.
 
 Audit of native top output:
 
@@ -215,7 +238,9 @@ Audit of native top output:
 - Panel full, half, and two-thirds GPU paths squeeze their final top copy;
   source framebuffers and scratch drawing stay in original coordinates. Full
   mode converts one selected RGBA8 column at a time with DisplayTransfer;
-  half/two-thirds and Map use aligned vertical TextureCopy runs. The CPU panel
+  half/two-thirds use aligned vertical TextureCopy runs (one command per
+  column: likely to hit the same crash as the map did, not yet tested). Map
+  uses one TextureCopy of the game-squeezed picture (above). The CPU panel
   fallback samples the same columns. The half/fallback CPU cursor squeezes its
   bars; full/two-thirds scratch cursors squeeze with the final image. Panel
   readback checks sample the corrected destination and corresponding source.
@@ -305,8 +330,8 @@ The overlays themselves stay 1x pictures that Azahar scales up, so they look
 soft at high internal resolutions (texture filters such as MMPX did not help);
 only drawing them with the 3DS GPU would make them sharp.
 
-Known issue, also on main: the native map crashes the game at 21:9 (its
-picture is copied with one GPU copy per squeezed column; see PERF.md).
+The native map used to crash the game at 16:9/21:9 (one GPU copy per squeezed
+column); it now copies a game-squeezed picture in one command (above).
 
 ## Verification and open work
 
@@ -338,9 +363,10 @@ and row-major layouts, three formats, 16:9/21:9 and extreme factors, sentinel
 clipping, and unchanged 320-pixel bottom surfaces. It passed using MSVC C++17
 on the host; no plugin build or emulator was run for this change.
 
-GPU runtime correctness and transfer-call overhead remain unverified. Widescreen
-panel/map copies submit up to one transfer per copied destination column;
-measure with the existing perf commands. Full-mode one-column DisplayTransfer
+GPU runtime correctness and transfer-call overhead remain unverified for the
+panel. Widescreen panel copies submit up to one transfer per copied destination
+column, which crashed the map (fixed there, see above); measure with the
+existing perf commands. Full-mode one-column DisplayTransfer
 and scene reloads especially need Azahar validation given the existing sprite
 transfer caveat in Panel.cpp. CPU fallback/cursor and periodic panel readback
 retain their existing framebuffer costs. Existing game layout environments may
