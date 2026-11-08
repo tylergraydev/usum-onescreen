@@ -1,3 +1,6 @@
+/* Copied from Gen6CTRPFrameworkOverhauled (samaBR85, GPL-3.0), itself from
+   Gen6CTRPluginFramework (biometrix76). Unmodified apart from this comment.
+   See THIRD-PARTY.md. */
 OUTPUT_FORMAT("elf32-littlearm", "elf32-bigarm", "elf32-littlearm")
 OUTPUT_ARCH(arm)
 ENTRY(_start)

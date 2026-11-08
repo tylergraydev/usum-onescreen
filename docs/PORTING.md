@@ -23,9 +23,9 @@ For Ultra Sun v1.2 the build-specific values are: text `0x100000`, rodata `0x5BC
 
 | File | TMD version | `code.bin` SHA-256 |
 |---|---|---|
-| `ultra-sun-update-v1.2-0x0800-decrypted.cia` (the one the plugin was built and tested on) | `0x0800` (2048) | `421774f2…ce16200f` |
-| `ultra-sun-update-v1.2-encrypted.cia` (Tyler's encrypted original) | `0x0820` (2080) | `421774f2…ce16200f` |
-| `ultra-sun-update-v1.2-0x0820-decrypted.cia` (another decrypted dump) | `0x0820` (2080) | `421774f2…ce16200f` |
+| A decrypted v1.2 update copy whose TMD was rewritten (the one the plugin was built and tested on) | `0x0800` (2048) | `421774f2…ce16200f` |
+| The genuine v1.2 update, encrypted | `0x0820` (2080) | `421774f2…ce16200f` |
+| The genuine v1.2 update, decrypted | `0x0820` (2080) | `421774f2…ce16200f` |
 
 The code is byte-identical, so every hook target sits at the same address and the same offset table serves both. Only the patched copy's TMD says `0x0800`. `Game.cpp` therefore lists Ultra Sun twice: `0x0820` (genuine) and `0x0800` (that patched copy, still used by the test instances and start points).
 

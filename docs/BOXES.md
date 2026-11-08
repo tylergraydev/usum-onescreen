@@ -202,7 +202,7 @@ plugin's life.
   (synthetic): drawn 1:1 on the cell's left, never into the gap beside it,
   a cell without a decoded icon drawn exactly as without icons, the held
   Pokémon's icon under the cursor. The preview has them.
-- `scenarios/native-boxes.txt`: see README (Testing → Scenarios).
+- `scenarios/native-boxes.txt`: see [DEVELOPMENT.md](DEVELOPMENT.md#scenarios-scripted-tests).
 
 ## Not done
 

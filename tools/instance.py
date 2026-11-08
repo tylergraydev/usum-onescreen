@@ -7,8 +7,8 @@ Usage: py -3 -I tools/instance.py COMMAND NAME [options]
   game NAME [sun|moon]       print or set the instance's game
   install NAME [3GX]        copy a built plugin in (default: ./usum-onescreen.3gx)
   start NAME [--rom PATH] [--wait SECONDS] [--movie CTM] [--no-plugin] [--no-queue]
-                            launch the instance's game; --rom defaults to the Sun
-                            ROM or installed Moon base content; with --wait, wait for the plugin's
+                            launch the instance's game; --rom defaults to
+                            $USUM_SUN_ROM (Sun) or installed Moon base content; with --wait, wait for the plugin's
                             boot log and print it; --movie plays an input movie
                             (tools/movie.py); --no-plugin turns the 3GX plugin
                             loader off for this run (each start sets it).
@@ -47,8 +47,8 @@ REPO = Path(__file__).resolve().parent.parent
 INSTANCES = REPO / "analysis" / "private" / "instances"
 AZAHAR_DIR = Path(r"C:\Program Files\Azahar")
 APPDATA = Path(os.environ["APPDATA"]) / "Azahar"
-ROM = Path("roms/"
-           "ultra-sun-decrypted.cci")
+# Your own decrypted Ultra Sun ROM (.cci/.3ds), used when start has no --rom.
+ROM = Path(os.environ["USUM_SUN_ROM"]) if os.environ.get("USUM_SUN_ROM") else None
 TITLE = "00040000001B5000"
 MOON_TITLE = "00040000001B5100"
 SD_ID = Path("Nintendo 3DS") / ("0" * 32) / ("0" * 32)
@@ -294,6 +294,8 @@ def cmd_start(args):
     if running_pid(args.name):
         sys.exit(f"instance '{args.name}' is already running")
     rom = Path(args.rom) if args.rom is not None else ROM
+    if rom is None and game_of(args.name) != "moon":
+        sys.exit("no Ultra Sun ROM: pass --rom PATH or set USUM_SUN_ROM to your own decrypted dump")
     if args.rom is None and game_of(args.name) == "moon":
         rom = sdmc_dir(args.name) / SD_ID / "title/00040000/001b5100/content/00000000.app"
         if not rom.is_file():

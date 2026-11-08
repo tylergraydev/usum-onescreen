@@ -1,0 +1,47 @@
+name: Bug report
+description: Something doesn't work in the plugin or the launcher.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please don't attach or link game files, keys or saves.
+  - type: dropdown
+    id: game
+    attributes:
+      label: Game
+      options:
+        - Ultra Sun (USA)
+        - Ultra Moon (USA)
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Plugin or launcher version, Azahar version, and the update's title version if you know it (0x0820 or 0x0800).
+      placeholder: "plugin v0.1.1, Azahar 2126.2, update 0x0820"
+    validations:
+      required: true
+  - type: dropdown
+    id: setup
+    attributes:
+      label: How do you run it?
+      options:
+        - Windows launcher (UsumOneScreen.exe)
+        - Manual install in my own Azahar
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead. Screenshots help.
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: usum-onescreen.log
+      description: From the root of the emulated SD card (with the launcher, inside its azahar\user\sdmc folder; otherwise %APPDATA%\Azahar\sdmc).
+      render: text

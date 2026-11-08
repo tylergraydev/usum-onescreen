@@ -1,3 +1,5 @@
+# Modified from the Makefile in Gen6CTRPFrameworkOverhauled (samaBR85, GPL-3.0),
+# itself from Gen6CTRPluginFramework (biometrix76). See THIRD-PARTY.md.
 .SUFFIXES:
 
 ifeq ($(strip $(DEVKITARM)),)
