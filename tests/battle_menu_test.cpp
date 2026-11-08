@@ -54,8 +54,14 @@ static BattleSnapshot MovesSnap(void)
     const u8 type[4] = { 0, 9, 1, 7 }, effect[4] = { 1, 1, 2, 0 };
     snap.moveCount = BuildMoveRows(snap.moves, moves, pp, maxPp, type, effect, 4);
     const char *names[4] = { "Scratch", "Fire Fang", "Double Kick", "Lick" };
+    const u8 power[4] = { 40, 65, 30, 30 }, accuracy[4] = { 100, 95, 100, 100 };
     for (u8 i = 0; i < snap.moveCount; i++)
+    {
         snap.moves[i].name = names[i];
+        snap.moves[i].power = power[i];
+        snap.moves[i].accuracy = accuracy[i];
+        snap.moves[i].category = 1;
+    }
     return snap;
 }
 
@@ -1063,6 +1069,53 @@ static void TestLayoutDrawing(void)
     }
 }
 
+static void TestMoveDetails(void)
+{
+    const char *expected[] = { "Power 40  Acc 100", "Power 65  Acc 95", "Power 30  Acc 100", "Power 30  Acc 100" };
+    for (BattleLayout layout : { BattleLayout::Classic, BattleLayout::Bar, BattleLayout::Rail })
+    {
+        BattleSnapshot snap = MovesSnap();
+        BattleMenu menu;
+        menu.SetLayout(layout);
+        menu.Update(snap, 0);
+        const UI::Rect area = menu.Area();
+        CHECK(area.x >= 166 && area.y >= 36 && area.Right() <= 400 && area.Bottom() <= 238);
+        for (u8 i = 0; i < 4; i++)
+        {
+            CHECK(menu.Cursor() == i);
+            CHECK(MoveDetailsText(snap.moves[menu.Cursor()]) == expected[i]);
+            CHECK(std::strcmp(BattleCategoryName(snap.moves[i].category), "Physical") == 0);
+            const std::string key = menu.DrawKey(snap);
+            snap.moves[i].power++;
+            CHECK(menu.DrawKey(snap) != key);
+            snap.moves[i].power--;
+            snap.moves[i].accuracy = 101;
+            CHECK(menu.DrawKey(snap) != key);
+            snap.moves[i].accuracy = i == 1 ? 95 : 100;
+            snap.moves[i].category = 2;
+            CHECK(menu.DrawKey(snap) != key);
+            snap.moves[i].category = 1;
+            menu.Update(snap, BattleKeys::DDown);
+            CHECK(menu.DrawKey(snap) != key);
+        }
+    }
+    MoveRow row;
+    CHECK(MoveDetailsText(row) == "Power \xE2\x80\x94  Acc \xE2\x80\x94");
+    row.category = 0;
+    row.power = 80; // status category suppresses power even if supplied
+    row.accuracy = 101;
+    CHECK(MoveDetailsText(row) == "Power \xE2\x80\x94  Acc \xE2\x80\x94");
+    row.category = 1;
+    row.power = 0;
+    row.accuracy = 100;
+    CHECK(MoveDetailsText(row) == "Power \xE2\x80\x94  Acc 100");
+    row.power = 40;
+    row.accuracy = 0;
+    CHECK(MoveDetailsText(row) == "Power 40  Acc \xE2\x80\x94");
+    CHECK(std::strcmp(BattleCategoryName(0), "Status") == 0);
+    CHECK(std::strcmp(BattleCategoryName(2), "Special") == 0);
+}
+
 int main(int argc, char **argv)
 {
     if (argc > 1)
@@ -1081,6 +1134,7 @@ int main(int argc, char **argv)
     TestDrawing();
     TestLayouts();
     TestLayoutDrawing();
+    TestMoveDetails();
     if (s_failures != 0)
     {
         std::printf("battle_menu_test: %d failure(s)\n", s_failures);
