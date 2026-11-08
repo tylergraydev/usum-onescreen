@@ -96,6 +96,7 @@ namespace OneScreen
     static PartyPage s_lastPageLogged = PartyPage::List;
 
     static bool s_summaryHidden = false;
+    static bool s_summaryJudge = false;
     static int s_summaryPos = -1;           // the Pokémon the summary shows (screen position)
     static int s_ringSeen = -1;             // latest ring reading and how many in a row
     static u32 s_ringSeenCount = 0, s_ringLastCount = 0;
@@ -256,6 +257,14 @@ namespace OneScreen
             return v;
         v.valid = mon.calcValid;
         v.egg = mon.isEgg;
+        v.shiny = mon.shiny;
+        v.hiddenAbility = mon.hiddenAbility;
+        for (int i = 0; i < 6; i++)
+        {
+            v.ivs[i] = mon.ivs[i];
+            v.evs[i] = mon.evs[i];
+            v.hyperTrained[i] = mon.hyperTrained[i];
+        }
         char nick[3 * 13 + 1];
         Utf16ToUtf8(mon.nickname, 13, nick, sizeof(nick));
         v.name = nick;
@@ -1144,6 +1153,7 @@ namespace OneScreen
         view.count = Count();
         view.pos = s_summaryPos;
         view.hidden = s_summaryHidden;
+        view.judge = s_summaryJudge;
         if (view.pos >= 0 && view.pos < Count())
         {
             view.mon = s_mons[view.pos];
@@ -1297,7 +1307,13 @@ namespace OneScreen
         if (inStatus)
         {
             s_ringWanted = true;
-            SetCapture((u32)Key::Y);
+            SetCapture((u32)Key::Y | (u32)Key::X);
+            if (!ActionRunning() && (CaptureRealPressed() & Key::X))
+            {
+                s_summaryJudge = !s_summaryJudge;
+                s_summaryHidden = false;
+                log.push_back(std::string("party-ui: summary page ") + (s_summaryJudge ? "judge" : "details"));
+            }
             if (!ActionRunning() && (CaptureRealPressed() & Key::Y))
             {
                 s_summaryHidden = !s_summaryHidden;
@@ -1310,6 +1326,7 @@ namespace OneScreen
         {
             s_ringWanted = false;
             s_summaryHidden = false;
+            s_summaryJudge = false;
             s_summaryLogged.clear();
             const bool owning = !ActionRunning()
                                 && ((inParty && s_stage == Stage::Idle && (ActionProbeFlags() & WorldPartyList))
