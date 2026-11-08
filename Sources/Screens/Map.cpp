@@ -269,7 +269,8 @@ namespace OneScreen
         const u32 all = node >= ChildNodeOffset ? node - ChildNodeOffset : 0;
         if (IsMapPane(all, "All"))
         {
-            SetGamePaneScaleX(all, VtMapPane, 1.0f / squeeze);
+            const u32 nameWord = (u32)'A' | ((u32)'l' << 8) | ((u32)'l' << 16) | ((u32)'\0' << 24);
+            SetGamePaneScaleX(all, VtMapPane, nameWord, 1.0f / squeeze);
             return;
         }
         ClearGamePaneScaleX();

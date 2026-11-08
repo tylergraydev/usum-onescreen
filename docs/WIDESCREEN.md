@@ -209,8 +209,13 @@ widescreen"). So while the map shows with k > 1, `Map.cpp` finds the Rotom
 map layout's `All` pane (every tile, the player icon and the goal flag; its
 origin is the map window's centre, bottom x 160) and `CalculateMtxHook` sets
 its scale x to 1/k right before the game calculates its matrix (the game resets
-it to 1 every frame, so it has to be applied in the hook; after the override
-stops, the game puts it back by itself). The bottom screen then shows the map
+it to 1 every frame, so it has to be applied in the hook). When the override is
+cleared, the hook writes back the game's own last value on that pane's next
+matrix calculation and marks it dirty (the game would also put it back by
+itself; verified both ways). Override and restore only touch a pane whose
+address, vtable and first name bytes (`All `) all match, so a freed layout
+whose address is reused is never written; the hook never waits on the plugin
+thread (it skips a frame if the lock is busy). The bottom screen then shows the map
 squeezed about x 160, and one 1:1 TextureCopy puts the columns the squeezed
 window covers (`UI::SqueezedColumns`) onto the top screen: top column d shows
 bottom column d - 40, the same offset as unsqueezed. `MapWindow` is centred on
