@@ -5,6 +5,55 @@ What the bottom-screen panel costs Azahar, measured 2026-11-02 with
 Azahar 0-4% of its speed (1/2 and full), 8% for 2/3; it was ~40% (H5, below).
 The sections after "P1-6" are H5's original measurements of the old CPU copy.
 
+## Map at widescreen: one GX command (2026-11-08)
+
+On `main` (`b559b40`) the native map crashed the game at 16:9 and 21:9 within
+~15-30 s (plugin stops answering; Azahar logs unmapped reads at PC `0x402690`,
+`0x3596C4`, `0x33FA3C`, `0x3531BC`, then undefined instructions and a jump to
+0); `aspect off` ran fine. `PanelCopyBottomRect` squeezed the picture with one
+TextureCopy per destination column. Tests (instance `mapfix`, Ultra Sun, 5x,
+frame limit 250%, Pokémon Center, map open; throwaway builds):
+
+| copy | GX commands per frame | result |
+|---|--:|---|
+| `main`, 16:9, one per column | 244 | crashed in ~15 s |
+| `main`, 21:9, one per column | 186 | crashed within 30 s (instance `lrtoggle`, 2026-11-07) |
+| 21:9, consecutive columns merged into runs | 75 | crashed in < 15 s |
+| 21:9, the same rectangle copied 75 times | 75 | crashed in < 30 s |
+| 21:9, runs merged, 100 µs sleep between commands | 75 | crashed in < 30 s |
+| 21:9, one copy (centre columns, unsqueezed) | 1 | ran 2 min |
+| **this fix**, 21:9 / 16:9 | **1** | ran 3.7 / 3.5 min; `native-map` scenario passes at both |
+
+So the number of commands is what matters, not what they copy, and giving the
+game's threads time between them doesn't help. The game's GX push
+(`0x279A2C`) is the standard GSP shared-memory command queue (15 entries; a
+push into an empty queue triggers `TriggerCmdReqQueue`), so each command is
+one GSP request and one PPF interrupt for the game's handlers; why many of them
+break the game was not found. Merging runs can't get far enough: Azahar keeps
+a TextureCopy on the GPU only when its gaps match the surfaces' stride, so a
+nearest-neighbour squeeze needs one command per run (75 at 21:9, 17 at 16:9),
+and DisplayTransfer only scales by exactly 2.
+
+The fix makes the game draw the bottom map squeezed (`docs/WIDESCREEN.md`)
+and copies it with one TextureCopy at every aspect; the picture stays at the
+internal resolution.
+
+Speed (`tools/perf.py --modes map:closed,map:off,map:16:9,map:21:9`, 2 rounds
+× 4 windows of 8 s, 2 Azahar processes; "before" from the `main` build, 5
+windows each):
+
+| build | map | GX per frame | speed (mean ± sd) |
+|---|---|--:|---|
+| `main` | closed | 0 | 1.77 ± 0.02 |
+| `main` | open, aspect off | 1 | 1.73 ± 0.04 |
+| fix | closed | 0 | 1.80 ± 0.01 |
+| fix | open, aspect off | 1 | 1.77 ± 0.01 |
+| fix | open, 16:9 | 1 | 1.74 ± 0.02 |
+| fix | open, 21:9 | 1 | 1.73 ± 0.01 |
+
+The map costs ~2-4% either way. The panel's own half/two-thirds/full paths
+still send one command per column at widescreen and were not tested here.
+
 ## P1-6: GPU copy
 
 ### Why the old panel was slow

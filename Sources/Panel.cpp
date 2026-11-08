@@ -725,11 +725,20 @@ namespace OneScreen
         // The run starts at the rect's lowest pixel in memory: its bottom row
         // when lines run toward smaller y.
         const u32 first = fb.stepY < 0 ? ScreenHeight - (y + h) : y;
-        const u32 in = s_bottomFb + x * s_bottomStride + first * 3;
-        const u32 out = BoxLineStart(fb, { dx, dy, w, h, 0, 1, 1 }, dx);
+        const UI::ColumnRange columns = UI::SqueezedColumns(dx, dx + w, WidescreenSqueeze());
+        const s32 sourceX = (s32)x + columns.begin - (s32)dx;
+        const u32 count = columns.end - columns.begin;
+        if (count == 0 || sourceX < (s32)x || sourceX < 0
+            || sourceX + (s32)count > (s32)(x + w)
+            || sourceX + (s32)count > (s32)BottomWidth)
+            return false;
+        const u32 in = s_bottomFb + sourceX * s_bottomStride + first * 3;
+        const u32 out = BoxLineStart(fb, { dx, dy, w, h, 0, 1, 1 }, columns.begin);
         if (run % 16 != 0 || in % 8 != 0 || out % 8 != 0 || (u32)fb.stepX != s_bottomStride)
             return false;
-        CopyTopColumns(in, s_bottomStride, run, w, fb, { dx, dy, w, h, 0, 1, 1 });
+        // The game already squeezed the picture; one GX command avoids queue overload.
+        s_textureCopy(in, out, run * count, run / 16, (s_bottomStride - run) / 16,
+                      run / 16, ((u32)fb.stepX - run) / 16, FlagTextureCopy);
         return true;
     }
 

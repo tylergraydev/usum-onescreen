@@ -22,9 +22,27 @@ namespace UI
 
     struct ColumnRange
     {
-        int begin, end; // Menu coverage [begin, end); bands are its complement.
+        int begin, end; // Destination coverage [begin, end).
         bool active;
     };
+
+    // Top columns whose nearest-neighbour source is in [sourceBegin, sourceEnd).
+    inline ColumnRange SqueezedColumns(int sourceBegin, int sourceEnd, float squeeze)
+    {
+        const auto lowerBound = [&](int source) {
+            int lo = 0, hi = ScreenW;
+            while (lo < hi)
+            {
+                const int mid = lo + (hi - lo) / 2;
+                if (SourceColumn(mid, squeeze) < source) lo = mid + 1;
+                else hi = mid;
+            }
+            return lo;
+        };
+        if (sourceBegin >= sourceEnd)
+            return { 0, 0, false };
+        return { lowerBound(sourceBegin), lowerBound(sourceEnd), true };
+    }
 
     inline ColumnRange PillarboxColumns(const Surface &screen, const Rect &area)
     {
@@ -34,17 +52,7 @@ namespace UI
             || screen.pillarbox == Pillarbox::Off || area.Empty()
             || area.x > 12 || area.y > 8 || area.Right() < 388 || area.Bottom() < 232)
             return { 0, 0, false };
-        const auto lowerBound = [&](int source) {
-            int lo = 0, hi = ScreenW;
-            while (lo < hi)
-            {
-                const int mid = lo + (hi - lo) / 2;
-                if (SourceColumn(mid, screen.squeeze) < source) lo = mid + 1;
-                else hi = mid;
-            }
-            return lo;
-        };
-        return { lowerBound(area.x), lowerBound(area.Right()), true };
+        return SqueezedColumns(area.x, area.Right(), screen.squeeze);
     }
 
 }

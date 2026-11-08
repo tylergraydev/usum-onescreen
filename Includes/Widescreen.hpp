@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <3ds/types.h>
 
 namespace OneScreen
 {
@@ -12,6 +13,11 @@ namespace OneScreen
     std::string SetWidescreenAspect(float aspect);
     // Horizontal stretch relative to stock 5:3; 1 when off.
     float WidescreenSqueeze(void);
+
+    // Applied before the game calculates this pane's matrix; no restore needed.
+    void SetGamePaneScaleX(u32 pane, u32 vtable, float scaleX);
+    void ClearGamePaneScaleX(void);
+    std::string DescribeGamePaneScaleX(void);
 
     // Capture unique culled panes until the next plugin frame callback (max 32).
     void RequestWidescreenCullNames(void);

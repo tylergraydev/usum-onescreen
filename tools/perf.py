@@ -1,4 +1,4 @@
-"""Measure what the bottom-screen panel costs, per panel mode (see docs/PERF.md).
+"""Measure panel, UI demo, or native map costs (see docs/PERF.md).
 
 Usage: py -3 -I tools/perf.py --instance NAME [--modes off,panel,full]
            [--rounds 2] [--windows 6] [--seconds 10] [--csv OUT]
@@ -6,6 +6,11 @@ Usage: py -3 -I tools/perf.py --instance NAME [--modes off,panel,full]
 A mode `ui:X` measures the `uidemo X` test menu instead, with the panel off:
 e.g. `--modes off,ui:on,ui:shade,ui:direct` (see docs/UI.md). The `ui` columns
 are the demo's emulated time per frame.
+
+A mode `map:A` opens the native map with the panel and UI demo off and sets
+`aspect A` (e.g. `map:off`, `map:16:9`, `map:21:9`). `map:closed` closes the
+map and leaves the aspect unchanged. Map runs end with `map close`; the aspect
+is left as set. Example: `--modes map:closed,map:off,map:16:9,map:21:9`.
 
 For each round and mode: sets the mode, lets it settle, then takes WINDOWS
 timing windows of SECONDS each with the plugin's `perf` command. Each window
@@ -92,7 +97,15 @@ def main():
     rows = []
     for rnd in range(args.rounds):
         for mode in args.modes.split(","):
-            if mode.startswith("ui:"):
+            if mode.startswith("map:"):
+                aspect = mode[4:]
+                commands = ["mode off", "uidemo off"]
+                if aspect == "closed":
+                    commands.append("map close")
+                else:
+                    commands.extend([f"aspect {aspect}", "map open"])
+                plugin.send(*commands)
+            elif mode.startswith("ui:"):
                 plugin.send("mode off", f"uidemo {mode[3:]}")
             else:
                 plugin.send("uidemo off", f"mode {mode}")
@@ -131,6 +144,8 @@ def main():
             for r in rows:
                 f.write(",".join(f"{r[k]:.4f}" if isinstance(r[k], float) else str(r[k]) for k in keys) + "\n")
 
+    if any(mode.startswith("map:") for mode in args.modes.split(",")):
+        plugin.send("map close")
     if any(mode.startswith("ui:") for mode in args.modes.split(",")):
         plugin.send("uidemo off")
     print("\nmode       n  speed (mean sd)   top fps wall   top fps emu   capture us   draw us   panel ms per emu s"
