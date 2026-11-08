@@ -14,7 +14,8 @@ namespace UI
     // into 400x240. The game's columns under the layer are copied out by the
     // GPU, the layer is copied into that copy, and it goes back by GPU, so the
     // frame keeps its internal resolution. Falls back to the CPU copy when it
-    // can't (not BGR8, no linear memory, a skip rect, pillarbox bands).
+    // can't (not BGR8, no linear memory, `layergpu off`). Corners are
+    // copied square on this path (see LayerGpu.cpp).
     void StartLayerGpu(u32 displayTransfer, u32 textureCopy);
     void SetLayerGpu(bool on);
     std::string LayerGpuStatus(void);

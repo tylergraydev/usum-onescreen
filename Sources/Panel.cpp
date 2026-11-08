@@ -705,15 +705,17 @@ namespace OneScreen
         if (s_perf)
             s_captureStat.Add(copied - start);
 
-        if (s_drawnFrames % ReadbackInterval == 0)
+        const bool readback = s_drawnFrames % ReadbackInterval == 0;
+        if (readback)
             CheckReadback(screen, p, gpu);
 
         if (s_perf)
             s_drawStat.Add(svcGetSystemTick() - copied);
         s_drawnFrames++;
         // True when the CPU wrote to the top screen (CTRPF then flushes it):
-        // the fallback, and the half-size cursor.
-        return !gpu || (s_mode == PanelMode::Panel && !twoThirds);
+        // the fallback, and the half-size cursor. Keep the
+        // readback diagnostic on CTRPF's flush path too.
+        return !gpu || (s_mode == PanelMode::Panel && !twoThirds) || readback;
     }
 
     bool PanelCopyBottomRect(const Screen &top, u32 x, u32 y, u32 w, u32 h, u32 dx, u32 dy)
@@ -741,7 +743,7 @@ namespace OneScreen
         // screenshot hook so shots include them.
         drew |= UiDemoOnScreen(screen);
         drew |= BattleScreenOnScreen(screen);
-        ShotOnScreen(screen);
+        drew |= ShotOnScreen(screen);
         return drew;
     }
 

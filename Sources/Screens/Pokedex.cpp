@@ -156,9 +156,7 @@ namespace OneScreen
             }
             s_drawLock.Unlock();
         }
-        if (s_layerArea.w > 0)
-            s_layer.Present(fb);
-        return true;
+        return s_layerArea.w > 0 && s_layer.Present(fb);
     }
 
     void StartPokedex(void)

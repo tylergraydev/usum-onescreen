@@ -120,6 +120,9 @@ namespace OneScreen
             s_badge = UI::Layer();
             s_layer = UI::Layer();
         }
+        // Details draws only the badge; the normal view draws only the menu.
+        // Accumulate each present without short-circuiting GPU work.
+        bool drew = false;
         if (s_details)
         {
             if (!s_badge.Matches(fb))
@@ -134,8 +137,8 @@ namespace OneScreen
                 DrawBoxesBadge(canvas);
                 s_badgeDrawn = true;
             }
-            s_badge.Present(fb);
-            return true;
+            drew |= s_badge.Present(fb);
+            return drew;
         }
 
         bool redraw = s_sharedVersion != s_drawnVersion;
@@ -161,8 +164,8 @@ namespace OneScreen
                 s_drawTicksMax = ticks;
             s_drawTicksLast = ticks;
         }
-        s_layer.Present(fb);
-        return true;
+        drew |= s_layer.Present(fb);
+        return drew;
     }
 
     void StartBoxes(void)
