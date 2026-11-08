@@ -19,18 +19,21 @@ namespace OneScreen
     static volatile bool s_wantBottom = false;
     static bool s_pending = false;
 
-    void ShotOnScreen(const Screen &screen)
+    bool ShotOnScreen(const Screen &screen)
     {
         if (screen.IsTop && s_wantTop)
         {
             ReadScreen(screen, TopWidth, s_top);
             s_wantTop = false;
+            return true;
         }
         else if (!screen.IsTop && s_wantBottom)
         {
             ReadScreen(screen, BottomWidth, s_bottom);
             s_wantBottom = false;
+            return true;
         }
+        return false;
     }
 
     // Binary PPM (P6): a short text header, then RGB888 rows.
