@@ -15,6 +15,12 @@ namespace OneScreen
     static volatile float s_aspect = 0.0f;
     static volatile u32 s_rewritten = 0;
     static volatile u32 s_culled = 0;
+    static volatile u32 s_scalePane = 0;
+    static volatile u32 s_scaleVtable = 0;
+    static volatile float s_scaleX = 1.0f;
+    // nw::lyt::Pane fields, USUM v1.2 (both games).
+    static constexpr u32 PaneScaleX = 0x34, PaneFlags = 0x44;
+    static constexpr u8 PaneMatrixDirty = 0x10;
 
     // Debug capture only: never allocate or log from the game hook.
     struct CulledPane
@@ -74,6 +80,27 @@ namespace OneScreen
         return aspect == 0.0f ? 1.0f : aspect / (400.0f / 240.0f);
     }
 
+    void SetGamePaneScaleX(u32 pane, u32 vtable, float scaleX)
+    {
+        s_scalePane = 0;
+        s_scaleX = scaleX;
+        s_scaleVtable = vtable;
+        s_scalePane = pane;
+    }
+
+    void ClearGamePaneScaleX(void)
+    {
+        s_scalePane = 0;
+    }
+
+    std::string DescribeGamePaneScaleX(void)
+    {
+        const u32 pane = s_scalePane;
+        if (pane == 0)
+            return "bottom squeeze off";
+        return Utils::Format("bottom squeeze %.4f (All %08lX)", (double)s_scaleX, pane);
+    }
+
     // Opaque output matrix: the hook only forwards the game's pointer.
     struct Matrix34or44;
 
@@ -95,6 +122,13 @@ namespace OneScreen
 
     static void CalculateMtxHook(u8 *pane, const DrawInfo *info, u32 dirty)
     {
+        const u32 target = s_scalePane;
+        if (target != 0 && (u32)pane == target
+            && *reinterpret_cast<const u32 *>(pane) == s_scaleVtable)
+        {
+            *reinterpret_cast<float *>(pane + PaneScaleX) = s_scaleX;
+            pane[PaneFlags] |= PaneMatrixDirty;
+        }
         HookContext::GetCurrent().OriginalFunction<void>(pane, info, dirty);
         if (WidescreenSqueeze() <= 1.0f)
             return;
@@ -180,6 +214,8 @@ namespace OneScreen
         const float halfWidth = aspect == 0.0f ? 200.0f : 200.0f * (aspect / (400.0f / 240.0f));
         if (!std::isfinite(aspect) || aspect < 0.0f || !std::isfinite(halfWidth) || halfWidth <= 0.0f)
             return "widescreen: invalid aspect";
+        if (aspect <= 400.0f / 240.0f)
+            ClearGamePaneScaleX();
         s_aspect = aspect;
         const std::string status = aspect == 0.0f ? "widescreen: off"
             : Utils::Format("widescreen: aspect %.7g", (double)aspect);

@@ -11,6 +11,10 @@ All notable changes for players are listed here. Versions follow [Semantic Versi
 - Cheats dialog and CLI with six embedded own-code cheats, separate Sun/Moon selections, preserved boot safety guards and exclusive shiny/undo choices. Back up first; changes apply next start.
 - The native PC boxes show each Pokémon's own box icon (the game's, read from your ROM) next to its name, in the box, the party row and under the cursor while moving one.
 
+### Fixed
+
+- The native map no longer crashes the game with widescreen (16:9 or 21:9) on. The map picture now squeezes like the rest of the game's 2D.
+
 ## [0.1.1] - 2026-11-05
 
 ### Changed

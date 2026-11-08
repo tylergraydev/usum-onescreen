@@ -412,6 +412,9 @@ static void TestLayout(void)
     // The copy's constraints (PanelCopyBottomRect): whole 16-byte BGR8 runs
     // at 8-byte aligned addresses in 240-px lines, either line direction.
     CHECK(MapSource.w == MapWindow.w && MapSource.h == MapWindow.h);
+    // All scales about bottom x=160; the 1:1 copy must put it on top x=200.
+    CHECK(2 * MapWindow.x + MapWindow.w == 400);
+    CHECK(2 * MapSource.x + MapSource.w == 320);
     CHECK((MapSource.h * 3) % 16 == 0);
     CHECK(MapSource.y % 8 == 0 && (MapSource.y + MapSource.h) % 8 == 0);
     CHECK(MapWindow.y % 8 == 0 && (MapWindow.y + MapWindow.h) % 8 == 0);
