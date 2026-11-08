@@ -10,7 +10,8 @@ namespace OneScreen
 
     // Called from the OSD callback with each screen, after the plugin has drawn
     // on it, so a top-screen shot shows exactly what the player sees.
-    void ShotOnScreen(const CTRPluginFramework::Screen &screen);
+    // True when a capture read the framebuffer (retain CTRPF flush reporting).
+    bool ShotOnScreen(const CTRPluginFramework::Screen &screen);
 
     // Called every frame from the plugin thread: picks up requests and writes
     // finished captures to the SD card.

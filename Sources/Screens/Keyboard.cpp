@@ -263,8 +263,7 @@ namespace OneScreen
             s_drawnGameFont = gameFont;
             s_viewLock.Unlock();
         }
-        s_layer.Present(fb);
-        return true;
+        return s_layer.Present(fb);
     }
 
     void StartKeyboard(void)

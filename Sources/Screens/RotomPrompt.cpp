@@ -148,8 +148,7 @@ namespace OneScreen
             s_drawnVersion = version;
             s_drawnGameFont = gameFont;
         }
-        s_layer.Present(fb);
-        return true;
+        return s_layer.Present(fb);
     }
 
     void StartRotomPrompt(void)

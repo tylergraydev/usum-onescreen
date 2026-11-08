@@ -87,6 +87,72 @@ Not measured: 1x internal resolution, other scenes, real hardware (the
 transfers are hardware features, but the flags used, e.g. scaling linear input,
 were only checked against Azahar).
 
+## Native overlays and internal resolution
+
+Azahar drops the entire frame to 1x (400x240) when the CPU writes into the
+game's framebuffer, or when a CTRPF OSD callback returns true ("I drew").
+The battle-menu prototype at `fff0411` was verified at the internal resolution
+with GPU-only presentation and a false callback result. Avoiding downloads
+alone is not enough: callbacks must also report CPU drawing accurately.
+
+`Sources/UI/LayerGpu.cpp` transfers the game's columns into GPU-written
+RGBA8 background scratch. The CPU writes layer pixels only into a separate
+stage that the GPU never writes. A GPU twin is seeded from the background
+then overwritten from the stage, keeping its internal scale for TextureCopy.
+The layer's rectangle is copied into the background, converted to BGR8 and
+copied back as whole 240-pixel columns. RGBA8 gives 2-pixel aligned starts
+and 4-pixel lengths rather than BGR8's coarse 8/16-pixel steps.
+
+**Keep the GX command count per present small.** Every column of the layer
+copies the whole rectangle (square corners: the layer's black shows outside
+its rounded shape), so a present is 4 DisplayTransfers, one TextureCopy for
+the layer (two around a skip window), one per pillarbox side and the copy
+back: 6-8 commands. Rounded corners need one copy per distinct column run,
+~15 commands for the 376x224 menus. With those, the game's Party screen
+(scene `main:00647FCC`) crashed within ~10 s every time (bad reads at PC
+`0x402690` / `0x3596C4`, then a jump to garbage). A bisect of the GPU steps
+put it on the TextureCopies; one copy for the whole rectangle ran for
+minutes. The X menu, same rectangle and count, never crashed. The cause was
+not found (not memory: 37 MB of the application region stayed free; not the
+GX queue, see below; not writes past the scratch: 1 MB guards changed
+nothing).
+
+Pillarbox tint/pattern band columns are written into the same CPU stage as
+the layer (whole 240-row columns, by the same pure helper as the CPU
+fallback), and the destination range expands to the full screen. Their runs
+are identical, so each side's band goes in one TextureCopy with the layer's
+runs. A first version copied each band column separately (~114 copies a
+frame at 21:9): the game crashed in the X menu within seconds (PC 0, from
+game code at `0x41DB8C`). The cause was not found: the game's GX queue
+(`*(*(0x69EA68 + 0x1C) + 0x58)`, count at `+1`, refuses commands at 15)
+was empty before every push. `LayerGpu` still checks it before each push
+(waits at 12, gives up after ~2 ms) and reports the most commands in one
+present and the deepest queue seen in `layergpu status`. Measured at 21:9:
+X menu, Party, Bag and Pokédex 8 commands, battle menu 6.
+
+Speed (21:9, 5x, frame limit 250%, X menu open, `layergpu on`/`off`
+alternated, 3 windows of 8 s each): 1.51 / 1.51. No measurable cost.
+
+**Map at 21:9 crashes on main too** (`b559b40`, `layergpu` not involved;
+fine with `aspect off`). `PanelCopyBottomRect` copies its picture with one
+TextureCopy per destination column when the screen is squeezed, a few
+hundred a frame, the same pattern as the crashes above. Not fixed here.
+
+Skip rectangles split each run around excluded rows before rounding each
+piece inward. Map's picture transfer runs after the layer present so the
+whole-column copy-back cannot overwrite it with the saved background.
+Non-BGR8 layouts, unavailable linear memory and `layergpu off` retain the
+CPU fallback. Layer callbacks return `Present`'s CPU-write result, combining
+results without short-circuiting. Direct demo shading/drawing, panel CPU
+fallbacks/cursor, readback checks and requested screenshots retain true
+reporting and their existing framebuffer costs. Actions only probes and
+returns false; inactive/empty callbacks also return false.
+
+Host regression tests cover band bytes in all five formats and both vertical
+directions, plus split-run alignment and skip preservation. The new band,
+skip and callback paths need a devkitARM build and Azahar verification;
+no new emulator speed measurements are claimed. See docs/WIDESCREEN.md.
+
 ## H5: the old CPU copy
 
 ### Method
