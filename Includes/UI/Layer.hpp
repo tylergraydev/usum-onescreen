@@ -8,6 +8,10 @@ namespace OneScreen
 {
 namespace UI
 {
+    // Pure band pixels in memory order. phase: 0..7 stripes, 8 tint,
+    // 9..11 soft edges. column must hold ScreenH * BytesPerPixel(format).
+    void WriteBandColumn(u8 *column, int phase, PixelFormat format, bool reverse);
+
     // An off-screen copy of one rounded-rect area of a screen. Draw into it
     // only when its content changes (Begin), and copy it onto the framebuffer
     // every frame (Present). Present only writes: reading the framebuffer
@@ -48,10 +52,8 @@ namespace UI
         // skip is unsqueezed: test the same source column as the layer.
         bool   Present(const Surface &screen, const Rect &skip) const;
 
-        // The layer's own pixels and the rows copied per column, for a GPU
-        // present (UI/LayerGpu.cpp).
+        // The layer's own pixels, for a GPU present (UI/LayerGpu.cpp).
         const Surface &Pixels(void) const { return m_surface; }
-        u8 TopRows(s32 column) const { return m_top[column]; }
 
         // Set by the plugin (UI/LayerGpu.cpp): presents the layer with GPU
         // transfers instead of CPU writes, so Azahar keeps the frame at its

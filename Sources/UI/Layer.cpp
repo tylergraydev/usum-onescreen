@@ -18,6 +18,21 @@ namespace UI
         return s.stepY == bpp || s.stepY == -bpp;
     }
 
+    void WriteBandColumn(u8 *column, int phase, PixelFormat format, bool reverse)
+    {
+        const Color fill = Theme::WindowFill;
+        const s32 bpp = (s32)BytesPerPixel(format);
+        for (int y = 0; y < ScreenH; y++)
+        {
+            // Half-bright window olive; stripes differ by just 3 levels.
+            const int extra = phase < 8 ? (((phase + y) & 7) < 2 ? 3 : 0)
+                            : phase == 8 ? 0 : (phase - 8) * 4;
+            u8 *pixel = column + (reverse ? ScreenH - 1 - y : y) * bpp;
+            WritePixel(pixel, format, (u8)(fill.r / 2 + extra),
+                       (u8)(fill.g / 2 + extra), (u8)(fill.b / 2 + extra));
+        }
+    }
+
     // Shared by all layers; OSD callbacks are serial (ScreenBuffer.hpp).
     // Eight diagonal phases, one solid base, three soft edge columns.
     // No heap allocation and no framebuffer reads, including on cache rebuild.
@@ -31,17 +46,8 @@ namespace UI
         const s32 bpp = (s32)BytesPerPixel(screen.format);
         if (cachedFormat != (int)screen.format || cachedReverse != reverse)
         {
-            const Color fill = Theme::WindowFill;
             for (int phase = 0; phase < 12; phase++)
-                for (int y = 0; y < ScreenH; y++)
-                {
-                    // Half-bright window olive; stripes differ by just 3 levels.
-                    const int extra = phase < 8 ? (((phase + y) & 7) < 2 ? 3 : 0)
-                                    : phase == 8 ? 0 : (phase - 8) * 4;
-                    u8 *pixel = columns[phase] + (reverse ? ScreenH - 1 - y : y) * bpp;
-                    WritePixel(pixel, screen.format, (u8)(fill.r / 2 + extra),
-                               (u8)(fill.g / 2 + extra), (u8)(fill.b / 2 + extra));
-                }
+                WriteBandColumn(columns[phase], phase, screen.format, reverse);
             cachedFormat = (int)screen.format;
             cachedReverse = reverse;
         }

@@ -68,8 +68,7 @@ namespace OneScreen
             UI::DrawThemeDemo(canvas, s_datas[s_dataSlot], s_page, s_selected);
             s_drawnVersion = version;
         }
-        s_layer.Present(fb);
-        return true;
+        return s_layer.Present(fb);
     }
 
     void StartThemeScreen(void)

@@ -5,6 +5,7 @@
 
 #include "UI/ColumnMapping.hpp"
 #include "UI/Layer.hpp"
+#include "UI/LayerRuns.hpp"
 
 namespace OneScreen
 {
@@ -42,6 +43,50 @@ namespace UI
     static bool s_failed = false;
     static volatile bool s_on = true;
     static u32 s_presents = 0, s_fallbacks = 0;
+    static u32 s_copies = 0, s_maxCopies = 0;   // GX commands in one present, most seen
+
+    // The game's GX command queue (gx functions 0x27A5BC / 0x279E28 push
+    // onto it with 0x279A2C): *(*(0x69EA68 + 0x1C) + 0x58), its command
+    // count in byte +1. The push refuses a command once 15 are queued; a
+    // refused command of the game's own could break it. In Azahar the queue
+    // was always empty before our pushes (it runs each one at once), so this
+    // is a safety net, not a fix for anything seen. Same address on Ultra Moon.
+    static constexpr u32 GxState = 0x69EA68;
+    static constexpr u32 QueueRoom = 12;        // wait while this many are queued
+    static u32 s_maxDepth = 0, s_waits = 0, s_gaveUp = 0;
+
+    static volatile u8 *QueueCount(void)
+    {
+        const u32 gx = *(volatile u32 *)(GxState + 0x1C);
+        if (gx == 0)
+            return nullptr;
+        const u32 queue = *(volatile u32 *)(gx + 0x58);
+        return queue == 0 ? nullptr : (volatile u8 *)(queue + 1);
+    }
+
+    // Room for one more command: waits up to ~2 ms for the GPU to drain the
+    // queue. False if it stays full (the caller drops this frame's present).
+    static bool Room(void)
+    {
+        volatile u8 *count = QueueCount();
+        if (count == nullptr)
+            return false;
+        for (int i = 0; ; i++)
+        {
+            const u32 depth = *count;
+            if (depth > s_maxDepth)
+                s_maxDepth = depth;
+            if (depth < QueueRoom)
+                return true;
+            if (i == 20)
+            {
+                s_gaveUp++;
+                return false;
+            }
+            s_waits++;
+            svcSleepThread(100000);
+        }
+    }
     static std::string s_why = "not used yet";
 
     static u32 Flags(u32 in, u32 out)
@@ -75,6 +120,10 @@ namespace UI
         return false;
     }
 
+    // Checked pushes: false when the queue stays full.
+#define DT(...) do { if (!Room()) return Fallback("GX queue full"); s_displayTransfer(__VA_ARGS__); } while (0)
+#define TC(...) do { if (!Room()) return Fallback("GX queue full"); s_textureCopy(__VA_ARGS__); } while (0)
+
     static bool GpuPresent(const Layer &layer, const Surface &screen, const Rect &skip)
     {
         if (!s_on || s_displayTransfer == nullptr || s_textureCopy == nullptr)
@@ -82,11 +131,8 @@ namespace UI
         if (screen.format != PixelFormat::BGR8 || screen.height != (s32)Len || screen.width > (s32)MaxLines
             || screen.stepX != (s32)Len * 3 || (screen.stepY != 3 && screen.stepY != -3))
             return Fallback("screen not BGR8 columns");
-        if (!skip.Empty())
-            return Fallback("skip rect");
         const Rect area = layer.Area();
-        if (PillarboxColumns(screen, area).active)
-            return Fallback("pillarbox bands");
+        const ColumnRange bands = PillarboxColumns(screen, area);
         if (!Scratch())
             return false;
 
@@ -102,6 +148,11 @@ namespace UI
                 d0 = d;
             d1 = d + 1;
         }
+        if (bands.active)
+        {
+            d0 = 0;
+            d1 = screen.width;
+        }
         if (d0 < 0)
             return true;    // nothing of it on screen
         const u32 lines = (u32)(d1 - d0);
@@ -114,25 +165,45 @@ namespace UI
         const u32 twin = s_scratch + OffTwin, out = s_scratch + OffOut;
 
         // 1. The game's columns, by GPU, into bg (keeps the internal resolution).
-        s_displayTransfer(fbLines, Len, lines, bg, Len, lines, Flags(Rgb8, Rgba8));
+        DT(fbLines, Len, lines, bg, Len, lines, Flags(Rgb8, Rgba8));
 
         // 2. The layer into stage (CPU, memory the GPU never writes), as RGBA8
         //    (bytes A, B, G, R), only the rows each column copies.
         const Surface &px = layer.Pixels();
-        struct Run { u32 a, b; };
-        static Run runs[MaxLines];
+        static LayerRuns runs[MaxLines];
         for (u32 l = 0; l < lines; l++)
         {
-            runs[l] = { 0, 0 };
-            const s32 x = SourceColumn(d0 + (s32)l, squeeze);
+            runs[l] = {};
+            const s32 dx = d0 + (s32)l;
+            if (bands.active && (dx < bands.begin || dx >= bands.end))
+            {
+                // A pillarbox band column: whole 240 rows, so all band
+                // columns merge into one copy per side in step 3. One copy
+                // per band column (~114 a frame at 21:9) crashed the game
+                // in the X menu (PC 0 from 0x41DB8C); cause not found, the
+                // queue was not full (see Room).
+                const s32 distance = dx < bands.begin ? bands.begin - 1 - dx : dx - bands.end;
+                const s32 phase = distance < 3 ? 11 - distance
+                                : screen.pillarbox == Pillarbox::Pattern ? dx & 7 : 8;
+                WriteBandColumn((u8 *)(stage + l * Len * 4), phase, PixelFormat::RGBA8, reverse);
+                runs[l].pieces[0] = { 0, Len };
+                continue;
+            }
+            const s32 x = SourceColumn(dx, squeeze);
             if (x < area.x || x >= area.Right())
                 continue;
             const s32 i = x - area.x;
-            const s32 y0 = layer.TopRows(i), y1 = area.h - layer.TopRows(i);
-            if (y1 <= y0)
-                continue;
+            // Square corners: every column copies the whole rectangle, so
+            // the layer goes in one copy (two around a skip window), plus
+            // one per band. Per-column rounded runs were ~10 more GX
+            // commands a present: with 15 the game's Party screen
+            // (main:00647FCC) crashed within seconds every time, and the
+            // map with its own copies too, while 6-8 ran for minutes. The X
+            // menu, same rectangle, did not crash. Cause not found. The
+            // corners show the layer's black outside the rounded shape.
+            const s32 y0 = 0, y1 = area.h;
             u8 *dst = (u8 *)(stage + l * Len * 4);
-            for (s32 y = y0; y < y1; y++)
+            for (s32 y = 0; y < area.h; y++)
             {
                 const u8 *s = px.origin + i * px.stepX + y * px.stepY;
                 u8 *d = dst + index(area.y + y) * 4;
@@ -141,39 +212,57 @@ namespace UI
             // Rows in memory order, rounded inward to the copy's steps.
             u32 a = index(area.y + (reverse ? y1 - 1 : y0));
             u32 b = index(area.y + (reverse ? y0 : y1 - 1)) + 1;
-            a = (a + 1) & ~1u;
-            if (b > a)
-                b = a + ((b - a) & ~3u);
-            runs[l] = { a, b > a ? b : a };
+            u32 skipA = 0, skipB = 0;
+            if (!skip.Empty() && x >= skip.x && x < skip.Right())
+            {
+                // Clip in screen rows before converting to memory order.
+                const s32 lo = skip.y < 0 ? 0 : skip.y > (s32)Len ? (s32)Len : skip.y;
+                const s32 hi = skip.Bottom() < 0 ? 0 : skip.Bottom() > (s32)Len ? (s32)Len : skip.Bottom();
+                skipA = (u32)(reverse ? (s32)Len - hi : lo);
+                skipB = (u32)(reverse ? (s32)Len - lo : hi);
+            }
+            runs[l] = SplitLayerRun(a, b, skipA, skipB);
         }
         // stage's twin at the game's scale: made from bg, then overwritten.
-        s_displayTransfer(bg, Len, lines, twin, Len, lines, Flags(Rgba8, Rgba8));
-        s_displayTransfer(stage, Len, lines, twin, Len, lines, Flags(Rgba8, Rgba8));
+        DT(bg, Len, lines, twin, Len, lines, Flags(Rgba8, Rgba8));
+        DT(stage, Len, lines, twin, Len, lines, Flags(Rgba8, Rgba8));
 
-        // 3. The layer's runs into bg; neighbouring columns with the same run
-        //    go in one copy.
         const u32 lineBytes = Len * 4;
-        for (u32 l = 0; l < lines;)
-        {
-            const Run r = runs[l];
-            u32 n = 1;
-            while (l + n < lines && runs[l + n].a == r.a && runs[l + n].b == r.b)
-                n++;
-            if (r.b > r.a)
-            {
-                const u32 run = (r.b - r.a) * 4, gap = lineBytes - run;
-                const u32 at = l * lineBytes + r.a * 4;
-                s_textureCopy(twin + at, bg + at, run * n, run / 16, gap / 16, run / 16, gap / 16, FlagTextureCopy);
-            }
-            l += n;
-        }
+        s_copies = 0;
 
-        // 4. Back to BGR8, then over the game's columns.
-        s_displayTransfer(bg, Len, lines, out, Len, lines, Flags(Rgba8, Rgb8));
-        s_textureCopy(out, fbLines, lines * Len * 3, Len * 3 / 16, 0, Len * 3 / 16, 0, FlagTextureCopy);
+        // 3. Each half of the layer's runs into bg; neighbouring columns
+        //    with the same piece go in one copy. Both pieces avoid skip.
+        for (unsigned piece = 0; piece < 2; piece++)
+            for (u32 l = 0; l < lines;)
+            {
+                const LayerRun r = runs[l].pieces[piece];
+                u32 n = 1;
+                while (l + n < lines && runs[l + n].pieces[piece].a == r.a
+                       && runs[l + n].pieces[piece].b == r.b)
+                    n++;
+                if (r.b > r.a)
+                {
+                    const u32 run = (r.b - r.a) * 4, gap = lineBytes - run;
+                    const u32 at = l * lineBytes + r.a * 4;
+                    TC(twin + at, bg + at, run * n, run / 16, gap / 16, run / 16, gap / 16, FlagTextureCopy);
+                    s_copies++;
+                }
+                l += n;
+            }
+
+        // 4. Back to BGR8, then over the game's columns. This also restores
+        // the saved bg under skip; Map must copy its picture AFTER Present.
+        DT(bg, Len, lines, out, Len, lines, Flags(Rgba8, Rgb8));
+        TC(out, fbLines, lines * Len * 3, Len * 3 / 16, 0, Len * 3 / 16, 0, FlagTextureCopy);
         s_presents++;
+        s_copies += 5;  // the four DisplayTransfers and the copy back
+        if (s_copies > s_maxCopies)
+            s_maxCopies = s_copies;
         return true;
     }
+
+#undef DT
+#undef TC
 
     void StartLayerGpu(u32 displayTransfer, u32 textureCopy)
     {
@@ -189,8 +278,8 @@ namespace UI
 
     std::string LayerGpuStatus(void)
     {
-        return CTRPluginFramework::Utils::Format("layergpu: %s, scratch %08lX, presents %lu, fallbacks %lu (last: %s)",
-                                                 s_on ? "on" : "off", s_scratch, s_presents, s_fallbacks,
+        return CTRPluginFramework::Utils::Format("layergpu: %s, app free %lu KB, scratch %08lX, presents %lu, most GX commands %lu, deepest queue %lu, waits %lu, gave up %lu, fallbacks %lu (last: %s)",
+                                                 s_on ? "on" : "off", (u32)(osGetMemRegionFree(MEMREGION_APPLICATION) / 1024), s_scratch, s_presents, s_maxCopies, s_maxDepth, s_waits, s_gaveUp, s_fallbacks,
                                                  s_why.c_str());
     }
 }
