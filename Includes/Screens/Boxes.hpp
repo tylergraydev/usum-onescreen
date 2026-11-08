@@ -25,7 +25,7 @@ namespace OneScreen
     // lines are appended to `log`.
     void BoxesUpdate(u32 sceneManager, const std::string &scene, std::vector<std::string> &log);
 
-    // "boxes on|off|status|details|pick|drop|prev|next" (the part after
+    // "boxes on|off|status|details|pick|drop|prev|next|icons on|icons off" (the part after
     // "boxes "); pick/drop/prev/next act as A / L / R would. False if it
     // isn't one of those.
     bool BoxesRunCommand(const std::string &args, u32 sceneManager, std::vector<std::string> &log);

@@ -9,6 +9,7 @@
 
 #include "ActionQueue.hpp"
 #include "BoxData.hpp"
+#include "UI/PokeIcons.hpp"
 #include "UI/Raster.hpp"
 
 namespace OneScreen
@@ -48,10 +49,15 @@ namespace OneScreen
         std::string party[BoxPartySlots];
         u8 slotBalls[BoxSlots] = {};        // Poké Ball per Pokémon (Pk7::ball; 0 = none drawn)
         u8 partyBalls[BoxPartySlots] = {};
+        bool slotShiny[BoxSlots] = {}, partyShiny[BoxPartySlots] = {};
+        // The game's box icon per Pokémon (UI/PokeIcons.hpp, index in
+        // a/0/6/2); 0 = none (icon 0 is the game's "no Pokémon" ball).
+        u16 slotIcons[BoxSlots] = {}, partyIcons[BoxPartySlots] = {};
         u32 cursor = 0;                     // the game's cursor (BoxData.hpp)
         BoxMode mode = BoxMode::Idle;
         std::string held;                   // carrying: what (empty: unknown)
         u8 heldBall = 0;
+        u16 heldIcon = 0;
         int heldTray = -1, heldIndex = -1;  // carrying: where it came from (cursor index)
         std::string busy;                   // an action is running: what it does
     };
@@ -65,7 +71,9 @@ namespace OneScreen
     UI::Rect BoxesCellRect(u32 index);
     // The footer line: hints, or what is happening.
     std::string BoxesFooter(const BoxesView &view);
-    void DrawBoxes(UI::Canvas &canvas, const BoxesView &view);
+    // Each Pokémon's box icon comes from `icons` (nullptr, or an icon not
+    // decoded yet: the name alone).
+    void DrawBoxes(UI::Canvas &canvas, const BoxesView &view, const UI::PokeIconCache *icons = nullptr);
 
     // Details: the native screen steps aside so the game's own top screen
     // (the Pokémon at its cursor) shows; only this badge stays.

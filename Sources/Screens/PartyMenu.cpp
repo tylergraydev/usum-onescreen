@@ -662,7 +662,10 @@ namespace OneScreen
 
         // Line 1: name and gender (as the game: the gender sign at the
         // right end).
-        Theme::DrawText(canvas, mon.name, UI::Rect{ inner.x, inner.y, inner.w - 16, line }, text);
+        const int nameRoom = inner.w - 16 - (mon.shiny ? 14 : 0);
+        const int nameW = Theme::DrawText(canvas, mon.name, UI::Rect{ inner.x, inner.y, nameRoom, line }, text);
+        if (mon.shiny)
+            Theme::DrawShiny(canvas, inner.x + nameW + 2, inner.y + (line - 10) / 2);
         if (mon.gender < 2)
             Theme::DrawGender(canvas, inner.Right() - 12, inner.y + (line - 12) / 2, mon.gender == 1);
 
@@ -904,6 +907,51 @@ namespace OneScreen
         Theme::DrawText(canvas, value, UI::Rect{ r.x + labelW + 6, r.y, r.w - labelW - 10, r.h }, Style(size, valueColor));
     }
 
+    const char *JudgeWord(u8 iv, bool hyperTrained)
+    {
+        if (hyperTrained) return "Hyper trained";
+        if (iv == 31) return "Best";
+        if (iv == 30) return "Fantastic";
+        if (iv >= 26) return "Very good";
+        if (iv >= 16) return "Pretty good";
+        if (iv >= 1) return "Decent";
+        return "No good";
+    }
+
+    static void DrawJudge(UI::Canvas &canvas, const PartyMonView &mon, int x, int y, int w)
+    {
+        static const char *const stats[6] = { "HP", "Atk", "Def", "SpA", "SpD", "Spe" };
+        const int labelW = Theme::MeasureText("SpA", Theme::TextSize::Small) + 12;
+        const int evW = Theme::MeasureText("252", Theme::TextSize::Small) + 8;
+        const int barW = 46, gap = 6;
+        const int barX = x + w - barW - gap;
+        const int evX = barX - gap - evW;
+        const int ivX = x + labelW + gap;
+        Theme::DrawText(canvas, "Judge / IV", UI::Rect{ ivX, y, evX - ivX, 18 },
+                        Style(Theme::TextSize::Small, Theme::WindowText));
+        Theme::DrawText(canvas, "EV / 252", UI::Rect{ evX, y, x + w - evX, 18 },
+                        Style(Theme::TextSize::Small, Theme::WindowText));
+        y += 18;
+        int total = 0;
+        for (int i = 0; i < 6; i++, y += 19)
+        {
+            const UI::Rect r = { x, y, w, 18 };
+            canvas.FillRoundRect(r, 4, ValueBottom);
+            canvas.FillRoundRect(UI::Rect{ x, y, labelW, r.h }, 4, LabelBar);
+            Theme::DrawText(canvas, stats[i], UI::Rect{ x + 5, y, labelW - 6, r.h },
+                            Style(Theme::TextSize::Small, Theme::WindowText));
+            Theme::DrawText(canvas, Format("%d ", mon.ivs[i]) + JudgeWord(mon.ivs[i], mon.hyperTrained[i]),
+                            UI::Rect{ ivX, y, evX - gap - ivX, r.h }, Style(Theme::TextSize::Small, Theme::AccentText));
+            Theme::DrawText(canvas, Format("%d", mon.evs[i]), UI::Rect{ evX, y, evW, r.h },
+                            Style(Theme::TextSize::Small, Theme::AccentText, UI::Align::Right));
+            // Gauge geometry is the theme's, with a fixed per-stat EV limit.
+            Theme::DrawHpBar(canvas, UI::Rect{ barX, y + 4, barW, Theme::GaugeHeight + 3 }, mon.evs[i], 252);
+            total += mon.evs[i];
+        }
+        Theme::DrawText(canvas, Format("EV total: %d / 510", total), UI::Rect{ x + 4, y, w - 8, 18 },
+                        Style(Theme::TextSize::Small, Theme::WindowText));
+    }
+
     void DrawSummary(UI::Canvas &canvas, const SummaryView &view)
     {
         Backdrop(canvas, PartyArea);
@@ -921,7 +969,13 @@ namespace OneScreen
         const int whereW = Theme::MeasureText(where, Theme::TextSize::Small);
         Theme::DrawText(canvas, where, UI::Rect{ hin.Right() - whereW, hin.y, whereW, hin.h }, whiteSmall);
         int hx = hin.x;
-        hx += Theme::DrawText(canvas, mon.valid ? mon.name : std::string("?"), UI::Rect{ hx, hin.y, 150, hin.h }, white);
+        hx += Theme::DrawText(canvas, mon.valid ? (mon.egg ? std::string("Egg") : mon.name) : std::string("?"),
+                              UI::Rect{ hx, hin.y, mon.shiny && !mon.egg ? 136 : 150, hin.h }, white);
+        if (mon.valid && !mon.egg && mon.shiny)
+        {
+            Theme::DrawShiny(canvas, hx + 2, hin.y + (hin.h - 10) / 2);
+            hx += 14;
+        }
         if (mon.valid && !mon.egg && mon.gender < 2)
         {
             Theme::DrawGender(canvas, hx + 4, hin.y + (hin.h - 12) / 2, mon.gender == 1);
@@ -937,7 +991,17 @@ namespace OneScreen
         }
         y = head.Bottom() + 6;
         if (!mon.valid || mon.egg)
+        {
+            DrawPrompts(canvas, { { Theme::Button::X, view.judge ? "Details" : "Judge" },
+                                  { Theme::Button::Y, "Game page" }, { Theme::Button::B, "Back" } });
             return;
+        }
+        if (view.judge)
+        {
+            DrawJudge(canvas, mon, x, y, w);
+            DrawPrompts(canvas, { { Theme::Button::X, "Details" }, { Theme::Button::Y, "Game page" }, { Theme::Button::B, "Back" } });
+            return;
+        }
 
         // Left: HP, status, item, ability, nature.
         const int leftW = 196, rowH = 24, gap = 4;
@@ -960,7 +1024,16 @@ namespace OneScreen
         };
         for (const auto &row : rows)
         {
-            DrawInfoRow(canvas, UI::Rect{ x, y, leftW, rowH }, row[0], row[1], Theme::AccentText);
+            const bool ha = mon.hiddenAbility && row[0] == "Ability";
+            const int pillW = ha ? Theme::MeasureText("HA", Theme::TextSize::Small) + 6 : 0;
+            DrawInfoRow(canvas, UI::Rect{ x, y, leftW - (ha ? pillW + 2 : 0), rowH }, row[0], row[1], Theme::AccentText);
+            if (ha)
+            {
+                const int px = x + leftW - pillW;
+                canvas.FillRoundRect(UI::Rect{ px, y + 3, pillW, rowH - 6 }, 6, LabelBar);
+                Theme::DrawText(canvas, "HA", UI::Rect{ px, y + 3, pillW, rowH - 6 },
+                                Style(Theme::TextSize::Small, Theme::WindowText, UI::Align::Center));
+            }
             y += rowH + gap;
         }
 
@@ -996,13 +1069,19 @@ namespace OneScreen
                             Style(Theme::TextSize::Small, Theme::AccentText, UI::Align::Right));
         }
 
-        DrawPrompts(canvas, { { Theme::Button::Y, "Game page" }, { Theme::Button::B, "Back" } });
+        // Keep the details prompts below the left column: short labels, so
+        // they don't run into the fourth move's category / PP.
+        DrawPrompts(canvas, { { Theme::Button::X, "Judge" }, { Theme::Button::Y, "Game" }, { Theme::Button::B, "Back" } });
     }
 
     static std::string MonKey(const PartyMonView &m)
     {
         std::string k = m.valid ? "v" : "-";
         k += m.egg ? "e" : "";
+        k += m.shiny ? "*" : "";
+        k += m.hiddenAbility ? "ha" : "";
+        for (int i = 0; i < 6; i++)
+            k += Format("/%d:%d", m.ivs[i], m.evs[i]) + (m.hyperTrained[i] ? "t" : "");
         k += m.name + "|" + m.species + "|" + m.item + "|" + m.ability + "|" + m.nature;
         k += Format("|%d|%d", m.level, m.hp) + Format("|%d|%d", m.maxHp, (int)m.status) + Format("|%d|%d", m.gender, m.itemId);
         for (int i = 0; i < 4; i++)
@@ -1026,6 +1105,6 @@ namespace OneScreen
 
     std::string SummaryViewKey(const SummaryView &v)
     {
-        return Format("%d/%d", v.pos, v.count) + (v.hidden ? "h" : "s") + MonKey(v.mon);
+        return Format("%d/%d", v.pos, v.count) + (v.hidden ? "h" : "s") + (v.judge ? "j" : "d") + MonKey(v.mon);
     }
 }

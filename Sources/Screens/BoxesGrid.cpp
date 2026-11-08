@@ -5,6 +5,7 @@
 
 #include "UI/GameAssets.hpp"
 #include "UI/Layout.hpp"
+#include "UI/PokeIcons.hpp"
 #include "UI/Text.hpp"
 #include "UI/Theme.hpp"
 
@@ -165,6 +166,10 @@ namespace OneScreen
     static const int PartyGap = 8, PartyH = Theme::RowHeight;
     static const int ArrowW = 16;
     static const int TabW = 170;
+    // Where a box icon sits in its cell: its left edge (the pictures have
+    // about 9 clear columns on the left), how far its bottom reaches below
+    // the cell (their feet are on row 28 of 30), the name line above it.
+    static const int IconX = -6, IconDrop = 2, NameH = 13;
 
     UI::Rect BoxesCellRect(u32 index)
     {
@@ -251,8 +256,23 @@ namespace OneScreen
         UI::DrawImage(canvas, *icon, x, y, &src);
     }
 
+    // The icon on the cell's left, 1:1 as the game shows it, its feet on
+    // the plate's bottom edge; it may reach into the gaps above and below
+    // (2 px), never into a neighbour.
+    static void DrawCellIcon(UI::Canvas &canvas, const UI::Rect &r, const UI::PokeIcon *icon, bool dim)
+    {
+        if (icon == nullptr)
+            return;
+        const UI::Rect clip = UI::Intersect(canvas.GetClip(), UI::Rect{ r.x, r.y - Gap, r.w, r.h + 2 * Gap });
+        const UI::Rect saved = canvas.GetClip();
+        canvas.SetClip(clip);
+        UI::DrawPokeIcon(canvas, *icon, r.x + IconX, r.Bottom() + IconDrop - UI::PokeIconH, dim ? 110 : 255);
+        canvas.SetClip(saved);
+    }
+
     static void DrawCell(UI::Canvas &canvas, const UI::Rect &r, const std::string &label, bool party,
-                         bool cursor, bool holding, bool dim, const std::string &held)
+                         bool cursor, bool holding, bool dim, const std::string &held,
+                         const UI::PokeIcon *icon, const UI::PokeIcon *heldIcon)
     {
         Theme::TextStyle style;
         style.size = Theme::TextSize::Small;
@@ -272,25 +292,47 @@ namespace OneScreen
             style.color = dim ? DimText : White;
             style.outline = dim ? Rgb(0, 0, 0, 0) : FrameLine;
         }
+
+        // Without an icon the name is centred in the cell. With one, the
+        // icon stands on the left and the name runs along the top right:
+        // the icons' pictures sit low (feet on the bottom row), so a long
+        // name covers at most the top of the picture. Outlined in the box,
+        // so it reads over the picture.
+        const UI::Rect centred = UI::Inset(r, 2, 0, 2, party ? 2 : 0);
+        const UI::Rect top{ r.x + 2, r.y + (party ? 1 : 0), r.w - 4 - (party ? 4 : 0), NameH };
+        if (!label.empty())
+        {
+            DrawCellIcon(canvas, r, icon, dim);
+            if (icon != nullptr)
+            {
+                style.align = UI::Align::Right;
+                // On the party's light rows: a light rim keeps the dark
+                // letters apart from the picture.
+                if (party && !dim)
+                    style.outline = Theme::ListTop;
+            }
+            Theme::DrawText(canvas, label, icon != nullptr ? top : centred, style);
+        }
+        else if (cursor && holding && !held.empty())
+        {
+            // Where the held Pokémon would go.
+            DrawCellIcon(canvas, r, heldIcon, false);
+            if (heldIcon != nullptr)
+                style.align = UI::Align::Right;
+            style.color = White;
+            style.outline = Theme::CursorRed;
+            Theme::DrawText(canvas, held, heldIcon != nullptr ? top : centred, style);
+        }
+
         if (cursor)
         {
-            // The orange frame of the game's selected plate; red while holding.
+            // The orange frame of the game's selected plate; red while
+            // holding. Last, so an icon reaching into the gap stays under it.
             const UI::Rect ring = UI::Inset(r, -2);
             if (holding)
                 canvas.StrokeRoundRect(ring, 8, Theme::CursorRed, 2);
             else
                 Theme::DrawHighlightFrame(canvas, ring, 8);
-        }
-
-        const UI::Rect text = UI::Inset(r, 2, 0, 2, party ? 2 : 0);
-        if (!label.empty())
-            Theme::DrawText(canvas, label, text, style);
-        else if (cursor && holding && !held.empty())
-        {
-            // Where the held Pokémon would go.
-            style.color = White;
-            style.outline = Theme::CursorRed;
-            Theme::DrawText(canvas, held, text, style);
         }
     }
 
@@ -302,7 +344,7 @@ namespace OneScreen
             x += Theme::DrawButtonPrompt(canvas, x, r.y, p.first, p.second) + (p.second.empty() ? 2 : 6);
     }
 
-    void DrawBoxes(UI::Canvas &canvas, const BoxesView &view)
+    void DrawBoxes(UI::Canvas &canvas, const BoxesView &view, const UI::PokeIconCache *icons)
     {
         const bool carrying = view.mode == BoxMode::Carrying;
 
@@ -381,8 +423,17 @@ namespace OneScreen
             // drop; dim it here.
             const bool source = carrying && view.heldIndex == (int)i
                                 && (party || view.heldTray == (int)view.tray);
+            const u16 iconIndex = party ? view.partyIcons[i - BoxSlots] : view.slotIcons[i];
+            const UI::PokeIcon *icon = icons != nullptr && iconIndex != 0 ? icons->Find(iconIndex) : nullptr;
+            const UI::PokeIcon *heldIcon = icons != nullptr && view.heldIcon != 0 ? icons->Find(view.heldIcon) : nullptr;
             DrawCell(canvas, BoxesCellRect(i), label, party, i == view.cursor, carrying,
-                     source || !view.busy.empty(), view.held);
+                     source || !view.busy.empty(), view.held, icon, heldIcon);
+            const bool shiny = party ? view.partyShiny[i - BoxSlots] : view.slotShiny[i];
+            if (shiny && !label.empty())
+            {
+                const UI::Rect cell = BoxesCellRect(i);
+                Theme::DrawShiny(canvas, cell.Right() - 11, cell.y + 1);
+            }
         }
 
         // Footer: the button prompts while the screen takes keys, else what
