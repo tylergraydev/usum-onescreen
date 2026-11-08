@@ -145,7 +145,7 @@ namespace OneScreen
             || area.h != s_drawnArea.h)
         {
             const int radius = badge ? area.h / 2 : RotomRadius;
-            if (!s_layer.SetupHiRes(fb, area, radius, 0, pixels, bytes))
+            if (!s_layer.SetupHiRes(fb, area, radius, UI::RotomSlot, pixels, bytes))
                 return false;
             s_drawnArea = area;
             redraw = true;

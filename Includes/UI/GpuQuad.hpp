@@ -10,7 +10,7 @@ namespace OneScreen
 namespace UI
 {
     // Overlay backend evolved from the verified spike (docs/GPUQUAD.md).
-    // Up to two textured quads share one PICA list and one state restore.
+    // Four textured layers and pillarbox strips share one PICA list/restore.
     //
     // Both modes run one PICA command list (our state, the draw, then the
     // game's state restored). `mode fb`, from the OSD callback:
@@ -24,10 +24,11 @@ namespace UI
     // game's gx ProcessCommandList wrapper (0x279D5C), which parses every
     // command list the game submits (following CMDBUF jumps).
 
-    // Two independently visible atlas regions, composited in slot order in one GX list.
+    // Four independently visible atlas regions, composited in slot order in one GX list.
     // Source is row-major RGBA8 (ABGR bytes); region is in a shared 1024x1024 atlas.
     // First publish must be dirty. Source must stay stable for this call; callers
     // own staging storage and slot/region ownership. Renew every visible callback.
+    // Leave a transparent texel between regions; x>=1012 is reserved for bands.
     // Upload only on dirty content. Nonblocking: false means retry next callback.
     bool HiResReady(void);
     bool UpdateGpuQuad(u32 slot, const Surface &source, const Rect &region, const Rect &destination, bool dirty);

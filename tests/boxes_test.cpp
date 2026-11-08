@@ -3,6 +3,7 @@
 // and run: make -C tests. With a path argument, also writes a preview of the
 // screen there as a PPM image.
 
+#include "hires_screen_smoke.hpp"
 #include "BoxData.hpp"
 #include "Screens/BoxesGrid.hpp"
 
@@ -518,6 +519,8 @@ static void TestDraw(const char *preview)
         CHECK(icons.Store(FakeIcon(200 + i, (u8)(220 - i * 30), (u8)(90 + i * 30), 60)));
     }
     DrawBoxes(canvas, view, &icons);
+    CHECK(HiResScreenSmoke::Run(BoxesArea, BoxesRadius, [&](UI::Canvas &hi) { DrawBoxes(hi, view, &icons); }));
+    CHECK(HiResScreenSmoke::Run(BoxesBadgeArea, 8, [&](UI::Canvas &hi) { DrawBoxesBadge(hi); }));
     // The icon sits on the cell's left, 1:1; the name stays on the right.
     const UI::Rect iconCell = BoxesCellRect(11);    // Abra: a short name, clear of the icon's left
     const UI::Color body = At(canvas, iconCell.x - 6 + 10, iconCell.Bottom() + 2 - UI::PokeIconH + 18);

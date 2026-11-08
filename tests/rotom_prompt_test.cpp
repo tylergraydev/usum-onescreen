@@ -3,6 +3,7 @@
 // an optional path to the game's own a/0/3/2 (English text GARC, from the
 // user's dump in analysis/private/; skipped when missing, as on CI).
 
+#include "hires_screen_smoke.hpp"
 #include "RomfsText.hpp"
 #include "Screens/RotomPromptView.hpp"
 #include "UI/Text.hpp"
@@ -289,6 +290,7 @@ static void TestDraw(const char *preview)
     v.cursor = 1;
     const UI::Rect area = RotomArea(v);
     DrawRotomPrompt(canvas, v);
+    CHECK(HiResScreenSmoke::Run(RotomArea(v), RotomRadius, [&](UI::Canvas &hi) { DrawRotomPrompt(hi, v); }));
     // Nothing above the box is touched; the box is drawn.
     const UI::Color above = At(canvas, area.x + 50, area.y - 2);
     CHECK(above.r == 10 && above.g == 200 && above.b == 10);

@@ -24,6 +24,21 @@ namespace OneScreen { namespace UI {
         return true;
     }
 
+    // Clear a reused region's one-texel gutter before bilinear sampling.
+    inline void ClearQuadBorder(const Rect &r, u8 *atlas, s32 width, s32 height)
+    {
+        u8 zero[4] = {};
+        const Surface pixel{ zero, 4, 4, PixelFormat::RGBA8, 1, 1 };
+        const auto clear = [&](s32 x, s32 y) {
+            if (x >= 0 && x < width && y >= 0 && y < height)
+                TileQuadRegion(pixel, Rect{ x, y, 1, 1 }, atlas, width, height);
+        };
+        for (s32 x = r.x - 1; x <= r.Right(); x++)
+        { clear(x, r.y - 1); clear(x, r.Bottom()); }
+        for (s32 y = r.y; y < r.Bottom(); y++)
+        { clear(r.x - 1, y); clear(r.Right(), y); }
+    }
+
     // Four vertices, each float4 clip position + float2 UV. Rotated top target;
     // same x=200 squeeze as SourceColumn, continuous rather than rounded to 1x.
     inline void QuadVertices(float *v, const Rect &r, const Rect &tex, s32 texW, s32 texH,

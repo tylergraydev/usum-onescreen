@@ -142,7 +142,9 @@ namespace UI
 
     bool Canvas::GetPixel(s32 x, s32 y, Color &out) const
     {
-        if (x < m_ox || y < m_oy || x >= m_ox + m_surface.width || y >= m_oy + m_surface.height)
+        const s32 w = m_scale == 1.f ? m_surface.width : (s32)std::lround(m_surface.width / m_scale);
+        const s32 h = m_scale == 1.f ? m_surface.height : (s32)std::lround(m_surface.height / m_scale);
+        if (x < m_ox || y < m_oy || x >= m_ox + w || y >= m_oy + h)
             return false;
         if (m_scale != 1.f)
             return DeviceCanvas().GetPixel((s32)DeviceX(x), (s32)DeviceY(y), out);
@@ -508,6 +510,84 @@ namespace UI
             }
         }
     }
+    void Canvas::DrawImage(const ImageView &image, const Rect &src, const Rect &dst,
+                           ImageFilter filter, Color tint, bool rotate)
+    {
+        if (image.pixels == nullptr || image.width <= 0 || image.height <= 0 ||
+            src.Empty() || dst.Empty() || tint.a == 0) return;
+        const s32 sw = rotate ? src.h : src.w, sh = rotate ? src.w : src.h;
+        const auto sample = [&](s32 x, s32 y) -> Color {
+            // Clamp at the requested crop, not at an adjacent sprite in a sheet.
+            x = std::max<s32>(0, std::min(x, sw - 1));
+            y = std::max<s32>(0, std::min(y, sh - 1));
+            const s32 sx = rotate ? src.x + src.w - 1 - y : src.x + x;
+            const s32 sy = rotate ? src.y + x : src.y + y;
+            if (sx < 0 || sy < 0 || sx >= image.width || sy >= image.height)
+                return Rgb(0, 0, 0, 0);
+            Color c;
+            if (image.format == ImageFormat::RGB5A1)
+            {
+                const u8 *p = image.pixels + sy * image.stride + sx * 2;
+                const u16 v = (u16)(p[0] | (u16)p[1] << 8);
+                c = Rgb((u8)((v >> 11 & 31) * 255 / 31), (u8)((v >> 6 & 31) * 255 / 31),
+                        (u8)((v >> 1 & 31) * 255 / 31), (v & 1) != 0 ? 255 : 0);
+            }
+            else
+            {
+                const u8 *p = image.pixels + sy * image.stride + sx * 4;
+                c = Rgb(p[0], p[1], p[2], p[3]);
+            }
+            // Retain the legacy image helpers' truncation, including at 1x.
+            return Rgb((u8)(c.r * tint.r / 255), (u8)(c.g * tint.g / 255),
+                       (u8)(c.b * tint.b / 255), (u8)(c.a * tint.a / 255));
+        };
+        if (m_scale == 1.f && dst.w == sw && dst.h == sh)
+        {
+            // Exact native-sized copies: no floating point or filtering changes
+            // to the old per-pixel source-over result.
+            const Rect area = Intersect(dst, m_clip);
+            for (s32 y = area.y; y < area.Bottom(); y++)
+                for (s32 x = area.x; x < area.Right(); x++)
+                    BlendPixel(x, y, sample(x - dst.x, y - dst.y));
+            return;
+        }
+        Canvas device = DeviceCanvas();
+        const float x0 = DeviceX(dst.x), y0 = DeviceY(dst.y);
+        const float dw = dst.w * m_scale, dh = dst.h * m_scale;
+        const Rect area = Intersect(Rect{ (s32)std::floor(x0), (s32)std::floor(y0),
+            (s32)std::ceil(x0 + dw) - (s32)std::floor(x0),
+            (s32)std::ceil(y0 + dh) - (s32)std::floor(y0) }, device.GetClip());
+        for (s32 y = area.y; y < area.Bottom(); y++)
+            for (s32 x = area.x; x < area.Right(); x++)
+            {
+                const float sx = (x + .5f - x0) * sw / dw - .5f;
+                const float sy = (y + .5f - y0) * sh / dh - .5f;
+                Color c;
+                if (filter == ImageFilter::Nearest)
+                    c = sample((s32)std::floor(sx + .5f), (s32)std::floor(sy + .5f));
+                else
+                {
+                    const s32 ix = (s32)std::floor(sx), iy = (s32)std::floor(sy);
+                    const float fx = sx - ix, fy = sy - iy;
+                    const Color texels[4] = { sample(ix, iy), sample(ix + 1, iy),
+                                             sample(ix, iy + 1), sample(ix + 1, iy + 1) };
+                    const float weights[4] = { (1.f - fx) * (1.f - fy), fx * (1.f - fy),
+                                               (1.f - fx) * fy, fx * fy };
+                    float a = 0.f, r = 0.f, g = 0.f, b = 0.f;
+                    for (s32 i = 0; i < 4; i++)
+                    {
+                        const float aw = texels[i].a * weights[i];
+                        a += aw; r += texels[i].r * aw; g += texels[i].g * aw; b += texels[i].b * aw;
+                    }
+                    c = a > 0.f ? Rgb((u8)(r / a + .5f), (u8)(g / a + .5f),
+                                      (u8)(b / a + .5f), (u8)(a + .5f)) : Rgb(0, 0, 0, 0);
+                }
+                const float coverage = (std::min(x + 1.f, x0 + dw) - std::max((float)x, x0)) *
+                                       (std::min(y + 1.f, y0 + dh) - std::max((float)y, y0));
+                device.BlendPixel(x, y, c, Coverage(coverage));
+            }
+    }
+
     Canvas Canvas::DeviceCanvas(void) const
     {
         Canvas device(m_surface);

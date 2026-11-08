@@ -14,6 +14,7 @@ namespace UI
 
     // One raster scale for opt-in overlays. Other layers remain exactly 1x.
     static constexpr float HiResScale = 2.5f;
+    enum HiResSlot : u32 { MenuSlot, RotomSlot, BadgeSlot, MoveLearnSlot, HiResSlots };
     struct HiResBackend
     {
         bool (*ready)(void);
@@ -21,6 +22,8 @@ namespace UI
         bool (*present)(u32 slot, const Surface &pixels, const Rect &area, bool dirty);
         void (*hide)(u32 slot);
         u32 (*generation)(void) = nullptr; // destructive debug texture changes
+        void (*bands)(u32 slot, const Surface &screen, const Rect &area) = nullptr;
+        bool (*valid)(u32 slot, const Surface &pixels) = nullptr;
     };
 
     // An off-screen copy of one rounded-rect area of a screen. Draw into it
@@ -90,6 +93,7 @@ namespace UI
         u32     m_slot = 0, m_generation = 0;
         s32     m_radius = 0;
         mutable bool m_dirty = false;
+        bool m_begun = false;
     };
 }
 }

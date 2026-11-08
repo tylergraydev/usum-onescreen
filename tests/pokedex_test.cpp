@@ -3,6 +3,7 @@
 // path prefix argument, also writes a preview of each screen there as PPM
 // images (<prefix>-top.ppm, -list.ppm, -grid.ppm, -entry.ppm).
 
+#include "hires_screen_smoke.hpp"
 #include "Screens/PokedexList.hpp"
 #include "UI/Theme.hpp"
 
@@ -273,6 +274,7 @@ static void TestDraw(const char *prefix)
         view.dex = s == DexScreen::Grid ? DexKind::Melemele : DexKind::Alola;
         view.window = MakeDexWindow(rows, 3, s == DexScreen::List ? DexListRows : s == DexScreen::Grid ? DexGridRows : 1);
         DrawPokedex(canvas, view);
+        CHECK(HiResScreenSmoke::Run(PokedexArea(view.screen), PokedexRadius, [&](UI::Canvas &hi) { DrawPokedex(hi, view); }));
 
         // Only the screen's area is touched (the Layer copies only it).
         const UI::Rect area = PokedexArea(s);

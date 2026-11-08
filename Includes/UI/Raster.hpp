@@ -66,6 +66,17 @@ namespace UI
         bool        transparent = false; // straight-alpha RGBA target; legacy surfaces stay opaque
     };
 
+    enum class ImageFilter : u8 { Nearest, Bilinear };
+    enum class ImageFormat : u8 { RGBA8, RGB5A1 };
+    // Immutable row-major art. RGBA8 uses ordinary R,G,B,A byte order;
+    // RGB5A1 is the little-endian packed box-icon format, expanded to 0..255.
+    struct ImageView
+    {
+        const u8 *pixels;
+        s32 width, height, stride;
+        ImageFormat format = ImageFormat::RGBA8;
+    };
+
     u32  BytesPerPixel(PixelFormat format);
     void ReadPixel(const u8 *p, PixelFormat format, u8 &r, u8 &g, u8 &b);
     void WritePixel(u8 *p, PixelFormat format, u8 r, u8 g, u8 b);
@@ -85,6 +96,13 @@ namespace UI
         // Smooth mask with fractional screen dimensions (native font sheets).
         void DrawMaskSized(float x, float y, const u8 *mask, s32 w, s32 h, s32 stride,
                            float width, float height, Color c);
+        // Samples once per physical destination pixel, preventing seams at
+        // fractional Canvas scales. Bilinear filtering interpolates premultiplied
+        // colours so transparent texels cannot produce dark fringes. Rotate
+        // turns the source a quarter left before fitting it into dst.
+        void DrawImage(const ImageView &image, const Rect &src, const Rect &dst,
+                       ImageFilter filter = ImageFilter::Bilinear,
+                       Color tint = Rgb(255, 255, 255), bool rotate = false);
 
         const Surface &GetSurface(void) const { return m_surface; }
         const Rect    &GetClip(void) const { return m_clip; }

@@ -326,21 +326,30 @@ copy-back also restores the saved background under the skipped window.
 that value and retain true for direct CPU drawing. Panel readback checks
 and requested screenshots also retain true reporting. Non-BGR8 layouts,
 linear-memory failure and `layergpu off` keep the existing CPU fallback.
-All screens except the opt-in Rotom prompt/badge retain these 1x pictures that
-Azahar scales up. Rotom now uses the phase-1 PICA overlay backend by default when
-ready: it draws its unchanged logical layout into transparent RGBA8 at 2.5x,
-CPU-tiles only changed content into a shared 1024x1024 texture, then draws into
-the game's top render target immediately before the game's DisplayTransfer.
-Up to two quads share one command list and one shadow-state restore (one GX
-command per frame). GPU vertices apply the same continuous x=200 squeeze as the
-original spike; font advances/line breaks remain 1x while native glyph masks are
-sampled at the larger raster size. Rounded corners retain alpha zero outside.
-`hires off` restores Rotom's existing Layer/LayerGpu path live; `hires on` enables
-it again and `hires status` reports readiness/uploads/contention. Other screens,
-pillarbox art and Map's skipped copy are unchanged. See GPUQUAD.md for the
-publication/threading contract, 12.39 MiB linear allocation and unrun checks.
-The new backend has not yet been built or validated in the emulator; the earlier
-spike's sharpness and stability evidence does not validate this integration.
+All native Layer screens now opt into the PICA overlay backend when ready.
+Each keeps its logical layout and 1x fallback buffer, but draws transparent RGBA8
+at 2.5x and uploads only changed content. Four ownership-checked slots share a
+dynamically packed 1024x1024 atlas: primary menu, Rotom, Boxes badge, MoveLearn.
+An allocation refusal uses the legacy path for that frame and retries next frame.
+GPU vertices apply the continuous x=200 squeeze; glyph layout is unchanged.
+Nearest-scaled pixel sprites and bilinear smooth art retain their original size.
+
+Hi-res pillarbox bands sample the twelve WriteBandColumn phases reserved at
+atlas x=1012..1023. Pattern repeats eight phases; Tint stretches phase8; edge
+columns use11,10,9 outward from the menu. BandRuns uses destination coordinates
+without squeezing them again, nearest filtering for bands and bilinear for menus.
+Bands and up to four menu quads use one list/state restore: one overlay GX command,
+no hi-res CPU framebuffer writes. Off emits no bands. Original eligibility,
+SourceColumn boundaries and fallback CPU/LayerGpu behavior remain unchanged.
+
+Map's hi-res skip window is alpha0 in the layer texture. The target overlay is
+drawn before the game's DisplayTransfer; the existing OSD PanelCopyBottomRect
+then copies the game map into the framebuffer, after Layer::Present. Its picture
+therefore remains on top and adds its existing GPU copy to the overlay command.
+`hires off` restores all original Layer/LayerGpu presentations live.
+See [GPUQUAD.md](GPUQUAD.md) for allocation, costs, exact image paths and the
+per-screen verification matrix. Phase2 needs a plugin build and emulator review;
+phase1's sharpness/stability evidence does not validate the expanded integration.
 
 The native map used to crash the game at 16:9/21:9 (one GPU copy per squeezed
 column); it now copies a game-squeezed picture in one command (above).

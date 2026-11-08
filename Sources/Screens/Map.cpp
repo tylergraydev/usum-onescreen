@@ -87,13 +87,17 @@ namespace OneScreen
             return false;
         if (!s_shown)
         {
+            s_layer.Hide();
             UI::ScreenBuffer::GiveBack(Owner);
             return false;
         }
         bool fresh = false;
         u8 *pixels = UI::ScreenBuffer::Borrow(Owner, fresh);
         if (pixels == nullptr)
+        {
+            s_layer.Hide();
             return false;
+        }
         UiInitFont();
         const UI::Surface fb = SurfaceFromScreen(screen);
         const u32 version = s_viewVersion;
@@ -103,7 +107,7 @@ namespace OneScreen
         bool redraw = version != s_drawnVersion || gameFont != s_drawnGameFont;
         if (fresh || !s_layer.Matches(fb))
         {
-            if (!s_layer.Setup(fb, MapArea, MapRadius, pixels, UI::ScreenBuffer::Bytes))
+            if (!s_layer.SetupHiRes(fb, MapArea, MapRadius, UI::MenuSlot, pixels, UI::ScreenBuffer::Bytes))
                 return false;
             redraw = true;
         }
@@ -122,10 +126,12 @@ namespace OneScreen
         {
             return s_layer.Present(fb);
         }
-        // Present first: its GPU path copies whole background columns back,
-        // including the skipped window. Copy the game's map AFTER that so
-        // the saved background cannot overwrite the new picture. The CPU
-        // fallback also leaves the window alone.
+        // The target hook draws hi-res quads before the game's top-screen
+        // DisplayTransfer. Present publishes a texture with alpha 0 in
+        // MapWindow; this OSD callback then TextureCopies the game picture
+        // into that framebuffer, after the quad, so the picture stays on top.
+        // Legacy LayerGpu also presents before this copy (its background
+        // columns include the skipped window); CPU fallback skips it.
         const bool drew = s_layer.Present(fb, MapWindow);
         if (!PanelCopyBottomRect(screen, MapSource.x, MapSource.y, MapSource.w, MapSource.h, MapWindow.x, MapWindow.y))
         {

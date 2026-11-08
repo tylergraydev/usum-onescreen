@@ -129,6 +129,7 @@ namespace OneScreen
             return false;
         if (mode == UiDemoMode::Off)
         {
+            s_demoLayer.Hide();
             UI::ScreenBuffer::GiveBack(DemoOwner);
             return false;
         }
@@ -142,6 +143,7 @@ namespace OneScreen
 
         if (mode == UiDemoMode::Direct && !(fb.squeeze > 1.0f))
         {
+            s_demoLayer.Hide();
             UI::Canvas canvas(fb);
             UI::DrawDemoShade(canvas);
             drew = true;
@@ -161,10 +163,13 @@ namespace OneScreen
             bool fresh = false;
             u8 *pixels = UI::ScreenBuffer::Borrow(DemoOwner, fresh);
             if (pixels == nullptr)
+            {
+                s_demoLayer.Hide();
                 return drew;
+            }
             if (fresh || !s_demoLayer.Matches(fb))
             {
-                s_demoLayer.Setup(fb, UI::DemoPanel, UI::DemoRadius, pixels, UI::ScreenBuffer::Bytes);
+                s_demoLayer.SetupHiRes(fb, UI::DemoPanel, UI::DemoRadius, UI::MenuSlot, pixels, UI::ScreenBuffer::Bytes);
                 s_demoDrawn = -1;
             }
 

@@ -4,6 +4,7 @@
 // list, Bag and "Use next Pokémon?" against a fake game, and drawing inside
 // each page's area. Build and run: make -C tests.
 
+#include "hires_screen_smoke.hpp"
 #include "Screens/BattleMenu.hpp"
 
 #include <cstdio>
@@ -829,6 +830,7 @@ static void TestDrawing(void)
             CHECK(area.y >= 36 && area.x >= 166);
         UI::Canvas canvas(surface);
         menu.Draw(canvas, snap);
+        CHECK(HiResScreenSmoke::Run(area, menu.Radius(), [&](UI::Canvas &hi) { menu.Draw(hi, snap); }));
         u32 inside = 0, outside = 0;
         for (s32 y = 0; y < UI::ScreenH; y++)
             for (s32 x = 0; x < UI::ScreenW; x++)
