@@ -1,5 +1,8 @@
 #include "Screens/Boxes.hpp"
 
+#include <cstring>
+
+#include <3ds.h>
 #include <CTRPluginFramework.hpp>
 
 #include "Actions.hpp"
@@ -11,6 +14,7 @@
 #include "UI/Assets.hpp"
 #include "UI/Device.hpp"
 #include "UI/Layer.hpp"
+#include "UI/PokeIcons.hpp"
 #include "UI/ScreenBuffer.hpp"
 #include "UI/Theme.hpp"
 
@@ -63,6 +67,31 @@ namespace OneScreen
     static bool s_gameFont = false;     // the game font was loaded at the last publish
     static u32  s_lrKey = 0;            // L or R pressed, acted on when released
     static bool s_lrSpoiled = false;    // ... unless the other one joined in (L+R: panel)
+
+    // --- Box icons (docs/BOXES.md, "Icons") ---
+    // Loaded on the plugin thread a few per frame while the screen shows,
+    // freed when it hides. The OSD callback draws from the cache under
+    // s_iconLock; the plugin thread takes it only to add an icon or clear.
+    static const u32 IconsPerFrame = 3;
+    // A redraw costs ~50 ms of the game thread (emulated): while icons come
+    // in, redraw when a batch is complete or at most this often.
+    static const u32 IconRedrawFrames = 8;
+    static const u32 WantedIcons = BoxSlots + BoxPartySlots + 1;    // box, party, the held one
+    static Mutex               s_iconLock;
+    static UI::PokeIconCache   s_icons;
+    static UI::PokeIconArchive s_iconArchive;
+    static UI::PokeIconTable   s_iconTable;
+    static Handle              s_romfs = 0;
+    static bool                s_iconsOpen = false;
+    static bool                s_iconsSettled = true;   // every wanted icon is in (or failed), logged
+    static u32                 s_iconsStart = 0;        // frame the current batch started
+    static u32                 s_iconsDecoded = 0;
+    static u32                 s_iconsShownAt = 0;      // frame of the last redraw for new icons
+    static bool                s_iconsPending = false;  // decoded, not drawn yet
+    static u64                 s_iconTicks = 0, s_iconTicksMax = 0;  // decode time: total, worst frame
+    static volatile u32        s_drawTicksMax = 0;      // OSD: slowest redraw since the last log
+    static volatile u32        s_drawTicksLast = 0;     // OSD: the last redraw
+    static bool                s_iconsEnabled = true;   // `boxes icons on|off`
 
     // --- OSD callback ---
 
@@ -123,7 +152,14 @@ namespace OneScreen
             s_drawnVersion = s_sharedVersion;
             s_lock.Unlock();
             UI::Canvas canvas = s_layer.Begin();
-            DrawBoxes(canvas, s_drawView);
+            const u64 start = svcGetSystemTick();
+            s_iconLock.Lock();
+            DrawBoxes(canvas, s_drawView, &s_icons);
+            s_iconLock.Unlock();
+            const u32 ticks = (u32)(svcGetSystemTick() - start);
+            if (ticks > s_drawTicksMax)
+                s_drawTicksMax = ticks;
+            s_drawTicksLast = ticks;
         }
         s_layer.Present(fb);
         return true;
@@ -157,6 +193,15 @@ namespace OneScreen
         return none;
     }
 
+    static u16 IconAt(u32 cursor)
+    {
+        if (cursor < BoxSlots)
+            return s_view.slotIcons[cursor];
+        if (cursor < BoxSlots + BoxPartySlots)
+            return s_view.partyIcons[cursor - BoxSlots];
+        return 0;
+    }
+
     static u8 BallAt(u32 cursor)
     {
         if (cursor < BoxSlots)
@@ -164,6 +209,162 @@ namespace OneScreen
         if (cursor < BoxSlots + BoxPartySlots)
             return s_view.partyBalls[cursor - BoxSlots];
         return 0;
+    }
+
+    static bool ReadGame(u32 address, void *dst, u32 size)
+    {
+        if (size == 0 || !Process::CheckAddress(address, MEMPERM_READ)
+            || !Process::CheckAddress(address + size - 1, MEMPERM_READ))
+            return false;
+        std::memcpy(dst, (const void *)address, size);
+        return true;
+    }
+
+    static double Ms(u64 ticks)
+    {
+        return (double)ticks / CPU_TICKS_PER_MSEC;
+    }
+
+    // The game's icon table, the RomFS and the icon archive, once per show.
+    static void OpenIcons(std::vector<std::string> &log)
+    {
+        if (!s_iconsEnabled || s_iconsOpen)
+            return;
+        const u64 start = svcGetSystemTick();
+        std::string error;
+        if (!UI::FindPokeIconTable(ReadGame, s_iconTable, error))
+        {
+            log.push_back("boxes: icons not loaded (" + error + "), names only");
+            return;
+        }
+        static const u32 lowPath[3] = { 0, 0, 0 };
+        const FS_Path archive = { PATH_EMPTY, 1, "" };
+        const FS_Path file = { PATH_BINARY, sizeof(lowPath), lowPath };
+        const Result res = FSUSER_OpenFileDirectly(&s_romfs, ARCHIVE_ROMFS, archive, file, FS_OPEN_READ, 0);
+        if (R_FAILED(res))
+        {
+            s_romfs = 0;
+            log.push_back(Utils::Format("boxes: icons not loaded (can't open the RomFS, 0x%08lX), names only", (u32)res));
+            return;
+        }
+        const Handle handle = s_romfs;
+        const RomfsRead read = [handle](uint64_t offset, void *dst, u32 size) {
+            u32 got = 0;
+            return R_SUCCEEDED(FSFILE_Read(handle, &got, offset, dst, size)) && got == size;
+        };
+        if (!s_iconArchive.Open(read, error))
+        {
+            FSFILE_Close(s_romfs);
+            s_romfs = 0;
+            log.push_back("boxes: icons not loaded (a/0/6/2: " + error + "), names only");
+            return;
+        }
+        s_iconsOpen = true;
+        log.push_back(Utils::Format("boxes: icons: a/0/6/2, %lu entries, table 0x%08lX, egg %lu, opened in %.1f ms (%u KB)",
+                                    s_iconArchive.Count(), s_iconTable.table, s_iconTable.egg,
+                                    Ms(svcGetSystemTick() - start), (unsigned)(s_iconArchive.Bytes() / 1024)));
+    }
+
+    static void CloseIcons(void)
+    {
+        s_iconLock.Lock();
+        s_icons.Clear();
+        s_iconLock.Unlock();
+        s_iconArchive.Close();
+        if (s_romfs != 0)
+            FSFILE_Close(s_romfs);
+        s_romfs = 0;
+        s_iconsOpen = false;
+        s_iconsSettled = true;
+        s_iconsPending = false;
+    }
+
+    static u16 IconFor(const Pk7 &mon)
+    {
+        if (!s_iconsOpen || mon.form == Pk7Form::Invalid || mon.species == 0)
+            return 0;
+        const u32 index = UI::PokeIconIndex(ReadGame, s_iconTable, mon.species, mon.altForm, mon.gender, mon.isEgg);
+        return index < s_iconArchive.Count() && index <= 0xFFFF ? (u16)index : 0;
+    }
+
+    // A few of the icons on screen that aren't decoded yet; a redraw when
+    // any came in, log lines once all of them are in.
+    static void LoadIcons(std::vector<std::string> &log)
+    {
+        if (!s_iconsOpen)
+            return;
+        u32 wanted[WantedIcons];
+        for (u32 i = 0; i < BoxSlots; i++)
+            wanted[i] = s_view.slotIcons[i] != 0 ? s_view.slotIcons[i] : UI::PokeIconNone;
+        for (u32 i = 0; i < BoxPartySlots; i++)
+            wanted[BoxSlots + i] = s_view.partyIcons[i] != 0 ? s_view.partyIcons[i] : UI::PokeIconNone;
+        wanted[WantedIcons - 1] = s_view.heldIcon != 0 ? s_view.heldIcon : UI::PokeIconNone;
+
+        static UI::PokeIcon scratch;
+        const u64 start = svcGetSystemTick();
+        u32 done = 0;
+        for (; done < IconsPerFrame; done++)
+        {
+            const u32 index = s_icons.Next(wanted, WantedIcons);
+            if (index == UI::PokeIconNone)
+                break;
+            if (s_iconsSettled)
+            {
+                s_iconsSettled = false;
+                s_iconsStart = s_frames;
+                s_iconsDecoded = 0;
+                s_iconTicks = s_iconTicksMax = 0;
+            }
+            std::string error;
+            bool ok = s_iconArchive.Load(index, scratch, error);
+            if (ok)
+            {
+                s_iconLock.Lock();
+                ok = s_icons.Store(scratch);
+                s_iconLock.Unlock();
+                if (!ok)
+                    error = "no room in the cache";
+            }
+            if (!ok)
+            {
+                s_icons.Fail(index);
+                log.push_back(Utils::Format("boxes: icon %lu not loaded (%s)", index, error.c_str()));
+            }
+            else
+                s_iconsDecoded++;
+        }
+        if (done == 0)
+        {
+            if (s_iconsPending)
+            {
+                s_iconsPending = false;
+                s_iconsShownAt = s_frames;
+                s_dirty = true;
+            }
+            if (!s_iconsSettled)
+            {
+                s_iconsSettled = true;
+                log.push_back(Utils::Format("boxes: icons: %lu decoded over %lu frames, %.1f ms (worst frame %.1f ms), "
+                                            "cache %lu (%u KB), slowest redraw %.1f ms",
+                                            s_iconsDecoded, s_frames - s_iconsStart, Ms(s_iconTicks),
+                                            Ms(s_iconTicksMax), s_icons.Size(), (unsigned)(s_icons.Bytes() / 1024),
+                                            Ms(s_drawTicksMax)));
+                log.push_back(UI::ScreenBuffer::HeapLog("boxes icons in"));
+                s_drawTicksMax = 0;
+            }
+            return;
+        }
+        const u64 ticks = svcGetSystemTick() - start;
+        s_iconTicks += ticks;
+        if (ticks > s_iconTicksMax)
+            s_iconTicksMax = ticks;
+        s_iconsPending = true;
+        if (s_frames - s_iconsShownAt >= IconRedrawFrames)
+        {
+            s_iconsPending = false;
+            s_iconsShownAt = s_frames;
+            s_dirty = true;
+        }
     }
 
     // Reads the box on screen and the screen's party.
@@ -178,12 +379,16 @@ namespace OneScreen
             const Pk7 mon = ReadBoxMon(storage, s_game.tray, i);
             s_view.slots[i] = BoxMonLabel(mon);
             s_view.slotBalls[i] = mon.ball;
+            s_view.slotShiny[i] = mon.shiny && !mon.isEgg && mon.form != Pk7Form::Invalid;
+            s_view.slotIcons[i] = IconFor(mon);
         }
         for (u32 i = 0; i < BoxPartySlots; i++)
         {
             const Pk7 mon = s_game.partyValid ? ReadParam(s_game.party[i]) : Pk7();
             s_view.party[i] = s_game.partyValid ? BoxMonLabel(mon) : "";
             s_view.partyBalls[i] = mon.ball;
+            s_view.partyShiny[i] = mon.shiny && !mon.isEgg && mon.form != Pk7Form::Invalid;
+            s_view.partyIcons[i] = s_game.partyValid ? IconFor(mon) : 0;
         }
         s_refreshedAt = s_frames;
         s_dirty = true;
@@ -239,6 +444,7 @@ namespace OneScreen
         {
             s_view.held = LabelAt(cursor);
             s_view.heldBall = BallAt(cursor);
+            s_view.heldIcon = IconAt(cursor);
             s_view.heldTray = (int)s_game.tray;
             s_view.heldIndex = (int)cursor;
         }
@@ -338,6 +544,7 @@ namespace OneScreen
             // The game's font and icons (normally loaded at the first field
             // already); the screen redraws with them once they are in.
             UI::RequestAssets();
+            OpenIcons(log);
         }
         if (shown)
         {
@@ -363,9 +570,11 @@ namespace OneScreen
                     log.push_back("boxes: cursor " + Where(s_game.cursor));
             }
             s_haveView = true;
+            LoadIcons(log);
         }
         else if (s_shown)
         {
+            CloseIcons();
             log.push_back(std::string("boxes: hidden") + (s_yield ? " (panel on by hand)" : ""));
             log.push_back(UI::ScreenBuffer::HeapLog("boxes hidden"));
         }
@@ -378,6 +587,7 @@ namespace OneScreen
         {
             s_view.held.clear();
             s_view.heldBall = 0;
+            s_view.heldIcon = 0;
             s_view.heldTray = s_view.heldIndex = -1;
         }
         if (s_view.cursor != s_game.cursor || s_view.mode != s_game.mode)
@@ -427,6 +637,19 @@ namespace OneScreen
             log.push_back(BoxesStatus());
             return true;
         }
+        if (args == "icons on" || args == "icons off")
+        {
+            s_iconsEnabled = args == "icons on";
+            if (!s_iconsEnabled)
+                CloseIcons();
+            else if (s_shown)
+                OpenIcons(log);
+            if (s_shown)
+                Refresh();
+            Publish();
+            log.push_back(BoxesStatus());
+            return true;
+        }
         if (args == "status")
         {
             log.push_back(BoxesStatus());
@@ -460,11 +683,13 @@ namespace OneScreen
 
     std::string BoxesStatus(void)
     {
-        return Utils::Format("boxes: %s, %s%s, box %lu, mode %s, cursor %s%s%s%s%s", s_enabled ? "on" : "off",
+        return Utils::Format("boxes: %s, %s%s, box %lu, mode %s, cursor %s%s%s%s%s, icons %s (%lu cached, %u KB), "
+                             "last redraw %.1f ms", s_enabled ? "on" : "off",
                              s_shown ? "shown" : "hidden", s_details ? " (details)" : "", s_game.tray + 1,
                              BoxModeName(s_game.mode), Where(s_game.cursor).c_str(),
                              s_view.held.empty() ? "" : (", holding " + s_view.held).c_str(),
                              s_yield ? ", panel on by hand" : "", s_forcedOff ? ", holding panel off" : "",
-                             s_capturing ? ", input captured" : "");
+                             s_capturing ? ", input captured" : "", !s_iconsEnabled ? "off" : s_iconsOpen ? "on" : "not loaded",
+                             s_icons.Size(), (unsigned)(s_icons.Bytes() / 1024), Ms(s_drawTicksLast));
     }
 }

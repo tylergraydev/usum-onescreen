@@ -125,6 +125,52 @@ static void TestEgg(void)
     CHECK(DecodePk7(core, calc).isEgg);
 }
 
+static void TestJudgeAndMarkers(void)
+{
+    // Plain PK7 byte layout (before EncodePk7 shuffles/encrypts):
+    // +0C TID, +0E SID, +15 ability number, +16 markings, +18 PID;
+    // +1E..23 EVs: HP/Atk/Def/Spe/SpA/SpD;
+    // +74 IV word: 5 bits each in that order, bit30 egg, bit31 nickname;
+    // +DE HT bits: HP/Atk/Def/SpA/SpD/Spe (different order!).
+    for (u32 sv = 0; sv < 24; sv++)
+        for (int decrypted = 0; decrypted < 2; decrypted++)
+            for (int ht = 0; ht < 6; ht++)
+            {
+                u8 core[Pk7CoreSize], calc[Pk7CalcSize];
+                const u32 ec = sv << 13;
+                MakeMon(core, calc, ec);
+                Put16(core, 0x0C, 0x1234);
+                Put16(core, 0x0E, 0x5678);
+                // XOR = 15 (shiny) or 16 (not shiny), exact boundary.
+                Put32(core, 0x18, ((u32)(0x1234 ^ 0x5678 ^ (ht % 2 ? 16 : 15)) << 16));
+                core[0x15] = (u8)(ht % 3 == 0 ? 0x84 : ht % 3 == 1 ? 1 : 2);
+                core[0x16] = 4; // must NOT be read as the HA flag
+                core[0x1E] = 252; core[0x1F] = 1; core[0x20] = 2;
+                core[0x21] = 3; core[0x22] = 4; core[0x23] = 248;
+                Put32(core, 0x74, 31u | (30u << 5) | (29u << 10) | (0u << 15)
+                                      | (16u << 20) | (1u << 25) | (1u << 31));
+                core[0xDE] = (u8)(1 << ht);
+                EncodePk7(core, calc);
+                if (decrypted)
+                {
+                    Pk7Crypt(core + 8, Pk7CoreSize - 8, ec);
+                    Pk7Crypt(calc, Pk7CalcSize, ec);
+                }
+                const Pk7 mon = DecodePk7(core, calc);
+                CHECK(mon.form == (decrypted ? Pk7Form::Decrypted : Pk7Form::Encrypted));
+                const u8 ivs[6] = { 31, 30, 29, 16, 1, 0 };
+                const u8 evs[6] = { 252, 1, 2, 4, 248, 3 };
+                for (int i = 0; i < 6; i++)
+                {
+                    CHECK(mon.ivs[i] == ivs[i] && mon.evs[i] == evs[i]);
+                    CHECK(mon.hyperTrained[i] == (i == ht));
+                }
+                CHECK(!mon.isEgg); // nickname bit doesn't spill into IVs/egg
+                CHECK(mon.shiny == (ht % 2 == 0));
+                CHECK(mon.hiddenAbility == (ht % 3 == 0));
+            }
+}
+
 static void TestBagSlot(void)
 {
     // Potion x9; Burn Heal x3 with the NEW badge; free-space position 5.
@@ -209,6 +255,7 @@ int main()
     TestDecrypted();
     TestInvalid();
     TestEgg();
+    TestJudgeAndMarkers();
     TestBagSlot();
     TestMsgLine();
     TestUtf8();

@@ -160,6 +160,14 @@ Full write-up: [PC-ANYWHERE.md](PC-ANYWHERE.md). Used by `Sources/PcAnywhere.cpp
 - `App::Event::BoxEvent` (vtable `0x647F58`): start `0x2DE91C(gm)`; `+0x54` u8 mode (0 = the PC), `+0xB4` listener. The PC script's command is `0x384DC4`.
 - Game ExpHeap at `gm + 0x104` (magic `EXPH` at `+0x18`), its mutex at `gm + 0x15C` (1 = free): the one CTRPF's LoadCRO-hook run of `PanelEntry` overwrote (PC-ANYWHERE.md, "The battle freeze").
 
+## Pokémon box icons (static, checked at runtime 2026-11-07)
+
+Read by the native Boxes (`Sources/UI/PokeIcons.cpp`, [GAME-ASSETS.md](GAME-ASSETS.md) "Pokémon box icons"). Same bytes on Ultra Moon v1.2.
+
+- `0x30CC1C`: the icon lookup (species, form, sex, egg, facing right) → index in `a/0/6/2`; first words `E92D41F0 E3500FCA E1A04001 E59D6018`, checked before use. Literal pool `0x30CCE8` = 1153 (egg icon), `0x30CCEC` = `0x5BFD50`.
+- `0x5BFD50` (rodata): 808 × 16 bytes, species 0-807: u16 icon, u16 female icon, u32 → u16 form icons, u32 → u16 right-facing form icons, u16 form count.
+- Callers: `0x30CD44` (unpacks a SimpleParam: u16 species, u8 form +2, u8 sex +3, s8 egg +5), from `App::Tool::PokeIconTexPool` (`0x2D490C`; ARC ID `0x3E` set in its constructor `0x2D4E40`).
+
 ## Player location (runtime, 2026-11-02)
 
 Full write-up: [RE4-map.md](RE4-map.md). Read by the `where` command (`Sources/Where.cpp`).
