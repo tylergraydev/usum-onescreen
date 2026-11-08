@@ -71,6 +71,7 @@ GSP (display):
 - `0x66FC40`: GSP manager object. `0x69EA68`: its parent (`+0x1C` -> manager).
 - `0x279A2C`: GX command queue push (shared `+0x800`).
 - GX commands: `0x279C48` MemoryFill, `0x27A5BC` DisplayTransfer, `0x279E28` TextureCopy, `0x279D5C` FlushCacheRegions + ProcessCommandList.
+- `0x279D5C` (entered at `0x279D58`, a `mov r0,r0`): gx ProcessCommandList `(list, size in bytes, flush, flags)`. With `flush` it first pushes GX command 5 (FlushCacheRegions) for the list; then GX command 1 with `flags` in word 3. Only caller: `0x5614F4` in nngx's request runner `0x561440` (18 callers), which walks 0x1C-byte requests (type 0 DMA `0x54A5FC`, 1 command list, 2 MemoryFill `0x54A650`, 3 DisplayTransfer `0x54A630`, 4 TextureCopy `0x54A670`). Same prologue on Ultra Moon. Hooked by the `gpuquad` spike (docs/GPUQUAD.md): in the field the game submits ~20 lists, ~67k words and ~1340 CMDBUF jumps per top frame.
 - IPC wrappers: `0x27A7F4` AcquireRight, `0x27A860` FlushDataCache, `0x27AA80` RegisterInterruptRelayQueue.
 
 HID (input):

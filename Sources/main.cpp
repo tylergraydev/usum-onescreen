@@ -19,6 +19,7 @@
 #include "Party.hpp"
 #include "PcAnywhere.hpp"
 #include "UI/LayerGpu.hpp"
+#include "UI/GpuQuad.hpp"
 #include "Scene.hpp"
 #include "Screens/BattleScreen.hpp"
 #include "Screens/Keyboard.hpp"
@@ -586,6 +587,8 @@ namespace CTRPluginFramework
                 return;
             }
         }
+        else if (line.compare(0, 8, "gpuquad ") == 0)
+            WriteLog(OneScreen::UI::GpuQuadCommand(line.substr(8)), false);
         else if (line == "layergpu on" || line == "layergpu off" || line == "layergpu status")
         {
             if (line != "layergpu status")
@@ -1077,6 +1080,7 @@ namespace CTRPluginFramework
         OneScreen::StartPanel(OneScreen::PanelMode::Off, s_game->offsets.gxDisplayTransfer.address,
                               s_game->offsets.gxTextureCopy.address);
         OneScreen::StartActions();
+        WriteLog(OneScreen::UI::StartGpuQuad(s_game->offsets.gxDisplayTransfer.address), false);
 
         std::string cursorReport;
         OneScreen::StartCursor(s_game->offsets.hidTouchRead.address, cursorReport);

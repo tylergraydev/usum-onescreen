@@ -12,6 +12,7 @@
 #include "UI/Device.hpp"
 #include "UI/ColumnMapping.hpp"
 #include "UI/LayerGpu.hpp"
+#include "UI/GpuQuad.hpp"
 #include "Widescreen.hpp"
 #include <cmath>
 
@@ -752,6 +753,7 @@ namespace OneScreen
         // screenshot hook so shots include them.
         drew |= UiDemoOnScreen(screen);
         drew |= BattleScreenOnScreen(screen);
+        drew |= UI::GpuQuadOnScreen(screen);   // always false: GPU only
         drew |= ShotOnScreen(screen);
         return drew;
     }
