@@ -19,6 +19,12 @@ namespace OneScreen
     int FieldState(u32 sceneManager);
     static const int FieldStateMenu = 4;
 
+    // Address of the state object FieldState() reads (its word at +4 is the
+    // state) and, in `vtable`, the vtable it must have; 0 when FieldState()
+    // can't read. For a check from the game thread (PcAnywhere.cpp): call
+    // this from the plugin thread only, it shares FieldState()'s cache.
+    u32 FieldStateObject(u32 sceneManager, u32 &vtable);
+
     // Header address of the loaded CRO module containing `address` (0 if
     // none), and a module's name from its header.
     u32 CroModuleOf(u32 address);
