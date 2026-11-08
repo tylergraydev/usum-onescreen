@@ -11,6 +11,7 @@
 #include "Shot.hpp"
 #include "UI/Device.hpp"
 #include "UI/ColumnMapping.hpp"
+#include "UI/LayerGpu.hpp"
 #include "Widescreen.hpp"
 #include <cmath>
 
@@ -748,6 +749,7 @@ namespace OneScreen
     {
         s_displayTransfer = (DisplayTransferFn)displayTransfer;
         s_textureCopy = (TextureCopyFn)textureCopy;
+        UI::StartLayerGpu(displayTransfer, textureCopy);
         s_mode = initial;
         OSD::Run(PanelCallback);
     }

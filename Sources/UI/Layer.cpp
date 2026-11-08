@@ -137,15 +137,19 @@ namespace UI
         return canvas;
     }
 
-    void Layer::Present(const Surface &screen) const
+    bool Layer::Present(const Surface &screen) const
     {
-        Present(screen, Rect{ 0, 0, 0, 0 });
+        return Present(screen, Rect{ 0, 0, 0, 0 });
     }
 
-    void Layer::Present(const Surface &screen, const Rect &skip) const
+    Layer::GpuPresentFn Layer::s_gpuPresent = nullptr;
+
+    bool Layer::Present(const Surface &screen, const Rect &skip) const
     {
         if (!Matches(screen))
-            return;
+            return false;
+        if (s_gpuPresent != nullptr && s_gpuPresent(*this, screen, skip))
+            return false;
         PresentBands(screen, PillarboxColumns(screen, m_area));
         const s32 bpp = (s32)BytesPerPixel(screen.format);
         const bool columnar = Columnar(screen);
@@ -184,6 +188,7 @@ namespace UI
             copy(destination, i, y0, s0 < y1 ? s0 : y1);
             copy(destination, i, s1 > y0 ? s1 : y0, y1);
         }
+        return true;
     }
 }
 }

@@ -18,6 +18,7 @@
 #include "Panel.hpp"
 #include "Party.hpp"
 #include "PcAnywhere.hpp"
+#include "UI/LayerGpu.hpp"
 #include "Scene.hpp"
 #include "Screens/BattleScreen.hpp"
 #include "Screens/Keyboard.hpp"
@@ -584,6 +585,12 @@ namespace CTRPluginFramework
                 WriteLog("cmd: unknown partyui command in '" + line + "'", false);
                 return;
             }
+        }
+        else if (line == "layergpu on" || line == "layergpu off" || line == "layergpu status")
+        {
+            if (line != "layergpu status")
+                OneScreen::UI::SetLayerGpu(line == "layergpu on");
+            WriteLog(OneScreen::UI::LayerGpuStatus(), false);
         }
         else if (line == "pc" || line.compare(0, 3, "pc ") == 0)
         {
