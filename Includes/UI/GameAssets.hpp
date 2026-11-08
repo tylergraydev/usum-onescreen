@@ -137,6 +137,7 @@ namespace UI
         s32 Ascent(void) const;
         s32 Advance(u32 codePoint);
         const Glyph *Get(u32 codePoint);
+        void Draw(Canvas &canvas, u32 codePoint, s32 x, s32 y, Color color);
 
         u32 hits = 0, misses = 0;
 

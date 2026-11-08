@@ -7,10 +7,12 @@
 #include <CTRPluginFramework.hpp>
 
 #include <cstring>
+#include <atomic>
+#include <algorithm>
+#include "UI/Layer.hpp"
+#include "UI/QuadLayout.hpp"
 
-#include "UI/Device.hpp"
 #include "UI/Raster.hpp"
-#include "UI/Text.hpp"
 #include "Widescreen.hpp"
 
 #include "UI/GpuQuadShader.inc"
@@ -51,9 +53,9 @@ namespace UI
     static volatile bool s_ownPush = false;
     // Debug switches: `gpuquad restore off` skips the restore (to see whether
     // the game needs it); `gpuquad shadow off` stops parsing the game's lists.
-    static volatile bool s_restore = true, s_shadow = true;
+    static std::atomic<bool> s_restore{true}, s_shadow{true};
     // `gpuquad mode fb|target` (see GpuQuadOnScreen / DisplayTransferHook).
-    static volatile bool s_inTarget = true;
+    static std::atomic<bool> s_inTarget{true};
     static Hook s_dtHook;
     static bool s_dtHooked = false;
 
@@ -256,18 +258,31 @@ namespace UI
 
     // ------------------------------------------------------------ resources
 
-    static constexpr u32 TexW = 1024, TexH = 512;
+    static constexpr u32 TexW = 1024, TexH = 1024;
     static constexpr u32 TargetW = 240, TargetH = 400;     // a top framebuffer, rotated
     static constexpr u32 PageAlign(u32 size) { return (size + 0xFFF) & ~0xFFFu; }
     static constexpr u32 OffTex    = 0;
-    static constexpr u32 OffTarget = OffTex + PageAlign(TexW * TexH * 4);
+    static constexpr u32 AtlasBytes = TexW * TexH * 4;
+    static constexpr u32 OffBack = OffTex + AtlasBytes;
+    static constexpr u32 OffStage = OffBack + AtlasBytes;
+    static constexpr u32 OffTarget = OffStage + AtlasBytes;
     static constexpr u32 OffList   = OffTarget + PageAlign(TargetW * TargetH * 4);
     static constexpr u32 ListWords = 0x1000;
     static constexpr u32 OffVbo    = OffList + PageAlign(ListWords * 4);
     static constexpr u32 ScratchSize = OffVbo + 0x1000;
 
     static u32 s_scratch = 0;
-    static volatile bool s_on = false;
+    static std::atomic<bool> s_on{false};
+    static std::atomic<bool> s_hiResEnabled{true}, s_test{false};
+    static Mutex s_contentLock; // CTRPF TryLock returns zero on success.
+    struct Quad { Rect region = {}; Rect destination = {}; u32 serial = 0; bool visible = false; };
+    static Quad s_pending[2], s_active[2];
+    static u32 s_front = OffTex, s_back = OffBack;
+    static bool s_pendingDirty = false, s_backSynced = true, s_activeTest = false;
+    static std::atomic<u32> s_topSerial{0}, s_generation{0};
+    static u32 Generation(void) { return s_generation.load(); }
+    static u32 s_uploads = 0, s_contentBusy = 0;
+    static u32 s_vertexQuads = 1;
     static std::string s_why = "off";
     static u32 s_frames = 0, s_drawn = 0, s_skipped = 0, s_maxGx = 0, s_listBytes = 0, s_restored = 0;
     static u32 s_unseenRegs = 0, s_unseenCode = 0;
@@ -291,14 +306,9 @@ namespace UI
             s_why = Utils::Format("no linear memory (0x%08lX)", (u32)res);
             return false;
         }
+        std::memset((void *)addr, 0, ScratchSize);
         s_scratch = addr;
         return true;
-    }
-
-    // Morton offset of (x, y) inside an 8x8 tile.
-    static u32 Morton(u32 x, u32 y)
-    {
-        return (x & 1) | ((y & 1) << 1) | ((x & 2) << 1) | ((y & 2) << 2) | ((x & 4) << 2) | ((y & 4) << 3);
     }
 
     // Test picture: detail that 1x can't show. Drawn row-major RGBA8 (bytes
@@ -306,7 +316,7 @@ namespace UI
     static void MakePicture(u8 *stage)
     {
         const u32 stride = TexW * 4;
-        for (u32 y = 0; y < TexH; y++)
+        for (u32 y = 0; y < 512; y++)
             for (u32 x = 0; x < TexW; x++)
             {
                 u8 *p = stage + y * stride + x * 4;
@@ -319,13 +329,13 @@ namespace UI
         surface.stepY = (s32)stride;
         surface.format = PixelFormat::RGBA8;
         surface.width = TexW;
-        surface.height = TexH;
+        surface.height = 512;
         Canvas canvas(surface, 0, 0);
 
         // Frame and orientation marks.
-        canvas.StrokeRect(Rect{ 0, 0, (s32)TexW, (s32)TexH }, Rgb(255, 255, 255), 4);
+        canvas.StrokeRect(Rect{ 0, 0, (s32)TexW, (s32)512 }, Rgb(255, 255, 255), 4);
         canvas.FillRect(Rect{ 8, 8, 64, 64 }, Rgb(230, 40, 40));          // red: top left
-        canvas.FillRect(Rect{ (s32)TexW - 72, (s32)TexH - 72, 64, 64 }, Rgb(40, 200, 60)); // green: bottom right
+        canvas.FillRect(Rect{ (s32)TexW - 72, (s32)512 - 72, 64, 64 }, Rgb(40, 200, 60)); // green: bottom right
 
         // 1-texel checkerboard, then 1/2/3/4-texel line pairs.
         for (s32 y = 90; y < 250; y++)
@@ -345,24 +355,6 @@ namespace UI
         for (s32 k = 0; k < 8; k++)
             canvas.Line(16.0f + 40 * k, 500.0f, 136.0f + 40 * k, 270.0f, 1.0f, Rgb(255, 220, 80));
 
-        TextStyle style;
-        style.font = Font::Small;
-        style.scale = 1;
-        style.color = Rgb(255, 255, 255);
-        DrawText(canvas, "5x7 font at 1 texel: THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG 0123456789", Rect{ 90, 12, 900, 10 }, style);
-        style.scale = 2;
-        DrawText(canvas, "5x7 at 2 texels: gpuquad spike", Rect{ 90, 30, 900, 18 }, style);
-        style.font = Font::System;
-        style.scale = 1;
-        style.color = Rgb(255, 240, 160);
-        DrawText(canvas, "System font, 1 texel per px: Pikachu used Thunderbolt! It's super effective!",
-                 Rect{ 360, 260, 640, 24 }, style);
-        style.font = Font::Large;
-        DrawText(canvas, "Large font: USUM One Screen GPU quad", Rect{ 360, 290, 640, 30 }, style);
-        style.scale = 2;
-        style.color = Rgb(255, 255, 255);
-        DrawText(canvas, "2.56 texels per pixel", Rect{ 360, 340, 640, 60 }, style);
-
         // Alpha ramp: left transparent, right opaque.
         for (u32 yy = 420; yy < 470; yy++)
             for (u32 xx = 360; xx < 1000; xx++)
@@ -376,47 +368,90 @@ namespace UI
     // in texture memory is the top (t = 1).
     static void Tile(const u8 *stage, u8 *tex)
     {
-        for (u32 y = 0; y < TexH; y++)
-            for (u32 x = 0; x < TexW; x++)
-            {
-                const u32 tile = (y / 8) * (TexW / 8) + x / 8;
-                const u32 at = (tile * 64 + Morton(x & 7, y & 7)) * 4;
-                std::memcpy(tex + at, stage + (y * TexW + x) * 4, 4);
-            }
+        const Surface pixels{ const_cast<u8 *>(stage), 4, (s32)TexW * 4, PixelFormat::RGBA8, (s32)TexW, (s32)TexH };
+        TileQuadRegion(pixels, Rect{ 0, 0, (s32)TexW, (s32)TexH }, tex, TexW, TexH);
     }
 
     static bool Prepare(void)
     {
-        if (!Alloc() || s_dvlb == nullptr)
+        return s_dvlb != nullptr && Alloc();
+    }
+
+    bool HiResReady(void)
+    {
+        return s_on.load() && s_hiResEnabled.load() && !s_test.load() && s_hooked && s_dtHooked
+            && s_inTarget && s_shadow && s_restore && s_scratch != 0;
+    }
+
+    bool UpdateGpuQuad(u32 slot, const Surface &source, const Rect &region, const Rect &destination, bool dirty)
+    {
+        if (!HiResReady() || source.origin == nullptr || slot >= 2 || region.Empty() || destination.Empty()
+            || region.x < 0 || region.y < 0 || region.Right() > (s32)TexW || region.Bottom() > (s32)TexH
+            || source.width != region.w || source.height != region.h || source.format != PixelFormat::RGBA8)
             return false;
-        static bool texReady = false;
-        if (!texReady)
+        if (s_contentLock.TryLock()) return false;
+        if (dirty)
         {
-            UiInitFont();
-            // The row-major picture goes in a temporary linear block, freed
-            // once it is tiled into the texture.
-            u32 stage = 0;
-            const Result res = svcControlMemory(&stage, 0, 0, TexW * TexH * 4, MEMOP_ALLOC_LINEAR,
-                                                (MemPerm)(MEMPERM_READ | MEMPERM_WRITE));
-            if (R_FAILED(res) || stage == 0)
+            // Never modify the atlas being sampled by the hook. After a swap,
+            // seed the back atlas once so unchanged slots survive the update.
+            if (!s_backSynced)
             {
-                s_why = Utils::Format("no linear memory for the picture (0x%08lX)", (u32)res);
-                return false;
+                std::memcpy((void *)(s_scratch + s_back), (const void *)(s_scratch + s_front), AtlasBytes);
+                s_backSynced = true;
             }
-            const u64 t0 = svcGetSystemTick();
-            MakePicture((u8 *)stage);
-            const u64 t1 = svcGetSystemTick();
-            Tile((const u8 *)stage, (u8 *)(s_scratch + OffTex));
-            svcFlushProcessDataCache(CUR_PROCESS_HANDLE, s_scratch + OffTex, TexW * TexH * 4);
-            const u64 t2 = svcGetSystemTick();
-            u32 dummy;
-            svcControlMemory(&dummy, stage, 0, TexW * TexH * 4, MEMOP_FREE, (MemPerm)0);
-            const auto us = [](u64 ticks) { return (u32)(ticks * 1000000 / SYSCLOCK_ARM11); };
-            s_why = Utils::Format("texture %lux%lu: picture drawn in %lu us, tiled in %lu us", TexW, TexH,
-                                  us(t1 - t0), us(t2 - t1));
-            texReady = true;
+            TileQuadRegion(source, region, (u8 *)(s_scratch + s_back), TexW, TexH);
+            svcFlushProcessDataCache(CUR_PROCESS_HANDLE, s_scratch + s_back, AtlasBytes);
+            s_pendingDirty = true;
+            s_uploads++;
         }
+        s_pending[slot] = Quad{ region, destination, s_topSerial.load(), true };
+        s_contentLock.Unlock();
         return true;
+    }
+
+    void HideGpuQuad(u32 slot)
+    {
+        if (slot >= 2 || s_contentLock.TryLock()) return;
+        s_pending[slot].visible = false;
+        s_contentLock.Unlock();
+    }
+
+    static bool SetupLayer(u32 slot, s32 width, s32 height, Surface &pixels)
+    {
+        // Slot 0 fits a full 2.5x top screen; slot 1 holds a concurrent badge.
+        const s32 row = slot == 0 ? 0 : 600;
+        if (!HiResReady() || slot >= 2 || width <= 0 || width > (s32)TexW
+            || height <= 0 || height > (slot == 0 ? 600 : 424)) return false;
+        pixels = Surface{ (u8 *)(s_scratch + OffStage + row * TexW * 4), 4, (s32)TexW * 4,
+                          PixelFormat::RGBA8, width, height };
+        pixels.transparent = true;
+        return true;
+    }
+
+    static bool PresentLayer(u32 slot, const Surface &pixels, const Rect &area, bool dirty)
+    {
+        return UpdateGpuQuad(slot, pixels, Rect{ 0, slot == 0 ? 0 : 600, pixels.width, pixels.height }, area, dirty);
+    }
+
+    // Hook-side snapshot: never wait for an uploader. Both texture address and
+    // all quad metadata change together; contention keeps the complete old frame.
+    static void Snapshot(void)
+    {
+        if (!s_contentLock.TryLock())
+        {
+            if (s_pendingDirty)
+            {
+                std::swap(s_front, s_back);
+                s_pendingDirty = false;
+                s_backSynced = false;
+            }
+            s_activeTest = s_test.load();
+            std::memcpy(s_active, s_pending, sizeof(s_active));
+            for (Quad &q : s_active)
+                if (s_topSerial.load() - q.serial > 2) q.visible = false;
+            s_contentLock.Unlock();
+        }
+        else s_contentBusy++;
     }
 
     // --------------------------------------------------------------- drawing
@@ -463,32 +498,19 @@ namespace UI
             || (id >= GPUREG_GSH_CODETRANSFER_CONFIG && id <= GPUREG_GSH_OPDESCS_DATA + 7);
     }
 
-    // Screen point (x 0..400 left to right, y 0..240 top down) -> clip space
-    // of the rotated 240x400 target (citro3d's Mtx_OrthoTilt for the top
-    // screen). Memory rows run bottom to top when stepY < 0 (the usual).
-    static void ClipOf(float x, float y, float *out)
-    {
-        const float fx = 200.0f + (x - 200.0f) / s_squeeze;
-        out[0] = s_stepY < 0 ? 1.0f - y / 120.0f : y / 120.0f - 1.0f;
-        out[1] = 1.0f - fx / 200.0f;
-        out[2] = -0.5f;
-        out[3] = 1.0f;
-    }
-
     static void WriteVertices(void)
     {
-        // Triangle strip: top left, bottom left, top right, bottom right.
-        // Each vertex: clip position (4 floats), texcoord (2 floats).
-        const float x0 = 0, x1 = 400, y0 = 20, y1 = 220;
         float *v = (float *)(s_scratch + OffVbo);
-        const float corners[4][4] = { { x0, y0, 0, 1 }, { x0, y1, 0, 0 }, { x1, y0, 1, 1 }, { x1, y1, 1, 0 } };
-        for (int i = 0; i < 4; i++)
-        {
-            ClipOf(corners[i][0], corners[i][1], v);
-            v[4] = corners[i][2];
-            v[5] = corners[i][3];
-            v += 6;
-        }
+        s_vertexQuads = 0;
+        const auto write = [&](const Rect &r, const Rect &tex) {
+            QuadVertices(v, r, tex, TexW, TexH, s_squeeze, s_stepY < 0);
+            v += 24;
+            s_vertexQuads++;
+        };
+        if (s_activeTest) write(Rect{ 0, 20, 400, 200 }, Rect{ 0, 0, (s32)TexW, 512 });
+        else if (HiResReady())
+            for (const Quad &q : s_active)
+                if (q.visible) write(q.destination, q.region);
     }
 
     static u32 Pa(u32 va)
@@ -504,7 +526,7 @@ namespace UI
     static void EmitDraw(u32 target = 0, u32 targetW = TargetW, u32 targetH = TargetH, bool rgb8 = false)
     {
         const u32 viewY = targetH - TargetH;
-        const u32 tex = Pa(s_scratch + OffTex), vbo = Pa(s_scratch + OffVbo);
+        const u32 tex = Pa(s_scratch + s_front), vbo = Pa(s_scratch + OffVbo);
 
         GPUCMD_AddWrite(GPUREG_FRAMEBUFFER_FLUSH, 1);
         GPUCMD_AddWrite(GPUREG_FRAMEBUFFER_INVALIDATE, 1);
@@ -544,7 +566,7 @@ namespace UI
         GPUCMD_AddWrite(GPUREG_STENCIL_OP, 0);
         GPUCMD_AddWrite(GPUREG_DEPTH_COLOR_MASK, (GPU_ALWAYS << 4) | (0xF << 8));
 
-        // Texture unit 0: RGBA8 1024x512, bilinear, clamped.
+        // Texture unit 0: shared RGBA8 1024x1024 atlas, bilinear, clamped.
         GPUCMD_AddWrite(GPUREG_TEXUNIT_CONFIG, 0x00011001);
         GPUCMD_AddWrite(GPUREG_TEXUNIT0_BORDER_COLOR, 0);
         GPUCMD_AddWrite(GPUREG_TEXUNIT0_DIM, TexH | (TexW << 16));
@@ -584,16 +606,19 @@ namespace UI
         GPUCMD_AddIncrementalWrites(GPUREG_VSH_ATTRIBUTES_PERMUTATION_LOW, permutation, 2);
 
         // Draw 4 vertices as a triangle strip (citro3d's C3D_DrawArrays).
+        for (u32 quad = 0; quad < s_vertexQuads; quad++)
+        {
         GPUCMD_AddMaskedWrite(GPUREG_PRIMITIVE_CONFIG, 2, GPU_TRIANGLE_STRIP);
         GPUCMD_AddWrite(GPUREG_RESTART_PRIMITIVE, 1);
         GPUCMD_AddWrite(GPUREG_INDEXBUFFER_CONFIG, 0x80000000);
         GPUCMD_AddWrite(GPUREG_NUMVERTICES, 4);
-        GPUCMD_AddWrite(GPUREG_VERTEX_OFFSET, 0);
+        GPUCMD_AddWrite(GPUREG_VERTEX_OFFSET, quad * 4);
         GPUCMD_AddMaskedWrite(GPUREG_GEOSTAGE_CONFIG2, 1, 0);
         GPUCMD_AddMaskedWrite(GPUREG_START_DRAW_FUNC0, 1, 0);
         GPUCMD_AddWrite(GPUREG_DRAWARRAYS, 1);
         GPUCMD_AddMaskedWrite(GPUREG_START_DRAW_FUNC0, 1, 1);
         GPUCMD_AddWrite(GPUREG_VTX_FUNC, 1);
+        }
 
         GPUCMD_AddWrite(GPUREG_FRAMEBUFFER_FLUSH, 1);
         GPUCMD_AddWrite(GPUREG_FRAMEBUFFER_INVALIDATE, 1);
@@ -702,6 +727,7 @@ namespace UI
     {
         const u32 list = s_scratch + OffList;
         WriteVertices();
+        if (s_vertexQuads == 0) return 0;
         svcFlushProcessDataCache(CUR_PROCESS_HANDLE, s_scratch + OffVbo, 0x1000);
 
         // Our draw, walked into a blank register file to learn what it touches.
@@ -774,7 +800,7 @@ namespace UI
         if (!screen.IsTop)
             return false;
         s_frames++;
-        if (!s_on || s_inTarget || s_scratch == 0 || s_displayTransfer == nullptr)
+        if (!s_on.load() || !s_test.load() || s_inTarget || s_scratch == 0 || s_displayTransfer == nullptr)
             return false;
         u8 *const origin = screen.GetFramebuffer(0, 0);
         const s32 stepX = (s32)(screen.GetFramebuffer(1, 0) - origin);
@@ -793,6 +819,7 @@ namespace UI
         }
         const u64 t0 = svcGetSystemTick();
         s_stepY = stepY;
+        Snapshot();
         UpdateSqueeze();
         const u32 fb = (u32)(origin + (stepY < 0 ? ((s32)TargetW - 1) * stepY : 0));
         const u32 target = s_scratch + OffTarget;
@@ -850,12 +877,14 @@ namespace UI
                 s_dtSeen[k].count++;
         }
         const u32 inFormat = (flags >> 8) & 7;
-        if (s_on && s_inTarget && !s_ownPush && s_scratch != 0 && (flags & ((1 << 1) | (1 << 3) | (1 << 5))) == 0
+        if ((s_test.load() || HiResReady()) && s_on.load() && s_inTarget && !s_ownPush && s_scratch != 0 && (flags & ((1 << 1) | (1 << 3) | (1 << 5))) == 0
             && outW == TargetW && outH == TargetH && inW >= outW && inH >= outH
             && ((inW == outW && inH == outH) || (flags & (1 << 2)) != 0)
             && (inFormat == GSP_RGBA8_OES || inFormat == GSP_BGR8_OES) && ((flags >> 24) & 3) == 0)
         {
             const u64 t0 = svcGetSystemTick();
+            s_topSerial.fetch_add(1);
+            Snapshot();
             UpdateSqueeze();
             s_stepY = -3;
             RecursiveLock_Lock(&s_lock);
@@ -917,6 +946,9 @@ namespace UI
         const HookResult dtResult = s_dtHook.Enable();
         s_dtHooked = dtResult == HookResult::Success;
         s_inTarget = s_dtHooked;
+        s_on = s_hooked && s_dtHooked && Prepare();
+        if (s_on.load()) s_why = "backend ready; awaiting published quads";
+        Layer::s_hiRes = HiResBackend{ HiResReady, SetupLayer, PresentLayer, HideGpuQuad, Generation };
         return Utils::Format("gpuquad: ProcessCommandList hook at %08lX -> %d, following %lu registers; DisplayTransfer hook at %08lX -> %d",
                              ProcessListAddress, (int)result, tracked, displayTransfer, (int)dtResult);
     }
@@ -930,7 +962,7 @@ namespace UI
             codeSeen += s_codeSeen[i];
         const auto us = [](u64 ticks) { return (u32)(ticks * 1000000 / SYSCLOCK_ARM11); };
         std::string line = Utils::Format("gpuquad: %s, mode %s, restore %s, shadow %s, hook %s, lists %lu (size %lu-%lu B), words %lu, jumps %lu (bad %lu), parse %lu us total",
-                                         s_on ? "on" : "off", s_inTarget ? "target" : "fb", s_restore ? "on" : "off", s_shadow ? "on" : "off", s_hooked ? "ok" : "MISSING", s_lists,
+                                         s_on.load() ? "on" : "off", s_inTarget ? "target" : "fb", s_restore ? "on" : "off", s_shadow ? "on" : "off", s_hooked ? "ok" : "MISSING", s_lists,
                                          s_minSize == 0xFFFFFFFF ? 0 : s_minSize, s_maxSize, (u32)s_words, s_jumps,
                                          s_badJumps, us(s_parseTicks));
         line += Utils::Format("\ngpuquad: regs seen %lu, vs code words seen %lu/512, drawn %lu, skipped %lu, GX per frame %lu, list %lu B, restored %lu",
@@ -955,25 +987,64 @@ namespace UI
                 stale += Utils::Format(" %03lX", r);
         line += Utils::Format("\ngpuquad: next-draw checks %lu, with stale state %lu, stale shader memory %lu, stale regs:",
                               s_checks, s_staleChecks, s_staleCode) + (stale.empty() ? std::string(" none") : stale);
+        line += Utils::Format("\ngpuquad: hires %s, test %s, uploads %lu, snapshot busy %lu, quads %lu, linear %lu bytes",
+            HiResReady() ? "ready" : "off/unavailable", s_test.load() ? "on" : "off", s_uploads,
+            s_contentBusy, s_vertexQuads, ScratchSize);
         line += "\ngpuquad: " + s_why;
         if (!s_unseenList.empty())
             line += "\ngpuquad: touched but not fully seen:" + s_unseenList;
         return line;
     }
 
+    std::string HiResCommand(const std::string &args)
+    {
+        if (args == "on") { s_hiResEnabled = true; s_on = s_hooked && s_dtHooked && s_scratch != 0; }
+        else if (args == "off") s_hiResEnabled = false;
+        else if (args != "status") return "hires: use on|off|status";
+        return Status();
+    }
+
     std::string GpuQuadCommand(const std::string &args)
     {
-        if (args == "on")
+        if (args == "test on" || args == "test off")
+        {
+            if (args == "test on" && (!s_hooked || !Prepare())) return "gpuquad: backend unavailable";
+            // Plugin thread may wait for a short snapshot, never vice versa.
+            Lock lock(s_contentLock);
+            s_generation.fetch_add(1);
+            s_test = false;
+            if (args == "test on")
+            {
+                u32 stage = 0;
+                const Result result = svcControlMemory(&stage, 0, 0, AtlasBytes, MEMOP_ALLOC_LINEAR,
+                                                       (MemPerm)(MEMPERM_READ | MEMPERM_WRITE));
+                if (R_FAILED(result) || stage == 0) return "gpuquad: no linear memory for test picture";
+                std::memset((void *)stage, 0, AtlasBytes);
+                MakePicture((u8 *)stage);
+                Tile((const u8 *)stage, (u8 *)(s_scratch + s_back));
+                u32 unused;
+                svcControlMemory(&unused, stage, 0, AtlasBytes, MEMOP_FREE, (MemPerm)0);
+                svcFlushProcessDataCache(CUR_PROCESS_HANDLE, s_scratch + s_back, AtlasBytes);
+                s_pendingDirty = true;
+                s_backSynced = true;
+                s_test = true;
+                s_on = true;
+            }
+            for (Quad &q : s_pending) q.visible = false;
+        }
+        else if (args == "on")
         {
             if (!s_hooked)
                 return "gpuquad: no hook, can't draw";
             if (!Prepare())
                 return "gpuquad: " + s_why;
+            s_hiResEnabled = true;
             s_on = true;
         }
         else if (args == "off")
         {
             s_on = false;
+            s_hiResEnabled = false;
             s_why = "off";
         }
         else if (args == "mode fb" || args == "mode target")
@@ -996,7 +1067,7 @@ namespace UI
             s_maxSize = 0;
         }
         else if (args != "status")
-            return "gpuquad: use on, off, status, reset, mode fb|target, restore on|off or shadow on|off";
+            return "gpuquad: use on, off, status, reset, test on|off, mode fb|target, restore on|off or shadow on|off";
         return Status();
     }
 }

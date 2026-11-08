@@ -120,29 +120,35 @@ namespace UI
         ResetClip();
     }
 
-    Canvas::Canvas(const Surface &surface, s32 originX, s32 originY)
-        : m_surface(surface), m_ox(originX), m_oy(originY)
+    Canvas::Canvas(const Surface &surface, s32 originX, s32 originY, float scale)
+        : m_scale(scale > 0.f ? scale : 1.f), m_surface(surface), m_ox(originX), m_oy(originY)
     {
         ResetClip();
     }
 
     void Canvas::SetClip(const Rect &clip)
     {
-        m_clip = Intersect(clip, Rect{ m_ox, m_oy, m_surface.width, m_surface.height });
+        const s32 w = m_scale == 1.f ? m_surface.width : (s32)std::lround(m_surface.width / m_scale);
+        const s32 h = m_scale == 1.f ? m_surface.height : (s32)std::lround(m_surface.height / m_scale);
+        m_clip = Intersect(clip, Rect{ m_ox, m_oy, w, h });
     }
 
     void Canvas::ResetClip(void)
     {
-        m_clip = Rect{ m_ox, m_oy, m_surface.width, m_surface.height };
+        const s32 w = m_scale == 1.f ? m_surface.width : (s32)std::lround(m_surface.width / m_scale);
+        const s32 h = m_scale == 1.f ? m_surface.height : (s32)std::lround(m_surface.height / m_scale);
+        m_clip = Rect{ m_ox, m_oy, w, h };
     }
 
     bool Canvas::GetPixel(s32 x, s32 y, Color &out) const
     {
         if (x < m_ox || y < m_oy || x >= m_ox + m_surface.width || y >= m_oy + m_surface.height)
             return false;
+        if (m_scale != 1.f)
+            return DeviceCanvas().GetPixel((s32)DeviceX(x), (s32)DeviceY(y), out);
         const u8 *p = At(x, y);
         ReadPixel(p, m_surface.format, out.r, out.g, out.b);
-        out.a = 255;
+        out.a = m_surface.transparent && m_surface.format == PixelFormat::RGBA8 ? p[0] : 255;
         return true;
     }
 
@@ -150,6 +156,12 @@ namespace UI
     {
         if (x < m_clip.x || y < m_clip.y || x >= m_clip.Right() || y >= m_clip.Bottom())
             return;
+        if (m_scale != 1.f)
+        {
+            c.a = Mul255(c.a, coverage);
+            FillRect(Rect{ x, y, 1, 1 }, c);
+            return;
+        }
         const u32 alpha = Mul255(c.a, coverage);
         if (alpha == 0)
             return;
@@ -163,6 +175,21 @@ namespace UI
         u8 r, g, b;
         ReadPixel(p, m_surface.format, r, g, b);
         const u32 inv = 255 - alpha;
+        if (m_surface.transparent && m_surface.format == PixelFormat::RGBA8 && p[0] != 255)
+        {
+            if (p[0] == 0)
+            {
+                WritePixel(p, m_surface.format, c.r, c.g, c.b);
+                p[0] = (u8)alpha;
+                return;
+            }
+            const u32 dest = Mul255(p[0], inv), total = alpha + dest;
+            WritePixel(p, m_surface.format, (u8)((c.r * alpha + r * dest + total / 2) / total),
+                       (u8)((c.g * alpha + g * dest + total / 2) / total),
+                       (u8)((c.b * alpha + b * dest + total / 2) / total));
+            p[0] = (u8)total;
+            return;
+        }
         WritePixel(p, m_surface.format,
                    (u8)Div255(c.r * alpha + r * inv),
                    (u8)Div255(c.g * alpha + g * inv),
@@ -173,6 +200,11 @@ namespace UI
     // which is most of what a menu draws.
     void Canvas::Span(s32 x0, s32 x1, s32 y, Color c)
     {
+        if (m_scale != 1.f || m_surface.transparent)
+        {
+            FillRect(Rect{ x0, y, x1 - x0, 1 }, c);
+            return;
+        }
         if (y < m_clip.y || y >= m_clip.Bottom())
             return;
         x0 = std::max(x0, m_clip.x);
@@ -229,7 +261,26 @@ namespace UI
 
     void Canvas::FillRect(const Rect &r, Color c)
     {
+        if (m_scale != 1.f)
+        {
+            Canvas device = DeviceCanvas();
+            const Rect clipped = Intersect(r, m_clip);
+            if (clipped.Empty()) return;
+            const float x0 = DeviceX(clipped.x), y0 = DeviceY(clipped.y);
+            const float x1 = DeviceX(clipped.Right()), y1 = DeviceY(clipped.Bottom());
+            for (s32 y = (s32)std::floor(y0); y < (s32)std::ceil(y1); y++)
+                for (s32 x = (s32)std::floor(x0); x < (s32)std::ceil(x1); x++)
+                    device.BlendPixel(x, y, c, Coverage((std::min(x + 1.f, x1) - std::max((float)x, x0))
+                                                     * (std::min(y + 1.f, y1) - std::max((float)y, y0))));
+            return;
+        }
         const Rect area = Intersect(r, m_clip);
+        if (m_surface.transparent)
+        {
+            for (s32 y = area.y; y < area.Bottom(); y++)
+                for (s32 x = area.x; x < area.Right(); x++) BlendPixel(x, y, c);
+            return;
+        }
         for (s32 y = area.y; y < area.Bottom(); y++)
             Span(area.x, area.Right(), y, c);
     }
@@ -278,6 +329,7 @@ namespace UI
 
     void Canvas::FillRoundRect(const Rect &r, s32 radius, Color c)
     {
+        if (m_scale != 1.f) { ScaledRound(r, radius, c, 0); return; }
         const s32 rad = std::max<s32>(0, std::min(radius, std::min(r.w, r.h) / 2));
         if (rad == 0)
         {
@@ -303,6 +355,7 @@ namespace UI
 
     void Canvas::StrokeRoundRect(const Rect &r, s32 radius, Color c, s32 thickness)
     {
+        if (m_scale != 1.f) { if (thickness > 0) ScaledRound(r, radius, c, thickness); return; }
         const s32 rad = std::max<s32>(0, std::min(radius, std::min(r.w, r.h) / 2));
         const s32 t = std::min(thickness, rad);
         if (rad == 0 || t <= 0)
@@ -332,6 +385,12 @@ namespace UI
 
     void Canvas::Line(float x0, float y0, float x1, float y1, float width, Color c)
     {
+        if (m_scale != 1.f)
+        {
+            Canvas device = DeviceCanvas();
+            device.Line(DeviceX(x0), DeviceY(y0), DeviceX(x1), DeviceY(y1), width * m_scale, c);
+            return;
+        }
         const float hw = width * 0.5f;
         const Rect box = Intersect(Rect{ (s32)std::floor(std::min(x0, x1) - hw - 1.f),
                                          (s32)std::floor(std::min(y0, y1) - hw - 1.f),
@@ -357,6 +416,12 @@ namespace UI
 
     void Canvas::FillTriangle(float ax, float ay, float bx, float by, float cx, float cy, Color c)
     {
+        if (m_scale != 1.f)
+        {
+            Canvas device = DeviceCanvas();
+            device.FillTriangle(DeviceX(ax), DeviceY(ay), DeviceX(bx), DeviceY(by), DeviceX(cx), DeviceY(cy), c);
+            return;
+        }
         // Make the winding counter-clockwise in screen space so "inside" is
         // positive for every edge.
         if ((bx - ax) * (cy - ay) - (by - ay) * (cx - ax) < 0.f)
@@ -398,6 +463,12 @@ namespace UI
 
     void Canvas::DrawMask(s32 x, s32 y, const u8 *mask, s32 w, s32 h, s32 stride, s32 scale, Color c)
     {
+        if (m_scale != 1.f)
+        {
+            DrawMaskSized((float)x, (float)y, mask, w, h, stride, (float)(w * std::max<s32>(1, scale)),
+                          (float)(h * std::max<s32>(1, scale)), c);
+            return;
+        }
         if (scale < 1)
             scale = 1;
         // Clip once to the mask pixels that touch the clip rect (BlendPixel
@@ -437,5 +508,62 @@ namespace UI
             }
         }
     }
+    Canvas Canvas::DeviceCanvas(void) const
+    {
+        Canvas device(m_surface);
+        const s32 x = (s32)std::floor(DeviceX(m_clip.x)), y = (s32)std::floor(DeviceY(m_clip.y));
+        device.SetClip(Rect{ x, y, (s32)std::ceil(DeviceX(m_clip.Right())) - x,
+                                  (s32)std::ceil(DeviceY(m_clip.Bottom())) - y });
+        return device;
+    }
+
+    void Canvas::ScaledRound(const Rect &r, s32 radius, Color c, s32 thickness)
+    {
+        if (r.Empty()) return;
+        const float rad = std::max(0.f, std::min((float)radius, std::min(r.w, r.h) / 2.f)) * m_scale;
+        if (rad == 0.f) { if (thickness > 0) StrokeRect(r, c, thickness); else FillRect(r, c); return; }
+        Canvas device = DeviceCanvas();
+        const float x0 = DeviceX(r.x), y0 = DeviceY(r.y), w = r.w * m_scale, h = r.h * m_scale;
+        const float t = std::min((float)thickness * m_scale, rad);
+        for (s32 y = (s32)std::floor(y0); y < (s32)std::ceil(y0 + h); y++)
+            for (s32 x = (s32)std::floor(x0); x < (s32)std::ceil(x0 + w); x++)
+            {
+                const float px = x + .5f - x0, py = y + .5f - y0;
+                const float dx = std::max(0.f, std::max(rad - px, px - (w - rad)));
+                const float dy = std::max(0.f, std::max(rad - py, py - (h - rad)));
+                const float dist = std::sqrt(dx * dx + dy * dy);
+                float edge = std::min(std::min(px, w - px), std::min(py, h - py));
+                edge = std::min(edge, rad - dist);
+                float cov = std::min(1.f, std::max(0.f, edge + .5f));
+                if (thickness > 0) cov -= std::min(1.f, std::max(0.f, edge - t + .5f));
+                device.BlendPixel(x, y, c, Coverage(cov));
+            }
+    }
+
+    void Canvas::DrawMaskSized(float x, float y, const u8 *mask, s32 w, s32 h, s32 stride,
+                               float width, float height, Color c)
+    {
+        if (mask == nullptr || w <= 0 || h <= 0 || width <= 0.f || height <= 0.f) return;
+        Canvas device = DeviceCanvas();
+        const float x0 = DeviceX(x), y0 = DeviceY(y), dw = width * m_scale, dh = height * m_scale;
+        const auto sample = [&](s32 sx, s32 sy) -> float {
+            return sx < 0 || sy < 0 || sx >= w || sy >= h ? 0.f : mask[sy * stride + sx];
+        };
+        const Rect bounds = Intersect(Rect{ (s32)std::floor(x0), (s32)std::floor(y0),
+            (s32)std::ceil(x0 + dw) - (s32)std::floor(x0),
+            (s32)std::ceil(y0 + dh) - (s32)std::floor(y0) }, device.GetClip());
+        for (s32 py = bounds.y; py < bounds.Bottom(); py++)
+            for (s32 px = bounds.x; px < bounds.Right(); px++)
+            {
+                const float sx = (px + .5f - x0) * w / dw - .5f;
+                const float sy = (py + .5f - y0) * h / dh - .5f;
+                const s32 ix = (s32)std::floor(sx), iy = (s32)std::floor(sy);
+                const float fx = sx - ix, fy = sy - iy;
+                const float a = sample(ix, iy) * (1.f - fx) + sample(ix + 1, iy) * fx;
+                const float b = sample(ix, iy + 1) * (1.f - fx) + sample(ix + 1, iy + 1) * fx;
+                device.BlendPixel(px, py, c, (u8)(a * (1.f - fy) + b * fy + .5f));
+            }
+    }
+
 }
 }

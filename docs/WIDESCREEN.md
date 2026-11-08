@@ -326,9 +326,21 @@ copy-back also restores the saved background under the skipped window.
 that value and retain true for direct CPU drawing. Panel readback checks
 and requested screenshots also retain true reporting. Non-BGR8 layouts,
 linear-memory failure and `layergpu off` keep the existing CPU fallback.
-The overlays themselves stay 1x pictures that Azahar scales up, so they look
-soft at high internal resolutions (texture filters such as MMPX did not help);
-only drawing them with the 3DS GPU would make them sharp.
+All screens except the opt-in Rotom prompt/badge retain these 1x pictures that
+Azahar scales up. Rotom now uses the phase-1 PICA overlay backend by default when
+ready: it draws its unchanged logical layout into transparent RGBA8 at 2.5x,
+CPU-tiles only changed content into a shared 1024x1024 texture, then draws into
+the game's top render target immediately before the game's DisplayTransfer.
+Up to two quads share one command list and one shadow-state restore (one GX
+command per frame). GPU vertices apply the same continuous x=200 squeeze as the
+original spike; font advances/line breaks remain 1x while native glyph masks are
+sampled at the larger raster size. Rounded corners retain alpha zero outside.
+`hires off` restores Rotom's existing Layer/LayerGpu path live; `hires on` enables
+it again and `hires status` reports readiness/uploads/contention. Other screens,
+pillarbox art and Map's skipped copy are unchanged. See GPUQUAD.md for the
+publication/threading contract, 12.39 MiB linear allocation and unrun checks.
+The new backend has not yet been built or validated in the emulator; the earlier
+spike's sharpness and stability evidence does not validate this integration.
 
 The native map used to crash the game at 16:9/21:9 (one GPU copy per squeezed
 column); it now copies a game-squeezed picture in one command (above).

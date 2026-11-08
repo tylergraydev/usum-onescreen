@@ -1,4 +1,125 @@
-# GPU quad spike (`gpuquad`)
+# GPU overlay backend (phase 1)
+
+The backend evolves the verified `a5e717e` spike. Only Rotom prompts and their
+ready badge opt in; other screens retain their existing Layer/LayerGpu path.
+The historical spike measurements below are **not** validation of this revision.
+Tyler confirmed the original 1024x512 spike looked sharp at 5x in Azahar.
+This revision has not been built or run; Claude must run the host and emulator checks.
+
+## Current commands
+
+- `hires on|off|status`: enabled by default once hooks, shader and linear allocation
+  succeed. Off switches Rotom live to its supplied legacy Layer buffer, with a redraw.
+- `gpuquad test on|off`: explicit checkerboard/line-pair/orientation/alpha-ramp test.
+  The test has no text or shared font-cache access. It replaces backend quads;
+  Rotom uses its legacy path while the test is on and redraws when it turns off.
+- `gpuquad on|off|status|reset`: backend enable/disable and the spike diagnostics.
+  `hires on` also re-enables the backend. Reset retains the content/upload counters. A generation counter also forces redraw after test
+  changes made between OSD callbacks.
+- `gpuquad mode fb|target`, `restore on|off`, `shadow on|off`: diagnostic switches.
+  Hi-res layers require target mode with shadow and restore enabled. FB mode is
+  retained only for the explicit test and still costs three GX commands.
+
+Status includes readiness, test state, upload count, snapshot contention, last
+quad count, linear bytes and the original shadow/restore/GX counters. Readiness
+means the pipeline is installed; the first draws can still skip until shader
+words have been observed by the shadow. An empty frame submits no overlay list.
+
+## API, atlas and publication
+
+`GpuQuad.hpp` exposes `HiResReady()`,
+`UpdateGpuQuad(slot, source, atlasRegion, destination, dirty)` and `HideGpuQuad(slot)`.
+Slots 0 and 1 draw in that order. Destinations use 400x240 screen coordinates;
+regions use physical texels in one shared 1024x1024 RGBA8 atlas (bytes A,B,G,R).
+The source describes stable caller-owned pixels; publish dirty on first use and
+on redraw, then renew visibility every OSD callback with dirty=false. A failed
+TryLock returns false and the caller retries without discarding its dirty flag.
+Regions must be disjoint, with transparent padding for bilinear sampling.
+`QuadLayout.hpp` contains the host-testable Morton tiler and vertex/UV mapping.
+The x mapping remains `200 + (x - 200) / WidescreenSqueeze()`, continuous at the
+GPU vertices, matching the 1x SourceColumn/template squeeze about x=200.
+
+Two tiled atlases alternate front/back. Uploads write only the back atlas, CPU
+Morton-swizzling the supplied region and flushing it once. The first dirty upload
+after a swap seeds the back atlas from the front, preserving unchanged slots.
+The game hook snapshots texture address and both quad records together, emits
+both triangle strips in one command list, and restores the shadow once. It uses
+the same target interception and shader as the spike: **one GX command per top
+frame**, no DisplayTransfer or texture upload per unchanged frame. Azahar's
+synchronous GX execution remains a requirement; no real-hardware fences were added.
+
+Content publication uses a separate CTRPF Mutex. Uploaders and the game hook use
+TryLock (CTRPF returns zero on success). The game never waits for the uploader;
+contention reuses the last complete texture and quads. On a successful snapshot,
+leases not renewed for more than two recognised top transfers expire, covering
+skipped OSD callbacks. Hide explicitly clears the slot on the next snapshot.
+Debug picture construction may hold this mutex on the plugin thread; it uses a
+separate temporary linear buffer and no shared text scratch. The original
+RecursiveLock still orders the game's shadow parsing and our command submission;
+the plugin's content upload does not take that lock. Producer pixels themselves
+must not be edited concurrently with their upload; Layer staging is OSD-owned.
+
+## Scaled layers and text
+
+`Layer::SetupHiRes(..., slot, fallback, bytes)` is the opt-in entry point.
+`HiResScale` in Layer.hpp is the one default scale, 2.5. Layer backend callbacks
+keep Layer.cpp host-buildable. Slot 0 staging reserves atlas rows 0..599 (a full
+1000x600 screen fits), slot 1 rows 600..1023 (a concurrent badge fits). Generic
+UpdateGpuQuad callers may choose any disjoint regions. This phase does not add
+hi-res skip-rectangle or pillarbox rendering; Map and full-screen menus stay legacy.
+Rotom keeps borrowing its existing fallback buffer so ownership behaviour is unchanged.
+
+Begin clears only the layer's physical RGBA staging rectangle to transparent and
+returns a Canvas with the original logical origin/clip. Rects and spans map their
+edges with fractional-pixel coverage; rounds, lines and triangles rasterize in
+physical pixels. Mask coverage uses bilinear sampling. Icons going through masks,
+BlendPixel or FillRect inherit the scale. Transparent RGBA surfaces use straight
+alpha source-over, preserving transparent corners. Present clips the outer rounded
+silhouette, uploads only after Begin, renews visibility, and always returns false
+(no CPU framebuffer writes). Unavailable/off transitions force Setup and redraw
+on the legacy path. Regular Setup and nontransparent 1x raster branches retain
+their existing behaviour.
+
+Text wrapping, ellipsizing, alignment, integer pen advances and bearings still
+come from the original 1x cache. At a scaled Canvas, system and game fonts decode
+the original native cell on redraw, then bilinearly sample it at the physical size;
+no high-resolution glyph cache is allocated. System text retains the 0.6/0.8
+font-size factors, so native system detail tops out near 1.67x for Body before
+smooth upsampling. Small bitmap text resamples its existing mask. Decode scratch
+uses at most 4 KiB of stack per draw call, reused between glyphs. DrawText's return
+width and all layout calculations remain in screen coordinates.
+
+## Memory and checks for this revision
+
+Persistent linear allocation: **12,988,416 bytes (12.39 MiB)**:
+8 MiB tiled front/back, 4 MiB row-major staging, 385,024 bytes page-rounded FB test
+target, 16 KiB command buffer, 4 KiB vertex buffer. The explicit test temporarily
+allocates another 4 MiB. No new dynamic heap surfaces or glyph caches; existing
+shader setup, font caches, fallback ScreenBuffer/badge and diagnostic strings remain.
+Small slot/layer metadata is static storage. Allocation failure leaves legacy drawing.
+
+Run `make -C tests` with g++ C++17 `-Wall -Wextra -Werror`. New `hires_test` checks
+scale-1 bytes against an independent legacy blend reference across five formats,
+scale-1 constructor equivalence across all primitives and storage directions,
+2.5x rect edges, masks, transparent round corners, lines/triangles, native system
+text pen/alignment positions, two atlas regions/UVs and dirty/retry/live fallback
+Layer lifecycle. `theme_test` adds native game-font mask/advance checks at both scales.
+Existing tests remain in the full gate. No build or tests were run by Codex.
+
+In Azahar, inspect Ready, Choice (both answers), Reply and all Roto Loto states at
+1x and 5x, with stock aspect, 16:9 and 21:9. Toggle hires while each is open; check
+layout/colour/alpha corners, text, badges, game sharpness and hide/reopen transitions.
+Compare status upload counts while idle versus a cursor/text change; unchanged
+content must not upload, target draws must show GX/frame 1. Exercise test on/off,
+mode fallback and shadow/restore guards. For two simultaneous quads, a temporary
+review harness can publish a badge in slot 1 and the Rotom/menu region in slot 0;
+this phase deliberately converts no second screen. Soak field, X menu, Party and
+battle with unrelated overlays and check state restore/queue stability. Hardware,
+Ultra Moon, stereo/right-eye output and performance remain unverified.
+
+---
+
+## Historical verified spike (`a5e717e`)
 
 Can the plugin draw a textured rectangle on the top screen with the 3DS GPU
 (PICA200), so that Azahar renders it at its internal resolution? Spike code:

@@ -79,6 +79,8 @@ namespace UI
 
     bool Layer::Setup(const Surface &like, const Rect &area, s32 radius, u8 *buffer, size_t size)
     {
+        Hide();
+        m_hiRes = m_preferHiRes = false;
         m_ready = false;
         if (area.Empty() || area.w > MaxW || area.x < 0 || area.y < 0 || area.Right() > like.width
             || area.Bottom() > like.height || size < BytesFor(like, area))
@@ -126,15 +128,55 @@ namespace UI
         return true;
     }
 
+    HiResBackend Layer::s_hiRes = {};
+
+    void Layer::Hide(void)
+    {
+        if (m_hiRes && s_hiRes.hide != nullptr) s_hiRes.hide(m_slot);
+    }
+
+    bool Layer::SetupHiRes(const Surface &like, const Rect &area, s32 radius, u32 slot, u8 *fallback, size_t size)
+    {
+        const bool legacy = Setup(like, area, radius, fallback, size);
+        m_preferHiRes = true;
+        m_slot = slot;
+        if (like.width != ScreenW || s_hiRes.ready == nullptr || !s_hiRes.ready()) return legacy;
+        Surface pixels = {};
+        if (area.Empty() || area.x < 0 || area.y < 0 || area.Right() > like.width || area.Bottom() > like.height) return false;
+        if (!s_hiRes.setup(slot, (s32)std::lround(area.w * HiResScale),
+                                      (s32)std::lround(area.h * HiResScale), pixels)) return legacy;
+        m_surface = pixels;
+        m_area = area;
+        m_likeStepX = like.stepX; m_likeStepY = like.stepY;
+        m_ready = true;
+        m_hiRes = true;
+        m_generation = s_hiRes.generation != nullptr ? s_hiRes.generation() : 0;
+        m_radius = std::max<s32>(0, std::min(radius, std::min(area.w, area.h) / 2));
+        m_dirty = true;
+        return true;
+    }
+
     bool Layer::Matches(const Surface &screen) const
     {
+        const bool available = m_preferHiRes && s_hiRes.ready != nullptr && s_hiRes.ready();
+        if (m_preferHiRes && m_hiRes != available) return false;
+        if (m_hiRes && s_hiRes.generation != nullptr && m_generation != s_hiRes.generation()) return false;
+        if (m_hiRes) return m_ready && available && screen.width == ScreenW && m_area.Bottom() <= screen.height
+            && screen.stepX == m_likeStepX && screen.stepY == m_likeStepY;
         return m_ready && screen.format == m_surface.format && screen.stepX == m_likeStepX
             && screen.stepY == m_likeStepY && m_area.Right() <= screen.width && m_area.Bottom() <= screen.height;
     }
 
     Canvas Layer::Begin(void)
     {
-        Canvas canvas(m_surface, m_area.x, m_area.y);
+        Canvas canvas(m_surface, m_area.x, m_area.y, m_hiRes ? HiResScale : 1.f);
+        if (m_hiRes)
+        {
+            for (s32 y = 0; y < m_surface.height; y++)
+                std::memset(m_surface.origin + y * m_surface.stepY, 0, (size_t)m_surface.width * 4);
+            m_dirty = true;
+            return canvas;
+        }
         // Black is all-zero bytes in every format but RGBA8 (alpha byte 0xFF).
         if (m_surface.format == PixelFormat::RGBA8)
             canvas.FillRect(m_area, Rgb(0, 0, 0));
@@ -154,6 +196,25 @@ namespace UI
     {
         if (!Matches(screen))
             return false;
+        if (m_hiRes)
+        {
+            if (m_dirty && m_radius > 0)
+            {
+                // Clip even callers which fill a square background to the layer's silhouette.
+                const float rad = m_radius * HiResScale;
+                for (s32 y = 0; y < m_surface.height; y++)
+                    for (s32 x = 0; x < m_surface.width; x++)
+                    {
+                        const float dx = std::max(0.f, std::max(rad - x - .5f, x + .5f - (m_surface.width - rad)));
+                        const float dy = std::max(0.f, std::max(rad - y - .5f, y + .5f - (m_surface.height - rad)));
+                        const float coverage = std::min(1.f, std::max(0.f, rad - std::sqrt(dx * dx + dy * dy) + .5f));
+                        u8 &alpha = m_surface.origin[y * m_surface.stepY + x * 4];
+                        alpha = std::min(alpha, (u8)(coverage * 255.f + .5f));
+                    }
+            }
+            if (s_hiRes.present(m_slot, m_surface, m_area, m_dirty)) m_dirty = false;
+            return false;
+        }
         if (s_gpuPresent != nullptr && s_gpuPresent(*this, screen, skip))
             return false;
         PresentBands(screen, PillarboxColumns(screen, m_area));

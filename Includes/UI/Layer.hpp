@@ -12,6 +12,17 @@ namespace UI
     // 9..11 soft edges. column must hold ScreenH * BytesPerPixel(format).
     void WriteBandColumn(u8 *column, int phase, PixelFormat format, bool reverse);
 
+    // One raster scale for opt-in overlays. Other layers remain exactly 1x.
+    static constexpr float HiResScale = 2.5f;
+    struct HiResBackend
+    {
+        bool (*ready)(void);
+        bool (*setup)(u32 slot, s32 width, s32 height, Surface &pixels);
+        bool (*present)(u32 slot, const Surface &pixels, const Rect &area, bool dirty);
+        void (*hide)(u32 slot);
+        u32 (*generation)(void) = nullptr; // destructive debug texture changes
+    };
+
     // An off-screen copy of one rounded-rect area of a screen. Draw into it
     // only when its content changes (Begin), and copy it onto the framebuffer
     // every frame (Present). Present only writes: reading the framebuffer
@@ -28,6 +39,10 @@ namespace UI
         // coverage of radius are not copied. The buffer must hold
         // BytesFor(like, area) bytes. Returns false if it doesn't fit.
         bool Setup(const Surface &like, const Rect &area, s32 radius, u8 *buffer, size_t size);
+        // Opt-in, with the same supplied 1x buffer as a live fallback.
+        bool SetupHiRes(const Surface &like, const Rect &area, s32 radius, u32 slot, u8 *fallback, size_t size);
+        void Hide(void);
+        static HiResBackend s_hiRes;
         static size_t BytesFor(const Surface &like, const Rect &area);
 
         // True if the layer was set up for a screen with this format and
@@ -71,6 +86,10 @@ namespace UI
         // Rows [m_top[i], m_area.h - m_top[i]) of column i are copied.
         u8      m_top[MaxW] = {};
         bool    m_ready = false;
+        bool    m_hiRes = false, m_preferHiRes = false;
+        u32     m_slot = 0, m_generation = 0;
+        s32     m_radius = 0;
+        mutable bool m_dirty = false;
     };
 }
 }

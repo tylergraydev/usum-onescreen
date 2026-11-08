@@ -636,6 +636,25 @@ namespace UI
         return &g;
     }
 
+    void GameTextCache::Draw(Canvas &canvas, u32 codePoint, s32 x, s32 y, Color color)
+    {
+        const Glyph *g = Get(codePoint);
+        if (g == nullptr || g->w <= 0) return;
+        if (canvas.Scale() == 1.f)
+        {
+            canvas.DrawMask(x + g->left, y, g->mask, g->w, g->h, g->w, 1, color);
+            return;
+        }
+        const FfntInfo &f = m_font->Info();
+        u8 cell[64 * 64];
+        if ((u32)f.cellW * f.cellH > sizeof(cell) || !m_font->DecodeCell(m_font->IndexOf(codePoint), cell)) return;
+        s32 left, glyphW, advance;
+        m_font->Widths(m_font->IndexOf(codePoint), left, glyphW, advance);
+        const s32 inkW = std::min<s32>(f.cellW, std::max<s32>(0, glyphW));
+        canvas.DrawMaskSized((float)(x + g->left), (float)y, cell, inkW, f.cellH, f.cellW,
+                            inkW * m_scale, f.cellH * m_scale, color);
+    }
+
     // --- What gets loaded ---
 
     Rect CategoryIconRect(u8 category)
