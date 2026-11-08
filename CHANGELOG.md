@@ -14,6 +14,7 @@ All notable changes for players are listed here. Versions follow [Semantic Versi
 ### Fixed
 
 - The native map no longer crashes the game with widescreen (16:9 or 21:9) on. The map picture now squeezes like the rest of the game's 2D.
+- At a higher Azahar internal resolution, the game stays sharp while the plugin's menus, battle menu and Rotom prompt are on screen (they used to drop the whole picture to 400x240). The menus themselves are still 400x240 pictures, now with square corners. `layergpu off` brings back the old drawing.
 
 ## [0.1.1] - 2026-11-05
 

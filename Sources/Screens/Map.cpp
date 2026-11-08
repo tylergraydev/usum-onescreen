@@ -120,18 +120,19 @@ namespace OneScreen
         }
         if (!picture)
         {
-            s_layer.Present(fb);
-            return true;
+            return s_layer.Present(fb);
         }
-        // The window is the game's own map, copied by the GPU; the CPU
-        // leaves those pixels alone.
-        s_layer.Present(fb, MapWindow);
+        // Present first: its GPU path copies whole background columns back,
+        // including the skipped window. Copy the game's map AFTER that so
+        // the saved background cannot overwrite the new picture. The CPU
+        // fallback also leaves the window alone.
+        const bool drew = s_layer.Present(fb, MapWindow);
         if (!PanelCopyBottomRect(screen, MapSource.x, MapSource.y, MapSource.w, MapSource.h, MapWindow.x, MapWindow.y))
         {
             s_copyFailed = true;
             s_drawnVersion = ~0u;
         }
-        return true;
+        return drew;
     }
 
     void StartMap(void)

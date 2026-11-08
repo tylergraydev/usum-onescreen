@@ -282,8 +282,7 @@ namespace OneScreen
         }
         else if (redraw)
             return false;
-        s_layer.Present(fb);
-        return true;
+        return s_layer.Present(fb);
     }
 
     void StartSubScreens(void)

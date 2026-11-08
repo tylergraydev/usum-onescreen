@@ -192,9 +192,9 @@ as presentation metadata on top surfaces only. `Layer::Present` uses it for
 400-pixel top output when k > 1: each destination column d samples the nearest
 source column `200 + (d - 200)*k` (ties toward increasing x). Out-of-area sources
 leave the destination untouched except for eligible pillarbox bands (below).
-The source column's original `m_top` range preserves rounded corners. Copies still only write the framebuffer, with one
-memcpy per copied column on rotated screens. No redraw is needed for a live
-change. Bottom surfaces remain unchanged. Positive aspects at or below 5:3
+The source column's original `m_top` range preserves rounded corners. The CPU
+fallback writes one memcpy per copied column on rotated screens; the GPU
+path is described below. No redraw is needed for a live change. Bottom surfaces remain unchanged. Positive aspects at or below 5:3
 retain native presentation at 1:1; native expansion is outside this change.
 
 The skip rectangle remains in unsqueezed coordinates and is tested against the
@@ -281,18 +281,12 @@ corners and the top/bottom inset inside that extent still show the game.
 at 16:9 and `[66, 334)` at 21:9. No band overlaps a sampled layer column;
 skipped Map pixels and rounded corners keep their existing behaviour.
 
-Cost reasoning (not an emulator measurement): a shared static 11.25 KiB
-cache holds eight stripe phases, one solid column and three gradient columns,
-encoded for the output format and vertical direction. It rebuilds only when
-those change, with no heap allocation. Each rotated BGR8 band column costs
+The CPU fallback caches all twelve band phases (11.25 KiB), encoded for the
+output format and vertical direction. Each rotated BGR8 band column costs
 one 720-byte memcpy: 48 copies / 33.75 KiB at 16:9, or 132 copies /
-92.81 KiB at 21:9 for the standard inset. This is about 12% / 33% of a
-400x240 BGR8 framebuffer. Both modes have the same per-frame copy cost;
-there is no per-pixel shading on the framebuffer. Row-major host surfaces
-use a pixel-copy fallback. See docs/UI.md and docs/PERF.md: this avoids reads
-and tiny framebuffer writes that trigger GPU downloads, but additional CPU
-writes may still cost host upload bandwidth. Actual Azahar speed needs user
-measurement; no emulated-time or wall-clock performance is claimed here.
+92.81 KiB at 21:9 for the standard inset. Row-major host surfaces use a
+pixel-copy fallback. The BGR8 GPU path instead stages these same phases as
+RGBA8 and copies whole columns on the GPU; see below.
 
 `tests/pillarbox_test.cpp` checks exact boundaries at 16:9 and 21:9,
 unit squeeze, off, compact areas, bottom surfaces, all five pixel formats,
@@ -300,6 +294,39 @@ both column directions and row-major storage, corner/skip preservation and
 guard bytes. It also renders the actual native X menu at 21:9 to
 `analysis/private/pillarbox-tint.ppm` and `pillarbox-pattern.ppm`; the matching
 `*-stretched.ppm` files resample the destination frame to 560x240.
+
+## Overlays and upscaling
+
+In Azahar, a CPU write to the game's framebuffer or an OSD callback returning
+true drops the whole frame from the internal resolution (e.g. 5x) to 1x
+400x240. The battle-menu prototype at `fff0411` was verified to stay sharp
+using GPU transfers and reporting false from the callback.
+
+`LayerGpu` copies game columns to RGBA8 background scratch, stages layer
+pixels in CPU-only memory, then transfers them through a GPU twin seeded
+from that background. TextureCopy inserts the layer's rectangle before
+converting back to BGR8 and copying whole columns to the screen. Corners are
+square on this path (the layer's black shows outside its rounded shape):
+rounded corners need a copy per corner column, and with ~15 GX commands a
+present the game's Party screen crashed (PERF.md). Pillarbox band
+columns are written into the same stage by the CPU fallback's pixel helper
+and copied with the layer, one copy per side (one copy per column crashed
+the game; see PERF.md). With bands active the transfers cover all 400
+columns. Pattern selects phase `x & 7`, tint phase 8, and edge phases 9-11.
+
+Skip rectangles split runs before alignment, using the unsqueezed source
+column. Map copies its game picture after the layer present: whole-column
+copy-back also restores the saved background under the skipped window.
+`Layer::Present` returns true only for a CPU present; callbacks propagate
+that value and retain true for direct CPU drawing. Panel readback checks
+and requested screenshots also retain true reporting. Non-BGR8 layouts,
+linear-memory failure and `layergpu off` keep the existing CPU fallback.
+The overlays themselves stay 1x pictures that Azahar scales up, so they look
+soft at high internal resolutions (texture filters such as MMPX did not help);
+only drawing them with the 3DS GPU would make them sharp.
+
+The native map used to crash the game at 16:9/21:9 (one GPU copy per squeezed
+column); it now copies a game-squeezed picture in one command (above).
 
 ## Verification and open work
 
