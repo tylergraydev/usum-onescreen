@@ -531,8 +531,7 @@ namespace OneScreen
             __sync_synchronize();
             s_drawnVersion = version;
         }
-        s_layer.Present(fb);
-        return true;
+        return s_layer.Present(fb);
     }
 
     void StartBag(void)

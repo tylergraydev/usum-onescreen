@@ -360,9 +360,9 @@ namespace OneScreen
             }
             s_drawLock.Unlock();
         }
-        if (s_layerArea.w > 0 && s_visible)
-            s_layer.Present(fb);
-        return true;
+        // True only if the CPU wrote to the frame (see UI::Layer::Present).
+        const bool battleDrew = s_layerArea.w > 0 && s_visible && s_layer.Present(fb);
+        return learnDrew | battleDrew;
     }
 
     void BattleScreenSetEnabled(bool enabled)
