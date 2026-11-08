@@ -10,7 +10,10 @@
 #include "UI/Font.hpp"
 #include "UI/Text.hpp"
 #include "UI/QuadLayout.hpp"
+#include "UI/QuadAllocator.hpp"
+#include "UI/ColumnMapping.hpp"
 using namespace OneScreen::UI;
+using OneScreen::Pillarbox;
 
 struct Image
 {
@@ -216,13 +219,66 @@ static void AtlasAndGeometry()
     assert(vertices[29] == 1.f - 600.f / 1024.f);
 }
 
-static bool ready = true, uploaded = false, dirtySeen = false, accept = true;
+static void AllocationAndBands()
+{
+    QuadAllocator allocator;
+    assert(allocator.Allocate(MenuSlot, 1000, 600));
+    assert(allocator.Allocate(MoveLearnSlot, 600, 395));
+    assert(allocator.Allocate(BadgeSlot, 250, 55));
+    assert(!allocator.Allocate(RotomSlot, 900, 400));
+    assert(allocator.regions[RotomSlot].Empty());
+    allocator.Release(MoveLearnSlot); allocator.Release(BadgeSlot);
+    assert(allocator.Allocate(RotomSlot, 900, 400));
+    assert(!allocator.Allocate(4, 1, 1));
+    assert(!allocator.Allocate(BadgeSlot, 1012, 1));
+    for (u32 i = 0; i < QuadAllocator::Slots; i++)
+        for (u32 j = i + 1; j < QuadAllocator::Slots; j++)
+            assert(Intersect(allocator.regions[i], allocator.regions[j]).Empty());
+    // A reused atlas region gets transparent gutters, not old sprite pixels.
+    std::array<u8, 16 * 16 * 4> atlas;
+    atlas.fill(0xFF);
+    ClearQuadBorder(Rect{ 4, 4, 8, 8 }, atlas.data(), 16, 16);
+    Image zero(1, 1);
+    std::array<u8, 16 * 16 * 4> expected;
+    expected.fill(0xFF);
+    for (int y = 3; y <= 12; y++) for (int x = 3; x <= 12; x++)
+        if (x == 3 || x == 12 || y == 3 || y == 12)
+            assert(TileQuadRegion(zero.surface, Rect{ x, y, 1, 1 }, expected.data(), 16, 16));
+    assert(atlas == expected);
+    for (Pillarbox mode : { Pillarbox::Tint, Pillarbox::Pattern, Pillarbox::Off })
+        for (int begin = 0; begin <= 200; begin++)
+        {
+            const ColumnRange range{ begin, 400 - begin, true };
+            std::array<int, 400> phases;
+            phases.fill(-1);
+            unsigned runs = 0;
+            BandRuns(range, mode, [&](int x, int width, int phase) {
+                assert(width > 0 && x >= 0 && x + width <= 400);
+                for (int i = 0; i < width; i++)
+                { assert(phases[x + i] == -1); phases[x + i] = phase < 8 ? phase + i : phase; }
+                runs++;
+            });
+            assert(runs <= 58); // four layers plus these fit the 8-KiB VBO
+            for (int x = 0; x < 400; x++)
+            {
+                int phase = -1;
+                if (mode != Pillarbox::Off && (x < range.begin || x >= range.end))
+                {
+                    const int distance = x < range.begin ? range.begin - 1 - x : x - range.end;
+                    phase = distance < 3 ? 11 - distance : mode == Pillarbox::Pattern ? x & 7 : 8;
+                }
+                assert(phases[x] == phase);
+            }
+        }
+}
+
+static bool ready = true, uploaded = false, dirtySeen = false, accept = true, fits = true;
 static unsigned hidden = 0;
 static u32 generation = 0;
 static u32 Generation() { return generation; }
 static Image staging(50, 50);
 static bool Ready() { return ready; }
-static bool Setup(u32, s32 w, s32 h, Surface &s) { assert(w == 50 && h == 50); s = staging.surface; return true; }
+static bool Setup(u32, s32 w, s32 h, Surface &s) { assert(w == 50 && h == 50); s = staging.surface; return fits; }
 static bool Present(u32, const Surface &, const Rect &, bool dirty)
 { uploaded = true; dirtySeen = dirty; return accept; }
 static void Hide(u32) { hidden++; }
@@ -234,6 +290,8 @@ static void LayerLifecycle()
     Layer layer;
     const Rect area{ 10, 20, 20, 20 };
     assert(layer.SetupHiRes(screen, area, 6, 0, fallback.data(), fallback.size()));
+    uploaded = false;
+    assert(!layer.Present(screen) && !uploaded); // setup without Begin cannot publish stale staging
     Canvas canvas = layer.Begin(); assert(canvas.Scale() == HiResScale);
     canvas.FillRect(area, Rgb(255, 255, 255));
     accept = false;
@@ -253,11 +311,28 @@ static void LayerLifecycle()
     assert(hidden > 0 && layer.Begin().Scale() == 1.f);
     assert(layer.Present(screen));
     ready = true; assert(!layer.Matches(screen));
+    fits = false;
+    assert(layer.SetupHiRes(screen, area, 6, 0, fallback.data(), fallback.size()));
+    assert(layer.Begin().Scale() == 1.f);
+    assert(!layer.Matches(screen)); // retry allocation next callback
+    assert(layer.Present(screen)); // but fallback draws THIS frame
+    fits = true;
+    assert(layer.SetupHiRes(screen, area, 6, 0, fallback.data(), fallback.size()));
+    layer.Begin().FillRect(area, Rgb(255, 255, 255));
+    Layer replacement;
+    assert(replacement.SetupHiRes(screen, area, 6, 0, fallback.data(), fallback.size()));
+    const unsigned before = hidden;
+    layer.Hide(); assert(hidden == before); // stale owner cannot hide replacement
+    assert(!layer.Matches(screen));
+    replacement.Begin().FillRect(area, Rgb(255, 255, 255));
+    assert(!replacement.Present(screen, Rect{ 14, 24, 4, 4 }));
+    assert(staging.Alpha(12, 12) == 0 && staging.Alpha(25, 25) == 255);
+    replacement.Hide();
     Layer::s_hiRes = {};
 }
 
 int main()
 {
-    ScaleOne(); Primitives(); TextLayout(); AtlasAndGeometry(); LayerLifecycle();
+    ScaleOne(); Primitives(); TextLayout(); AtlasAndGeometry(); AllocationAndBands(); LayerLifecycle();
     std::puts("hires: scale-1, primitives, masks, layout, atlas and live fallback OK");
 }

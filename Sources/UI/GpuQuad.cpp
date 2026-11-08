@@ -11,6 +11,8 @@
 #include <algorithm>
 #include "UI/Layer.hpp"
 #include "UI/QuadLayout.hpp"
+#include "UI/QuadAllocator.hpp"
+#include "UI/ColumnMapping.hpp"
 
 #include "UI/Raster.hpp"
 #include "Widescreen.hpp"
@@ -269,20 +271,27 @@ namespace UI
     static constexpr u32 OffList   = OffTarget + PageAlign(TargetW * TargetH * 4);
     static constexpr u32 ListWords = 0x1000;
     static constexpr u32 OffVbo    = OffList + PageAlign(ListWords * 4);
-    static constexpr u32 ScratchSize = OffVbo + 0x1000;
+    static constexpr u32 ScratchSize = OffVbo + 0x2000;
 
     static u32 s_scratch = 0;
     static std::atomic<bool> s_on{false};
     static std::atomic<bool> s_hiResEnabled{true}, s_test{false};
     static Mutex s_contentLock; // CTRPF TryLock returns zero on success.
-    struct Quad { Rect region = {}; Rect destination = {}; u32 serial = 0; bool visible = false; };
-    static Quad s_pending[2], s_active[2];
+    struct Quad {
+        Rect region = {}; Rect destination = {}; u32 serial = 0; bool visible = false;
+        Pillarbox bands = Pillarbox::Off;
+    };
+    static Quad s_pending[QuadAllocator::Slots], s_active[QuadAllocator::Slots];
+    static QuadAllocator s_regions;
+    static Pillarbox s_bandModes[QuadAllocator::Slots] = {
+        Pillarbox::Off, Pillarbox::Off, Pillarbox::Off, Pillarbox::Off };
     static u32 s_front = OffTex, s_back = OffBack;
     static bool s_pendingDirty = false, s_backSynced = true, s_activeTest = false;
     static std::atomic<u32> s_topSerial{0}, s_generation{0};
     static u32 Generation(void) { return s_generation.load(); }
     static u32 s_uploads = 0, s_contentBusy = 0;
     static u32 s_vertexQuads = 1;
+    static u32 s_bandQuads = 0;
     static std::string s_why = "off";
     static u32 s_frames = 0, s_drawn = 0, s_skipped = 0, s_maxGx = 0, s_listBytes = 0, s_restored = 0;
     static u32 s_unseenRegs = 0, s_unseenCode = 0;
@@ -385,11 +394,21 @@ namespace UI
 
     bool UpdateGpuQuad(u32 slot, const Surface &source, const Rect &region, const Rect &destination, bool dirty)
     {
-        if (!HiResReady() || source.origin == nullptr || slot >= 2 || region.Empty() || destination.Empty()
-            || region.x < 0 || region.y < 0 || region.Right() > (s32)TexW || region.Bottom() > (s32)TexH
+        if (!HiResReady() || source.origin == nullptr || slot >= QuadAllocator::Slots || region.Empty() || destination.Empty()
+            || region.x < 0 || region.y < 0 || region.Right() > QuadAllocator::Width || region.Bottom() > (s32)TexH
             || source.width != region.w || source.height != region.h || source.format != PixelFormat::RGBA8)
             return false;
         if (s_contentLock.TryLock()) return false;
+        // Generic publishers must obey the same disjoint-region contract.
+        const Rect padded{ region.x - 1, region.y - 1, region.w + 2, region.h + 2 };
+        for (u32 i = 0; i < QuadAllocator::Slots; i++)
+            if (i != slot && s_pending[i].visible && s_topSerial.load() - s_pending[i].serial <= 2
+                && !Intersect(padded, s_pending[i].region).Empty())
+            { s_contentLock.Unlock(); return false; }
+        if (!dirty && (!s_pending[slot].visible
+            || region.x != s_pending[slot].region.x || region.y != s_pending[slot].region.y
+            || region.w != s_pending[slot].region.w || region.h != s_pending[slot].region.h))
+        { s_contentLock.Unlock(); return false; }
         if (dirty)
         {
             // Never modify the atlas being sampled by the hook. After a swap,
@@ -400,29 +419,47 @@ namespace UI
                 s_backSynced = true;
             }
             TileQuadRegion(source, region, (u8 *)(s_scratch + s_back), TexW, TexH);
+            ClearQuadBorder(region, (u8 *)(s_scratch + s_back), TexW, TexH);
+            // The twelve legacy column phases, reserved outside all layer
+            // allocations. Re-seed on dirty publication, including after a test.
+            static u8 bandPixels[12 * ScreenH * 4];
+            u8 column[ScreenH * 4];
+            for (int phase = 0; phase < 12; phase++)
+            {
+                WriteBandColumn(column, phase, PixelFormat::RGBA8, false);
+                for (int y = 0; y < ScreenH; y++)
+                    std::memcpy(bandPixels + (y * 12 + phase) * 4, column + y * 4, 4);
+            }
+            const Surface bands{ bandPixels, 4, 12 * 4, PixelFormat::RGBA8, 12, ScreenH };
+            TileQuadRegion(bands, Rect{ 1012, 0, 12, ScreenH }, (u8 *)(s_scratch + s_back), TexW, TexH);
             svcFlushProcessDataCache(CUR_PROCESS_HANDLE, s_scratch + s_back, AtlasBytes);
             s_pendingDirty = true;
             s_uploads++;
         }
-        s_pending[slot] = Quad{ region, destination, s_topSerial.load(), true };
+        s_pending[slot] = Quad{ region, destination, s_topSerial.load(), true, s_bandModes[slot] };
         s_contentLock.Unlock();
         return true;
     }
 
     void HideGpuQuad(u32 slot)
     {
-        if (slot >= 2 || s_contentLock.TryLock()) return;
+        if (slot >= QuadAllocator::Slots || s_contentLock.TryLock()) return;
         s_pending[slot].visible = false;
+        s_regions.Release(slot);
         s_contentLock.Unlock();
     }
 
     static bool SetupLayer(u32 slot, s32 width, s32 height, Surface &pixels)
     {
-        // Slot 0 fits a full 2.5x top screen; slot 1 holds a concurrent badge.
-        const s32 row = slot == 0 ? 0 : 600;
-        if (!HiResReady() || slot >= 2 || width <= 0 || width > (s32)TexW
-            || height <= 0 || height > (slot == 0 ? 600 : 424)) return false;
-        pixels = Surface{ (u8 *)(s_scratch + OffStage + row * TexW * 4), 4, (s32)TexW * 4,
+        if (!HiResReady() || slot >= QuadAllocator::Slots || s_contentLock.TryLock()) return false;
+        for (u32 i = 0; i < QuadAllocator::Slots; i++)
+            if (s_topSerial.load() - s_pending[i].serial > 2) s_regions.Release(i);
+        s_pending[slot].visible = false; // no old UVs may reference the replacement
+        const bool fits = s_regions.Allocate(slot, width, height);
+        const Rect region = s_regions.regions[slot];
+        s_contentLock.Unlock();
+        if (!fits) return false;
+        pixels = Surface{ (u8 *)(s_scratch + OffStage + (region.y * TexW + region.x) * 4), 4, (s32)TexW * 4,
                           PixelFormat::RGBA8, width, height };
         pixels.transparent = true;
         return true;
@@ -430,7 +467,22 @@ namespace UI
 
     static bool PresentLayer(u32 slot, const Surface &pixels, const Rect &area, bool dirty)
     {
-        return UpdateGpuQuad(slot, pixels, Rect{ 0, slot == 0 ? 0 : 600, pixels.width, pixels.height }, area, dirty);
+        if (slot >= QuadAllocator::Slots) return false;
+        return UpdateGpuQuad(slot, pixels, s_regions.regions[slot], area, dirty);
+    }
+
+    static void LayerBands(u32 slot, const Surface &screen, const Rect &area)
+    {
+        if (slot < QuadAllocator::Slots)
+            s_bandModes[slot] = PillarboxColumns(screen, area).active ? screen.pillarbox : Pillarbox::Off;
+    }
+
+    static bool LayerValid(u32 slot, const Surface &pixels)
+    {
+        if (slot >= QuadAllocator::Slots) return false;
+        const Rect r = s_regions.regions[slot];
+        return !r.Empty() && r.w == pixels.width && r.h == pixels.height
+            && pixels.origin == (u8 *)(s_scratch + OffStage + (r.y * TexW + r.x) * 4);
     }
 
     // Hook-side snapshot: never wait for an uploader. Both texture address and
@@ -502,15 +554,41 @@ namespace UI
     {
         float *v = (float *)(s_scratch + OffVbo);
         s_vertexQuads = 0;
-        const auto write = [&](const Rect &r, const Rect &tex) {
-            QuadVertices(v, r, tex, TexW, TexH, s_squeeze, s_stepY < 0);
+        bool overflow = false;
+        const auto write = [&](const Rect &r, const Rect &tex, float squeeze) {
+            // Also guard arbitrary public publishers, whose destinations may
+            // request several overlapping full-screen sets of bands.
+            if (s_vertexQuads >= 0x2000 / (24 * sizeof(float)))
+            { overflow = true; return; }
+            QuadVertices(v, r, tex, TexW, TexH, squeeze, s_stepY < 0);
             v += 24;
             s_vertexQuads++;
         };
-        if (s_activeTest) write(Rect{ 0, 20, 400, 200 }, Rect{ 0, 0, (s32)TexW, 512 });
+        s_bandQuads = 0;
+        if (s_activeTest) write(Rect{ 0, 20, 400, 200 }, Rect{ 0, 0, (s32)TexW, 512 }, s_squeeze);
         else if (HiResReady())
+        {
+            // Destination-coordinate bands are deliberately not squeezed again.
+            // Pattern runs use all eight phases then repeat; tint stretches one
+            // phase. The three edge columns retain phases 9,10,11 exactly.
             for (const Quad &q : s_active)
-                if (q.visible) write(q.destination, q.region);
+            {
+                if (!q.visible || q.bands == Pillarbox::Off) continue;
+                Surface screen{};
+                screen.width = ScreenW; screen.height = ScreenH;
+                screen.squeeze = s_squeeze; screen.pillarbox = q.bands;
+                const ColumnRange range = PillarboxColumns(screen, q.destination);
+                if (!range.active) continue;
+                BandRuns(range, q.bands, [&](int x, int width, int phase) {
+                    write(Rect{ x, 0, width, ScreenH },
+                          Rect{ 1012 + phase, 0, phase < 8 ? width : 1, ScreenH }, 1.f);
+                });
+            }
+            s_bandQuads = s_vertexQuads;
+            for (const Quad &q : s_active)
+                if (q.visible) write(q.destination, q.region, s_squeeze);
+        }
+        if (overflow) s_vertexQuads = 0; // never submit a partial/overrun list
     }
 
     static u32 Pa(u32 va)
@@ -608,6 +686,11 @@ namespace UI
         // Draw 4 vertices as a triangle strip (citro3d's C3D_DrawArrays).
         for (u32 quad = 0; quad < s_vertexQuads; quad++)
         {
+        if (quad == 0 || quad == s_bandQuads)
+            GPUCMD_AddWrite(GPUREG_TEXUNIT0_PARAM,
+                GPU_TEXTURE_MAG_FILTER(quad < s_bandQuads ? GPU_NEAREST : GPU_LINEAR)
+                | GPU_TEXTURE_MIN_FILTER(quad < s_bandQuads ? GPU_NEAREST : GPU_LINEAR)
+                | GPU_TEXTURE_WRAP_S(GPU_CLAMP_TO_EDGE) | GPU_TEXTURE_WRAP_T(GPU_CLAMP_TO_EDGE));
         GPUCMD_AddMaskedWrite(GPUREG_PRIMITIVE_CONFIG, 2, GPU_TRIANGLE_STRIP);
         GPUCMD_AddWrite(GPUREG_RESTART_PRIMITIVE, 1);
         GPUCMD_AddWrite(GPUREG_INDEXBUFFER_CONFIG, 0x80000000);
@@ -728,7 +811,7 @@ namespace UI
         const u32 list = s_scratch + OffList;
         WriteVertices();
         if (s_vertexQuads == 0) return 0;
-        svcFlushProcessDataCache(CUR_PROCESS_HANDLE, s_scratch + OffVbo, 0x1000);
+        svcFlushProcessDataCache(CUR_PROCESS_HANDLE, s_scratch + OffVbo, s_vertexQuads * 24 * sizeof(float));
 
         // Our draw, walked into a blank register file to learn what it touches.
         GPUCMD_SetBuffer((u32 *)list, ListWords, 0);
@@ -948,7 +1031,7 @@ namespace UI
         s_inTarget = s_dtHooked;
         s_on = s_hooked && s_dtHooked && Prepare();
         if (s_on.load()) s_why = "backend ready; awaiting published quads";
-        Layer::s_hiRes = HiResBackend{ HiResReady, SetupLayer, PresentLayer, HideGpuQuad, Generation };
+        Layer::s_hiRes = HiResBackend{ HiResReady, SetupLayer, PresentLayer, HideGpuQuad, Generation, LayerBands, LayerValid };
         return Utils::Format("gpuquad: ProcessCommandList hook at %08lX -> %d, following %lu registers; DisplayTransfer hook at %08lX -> %d",
                              ProcessListAddress, (int)result, tracked, displayTransfer, (int)dtResult);
     }

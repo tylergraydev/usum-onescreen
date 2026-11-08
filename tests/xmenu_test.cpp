@@ -2,6 +2,7 @@
 // (Sources/Screens/XMenuGrid.cpp). Build and run: make -C tests. With a path
 // argument, also writes a preview of the menu there as a PPM image.
 
+#include "hires_screen_smoke.hpp"
 #include "Screens/XMenuGrid.hpp"
 
 #include <algorithm>
@@ -489,6 +490,7 @@ static void TestDraw(const char *preview)
     view.cursor = E("battle_video");
     view.enabled = AllBut("qr_scanner");
     DrawXMenu(canvas, view);
+    CHECK(HiResScreenSmoke::Run(XMenuArea, XMenuRadius, [&](UI::Canvas &hi) { DrawXMenu(hi, view); }));
 
     // Nothing outside the menu's area is touched (the Layer copies only it).
     const UI::Color outside = At(canvas, XMenuArea.x - 1, XMenuArea.y + 50);

@@ -4,6 +4,7 @@
 // no game data is needed (or in git). Writes the demo screen with and without
 // (synthetic) game assets as PPM previews under the given directory.
 
+#include "hires_screen_smoke.hpp"
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -615,6 +616,7 @@ static void TestDraw(const char *previewDir)
             const Color bg = Rgb(10, 200, 10);
             canvas.FillRect(Rect{ 0, 0, ScreenW, ScreenH }, bg);
             DrawThemeDemo(canvas, data, page, 1);
+            CHECK(HiResScreenSmoke::Run(ThemeDemoArea, 0, [&](Canvas &hi) { DrawThemeDemo(hi, data, page, 1); }));
             // Only the demo area is touched, and all of it.
             CHECK(At(canvas, ThemeDemoArea.x - 1, 100).g == 200);
             CHECK(At(canvas, ThemeDemoArea.Right(), 100).g == 200);

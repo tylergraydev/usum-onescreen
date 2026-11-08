@@ -7,9 +7,11 @@
 // writes the move list as a picture and, given the user's own move data
 // GARC, checks a few real moves (skipped when missing, as in CI).
 
+#include "hires_screen_smoke.hpp"
 #include "MoveData.hpp"
 #include "Screens/BattleMenu.hpp"
 #include "Screens/MoveLearnMenu.hpp"
+#include "UI/Theme.hpp"
 
 #include <cstdio>
 #include <cstring>
@@ -430,6 +432,7 @@ static void TestDrawing(const char *preview)
         CHECK(area.y >= 36 && area.x >= 156 && area.Right() <= UI::ScreenW && area.Bottom() <= 194);
         UI::Canvas canvas(surface);
         menu.Draw(canvas, snap);
+        CHECK(HiResScreenSmoke::Run(area, UI::Theme::WindowRadius, [&](UI::Canvas &hi) { menu.Draw(hi, snap); }));
         u32 inside = 0, outside = 0;
         for (s32 y = 0; y < UI::ScreenH; y++)
             for (s32 x = 0; x < UI::ScreenW; x++)

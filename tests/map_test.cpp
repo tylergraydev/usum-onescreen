@@ -4,6 +4,7 @@
 // path to the game's own a/0/3/2 (English text GARC, from the user's dump in
 // analysis/private/; skipped when missing, as on CI).
 
+#include "hires_screen_smoke.hpp"
 #include "RomfsText.hpp"
 #include "Screens/MapView.hpp"
 
@@ -453,6 +454,8 @@ static void TestDraw(const char *preview)
     n.push_back("Shopping District");
     MapView view = MakeMapView(Where(13, 20, false, 7524.6f, 16323.3f, -58, false), n, "ZR");
     DrawMap(canvas, view);
+    CHECK(HiResScreenSmoke::Run(MapArea, MapRadius, [&](UI::Canvas &hi) { DrawMap(hi, view); }));
+    CHECK(HiResScreenSmoke::Run(MapArea, MapRadius, [&](UI::Canvas &hi) { DrawMap(hi, view); }, MapWindow));
 
     // Nothing outside the area is touched.
     const UI::Color outside = At(canvas, MapArea.x - 1, MapArea.y + 50);

@@ -1,121 +1,170 @@
-# GPU overlay backend (phase 1)
+# GPU overlay backend (phase 2)
 
-The backend evolves the verified `a5e717e` spike. Only Rotom prompts and their
-ready badge opt in; other screens retain their existing Layer/LayerGpu path.
-The historical spike measurements below are **not** validation of this revision.
-Tyler confirmed the original 1024x512 spike looked sharp at 5x in Azahar.
-This revision has not been built or run; Claude must run the host and emulator checks.
+Phase 1 (`53a16c6`) was visually verified sharp at 5x in Azahar, with one
+GX command/frame and three-minute X menu/Party soaks. Phase 2 expands that
+backend to all native layers. **Phase 2 still needs the plugin build and emulator
+checks below**; historical results do not validate the new screens.
 
-## Current commands
+## Controls and fallback
 
-- `hires on|off|status`: enabled by default once hooks, shader and linear allocation
-  succeed. Off switches Rotom live to its supplied legacy Layer buffer, with a redraw.
-- `gpuquad test on|off`: explicit checkerboard/line-pair/orientation/alpha-ramp test.
-  The test has no text or shared font-cache access. It replaces backend quads;
-  Rotom uses its legacy path while the test is on and redraws when it turns off.
-- `gpuquad on|off|status|reset`: backend enable/disable and the spike diagnostics.
-  `hires on` also re-enables the backend. Reset retains the content/upload counters. A generation counter also forces redraw after test
-  changes made between OSD callbacks.
-- `gpuquad mode fb|target`, `restore on|off`, `shadow on|off`: diagnostic switches.
-  Hi-res layers require target mode with shadow and restore enabled. FB mode is
-  retained only for the explicit test and still costs three GX commands.
+`hires on|off|status` switches all native Layer users live. Readiness requires
+installed hooks, allocated linear memory, target mode, shadow and restore, and
+no checkerboard test. `gpuquad test on|off`, `mode fb|target`, `restore on|off`,
+`shadow on|off`, and `on|off|status|reset` retain their diagnostic meanings.
+`hires on` re-enables the backend. Test transitions increment the generation,
+forcing all visible layers to redraw. FB mode remains an explicit diagnostic
+with three GX commands; normal hi-res uses target mode and one command list.
 
-Status includes readiness, test state, upload count, snapshot contention, last
-quad count, linear bytes and the original shadow/restore/GX counters. Readiness
-means the pipeline is installed; the first draws can still skip until shader
-words have been observed by the shadow. An empty frame submits no overlay list.
+SetupHiRes retains each caller's original 1x fallback buffer and layout. Backend,
+slot, allocation or setup-lock failure draws the 1x Layer/LayerGpu path for that
+frame, and retries hi-res on the next callback. Upload contention retains dirty
+content for retry, reusing the last complete GPU snapshot. A newly set-up layer
+cannot publish until Begin has cleared and drawn its staging surface. Invisible
+screens Hide; leases also expire after more than two recognised top transfers.
 
-## API, atlas and publication
+## Slots, atlas and ownership
 
-`GpuQuad.hpp` exposes `HiResReady()`,
-`UpdateGpuQuad(slot, source, atlasRegion, destination, dirty)` and `HideGpuQuad(slot)`.
-Slots 0 and 1 draw in that order. Destinations use 400x240 screen coordinates;
-regions use physical texels in one shared 1024x1024 RGBA8 atlas (bytes A,B,G,R).
-The source describes stable caller-owned pixels; publish dirty on first use and
-on redraw, then renew visibility every OSD callback with dirty=false. A failed
-TryLock returns false and the caller retries without discarding its dirty flag.
-Regions must be disjoint, with transparent padding for bilinear sampling.
-`QuadLayout.hpp` contains the host-testable Morton tiler and vertex/UV mapping.
-The x mapping remains `200 + (x - 200) / WidescreenSqueeze()`, continuous at the
-GPU vertices, matching the 1x SourceColumn/template squeeze about x=200.
+Four named slots composite in this order, in **one GX command list**, followed
+by one shadow-state restore:
 
-Two tiled atlases alternate front/back. Uploads write only the back atlas, CPU
-Morton-swizzling the supplied region and flushing it once. The first dirty upload
-after a swap seeds the back atlas from the front, preserving unchanged slots.
-The game hook snapshots texture address and both quad records together, emits
-both triangle strips in one command list, and restores the shadow once. It uses
-the same target interception and shader as the spike: **one GX command per top
-frame**, no DisplayTransfer or texture upload per unchanged frame. Azahar's
-synchronous GX execution remains a requirement; no real-hardware fences were added.
+| Slot | Users | Concurrent use |
+|---|---|---|
+| 0 MenuSlot | BattleScreen, XMenu, Party/summary, Bag, Boxes menu, Pokedex, SubScreens (Options/Passport/Video), Keyboard, Map, ThemeScreen, UI demo | Primary pages share ScreenBuffer's exclusive owner; a new owner invalidates the old Layer |
+| 1 RotomSlot | Rotom field prompt or ready badge | Independent of primary menu and Map |
+| 2 BadgeSlot | Boxes details badge | Separate from Boxes menu, even though current UI alternates them |
+| 3 MoveLearnSlot | MoveLearn Choose/Confirm/Working/Done | Separate from battle menu, drawn last |
 
-Content publication uses a separate CTRPF Mutex. Uploaders and the game hook use
-TryLock (CTRPF returns zero on success). The game never waits for the uploader;
-contention reuses the last complete texture and quads. On a successful snapshot,
-leases not renewed for more than two recognised top transfers expire, covering
-skipped OSD callbacks. Hide explicitly clears the slot on the next snapshot.
-Debug picture construction may hold this mutex on the plugin thread; it uses a
-separate temporary linear buffer and no shared text scratch. The original
-RecursiveLock still orders the game's shadow parsing and our command submission;
-the plugin's content upload does not take that lock. Producer pixels themselves
-must not be edited concurrently with their upload; Layer staging is OSD-owned.
+Layer tracks its owning object per slot: an inactive screen cannot Hide another
+screen's quad, and an old layer cannot Present staging overwritten by a new owner.
+The backend additionally checks the staging pointer/dimensions against its live
+allocation, so an expired/reclaimed region forces setup and redraw.
 
-## Scaled layers and text
+The 1024x1024 RGBA8 atlas (GPU bytes A,B,G,R) is laid out as follows:
 
-`Layer::SetupHiRes(..., slot, fallback, bytes)` is the opt-in entry point.
-`HiResScale` in Layer.hpp is the one default scale, 2.5. Layer backend callbacks
-keep Layer.cpp host-buildable. Slot 0 staging reserves atlas rows 0..599 (a full
-1000x600 screen fits), slot 1 rows 600..1023 (a concurrent badge fits). Generic
-UpdateGpuQuad callers may choose any disjoint regions. This phase does not add
-hi-res skip-rectangle or pillarbox rendering; Map and full-screen menus stay legacy.
-Rotom keeps borrowing its existing fallback buffer so ownership behaviour is unchanged.
+- x=0..1010, y=0..1023: dynamically packed live layer rectangles, no compaction.
+  QuadAllocator searches fixed rectangle-edge candidates, with one transparent
+  texel between allocations. Staging uses the same rectangles and 4096-byte stride.
+- x=1011: separator; x=1012..1023, y=0..239: twelve legacy band phases.
+- A 400x240 Bag uses 1000x600 at (0,0); a 376x224 menu uses 940x560.
+  With the former, MoveLearn's largest 600x395 fits at (0,601), ending y=996.
+  A 250x55 Boxes badge can fit to its right at (601,601).
+  A Rotom prompt up to 940x400 fits below the full menu instead.
+  The tallest 940x490 Rotom choices cannot fit beside a full menu: the
+  later allocation uses 1x until space is released (short prompts/badges fit).
+- Two full menus cannot fit. Arbitrary combinations can exhaust or fragment the
+  atlas: the refused layer uses 1x for that frame, with no partial publication.
+  No slot borrows an overlapping region. Generic UpdateGpuQuad publishers must
+  also avoid live overlaps and the reserved band columns; first publish is dirty.
 
-Begin clears only the layer's physical RGBA staging rectangle to transparent and
-returns a Canvas with the original logical origin/clip. Rects and spans map their
-edges with fractional-pixel coverage; rounds, lines and triangles rasterize in
-physical pixels. Mask coverage uses bilinear sampling. Icons going through masks,
-BlendPixel or FillRect inherit the scale. Transparent RGBA surfaces use straight
-alpha source-over, preserving transparent corners. Present clips the outer rounded
-silhouette, uploads only after Begin, renews visibility, and always returns false
-(no CPU framebuffer writes). Unavailable/off transitions force Setup and redraw
-on the legacy path. Regular Setup and nontransparent 1x raster branches retain
-their existing behaviour.
+Dirty updates seed the back atlas from the front once after a swap, tile only
+the changed rectangle, clear its one-texel border, restore band texels and flush.
+Texture address and all quad records snapshot together under a nonblocking mutex.
+The hook never waits for an uploader. OSD staging is serial; it must not be edited
+concurrently by another producer. The shader-shadow RecursiveLock remains separate.
 
-Text wrapping, ellipsizing, alignment, integer pen advances and bearings still
-come from the original 1x cache. At a scaled Canvas, system and game fonts decode
-the original native cell on redraw, then bilinearly sample it at the physical size;
-no high-resolution glyph cache is allocated. System text retains the 0.6/0.8
-font-size factors, so native system detail tops out near 1.67x for Body before
-smooth upsampling. Small bitmap text resamples its existing mask. Decode scratch
-uses at most 4 KiB of stack per draw call, reused between glyphs. DrawText's return
-width and all layout calculations remain in screen coordinates.
+## Bands and Map window
 
-## Memory and checks for this revision
+PillarboxColumns retains the existing eligibility and SourceColumn boundaries:
+top full-menu insets, squeeze >1, Tint/Pattern enabled. BandRuns emits destination
+coordinate strips **without applying squeeze again**. Pattern uses eight-column
+phase runs; Tint stretches phase 8. The three columns touching the menu are phases
+11,10,9 outward, as in WriteBandColumn. Bands use nearest texture sampling and
+cover full screen height; menu textures switch back to bilinear sampling. Off emits
+no band quads. All band and layer strips share the same list and state restore;
+there are no hi-res CPU framebuffer writes or band TextureCopies.
 
-Persistent linear allocation: **12,988,416 bytes (12.39 MiB)**:
-8 MiB tiled front/back, 4 MiB row-major staging, 385,024 bytes page-rounded FB test
-target, 16 KiB command buffer, 4 KiB vertex buffer. The explicit test temporarily
-allocates another 4 MiB. No new dynamic heap surfaces or glyph caches; existing
-shader setup, font caches, fallback ScreenBuffer/badge and diagnostic strings remain.
-Small slot/layer metadata is static storage. Allocation failure leaves legacy drawing.
+Map::Present(fb, MapWindow) zeros the staging alpha throughout the physical skip
+rectangle on dirty content. The hook draws this transparent menu into the game
+target before the game's top DisplayTransfer. MapOnScreen then calls
+PanelCopyBottomRect (GPU TextureCopy) in the OSD callback, after Present, so the
+current game picture lands on top of the framebuffer. A copy failure dirties the
+next redraw and uses the existing unavailable-picture view. Rounded corners also
+retain alpha zero. Picture copying is an existing separate GPU operation, so
+Map's total GX work includes that copy in addition to the one overlay command.
 
-Run `make -C tests` with g++ C++17 `-Wall -Wextra -Werror`. New `hires_test` checks
-scale-1 bytes against an independent legacy blend reference across five formats,
-scale-1 constructor equivalence across all primitives and storage directions,
-2.5x rect edges, masks, transparent round corners, lines/triangles, native system
-text pen/alignment positions, two atlas regions/UVs and dirty/retry/live fallback
-Layer lifecycle. `theme_test` adds native game-font mask/advance checks at both scales.
-Existing tests remain in the full gate. No build or tests were run by Codex.
+## Images, text and unchanged 1x output
 
-In Azahar, inspect Ready, Choice (both answers), Reply and all Roto Loto states at
-1x and 5x, with stock aspect, 16:9 and 21:9. Toggle hires while each is open; check
-layout/colour/alpha corners, text, badges, game sharpness and hide/reopen transitions.
-Compare status upload counts while idle versus a cursor/text change; unchanged
-content must not upload, target draws must show GX/frame 1. Exercise test on/off,
-mode fallback and shadow/restore guards. For two simultaneous quads, a temporary
-review harness can publish a badge in slot 1 and the Rotom/menu region in slot 0;
-this phase deliberately converts no second screen. Soak field, X menu, Party and
-battle with unrelated overlays and check state restore/queue stability. Hardware,
-Ultra Moon, stereo/right-eye output and performance remain unverified.
+Canvas::DrawImage accepts RGBA or packed RGB5A1, crop/destination rectangles,
+tint and rotation. Native-size 1x copies keep the exact original integer tint,
+alpha and source-over calculations. At 2.5x, nearest sampling assigns every
+physical pixel to one source texel for PokeIcons (box/party/dex sprite consumers).
+Premultiplied-alpha bilinear sampling handles decoded GameAssets images (including
+type plates/balls) and Theme's tinted/rotated cursor sprites without dark fringes.
+Crop clamping prevents neighbouring sheet icons leaking into the result.
+
+Converted direct loops: PokeIcons::DrawPokeIcon, GameAssets::DrawImage,
+Theme::DrawTinted. UI/Icons already uses scaled lines/triangles/masks; Theme
+background helpers use Canvas HLine/rectangles. Font/native-cell decoding and
+DrawMaskSized remain scaled from phase 1. Canvas::GetPixel now checks logical
+bounds before mapping a scaled read. Remaining framebuffer probes in XMenu,
+PartyScreen and SubScreens detect game state; they do not draw art and are unchanged.
+Legacy CPU/LayerGpu band helpers remain exclusively for the fallback path.
+
+Font layout stays in 1x coordinates: advances, wrapping, ellipses and alignment
+are unchanged. Native system/game glyph masks are decoded and sampled on redraw;
+system Body detail tops out near 1.67x before upsampling. No glyph cache growth.
+
+## Redraw and memory cost
+
+A full layer clears/rasterizes/uploads about 6.25x its 1x pixels: 940x560 =
+526,400 or Bag's 1000x600 = 600,000 physical pixels (2.4 MB staging content).
+A dirty upload still seeds/copies and flushes the 4-MiB atlas as in phase 1;
+CPU time is not measured for phase 2. Unchanged layers only renew metadata, with
+no clear, rasterization, tiling or texture flush. Corner masking now visits only
+four radius-sized squares, rather than computing sqrt over the full surface.
+Bands add at most 58 strips, no GX submissions; vertex capacity is 8 KiB and
+cache flush covers the actual vertices. Typical 16:9/21:9 uses far fewer strips.
+
+Normal screens gate Begin on version/DrawKey or data equality. Party/summary,
+Map, Bag, Dex, Battle and MoveLearn can poll without repainting unchanged data.
+Boxes' 30-frame refresh now compares fields instead of repainting every poll;
+new icon arrivals are batched every eight frames while icons load. Cursor moves
+and text/result/progress changes can still redraw the whole layer. The UI demo
+changes selection every 60 frames. Explicit `uidemo direct` and `shade` diagnostics
+retain their per-frame CPU shade drawing; they are not representative idle menus.
+Rotom/Loto redraws on published text/state changes. No new every-frame animation
+redraw is introduced. Measure upload counters during real battle/party timers.
+
+Persistent linear allocation: **12,992,512 bytes (12.39 MiB)**, phase 1 plus
+4 KiB for the larger VBO. Front/back tiled atlases and staging remain 12 MiB;
+FB test target, list and shader resources otherwise unchanged. Band CPU scratch
+is 11.25 KiB static plus a 960-byte temporary column. Debug test uses an extra
+4 MiB temporarily. Allocation failure preserves 1x output.
+
+## Host and emulator verification
+
+`make -C tests` uses C++17 `-Wall -Wextra -Werror`. image_test covers independent
+legacy 1x bytes in five formats, tint/rotation, crop isolation, nearest no-gap
+scaling, premultiplied alpha and guards. hires_test covers packing, refusal,
+reclaim, border clearing, all band runs against legacy phase selection, first-Begin
+publication, ownership changes, live fallback/retry, rounded and skip alpha.
+Every existing screen test adds guarded 2.5x Layer smoke draws through real
+SetupHiRes/Begin/Present; original 1x assertions remain. Windows host verification used clang C++17 with -Wall -Wextra -Werror:
+26 of 27 C++ targets pass; screen_buffer_test is blocked by its existing
+Linux-only unistd.h/mallinfo dependencies. All 38 generated 1x preview artifacts
+from 14 targets match HEAD 53a16c6 byte for byte. Layout generation and synthetic
+signature checks pass; real game-data checks were skipped. Generated logs and
+baseline artifacts remain ignored under tests/build/.
+
+Claude should build the plugin and inspect **every page/state** at 1x and 5x,
+stock aspect, 16:9 and 21:9, and toggle hires live:
+
+- XMenu; Party list and summary tabs; every Bag pocket; Boxes slots, held icons,
+  loading icons and details badge; Dex top/list/grid/entry; keyboard pages.
+- Battle commands, moves, targets, party/bag transitions; MoveLearn choose,
+  confirm, working, skip and done, especially concurrent battle controls.
+- Options, Passport, Battle Video, Theme preview pages, and UI demo.
+- Map with picture visible/unavailable, pan/location changes and Rotom badge or
+  prompt; all Rotom choices/replies/Loto states alongside native menus.
+- Check type plates, balls, cursors and sprites, alpha corners/window, band phase
+  edges/Off, layout and colors. Close/reopen/switch screens rapidly to expose stale
+  ownership. Force allocation refusal in a review harness; fallback must draw.
+- Idle uploads must settle; cursor/text/icon changes upload. Confirm GX/frame=1
+  for the overlay (Map picture adds its separate copy). Soak XMenu, Party, Boxes,
+  battle+MoveLearn and Map; verify game render state survives hide/test transitions.
+
+Real hardware fences/FINALIZE, Ultra Moon and stereo/right-eye output remain
+unverified. Azahar's synchronous GX execution remains a requirement.
 
 ---
 
