@@ -59,7 +59,10 @@ around it (header, compass, footer) into a `UI::Layer` that is redrawn when
 the view changes.
 
 The copy (`MapSource` → `MapWindow` in `MapView.hpp`): bottom (30,104) 260 ×
-128 to top (70,72), 1:1. Framebuffer lines are screen columns of 240 BGR8
+128 to top (70,72), 1:1, always one TextureCopy. With widescreen on, the game
+draws the bottom map squeezed (its `All` pane scaled by 1/k) and the copy
+takes only the columns the squeezed window covers; see `docs/WIDESCREEN.md`
+and `docs/PERF.md` ("Map at widescreen"). Framebuffer lines are screen columns of 240 BGR8
 pixels, and TextureCopy moves whole 16-byte units at 8-byte aligned
 addresses, so each column's run must be a multiple of 16 bytes (128 px =
 384 bytes) starting at a multiple of 8 px from either end of the column (y
