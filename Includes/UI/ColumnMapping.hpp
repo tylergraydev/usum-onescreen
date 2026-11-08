@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include <algorithm>
 #include "UI/Raster.hpp"
 
 namespace OneScreen
@@ -53,6 +54,27 @@ namespace UI
             || area.x > 12 || area.y > 8 || area.Right() < 388 || area.Bottom() < 232)
             return { 0, 0, false };
         return SqueezedColumns(area.x, area.Right(), screen.squeeze);
+    }
+
+    // Each run samples consecutive stripe phases, or stretches one tint/edge
+    // phase. Destination coordinates match the legacy per-column presenter.
+    template<class Emit>
+    void BandRuns(const ColumnRange &range, Pillarbox mode, Emit emit)
+    {
+        if (!range.active || mode == Pillarbox::Off) return;
+        const auto side = [&](int begin, int end, bool left) {
+            for (int x = begin; x < end;)
+            {
+                const int distance = left ? range.begin - 1 - x : x - range.end;
+                const int phase = distance < 3 ? 11 - distance : mode == Pillarbox::Pattern ? x & 7 : 8;
+                const int limit = left ? range.begin - 3 : end;
+                const int width = distance < 3 ? 1 : mode == Pillarbox::Pattern
+                    ? std::min(8 - phase, limit - x) : limit - x;
+                emit(x, width, phase);
+                x += width;
+            }
+        };
+        side(0, range.begin, true); side(range.end, ScreenW, false);
     }
 
 }

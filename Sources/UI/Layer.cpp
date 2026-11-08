@@ -10,6 +10,7 @@ namespace OneScreen
 {
 namespace UI
 {
+    static const Layer *s_owners[HiResSlots] = {};
     // Column-contiguous screens (the 3DS ones: stored rotated, so a screen
     // column is one run of memory) get a layer with the same order.
     static bool Columnar(const Surface &s)
@@ -79,12 +80,16 @@ namespace UI
 
     bool Layer::Setup(const Surface &like, const Rect &area, s32 radius, u8 *buffer, size_t size)
     {
+        Hide();
+        m_hiRes = m_preferHiRes = false;
+        m_begun = false;
         m_ready = false;
         if (area.Empty() || area.w > MaxW || area.x < 0 || area.y < 0 || area.Right() > like.width
             || area.Bottom() > like.height || size < BytesFor(like, area))
             return false;
 
         const s32 bpp = (s32)BytesPerPixel(like.format);
+        m_surface = {};
         m_surface.format = like.format;
         m_surface.width = area.w;
         m_surface.height = area.h;
@@ -126,15 +131,62 @@ namespace UI
         return true;
     }
 
+    HiResBackend Layer::s_hiRes = {};
+
+    void Layer::Hide(void)
+    {
+        if (m_hiRes && m_slot < HiResSlots && s_owners[m_slot] == this)
+        {
+            if (s_hiRes.hide != nullptr) s_hiRes.hide(m_slot);
+            s_owners[m_slot] = nullptr;
+        }
+    }
+
+    bool Layer::SetupHiRes(const Surface &like, const Rect &area, s32 radius, u32 slot, u8 *fallback, size_t size)
+    {
+        const bool legacy = Setup(like, area, radius, fallback, size);
+        m_preferHiRes = true;
+        m_slot = slot;
+        if (slot >= HiResSlots || like.width != ScreenW || s_hiRes.ready == nullptr || !s_hiRes.ready()) return legacy;
+        Surface pixels = {};
+        if (area.Empty() || area.x < 0 || area.y < 0 || area.Right() > like.width || area.Bottom() > like.height) return false;
+        if (!s_hiRes.setup(slot, (s32)std::lround(area.w * HiResScale),
+                                      (s32)std::lround(area.h * HiResScale), pixels)) return legacy;
+        m_surface = pixels;
+        m_area = area;
+        m_likeStepX = like.stepX; m_likeStepY = like.stepY;
+        m_ready = true;
+        m_hiRes = true;
+        s_owners[slot] = this;
+        m_generation = s_hiRes.generation != nullptr ? s_hiRes.generation() : 0;
+        m_radius = std::max<s32>(0, std::min(radius, std::min(area.w, area.h) / 2));
+        m_dirty = true;
+        return true;
+    }
+
     bool Layer::Matches(const Surface &screen) const
     {
+        const bool available = m_preferHiRes && s_hiRes.ready != nullptr && s_hiRes.ready();
+        if (m_preferHiRes && m_hiRes != available) return false;
+        if (m_hiRes && s_hiRes.generation != nullptr && m_generation != s_hiRes.generation()) return false;
+        if (m_hiRes && s_hiRes.valid != nullptr && !s_hiRes.valid(m_slot, m_surface)) return false;
+        if (m_hiRes) return m_ready && available && s_owners[m_slot] == this && screen.width == ScreenW && m_area.Bottom() <= screen.height
+            && screen.stepX == m_likeStepX && screen.stepY == m_likeStepY;
         return m_ready && screen.format == m_surface.format && screen.stepX == m_likeStepX
             && screen.stepY == m_likeStepY && m_area.Right() <= screen.width && m_area.Bottom() <= screen.height;
     }
 
     Canvas Layer::Begin(void)
     {
-        Canvas canvas(m_surface, m_area.x, m_area.y);
+        Canvas canvas(m_surface, m_area.x, m_area.y, m_hiRes ? HiResScale : 1.f);
+        if (m_hiRes)
+        {
+            m_begun = true;
+            for (s32 y = 0; y < m_surface.height; y++)
+                std::memset(m_surface.origin + y * m_surface.stepY, 0, (size_t)m_surface.width * 4);
+            m_dirty = true;
+            return canvas;
+        }
         // Black is all-zero bytes in every format but RGBA8 (alpha byte 0xFF).
         if (m_surface.format == PixelFormat::RGBA8)
             canvas.FillRect(m_area, Rgb(0, 0, 0));
@@ -152,8 +204,52 @@ namespace UI
 
     bool Layer::Present(const Surface &screen, const Rect &skip) const
     {
-        if (!Matches(screen))
+        // Matches asks callers to retry hi-res allocation on the next frame.
+        // A failed allocation still has a valid legacy surface for THIS frame.
+        const bool legacyFallback = m_preferHiRes && !m_hiRes && m_ready
+            && screen.format == m_surface.format && screen.stepX == m_likeStepX
+            && screen.stepY == m_likeStepY && m_area.Right() <= screen.width && m_area.Bottom() <= screen.height;
+        if (!Matches(screen) && !legacyFallback)
             return false;
+        if (m_hiRes)
+        {
+            if (!m_begun) return false;
+            if (m_dirty && m_radius > 0)
+            {
+                // Clip even callers which fill a square background to the layer's silhouette.
+                const float rad = m_radius * HiResScale;
+                const s32 corner = (s32)std::ceil(rad + .5f);
+                for (s32 cy = 0; cy < corner; cy++)
+                    for (s32 cx = 0; cx < corner; cx++)
+                    for (int quadrant = 0; quadrant < 4; quadrant++)
+                    {
+                        const s32 x = quadrant & 1 ? m_surface.width - 1 - cx : cx;
+                        const s32 y = quadrant & 2 ? m_surface.height - 1 - cy : cy;
+                        const float dx = std::max(0.f, std::max(rad - x - .5f, x + .5f - (m_surface.width - rad)));
+                        const float dy = std::max(0.f, std::max(rad - y - .5f, y + .5f - (m_surface.height - rad)));
+                        const float coverage = std::min(1.f, std::max(0.f, rad - std::sqrt(dx * dx + dy * dy) + .5f));
+                        u8 &alpha = m_surface.origin[y * m_surface.stepY + x * 4];
+                        alpha = std::min(alpha, (u8)(coverage * 255.f + .5f));
+                    }
+            }
+            if (m_dirty && !skip.Empty())
+            {
+                // The game map is copied to the framebuffer later by its OSD
+                // callback. Keep this window transparent in the earlier target draw.
+                const Rect r = Intersect(skip, m_area);
+                const s32 x0 = (s32)std::floor((r.x - m_area.x) * HiResScale);
+                const s32 x1 = (s32)std::ceil((r.Right() - m_area.x) * HiResScale);
+                const s32 y0 = (s32)std::floor((r.y - m_area.y) * HiResScale);
+                const s32 y1 = (s32)std::ceil((r.Bottom() - m_area.y) * HiResScale);
+                if (!r.Empty())
+                    for (s32 y = y0; y < y1; y++)
+                        for (s32 x = x0; x < x1; x++)
+                            m_surface.origin[y * m_surface.stepY + x * 4] = 0;
+            }
+            if (s_hiRes.bands != nullptr) s_hiRes.bands(m_slot, screen, m_area);
+            if (s_hiRes.present(m_slot, m_surface, m_area, m_dirty)) m_dirty = false;
+            return false;
+        }
         if (s_gpuPresent != nullptr && s_gpuPresent(*this, screen, skip))
             return false;
         PresentBands(screen, PillarboxColumns(screen, m_area));

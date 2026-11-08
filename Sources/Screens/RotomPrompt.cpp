@@ -108,7 +108,10 @@ namespace OneScreen
         if (!s_shown || badge)
             UI::ScreenBuffer::GiveBack(Owner);
         if (!s_shown)
+        {
+            s_layer.Hide();
             return false;
+        }
         u8 *pixels = s_badgePixels;
         size_t bytes = sizeof(s_badgePixels);
         if (!badge)
@@ -117,7 +120,10 @@ namespace OneScreen
             pixels = UI::ScreenBuffer::Borrow(Owner, fresh);
             bytes = UI::ScreenBuffer::Bytes;
             if (pixels == nullptr)
+            {
+                s_layer.Hide();
                 return false;
+            }
             if (fresh)
                 s_drawnArea = UI::Rect{ 0, 0, 0, 0 };
         }
@@ -126,7 +132,10 @@ namespace OneScreen
         const u32 version = s_viewVersion;
         const UI::Rect area = RotomArea(view);
         if (area.Empty())
+        {
+            s_layer.Hide();
             return false;
+        }
         // Also once the game's font and icons have loaded.
         const bool gameFont = UI::Theme::UsingGameFont();
         bool redraw = version != s_drawnVersion || gameFont != s_drawnGameFont;
@@ -136,7 +145,7 @@ namespace OneScreen
             || area.h != s_drawnArea.h)
         {
             const int radius = badge ? area.h / 2 : RotomRadius;
-            if (!s_layer.Setup(fb, area, radius, pixels, bytes))
+            if (!s_layer.SetupHiRes(fb, area, radius, UI::RotomSlot, pixels, bytes))
                 return false;
             s_drawnArea = area;
             redraw = true;

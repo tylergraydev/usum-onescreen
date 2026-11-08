@@ -326,9 +326,30 @@ copy-back also restores the saved background under the skipped window.
 that value and retain true for direct CPU drawing. Panel readback checks
 and requested screenshots also retain true reporting. Non-BGR8 layouts,
 linear-memory failure and `layergpu off` keep the existing CPU fallback.
-The overlays themselves stay 1x pictures that Azahar scales up, so they look
-soft at high internal resolutions (texture filters such as MMPX did not help);
-only drawing them with the 3DS GPU would make them sharp.
+All native Layer screens now opt into the PICA overlay backend when ready.
+Each keeps its logical layout and 1x fallback buffer, but draws transparent RGBA8
+at 2.5x and uploads only changed content. Four ownership-checked slots share a
+dynamically packed 1024x1024 atlas: primary menu, Rotom, Boxes badge, MoveLearn.
+An allocation refusal uses the legacy path for that frame and retries next frame.
+GPU vertices apply the continuous x=200 squeeze; glyph layout is unchanged.
+Nearest-scaled pixel sprites and bilinear smooth art retain their original size.
+
+Hi-res pillarbox bands sample the twelve WriteBandColumn phases reserved at
+atlas x=1012..1023. Pattern repeats eight phases; Tint stretches phase8; edge
+columns use11,10,9 outward from the menu. BandRuns uses destination coordinates
+without squeezing them again, nearest filtering for bands and bilinear for menus.
+Bands and up to four menu quads use one list/state restore: one overlay GX command,
+no hi-res CPU framebuffer writes. Off emits no bands. Original eligibility,
+SourceColumn boundaries and fallback CPU/LayerGpu behavior remain unchanged.
+
+Map's hi-res skip window is alpha0 in the layer texture. The target overlay is
+drawn before the game's DisplayTransfer; the existing OSD PanelCopyBottomRect
+then copies the game map into the framebuffer, after Layer::Present. Its picture
+therefore remains on top and adds its existing GPU copy to the overlay command.
+`hires off` restores all original Layer/LayerGpu presentations live.
+See [GPUQUAD.md](GPUQUAD.md) for allocation, costs, exact image paths and the
+per-screen verification matrix. Phase2 needs a plugin build and emulator review;
+phase1's sharpness/stability evidence does not validate the expanded integration.
 
 The native map used to crash the game at 16:9/21:9 (one GPU copy per squeezed
 column); it now copies a game-squeezed picture in one command (above).

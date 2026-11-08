@@ -125,13 +125,17 @@ namespace OneScreen
             return false;
         if (!s_visible)
         {
+            s_layer.Hide();
             UI::ScreenBuffer::GiveBack(Owner);
             return false;
         }
         bool fresh = false;
         u8 *pixels = UI::ScreenBuffer::Borrow(Owner, fresh);
         if (pixels == nullptr)
+        {
+            s_layer.Hide();
             return false;
+        }
         if (fresh)
             s_layerArea = UI::Rect{};   // set up again before anything is presented
         UiInitFont();
@@ -145,7 +149,7 @@ namespace OneScreen
             if (!s_layer.Matches(fb) || area.x != s_layerArea.x || area.y != s_layerArea.y
                 || area.w != s_layerArea.w || area.h != s_layerArea.h)
             {
-                s_layerArea = s_layer.Setup(fb, area, PokedexRadius, pixels, UI::ScreenBuffer::Bytes) ? area : UI::Rect{};
+                s_layerArea = s_layer.SetupHiRes(fb, area, PokedexRadius, UI::MenuSlot, pixels, UI::ScreenBuffer::Bytes) ? area : UI::Rect{};
                 s_dirty = true;
             }
             if (s_dirty && s_layerArea.w > 0)

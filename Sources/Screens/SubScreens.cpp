@@ -244,13 +244,17 @@ namespace OneScreen
         const int index = s_drawing;
         if (index < 0)
         {
+            s_layer.Hide();
             UI::ScreenBuffer::GiveBack(Owner);
             return false;
         }
         bool fresh = false;
         u8 *pixels = UI::ScreenBuffer::Borrow(Owner, fresh);
         if (pixels == nullptr)
+        {
+            s_layer.Hide();
             return false;
+        }
 
         UiInitFont();
         const UI::Surface fb = SurfaceFromScreen(screen);
@@ -258,7 +262,7 @@ namespace OneScreen
         bool redraw = fresh || index != s_layerScreen;
         if (fresh || !s_layer.Matches(fb) || index != s_layerScreen)
         {
-            if (!s_layer.Setup(fb, ns->Area(), ScreenStyle::Radius, pixels, UI::ScreenBuffer::Bytes))
+            if (!s_layer.SetupHiRes(fb, ns->Area(), ScreenStyle::Radius, UI::MenuSlot, pixels, UI::ScreenBuffer::Bytes))
                 return false;
             s_layerScreen = index;
             redraw = true;

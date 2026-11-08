@@ -305,14 +305,9 @@ namespace UI
         Rect part = src != nullptr ? Intersect(*src, Rect{ 0, 0, image.w, image.h }) : Rect{ 0, 0, image.w, image.h };
         if (part.Empty())
             return;
-        for (s32 py = 0; py < part.h; py++)
-            for (s32 px = 0; px < part.w; px++)
-            {
-                const u8 *p = &image.rgba[((size_t)(part.y + py) * image.w + part.x + px) * 4];
-                if (p[3] == 0)
-                    continue;
-                canvas.BlendPixel(x + px, y + py, Rgb(p[0], p[1], p[2], 255), (u8)(p[3] * alpha / 255));
-            }
+        const ImageView view{ image.rgba.data(), image.w, image.h, image.w * 4 };
+        canvas.DrawImage(view, part, Rect{ x, y, part.w, part.h }, ImageFilter::Bilinear,
+                         Rgb(255, 255, 255, alpha));
     }
 
     // --- Font ---
@@ -634,6 +629,25 @@ namespace UI
         slot.codePoint = codePoint;
         slot.used = true;
         return &g;
+    }
+
+    void GameTextCache::Draw(Canvas &canvas, u32 codePoint, s32 x, s32 y, Color color)
+    {
+        const Glyph *g = Get(codePoint);
+        if (g == nullptr || g->w <= 0) return;
+        if (canvas.Scale() == 1.f)
+        {
+            canvas.DrawMask(x + g->left, y, g->mask, g->w, g->h, g->w, 1, color);
+            return;
+        }
+        const FfntInfo &f = m_font->Info();
+        u8 cell[64 * 64];
+        if ((u32)f.cellW * f.cellH > sizeof(cell) || !m_font->DecodeCell(m_font->IndexOf(codePoint), cell)) return;
+        s32 left, glyphW, advance;
+        m_font->Widths(m_font->IndexOf(codePoint), left, glyphW, advance);
+        const s32 inkW = std::min<s32>(f.cellW, std::max<s32>(0, glyphW));
+        canvas.DrawMaskSized((float)(x + g->left), (float)y, cell, inkW, f.cellH, f.cellW,
+                            inkW * m_scale, f.cellH * m_scale, color);
     }
 
     // --- What gets loaded ---

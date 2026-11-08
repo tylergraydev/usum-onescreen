@@ -6,6 +6,7 @@
 // PNG preview to the path given as the first argument. The system font is a
 // synthetic one built here in the CFNT sheet format (no font data in git).
 
+#include "hires_screen_smoke.hpp"
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -634,6 +635,7 @@ int main(int argc, char **argv)
     layer.Setup(buf.surface, DemoPanel, DemoRadius, pixels.data(), pixels.size());
     Canvas layerCanvas = layer.Begin();
     DrawDemoMenu(layerCanvas, 2);
+    CHECK(HiResScreenSmoke::Run(DemoPanel, DemoRadius, [&](Canvas &hi) { DrawDemoMenu(hi, 2); }));
     layer.Present(buf.surface);
     SetSystemFont(nullptr);
 
