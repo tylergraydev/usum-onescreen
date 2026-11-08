@@ -3,6 +3,7 @@
 #include <CTRPluginFramework.hpp>
 
 #include "InputCapture.hpp"
+#include "PcAnywhereRules.hpp"
 
 namespace OneScreen
 {
@@ -36,6 +37,12 @@ namespace OneScreen
     static volatile u32 s_actionKeys = 0;
     static u32 s_actionLastSeen = 0;
     static volatile bool s_actionNewFrame = true;
+
+    // A key combo the plugin takes for itself (pc_key, PcAnywhere.cpp): the
+    // hook counts its presses and hides its keys from the game until released.
+    static volatile u32 s_combo = 0;
+    static volatile u32 s_comboHits = 0;
+    static PcComboState s_comboState;   // only the hook touches it
 
     // Circle pad direction bits the HID module sets alongside the raw position.
     static u32 StickBits(s32 x, s32 y)
@@ -95,6 +102,22 @@ namespace OneScreen
             s_realHeld = held;
             s_realStickX = out[0].stickX;
             s_realStickY = out[0].stickY;
+        }
+        const u32 combo = s_combo;
+        if ((combo != 0 || s_comboState.suppressed != 0) && n > 0)
+        {
+            u32 held = 0;
+            for (s32 i = 0; i < n; i++)
+                held |= out[i].held;
+            if (PcComboRead(s_comboState, combo, held))
+                s_comboHits = s_comboHits + 1;
+            const u32 hide = s_comboState.suppressed;
+            if (hide != 0)
+                for (s32 i = 0; i < n; i++)
+                {
+                    out[i].held &= ~hide;
+                    out[i].pressed &= ~hide;
+                }
         }
         MaskPadSamples(s_capture, s_captureRequest, out, n);
 
@@ -189,6 +212,16 @@ namespace OneScreen
     void ButtonsActionSet(u32 keys)
     {
         s_actionKeys = keys;
+    }
+
+    void ButtonsSetCombo(u32 keys)
+    {
+        s_combo = keys;
+    }
+
+    u32 ButtonsComboHits(void)
+    {
+        return s_comboHits;
     }
 
     u32 ButtonsGameHeld(void)

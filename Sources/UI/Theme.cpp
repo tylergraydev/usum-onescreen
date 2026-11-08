@@ -539,6 +539,18 @@ namespace Theme
             canvas.Line(x + 7.5f, y + 3.5f, x + 11.f, y + 0.5f, 2.f, tint);
     }
 
+    void DrawShiny(Canvas &canvas, s32 x, s32 y)
+    {
+        // Five tips joined through an inset pentagon, within 10x10.
+        static const float px[10] = { 5, 6.2f, 9.8f, 7, 8, 5, 2, 3, 0.2f, 3.8f };
+        static const float py[10] = { 0, 3.4f, 3.4f, 5.6f, 9.5f, 7.2f, 9.5f, 5.6f, 3.4f, 3.4f };
+        for (int i = 0; i < 10; i++)
+        {
+            const int next = (i + 1) % 10;
+            canvas.FillTriangle(x + 5.f, y + 5.f, x + px[i], y + py[i], x + px[next], y + py[next], CursorRed);
+        }
+    }
+
     bool DrawBall(Canvas &canvas, s32 x, s32 y, u16 ballItem)
     {
         const GameAssets *assets = GetGameAssets();

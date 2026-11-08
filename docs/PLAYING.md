@@ -65,7 +65,7 @@ These work everywhere:
 | **L+R** | Show the bottom screen on the top screen when you need it: off → corner panel → full view → off. It stays as you set it. |
 | **C-stick** | Move the touch cursor (a crosshair on the panel or full view). It starts slow for precise taps and speeds up while you hold it. |
 | **ZL** | Touch the bottom screen at the cursor, for as long as you hold it. The crosshair turns red while touching. |
-| **Select** | Open the plugin's own menu (CTRPF's default hotkey): Bottom screen on top, Auto panel, Battle layout, Instant text, Battle speed, View settings, Reload settings file. |
+| **Select** | Open the plugin's own menu (CTRPF's default hotkey): Bottom screen on top, Auto panel, Battle layout, Instant text, Battle speed, Open PC (Boxes), View settings, Reload settings file. |
 
 Every other button works as normal. Each native screen below also takes the buttons listed for it.
 
@@ -81,7 +81,7 @@ The aim is that you rarely need the bottom screen. These screens are drawn on th
 | **ZR** | Show the map: place name, island, inside/outside, your position and Rotom's map around you, live while walking. **ZR** or **B** closes it. You can keep walking with it open. See [MAP.md](MAP.md). |
 | **Up** (D-pad) | When the corner badge says *Rotom wants to talk*: start Rotom's chat. Rotom's question and its two answers show at the bottom of the top screen: **Up/Down** choose, **A** answers, and Rotom's reply follows. The Roto Loto shows there too (**A** goes on and stops the reel). The map steps aside while Rotom asks. See [ROTOM-FIELD.md](ROTOM-FIELD.md). |
 
-`map_key` in the settings file changes the map key.
+`map_key` in the settings file changes the map key. `pc_key` (off by default; for example `R+X`: hold **R**, then press **X**) opens the PC boxes wherever you stand in the overworld, as if at a Pokémon Center PC; **Open PC (Boxes)** in the plugin menu does the same. B in the boxes brings you back to the same spot. See [PC-ANYWHERE.md](PC-ANYWHERE.md).
 
 ### X menu
 
@@ -109,7 +109,7 @@ The game's own keys: D-pad moves, **A** opens, **B** goes back, **Up/Down** on a
 
 See [NATIVE-SCREENS.md](NATIVE-SCREENS.md).
 
-### PC boxes (at a Pokémon Center PC)
+### PC boxes (at a Pokémon Center PC, or anywhere with `pc_key`)
 
 Shows the box and your party. The D-pad moves the game's cursor, **A** picks a Pokémon up and puts it down (swapping with one already there; box ↔ party and across boxes), **L/R** turn the box, **Y** shows the game's own details, **B** puts a held Pokémon back or leaves. Summary, Held Item, Marking, Release and the box list stay on the bottom screen (**L+R**). See [BOXES.md](BOXES.md).
 
