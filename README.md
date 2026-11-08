@@ -184,8 +184,7 @@ Bug reports and pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md
 
 ## Licence and credits
 
-<!-- LICENSE: pending Tyler's confirmation (docs/LICENSING.md recommends GPL-3.0). -->
-Licence: to be added before the repo goes public (see [docs/LICENSING.md](docs/LICENSING.md)).
+Licensed under the [GNU General Public License v3.0 only](LICENSE) (`GPL-3.0-only`). Why: [docs/LICENSING.md](docs/LICENSING.md).
 
 Third-party code and credits: [THIRD-PARTY.md](THIRD-PARTY.md).
 
