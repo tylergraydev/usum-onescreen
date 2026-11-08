@@ -14,8 +14,9 @@ namespace OneScreen
     // Horizontal stretch relative to stock 5:3; 1 when off.
     float WidescreenSqueeze(void);
 
-    // Applied before the game calculates this pane's matrix; no restore needed.
-    void SetGamePaneScaleX(u32 pane, u32 vtable, float scaleX);
+    // Applied before matrix calculation, guarded by the vtable and name word.
+    void SetGamePaneScaleX(u32 pane, u32 vtable, u32 nameWord, float scaleX);
+    // Restore on this pane's next matching matrix calculation, if it still exists.
     void ClearGamePaneScaleX(void);
     std::string DescribeGamePaneScaleX(void);
 

@@ -15,11 +15,15 @@ namespace OneScreen
     static volatile float s_aspect = 0.0f;
     static volatile u32 s_rewritten = 0;
     static volatile u32 s_culled = 0;
+    static Mutex s_scaleLock;
     static volatile u32 s_scalePane = 0;
     static volatile u32 s_scaleVtable = 0;
+    static volatile u32 s_scaleNameWord = 0;
     static volatile float s_scaleX = 1.0f;
+    static float s_savedScaleX = 1.0f;
+    static volatile bool s_restoreScaleX = false;
     // nw::lyt::Pane fields, USUM v1.2 (both games).
-    static constexpr u32 PaneScaleX = 0x34, PaneFlags = 0x44;
+    static constexpr u32 PaneScaleX = 0x34, PaneFlags = 0x44, PaneName = 0x80;
     static constexpr u8 PaneMatrixDirty = 0x10;
 
     // Debug capture only: never allocate or log from the game hook.
@@ -80,24 +84,38 @@ namespace OneScreen
         return aspect == 0.0f ? 1.0f : aspect / (400.0f / 240.0f);
     }
 
-    void SetGamePaneScaleX(u32 pane, u32 vtable, float scaleX)
+    void SetGamePaneScaleX(u32 pane, u32 vtable, u32 nameWord, float scaleX)
     {
+        Lock lock(s_scaleLock);
+        if (pane != s_scalePane || vtable != s_scaleVtable || nameWord != s_scaleNameWord)
+        {
+            // Drop the old restore on replacement; the game rewrites its scale.
+            s_savedScaleX = 1.0f;
+        }
         s_scalePane = 0;
         s_scaleX = scaleX;
         s_scaleVtable = vtable;
+        s_scaleNameWord = nameWord;
+        s_restoreScaleX = false;
+        // Publish only after all fields are ready; the lock protects both threads.
         s_scalePane = pane;
     }
 
     void ClearGamePaneScaleX(void)
     {
-        s_scalePane = 0;
+        Lock lock(s_scaleLock);
+        if (s_scalePane != 0)
+            s_restoreScaleX = true;
     }
 
     std::string DescribeGamePaneScaleX(void)
     {
+        Lock lock(s_scaleLock);
         const u32 pane = s_scalePane;
         if (pane == 0)
             return "bottom squeeze off";
+        if (s_restoreScaleX)
+            return Utils::Format("bottom squeeze restoring %.4f (All %08lX)", (double)s_savedScaleX, pane);
         return Utils::Format("bottom squeeze %.4f (All %08lX)", (double)s_scaleX, pane);
     }
 
@@ -122,12 +140,32 @@ namespace OneScreen
 
     static void CalculateMtxHook(u8 *pane, const DrawInfo *info, u32 dirty)
     {
-        const u32 target = s_scalePane;
-        if (target != 0 && (u32)pane == target
-            && *reinterpret_cast<const u32 *>(pane) == s_scaleVtable)
+        // Never wait on the plugin thread from the game's matrix calculation.
+        if (!s_scaleLock.TryLock())
         {
-            *reinterpret_cast<float *>(pane + PaneScaleX) = s_scaleX;
-            pane[PaneFlags] |= PaneMatrixDirty;
+            const u32 target = s_scalePane;
+            if (target != 0 && (u32)pane == target
+                && *reinterpret_cast<const u32 *>(pane) == s_scaleVtable
+                && *reinterpret_cast<const u32 *>(pane + PaneName) == s_scaleNameWord)
+            {
+                float &scale = *reinterpret_cast<float *>(pane + PaneScaleX);
+                if (s_restoreScaleX)
+                {
+                    scale = s_savedScaleX;
+                    s_scalePane = 0;
+                    s_restoreScaleX = false;
+                }
+                else
+                {
+                    const float overrideScale = s_scaleX;
+                    // Keep the game's last value if our previous write is still there.
+                    if (std::fabs(scale - overrideScale) > 0.00001f)
+                        s_savedScaleX = scale;
+                    scale = overrideScale;
+                }
+                pane[PaneFlags] |= PaneMatrixDirty;
+            }
+            s_scaleLock.Unlock();
         }
         HookContext::GetCurrent().OriginalFunction<void>(pane, info, dirty);
         if (WidescreenSqueeze() <= 1.0f)
