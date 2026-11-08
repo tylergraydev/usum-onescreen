@@ -54,6 +54,13 @@ namespace OneScreen
     u32 CaptureRealPressed(void);
     void CaptureRealStick(s32 &x, s32 &y);
 
+    // A combo the plugin takes for itself (pc_key): the pad hook counts each
+    // time all of `keys` become held together, and hides those keys from the
+    // game from then until each is released. 0 turns it off. The count only
+    // grows; compare it with the last value seen.
+    void ButtonsSetCombo(u32 keys);
+    u32 ButtonsComboHits(void);
+
     // Keys held by the action layer (Actions.hpp), 0 = none. Applied after
     // capture, so an action can press keys while the player's are captured.
     void ButtonsActionSet(u32 keys);

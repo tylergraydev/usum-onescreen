@@ -17,6 +17,7 @@
 #include "InputCapture.hpp"
 #include "Panel.hpp"
 #include "Party.hpp"
+#include "PcAnywhere.hpp"
 #include "Scene.hpp"
 #include "Screens/BattleScreen.hpp"
 #include "Screens/Keyboard.hpp"
@@ -264,6 +265,8 @@ namespace CTRPluginFramework
     //   map on|off|open|close|status   (native top-screen map, Screens/Map.hpp)
     //   rotom on|off|status|read|select N|answer [N]|talk|next   (Rotom's field prompts, Screens/RotomPrompt.hpp)
     //   partyui on|off|status   (native Party screen and summary, Screens/PartyScreen.hpp)
+    //   pc | pc status   (open the PC boxes from the field, PcAnywhere.hpp;
+    //     logs pc: opened / pc: refused (reason))
     //   boxes on|off|status|details|pick|drop|prev|next   (native PC boxes, Screens/Boxes.hpp;
     //     pick/drop/prev/next as A / L / R)
     //   uitheme on|off|load|status|page N|select N   (USUM theme demo with the game's own
@@ -582,6 +585,19 @@ namespace CTRPluginFramework
                 return;
             }
         }
+        else if (line == "pc" || line.compare(0, 3, "pc ") == 0)
+        {
+            std::vector<std::string> log;
+            const bool known = OneScreen::PcAnywhereCommand(line == "pc" ? "" : line.substr(3),
+                                                            s_game->offsets.sceneManager, log);
+            for (const std::string &l : log)
+                WriteLog(l, false);
+            if (!known)
+            {
+                WriteLog("cmd: unknown pc command in '" + line + "' (use pc or pc status)", false);
+                return;
+            }
+        }
         else if (line.compare(0, 6, "boxes ") == 0)
         {
             std::vector<std::string> log;
@@ -732,10 +748,27 @@ namespace CTRPluginFramework
     // scene (AutoPanel) and a hand choice holds until the next scene change.
     // C-stick moves the touch cursor and ZL touches (cursor_move, touch_key).
     // Scene and panel changes go to the log.
+    // True on the plugin's own threads, whose stacks are in the plugin's
+    // memory (0x06000000-0x07FFFFFF). CTRPF also runs the menu entries from
+    // its LoadCRO hook, on the game thread that loads a CRO; that thread's
+    // stack is small and sits in the game's heap. PanelEntry's work needs
+    // more stack than that: on a wild battle's Battle.cro load it overflowed
+    // into the game's ExpHeap mutex (gm + 0x15C) and the game froze
+    // (docs/PC-ANYWHERE.md, "The battle freeze").
+    static bool OnPluginStack(void)
+    {
+        u32 sp;
+        __asm__ volatile("mov %0, sp" : "=r"(sp));
+        return sp >= 0x06000000 && sp < 0x08000000;
+    }
+
     static void PanelEntry(MenuEntry *entry)
     {
         static u32 frames = 0;
         static std::string scene;
+
+        if (!OnPluginStack())
+            return;
 
         const u32 panelKey = OneScreen::GetSettings().panelKey;
         if (panelKey != 0 && Controller::IsKeysPressed(panelKey))
@@ -842,6 +875,11 @@ namespace CTRPluginFramework
         for (const std::string &line : boxesLog)
             WriteLog(line, false);
 
+        std::vector<std::string> pcLog;
+        OneScreen::PcAnywhereUpdate(s_game->offsets.sceneManager, scene, pcLog);
+        for (const std::string &line : pcLog)
+            WriteLog(line, false);
+
         std::vector<std::string> assetsLog;
         OneScreen::UI::AssetsUpdate(scene, assetsLog);
         for (const std::string &line : assetsLog)
@@ -919,6 +957,20 @@ namespace CTRPluginFramework
         RefreshMenuNames();
     }
 
+    // Asks for the PC boxes; they open once the plugin menu closes.
+    static void OpenPc(MenuEntry *entry)
+    {
+        std::vector<std::string> log;
+        OneScreen::PcAnywhereRequest(s_game->offsets.sceneManager, "menu", log);
+        for (const std::string &line : log)
+            WriteLog(line, false);
+        if (!log.empty())
+        {
+            MessageBox box("Open PC (Boxes)", log.back());
+            box();
+        }
+    }
+
     static void ShowSettings(MenuEntry *entry)
     {
         const std::string text = OneScreen::DescribeSettings(OneScreen::GetSettings())
@@ -958,6 +1010,10 @@ namespace CTRPluginFramework
         s_speedEntry = new MenuEntry("Battle speed", nullptr, CycleBattleSpeed,
             "A: cycle Normal, Fast, Instant for message waits and HP/EXP bars. Saved to usum-onescreen.ini.");
         menu += s_speedEntry;
+        menu += new MenuEntry("Open PC (Boxes)", nullptr, OpenPc,
+                              "A: open the PC boxes here, as at a Pokemon Center PC. Works in the overworld "
+                              "when nothing else is going on; they open when this menu closes. "
+                              "pc_key in usum-onescreen.ini sets a button combo for it.");
         menu += new MenuEntry("View settings", nullptr, ShowSettings,
                               "A: show the settings in use, read from /usum-onescreen.ini at boot.");
         menu += new MenuEntry("Reload settings file", nullptr, ReloadSettings,
@@ -1022,6 +1078,10 @@ namespace CTRPluginFramework
         std::string buttonsReport;
         OneScreen::StartButtons(s_game->offsets.hidPadRead.address, buttonsReport);
         WriteLog(buttonsReport, false);
+
+        std::string pcReport;
+        OneScreen::StartPcAnywhere(pcReport);
+        WriteLog(pcReport, false);
 
         std::string widescreenReport;
         OneScreen::StartWidescreen(widescreenReport);
