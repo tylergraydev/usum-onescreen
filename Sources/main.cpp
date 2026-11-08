@@ -587,6 +587,8 @@ namespace CTRPluginFramework
                 return;
             }
         }
+        else if (line.compare(0, 6, "hires ") == 0)
+            WriteLog(OneScreen::UI::HiResCommand(line.substr(6)), false);
         else if (line.compare(0, 8, "gpuquad ") == 0)
             WriteLog(OneScreen::UI::GpuQuadCommand(line.substr(8)), false);
         else if (line == "layergpu on" || line == "layergpu off" || line == "layergpu status")

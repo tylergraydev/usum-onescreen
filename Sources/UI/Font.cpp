@@ -171,6 +171,37 @@ namespace UI
         return &g;
     }
 
+    void GlyphCache::Draw(Canvas &canvas, u32 codePoint, s32 x, s32 y, s32 scale, Color color)
+    {
+        const Glyph *g = Get(codePoint);
+        if (g == nullptr || g->w <= 0) return;
+        if (canvas.Scale() == 1.f)
+        {
+            canvas.DrawMask(x + g->left * scale, y, g->mask, g->w, g->h, g->w, scale, color);
+            return;
+        }
+        u8 cell[64 * 64];
+        if ((u32)m_font->cellW * m_font->cellH > sizeof(cell)
+            || !DecodeGlyphCell(*m_font, m_font->indexOf(codePoint), cell)) return;
+        s32 left, glyphW, advance;
+        m_font->widths(m_font->indexOf(codePoint), left, glyphW, advance);
+        s32 ink0 = -1, ink1 = -1;
+        const s32 search = std::min<s32>(m_font->cellW, std::max<s32>(0, glyphW) + 1);
+        for (s32 sx = 0; sx < search; sx++)
+            for (s32 sy = 0; sy < m_font->cellH; sy++)
+                if (cell[sy * m_font->cellW + sx] != 0)
+                {
+                    if (ink0 < 0) ink0 = sx;
+                    ink1 = sx;
+                    break;
+                }
+        if (ink0 < 0) return;
+        const s32 inkW = ink1 - ink0 + 1;
+        canvas.DrawMaskSized((float)(x + g->left * scale), (float)y, cell + ink0,
+            inkW, m_font->cellH, m_font->cellW, inkW * m_scale * scale,
+            m_font->cellH * m_scale * scale, color);
+    }
+
     u32 NextCodePoint(const char *text, size_t size, size_t &i)
     {
         const u8 lead = (u8)text[i++];

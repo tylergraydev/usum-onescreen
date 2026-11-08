@@ -453,6 +453,37 @@ static void TestFont(void)
     full.Get('B');
     CHECK(full.hits == 1);
 
+    // Scaled game-font drawing uses the original cell, while both sizes keep
+    // their existing bearings/advances. Scale 1 still uses exactly its cache mask.
+    for (GameTextCache *cache : { &full, &half })
+        for (float scale : { 1.f, 2.5f })
+        {
+            const s32 w = (s32)(64 * scale), h = (s32)(24 * scale);
+            std::vector<u8> actual((size_t)w * h * 4, 0), expected = actual;
+            Surface sa{ actual.data(), 4, w * 4, PixelFormat::RGBA8, w, h };
+            sa.transparent = scale != 1.f;
+            Surface se = sa; se.origin = expected.data();
+            Canvas a(sa, 0, 0, scale), e(se, 0, 0, scale);
+            const s32 step = cache->Advance('A');
+            const Glyph metrics = *cache->Get('A');
+            for (int i = 0; i < 2; i++)
+            {
+                const s32 x = 4 + i * step;
+                cache->Draw(a, 'A', x, 3, Rgb(255, 255, 255));
+                if (scale == 1.f)
+                    e.DrawMask(x + metrics.left, 3, metrics.mask, metrics.w, metrics.h, metrics.w, 1, Rgb(255, 255, 255));
+                else
+                {
+                    u8 native[6 * 8];
+                    CHECK(font.DecodeCell(font.IndexOf('A'), native));
+                    const float size = cache == &full ? 1.f : .5f;
+                    e.DrawMaskSized((float)(x + metrics.left), 3.f, native, (s32)GlyphW(1), 8, 6,
+                                    GlyphW(1) * size, 8 * size, Rgb(255, 255, 255));
+                }
+            }
+            CHECK(actual == expected && step == cache->Advance('A'));
+        }
+
     // A font with more rows than the plugin keeps: only the first MaxRows
     // rows are read; characters beyond them fall back to the replacement.
     FontSpec tall;

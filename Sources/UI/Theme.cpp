@@ -160,11 +160,16 @@ namespace Theme
     {
         for (size_t i = 0; i < text.size();)
         {
-            const Glyph *g = cache.Get(NextCodePoint(text.data(), text.size(), i));
+            const u32 cp = NextCodePoint(text.data(), text.size(), i);
+            const Glyph *g = cache.Get(cp);
             if (g == nullptr)
                 break;
             if (g->w > 0)
-                canvas.DrawMask(x + g->left, y, g->mask, g->w, g->h, g->w, 1, color);
+            {
+                if (canvas.Scale() == 1.f)
+                    canvas.DrawMask(x + g->left, y, g->mask, g->w, g->h, g->w, 1, color);
+                else cache.Draw(canvas, cp, x, y, color);
+            }
             x += g->advance;
         }
     }
