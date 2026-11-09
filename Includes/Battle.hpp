@@ -9,6 +9,7 @@ namespace OneScreen
     // One battler as the battle engine keeps it (see docs/RE1-battle.md).
     struct BattleMon
     {
+        u32 pokemonParam = 0;   // record +0: static candidate, runtime guarded
         u32 address = 0;        // the game's record, 0 if absent
         u16 species = 0;
         u8  level = 0;
@@ -16,7 +17,7 @@ namespace OneScreen
         u16 ability = 0;
         u16 moves[4] = {};
         u8  pp[4] = {}, maxPp[4] = {};
-        u8  partyIndex = 0xFF;  // record +0x19: the party slot it came from
+        u8  partyIndex = 0xFF;  // record +0x19: battle-team index, NOT field-party slot
     };
 
     // Which sub-screen the battle UI shows (top of the scene manager's stack).

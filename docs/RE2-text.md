@@ -40,6 +40,7 @@ The v1.2 update RomFS ships its own `a/0/3/0`–`a/0/3/9`. For `a/0/3/2` it chan
 | File | Content | Lines | Section bytes | Notes |
 |---|---|---|---|---|
 | 60 | Species names | 808 (0 = "Egg", 1–807) | 20956 | `Nidoran♀/♂` use `U+2640`/`U+2642`; `é` in Flabébé |
+| 117 | Move descriptions | 730 | | Indexed by move ID; decoded offline from local English update GARC for battle extras; runtime unverified |
 | 118 | Move names | 729 (0 = "———", 1–728) | 22896 | |
 | 40 | Item names | 960 (0 = "None") | 28816 | plain |
 | 42 | Item names for WordSet | 960 | 40648 | every line ends in a plural tag, e.g. `Master Ball` + `[VAR 1101 00FE 0100]` + `s`; cut at the first `0x0010` for the singular |

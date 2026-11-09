@@ -39,6 +39,8 @@ namespace UI
         n += a.moves.capacity() * sizeof(MoveInfo);
         for (const std::string &s : a.typeNames)
             n += sizeof(std::string) + s.capacity();
+        for (const std::string &s : a.moveDescriptions)
+            n += sizeof(std::string) + s.capacity();
         for (const std::string &s : a.moveNames)
             n += sizeof(std::string) + s.capacity();
         return (u32)n;
@@ -139,6 +141,12 @@ namespace UI
     {
         const GameAssets *a = Assets();
         return a != nullptr ? a->Move(move) : MoveInfo();
+    }
+
+    std::string AssetMoveDescription(u16 move)
+    {
+        const GameAssets *a = Assets();
+        return a != nullptr && move < a->moveDescriptions.size() ? a->moveDescriptions[move] : std::string();
     }
 
     std::string AssetMoveName(u16 move, const std::string &fallback)

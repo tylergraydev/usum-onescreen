@@ -107,6 +107,7 @@ namespace OneScreen
             || !Process::CheckAddress(address + 0x300, MEMPERM_READ))
             return false;
         mon.address = address;
+        mon.pokemonParam = Read32(address);
         mon.species = Read16(address + MonSpecies);
         mon.maxHp = Read16(address + MonMaxHp);
         mon.hp = Read16(address + MonHp);
@@ -295,6 +296,7 @@ namespace OneScreen
                                         mon.species, mon.level, mon.hp, mon.maxHp, mon.ability, count);
         for (u32 i = 0; i < 4; i++)
             out += Utils::Format(" %u:%u/%u", mon.moves[i], mon.pp[i], mon.maxPp[i]);
+        out += Utils::Format(" param %08lX", mon.pokemonParam);
         return out;
     }
 

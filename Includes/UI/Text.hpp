@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include "UI/Font.hpp"
 #include "UI/Raster.hpp"
@@ -50,6 +51,10 @@ namespace UI
     // Draws text in box: aligned horizontally per style.align, centered
     // vertically, ellipsized to the box width. Returns the drawn width.
     s32 DrawText(Canvas &canvas, const std::string &text, const Rect &box, const TextStyle &style);
+
+    // Measured word wrapping, preserving newlines and UTF-8 boundaries.
+    // Overlong words split by codepoint. No height truncation.
+    std::vector<std::string> WrapText(const std::string &text, s32 width, const TextStyle &style);
 
     // Renders the Small font into a coverage mask at the given scale. Used by
     // the fallback System font.

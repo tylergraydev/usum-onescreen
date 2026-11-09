@@ -5,6 +5,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <initializer_list>
 
 using namespace OneScreen;
 
@@ -166,6 +167,7 @@ static void TestJudgeAndMarkers(void)
                     CHECK(mon.hyperTrained[i] == (i == ht));
                 }
                 CHECK(!mon.isEgg); // nickname bit doesn't spill into IVs/egg
+                CHECK(mon.personality == ((u32)(0x1234 ^ 0x5678 ^ (ht % 2 ? 16 : 15)) << 16));
                 CHECK(mon.shiny == (ht % 2 == 0));
                 CHECK(mon.hiddenAbility == (ht % 3 == 0));
             }
@@ -209,6 +211,13 @@ static bool Equals(const u16 *text, const char *expect)
 
 static void TestMsgLine(void)
 {
+    // Descriptions exceed the former 128-code-unit name buffer.
+    u16 longPlain[301] = {}, longEncrypted[301], longOut[301];
+    for (u32 i = 0; i < 300; i++) longPlain[i] = i == 140 ? '\n' : 'a';
+    u32 longLength = 0;
+    EncryptMsgLine(longPlain, 117, longEncrypted, &longLength);
+    CHECK(DecryptMsgLine(longEncrypted, longLength, 117, longOut, 301) == 300);
+    CHECK(longOut[140] == '\n' && longOut[299] == 'a' && longOut[300] == 0);
     u16 encrypted[32], out[32];
     u32 length = 0;
     const u16 pikachu[] = {'P', 'i', 'k', 'a', 'c', 'h', 'u', 0};
@@ -249,8 +258,34 @@ static void TestUtf8(void)
     CHECK(out[7] == 0);
 }
 
+static void TestBattleIdentity()
+{
+    Pk7 party[6];
+    const u16 species[] = { 25, 9, 157, 724, 570, 25 };
+    for (u32 i = 0; i < 6; i++)
+    {
+        party[i].form = Pk7Form::Encrypted;
+        party[i].species = species[i];
+        party[i].personality = i; // PID zero is valid
+    }
+    // Team chooses field slots 5, 1, 3; switching reorders them again.
+    for (u32 slot : { 5u, 1u, 3u, 1u, 5u })
+        CHECK(MatchPartyIdentity(party, 6, species[slot], true, slot) == (int)slot);
+    CHECK(MatchPartyIdentity(party, 6, 25, true, 0) == 0);
+    CHECK(MatchPartyIdentity(party, 6, 25, false, 0) == -1); // duplicate species
+    CHECK(MatchPartyIdentity(party, 6, 9, false, 0) == 1);
+    CHECK(MatchPartyIdentity(party, 6, 9, true, 55) == -1); // no species fallback with known PID
+    CHECK(MatchPartyIdentity(party, 0, 9, true, 1) == -1);
+    CHECK(MatchPartyIdentity(party, 6, 1, false, 0) == -1);
+    party[1].form = Pk7Form::Invalid;
+    CHECK(MatchPartyIdentity(party, 6, 9, true, 1) == -1);
+    party[5].personality = 0; // even duplicate PID/species is ambiguous
+    CHECK(MatchPartyIdentity(party, 6, 25, true, 0) == -1);
+}
+
 int main()
 {
+    TestBattleIdentity();
     TestEncryptedRoundTrip();
     TestDecrypted();
     TestInvalid();

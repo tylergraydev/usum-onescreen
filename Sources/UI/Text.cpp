@@ -145,6 +145,47 @@ namespace UI
         return MeasureText(dots, style) <= maxWidth ? std::string(dots) : std::string();
     }
 
+    std::vector<std::string> WrapText(const std::string &text, s32 width, const TextStyle &style)
+    {
+        std::vector<std::string> lines;
+        if (width <= 0) return lines;
+        std::string line, word;
+        const auto append = [&]() {
+            if (word.empty()) return;
+            if (!line.empty() && MeasureText(line + " " + word, style) > width)
+            {
+                lines.push_back(line);
+                line.clear();
+            }
+            if (!line.empty()) line += " ";
+            for (size_t i = 0; i < word.size();)
+            {
+                const size_t start = i++;
+                while (i < word.size() && ((unsigned char)word[i] & 0xC0) == 0x80) ++i;
+                const std::string cp = word.substr(start, i - start);
+                if (!line.empty() && MeasureText(line + cp, style) > width)
+                {
+                    lines.push_back(line);
+                    line.clear();
+                }
+                line += cp;
+            }
+            word.clear();
+        };
+        for (char c : text)
+        {
+            if (c == ' ' || c == '\n' || c == '\r' || c == '\t')
+            {
+                append();
+                if (c == '\n') { lines.push_back(line); line.clear(); }
+            }
+            else word += c;
+        }
+        append();
+        if (!line.empty()) lines.push_back(line);
+        return lines;
+    }
+
     void RenderSmallMask(const std::string &text, u8 *mask, s32 w, s32 h, s32 scale)
     {
         std::memset(mask, 0, (size_t)(w * h));
