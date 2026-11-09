@@ -840,7 +840,7 @@ namespace OneScreen
         {
             const bool two = view.ask.title.find('\n') != std::string::npos;
             const UI::Rect q = { qx, PartyArea.y + Pad, qw, two ? 48 : 30 };
-            DrawQuestion(canvas, q, view.ask.title);
+            DrawQuestion(canvas, q, Theme::FormatPanelHint(view.ask.title));
             if (view.ask.moves)
             {
                 const int w = 300, x = PartyArea.Right() - Pad - w, h = 28;
@@ -867,7 +867,7 @@ namespace OneScreen
         if (!view.busy.empty())
             DrawFooterMessage(canvas, view.busy);
         else if (!view.note.empty() && view.page == PartyPage::List)
-            DrawFooterMessage(canvas, view.note);
+            DrawFooterMessage(canvas, Theme::FormatPanelHint(view.note));
         else
             switch (view.page)
             {
@@ -879,7 +879,7 @@ namespace OneScreen
             case PartyPage::Swap:
                 DrawFooterMessage(canvas, "Move " + (view.swapFrom >= 0 && view.swapFrom < (int)view.mons.size()
                                                      ? view.mons[view.swapFrom].name : std::string())
-                                          + " where?   A here, B cancel");
+                                          + Theme::FormatPromptText(" where?   A here, B cancel"));
                 break;
             case PartyPage::Items:
                 DrawPrompts(canvas, { { Theme::Button::A, view.giving ? "Give" : "Use" }, { Theme::Button::L, "" }, { Theme::Button::R, "Pocket" },

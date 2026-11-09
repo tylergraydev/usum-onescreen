@@ -23,6 +23,10 @@ namespace OneScreen
     // Same order as PanelMode, so the two convert with a cast.
     enum class SceneMode : uint8_t { Off, Panel, Full };
 
+    enum class GlyphFamily : uint8_t { ThreeDS, Xbox, PlayStation, Nintendo };
+    bool ParseGlyphFamily(const std::string &value, GlyphFamily &out);
+    const char *GlyphFamilyName(GlyphFamily family);
+
     enum class CursorSource : uint8_t { CStick, DPad, CirclePad };
     enum class Pillarbox : uint8_t { Tint, Pattern, Off };
     enum class PanelSize : uint8_t { Half, TwoThirds };
@@ -42,6 +46,7 @@ namespace OneScreen
         uint32_t     touchKey = KeyBits::ZL;            // cursor touches while held
         uint32_t     mapKey = KeyBits::ZR;              // opens / closes the native map (Screens/Map.hpp)
         uint32_t     pcKey = 0;                         // opens the PC boxes in the field (PcAnywhere.hpp); 0 = none
+        GlyphFamily glyphs = GlyphFamily::ThreeDS;
         CursorSource cursorSource = CursorSource::CStick;
         uint32_t     cursorSpeed = 6;                   // pixels per frame once the stick has been held a while
         PanelSize    panelSize = PanelSize::Half;

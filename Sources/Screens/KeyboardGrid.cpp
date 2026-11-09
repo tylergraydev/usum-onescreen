@@ -474,7 +474,7 @@ namespace OneScreen
             UI::Theme::TextStyle note;
             note.color = MessageInk;
             note.align = UI::Align::Center;
-            UI::Theme::DrawText(canvas, view.message, footer, note);
+            UI::Theme::DrawText(canvas, UI::Theme::FormatPromptText(view.message), footer, note);
             return;
         }
         using UI::Theme::Button;

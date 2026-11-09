@@ -145,7 +145,13 @@ namespace Theme
     // The red menu cursor, its tip at (tipX, centerY), pointing right.
     void DrawCursor(Canvas &canvas, s32 tipX, s32 centerY);
 
-    enum class Button : u8 { A, B, X, Y, L, R, Start, Select };
+    enum class Button : u8 { A, B, X, Y, L, R, Start, Select, ZL, ZR };
+    // Positional mapping; widths always use the original 3DS badge size.
+    const char *ButtonName(Button button, GlyphFamily family);
+    // Converts standalone button names in a known text-only prompt.
+    std::string FormatPromptText(const std::string &text);
+    // Mixed messages can contain user names; only translate their fixed panel hint.
+    std::string FormatPanelHint(const std::string &text);
     // A prompt chip: the button's icon, then the label. Returns its width;
     // PromptWidth measures without drawing.
     s32 DrawButtonPrompt(Canvas &canvas, s32 x, s32 y, Button button, const std::string &label);
