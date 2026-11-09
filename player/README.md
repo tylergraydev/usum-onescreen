@@ -27,6 +27,7 @@ All in [`src/`](src):
 | `Ini.cs` | Edits Azahar's `qt-config.ini` (`key\default=false` + `key=value`, as `tools/instance.py` does) and the plugin's `usum-onescreen.ini` in place, keeping its comments. |
 | `Controls.cs` | Controller presets: Keyboard (Azahar's defaults), Gamepad (SDL `maptype:all`, so any controller works without its GUID), Custom (left alone; mapped in Azahar's own window). |
 | `Setup.cs` | The first-run flow, shared by the window and the command line. |
+| `Backups.cs` / `SaveSlots.cs` | Portable save discovery, rotating backups, permanent named slots and validated save ZIP import/export. |
 | `MainForm.cs` | The window. |
 | `Cli.cs` | Command line, for scripts and headless tests. |
 
@@ -70,8 +71,9 @@ for example `set aspect=21:9 size=2/3`. `status` marks Auto with `(auto)`.
 
 ## Saves and game options
 
-`Backups?` lists dated save snapshots with sizes, **Back up now**, **Restore**
-(with confirmation) and **Open folder**. Every Play backs up first. Missing/empty
+`Saves...` has separate **Named slots** and **Backups** tabs, each with sizes and
+folder access. Backups offers **Back up now**, **Restore**
+(with confirmation) and **Export backup**. Every Play backs up first. Missing/empty
 saves are skipped; a backup failure stops Play. Restore refuses a running portable
 Azahar and first backs up the current save. Ten newest snapshots per title are
 kept in `<home>\backups\<16-digit TITLEID>\yyyyMMdd-HHmmss\` (same-second
@@ -84,6 +86,38 @@ Save discovery follows `Home.ContentDir`'s existing ID0/ID1 enumeration:
 (`001b5000` Sun / `001b5100` Moon). Each snapshot contains `data/` plus a portable
 relative `source.txt` for restoring a missing save. **Extdata is not included**:
 Home.cs has no known extdata path. Nothing uses `%APPDATA%\Azahar`.
+
+Named slots are independent of backup retention and stay until explicitly deleted.
+Use **Save current to slot**, **Load**, **Rename**, **Delete** or **Export slot**.
+Load confirms and uses the same staging, safety backup and rollback as restore.
+A new save never overwrites a slot: choose another name or explicitly delete it.
+Names contain 1-64 characters, are unique per game ignoring case, and cannot
+contain control characters, `<>:"/\|?*`, leading/trailing whitespace or a trailing dot;
+`.` and `..` are refused. Names are display labels, not filesystem paths.
+Slots live in `<home>/slots/<UPPERCASE TITLEID>/<32-character GUID>/` with UTF-8
+`name.txt`, `data/` and (for locally captured saves) `source.txt`. Renaming changes
+only `name.txt`. Incomplete operations use `pending-<GUID>` and are not listed.
+
+The dialog's **Export current save** and **Import ZIP to new slot** buttons use
+file pickers. Exports require a new filename (existing files are refused). A ZIP
+contains `data/` plus UTF-8 `manifest.txt`: `format=1`, `title_id`, UTC `date`
+(export time), `source` (current / slot name / backup timestamp) and
+`launcher_version` (assembly version). This records the launcher version, not a
+claim about the version that originally wrote the save. Archives contain no ROM,
+update, extdata or machine-specific SD identity. Exports cannot go into the
+emulator, slots or backups directories. Close Azahar to export the current save.
+
+Import accepts only this manifest-bearing ZIP format; raw saves lack reliable
+title identification and are refused. The manifest title must match the selected
+game. Import creates a new slot and never changes the active save. Without a name,
+CLI import uses the ZIP filename without its extension. Unsafe, absolute or
+traversing paths, Windows device/stream names, links, duplicate paths and unexpected
+root entries are refused. Limits: 256 MiB uncompressed and 4096 entries, including
+the manifest. Actual decompressed lengths are also checked. Imported slots carry
+no `source.txt`: loading uses the existing save or the sole portable SD identity.
+If no unambiguous identity exists, start the game once first. No other Azahar home
+is consulted. A manifest declares a game; it does not authenticate or inspect the
+save's internal format. Use trusted saves and keep your own backups.
 
 Game options reads existing INIs when the window opens and saves through the same
 comment-preserving plugin editor:
@@ -122,6 +156,13 @@ Additional CLI commands (all accept `--home DIR`):
 UsumOneScreen backup
 UsumOneScreen backups
 UsumOneScreen restore yyyyMMdd-HHmmss
+UsumOneScreen slot save "before Elite Four"
+UsumOneScreen slot load "before Elite Four"
+UsumOneScreen slot list
+UsumOneScreen slot rename "before Elite Four" "Champion"
+UsumOneScreen slot delete "Champion"
+UsumOneScreen export PATH.zip [--slot NAME | --backup yyyyMMdd-HHmmss]
+UsumOneScreen import PATH.zip [--name NAME]
 UsumOneScreen cheats
 UsumOneScreen cheats on "Max money (9,999,999)"
 UsumOneScreen cheats off "Max money (9,999,999)"
@@ -130,9 +171,12 @@ UsumOneScreen set glyphs=auto|xbox|playstation|nintendo|3ds
 UsumOneScreen set layout=rail instant_text=on battle_messages=fast battle_bars=fast
 ```
 
-CLI restore is an explicit restore request and does not prompt; the window asks
+The `list` alias also lists backups. CLI load, restore and delete are explicit
+requests and do not prompt; the window asks
 for confirmation. Synthetic tests cover save discovery, retention, pre-restore
-backup, missing-save recovery, title isolation, cheat code preservation and shiny
+backup, missing-save recovery, title isolation, named slot lifecycle/name validation,
+slot retention and failed-safety-backup immutability, ZIP round trips, title mismatch,
+traversal/link/duplicate refusal, extdata exclusion, cheat code preservation and shiny
 exclusion, resolution presets/Keep, vendor mapping/fallbacks, option readback,
 battle/speed writes and layout at 100%/150%. Source-only builds without the optional
 embedded plugin use a synthetic adjacent plugin in tests. No emulator is started.

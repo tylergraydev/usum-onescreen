@@ -400,6 +400,20 @@ namespace CTRPluginFramework
             WriteLog(OneScreen::MemoryMap(), false);
         else if (std::sscanf(line.c_str(), "dump %x %x %15s", &a, &b, word) == 3)
             WriteLog(OneScreen::DumpMemory(a, b, word), false);
+        else if (line == "glyphs status")
+            WriteLog(std::string("glyphs: ") + OneScreen::GlyphFamilyName(OneScreen::GetSettings().glyphs), false);
+        else if (line.compare(0, 7, "glyphs ") == 0)
+        {
+            OneScreen::Settings settings = OneScreen::GetSettings();
+            const std::string arg = line.substr(7);
+            if (arg == "auto" || !OneScreen::ParseGlyphFamily(arg, settings.glyphs))
+                WriteLog("cmd: use glyphs 3ds|xbox|playstation|nintendo|status", false);
+            else
+            {
+                OneScreen::SetSettings(settings);
+                WriteLog(std::string("glyphs: ") + OneScreen::GlyphFamilyName(settings.glyphs), false);
+            }
+        }
         else if (line == "aspect")
             WriteLog(OneScreen::DescribeWidescreenAspect(), false);
         else if (line == "cullnames")
@@ -1003,33 +1017,33 @@ namespace CTRPluginFramework
 
     static void InitMenu(PluginMenu &menu)
     {
-        MenuEntry *panel = new MenuEntry("Bottom screen on top (L+R)", PanelEntry,
-                                         "Shows the bottom screen on the top screen. L+R cycles: off, small panel, full view. "
-                                         "C-stick moves the touch cursor, ZL touches. Keys are set in usum-onescreen.ini.");
+        MenuEntry *panel = new MenuEntry("Bottom screen on top", PanelEntry,
+                                         "Shows the bottom screen on the top screen. The panel combo cycles: off, small panel, full view. "
+                                         "Cursor controls and keys are set in usum-onescreen.ini.");
         menu += panel;
         panel->Enable();
 
         s_autoEntry = new MenuEntry("Auto panel", nullptr, ToggleAutoPanel,
-                                    "A: switch between following the scene and staying as set. "
+                                    "Switch between following the scene and staying as set. "
                                     "Lasts until the next boot; set auto in usum-onescreen.ini to keep it.");
         menu += s_autoEntry;
         s_layoutEntry = new MenuEntry("Battle layout", nullptr, CycleBattleLayout,
-                                      "A: change how the battle menu looks. Saved to usum-onescreen.ini.");
+                                      "Change how the battle menu looks. Saved to usum-onescreen.ini.");
         menu += s_layoutEntry;
         s_textEntry = new MenuEntry("Instant text", nullptr, ToggleInstantText,
-            "A: toggle instant typing. Page ends still need a press. Saved to usum-onescreen.ini.");
+            "Toggle instant typing. Page ends still need a press. Saved to usum-onescreen.ini.");
         menu += s_textEntry;
         s_speedEntry = new MenuEntry("Battle speed", nullptr, CycleBattleSpeed,
-            "A: cycle Normal, Fast, Instant for message waits and HP/EXP bars. Saved to usum-onescreen.ini.");
+            "Cycle Normal, Fast, Instant for message waits and HP/EXP bars. Saved to usum-onescreen.ini.");
         menu += s_speedEntry;
         menu += new MenuEntry("Open PC (Boxes)", nullptr, OpenPc,
-                              "A: open the PC boxes here, as at a Pokemon Center PC. Works in the overworld "
+                              "Open the PC boxes here, as at a Pokemon Center PC. Works in the overworld "
                               "when nothing else is going on; they open when this menu closes. "
                               "pc_key in usum-onescreen.ini sets a button combo for it.");
         menu += new MenuEntry("View settings", nullptr, ShowSettings,
-                              "A: show the settings in use, read from /usum-onescreen.ini at boot.");
+                              "Show the settings in use, read from /usum-onescreen.ini at boot.");
         menu += new MenuEntry("Reload settings file", nullptr, ReloadSettings,
-                              "A: read /usum-onescreen.ini again. Problems go to usum-onescreen.log.");
+                              "Read /usum-onescreen.ini again. Problems go to usum-onescreen.log.");
         RefreshMenuNames();
     }
 
