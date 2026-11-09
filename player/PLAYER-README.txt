@@ -51,10 +51,22 @@ Settings
   21:9 widescreen looks best on High or Ultra. Keep leaves Azahar's scale alone.
 - Button icons: Auto detects Xbox, PlayStation or Nintendo controllers;
   you can override it, including 3DS icons. Icon drawing needs a future plugin.
-- Backups...: Play backs up your save automatically, keeping the newest ten
+- Saves...: Play backs up your save automatically, keeping the newest ten
   per game in backups\TITLEID. Back up now, restore or open that folder here.
   Restore asks first and backs up the current save. Close Azahar first.
   Backups include save data only, not extdata. No save yet means no backup.
+  Named slots are kept separately until you delete them. Save the current save
+  with a name, load, rename or delete a slot on the Named slots tab. Names are
+  1-64 characters without path characters or leading/trailing spaces or dots;
+  names are unique per game (ignoring case). Load backs up your current save
+  first and asks for confirmation, as restore does. Slots live in slots\TITLEID.
+  Export the current save, a slot or a backup to a new ZIP file. Import a ZIP
+  exported by this launcher into a new named slot; imports don't change your
+  current save until you load them. The archive must declare the selected game.
+  Raw save files/folders are not supported. Close Azahar before saving/loading
+  or exporting the current save. Keep backups and use saves you trust.
+  An imported slot needs an existing portable SD identity; if loading cannot
+  find one unambiguously, start the game once first.
 - Cheats...: Back up first. Tick cheats, then Save; changes apply next start.
   Close Azahar before saving cheats. Shiny and its undo cannot both be on.
   Money/items stay changed after disabling cheats. Item cheats need an existing
@@ -74,3 +86,14 @@ Known problems
 
 If something goes wrong, the plugin's log is azahar\user\sdmc\usum-onescreen.log.
 Don't share game files, saves or keys when you report a problem.
+
+Save manager command line (add --home DIR to select a portable home)
+UsumOneScreen slot save "before Elite Four"
+UsumOneScreen slot load "before Elite Four"
+UsumOneScreen slot list
+UsumOneScreen slot rename "before Elite Four" "Champion"
+UsumOneScreen slot delete "Champion"
+UsumOneScreen export PATH.zip [--slot NAME | --backup yyyyMMdd-HHmmss]
+UsumOneScreen import PATH.zip [--name NAME]
+Export requires a new file. Import defaults to the ZIP filename as its slot name.
+CLI load, restore and delete act immediately, without a confirmation prompt.
