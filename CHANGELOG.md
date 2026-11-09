@@ -6,12 +6,17 @@ All notable changes for players are listed here. Versions follow [Semantic Versi
 
 ### Added
 
+- Native battle move descriptions: L toggles the selected move's own game text in all three layouts; L/B closes it.
+- Battle party shiny stars and HA pills, plus active player/first-foe command badges when their checked Pokemon data is available (emulator verification pending).
+
 - Windows launcher: automatic save backups before Play (ten per game), Backups dialog with restore and folder access, and backup/list/restore CLI commands. Portable saves only; extdata is excluded.
 - Game options for graphics resolution (Keep, 1x, 3x, 5x), battle layout, text/battle speed and automatic or manual controller icon families. Controller icon drawing follows in a future plugin update.
 - Cheats dialog and CLI with six embedded own-code cheats, separate Sun/Moon selections, preserved boot safety guards and exclusive shiny/undo choices. Back up first; changes apply next start.
 - The native PC boxes show each Pokémon's own box icon (the game's, read from your ROM) next to its name, in the box, the party row and under the cursor while moving one.
 
 ### Fixed
+
+- Battle teams selected from part of the field party no longer borrow nicknames/items from the wrong slot; metadata matches Pokemon identity and suppresses ambiguous matches.
 
 - The native map no longer crashes the game with widescreen (16:9 or 21:9) on. The map picture now squeezes like the rest of the game's 2D.
 - At a higher Azahar internal resolution, the game stays sharp while the plugin's menus, battle menu and Rotom prompt are on screen (they used to drop the whole picture to 400x240). The menus themselves are still 400x240 pictures, now with square corners. `layergpu off` brings back the old drawing.

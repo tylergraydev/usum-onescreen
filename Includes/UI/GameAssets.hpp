@@ -187,6 +187,7 @@ namespace UI
         std::vector<Image> balls;              // by ball item ID 1-16 (0 empty)
         std::vector<std::string> typeNames;    // the game's names, by type ID
         std::vector<MoveInfo> moves;           // by move ID
+        std::vector<std::string> moveDescriptions; // message file 117, by move ID
         std::vector<std::string> moveNames;    // by move ID
         std::string status;                    // one line per part, for the log
 

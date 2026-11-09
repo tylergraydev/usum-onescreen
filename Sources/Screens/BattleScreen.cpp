@@ -41,7 +41,7 @@ namespace OneScreen
         u16 id;
         std::string name;
     };
-    static std::vector<CachedName> s_moveNames, s_speciesNames, s_itemNames;
+    static std::vector<CachedName> s_moveNames, s_moveDescriptions, s_speciesNames, s_itemNames;
 
     // What the OSD callback draws, handed over under s_drawLock: the plugin
     // thread copies the menu and snapshot when what they show changes; the
@@ -80,6 +80,11 @@ namespace OneScreen
         return MoveName(state, move);
     }
 
+    static std::string LookupDescription(u16 move, const BattleState &)
+    {
+        return UI::AssetMoveDescription(move);
+    }
+
     static std::string LookupSpecies(u16 species, const BattleState &)
     {
         return SpeciesName(species);
@@ -90,36 +95,58 @@ namespace OneScreen
         return ItemName(item);
     }
 
-    // Nicknames, held items and status come from the party (RE3), by the
-    // battler record's party index; read when the party or Bag page opens
-    // and about once a second while it shows (decoding six Pokémon).
+    // Metadata follows the record pointer, not a battle-team/field-party index.
+    // Decode battle-owned PokemonParam first; field-party fallback only accepts
+    // an unambiguous identity match. Refresh at most once a second, immediately
+    // on a record reorder/menu transition, and clear across battle boundaries.
     struct PartyExtra
     {
+        u32 record = 0;
         bool valid = false;
         std::string nickname, item;
         u32 status = 0;
-        bool egg = false;
+        bool egg = false, shiny = false, hiddenAbility = false;
     };
-    static PartyExtra s_extra[6];
+    static PartyExtra s_extra[6], s_foeExtra;
 
-    static void ReadPartyExtra(u32 sceneManager)
+    static PartyExtra ReadExtra(const BattleMon &battle, const Pk7 field[6])
+    {
+        PartyExtra extra;
+        extra.record = battle.address;
+        Pk7 mon = ReadPokemonParam(battle.pokemonParam);
+        if (mon.form == Pk7Form::Invalid || mon.species != battle.species)
+        {
+            const int slot = MatchPartyIdentity(field, 6, battle.species, false, 0);
+            if (slot < 0) return extra;
+            mon = field[slot];
+        }
+        // If battle data supplies a PID, a field lookup must use that PID too.
+        // Prefer the battle copy's item/status: these may change during a turn.
+        const int slot = MatchPartyIdentity(field, 6, battle.species, true, mon.personality);
+        const Pk7 &named = slot >= 0 ? field[slot] : mon;
+        char nick[64];
+        Utf16ToUtf8(named.nickname, 13, nick, sizeof(nick));
+        extra.valid = true;
+        extra.nickname = nick;
+        extra.item = mon.heldItem ? ItemName(mon.heldItem) : std::string();
+        extra.status = mon.calcValid ? mon.status : 0;
+        extra.egg = mon.isEgg;
+        extra.shiny = mon.shiny;
+        extra.hiddenAbility = mon.hiddenAbility;
+        return extra;
+    }
+
+    static void ReadPartyExtra(u32 sceneManager, const BattleState &state)
     {
         const PartyState party = ReadParty(sceneManager);
+        Pk7 field[6];
+        if (party.valid)
+            for (u32 i = 0; i < party.count && i < 6; i++) field[i] = party.slots[i].mon;
         for (u32 i = 0; i < 6; i++)
-        {
-            PartyExtra &extra = s_extra[i];
-            extra = PartyExtra();
-            if (!party.valid || i >= party.count || party.slots[i].mon.form == Pk7Form::Invalid)
-                continue;
-            const Pk7 &mon = party.slots[i].mon;
-            char nick[64];
-            Utf16ToUtf8(mon.nickname, 13, nick, sizeof(nick));
-            extra.valid = true;
-            extra.nickname = nick;
-            extra.item = mon.heldItem ? ItemName(mon.heldItem) : std::string();
-            extra.status = mon.status;
-            extra.egg = mon.isEgg;
-        }
+            s_extra[i] = i < state.partyCount[0] ? ReadExtra(state.party[i], field) : PartyExtra();
+        // Never match a foe against the player's field party.
+        const Pk7 empty[6] = {};
+        s_foeExtra = ReadExtra(state.opponent, empty);
     }
 
     static void ReadSnapshot(u32 sceneManager)
@@ -129,6 +156,8 @@ namespace OneScreen
         snap.inBattle = state.valid;
         if (!state.valid)
         {
+            for (PartyExtra &extra : s_extra) extra = PartyExtra();
+            s_foeExtra = PartyExtra();
             s_snap = snap;
             return;
         }
@@ -146,6 +175,7 @@ namespace OneScreen
         {
             Screens::MoveRow &row = snap.moves[i];
             row.name = Cached(s_moveNames, row.move, LookupMove, state);
+            row.description = Cached(s_moveDescriptions, row.move, LookupDescription, state);
             // Details always come from the loaded move table; list type and
             // effectiveness still take precedence over the table's type.
             const UI::MoveInfo info = UI::AssetMove(row.move);
@@ -166,8 +196,11 @@ namespace OneScreen
                            || state.menu == BattleMenu::Bag;
         static bool listsBefore = false;
         static u32 extraFrames = 0;
-        if (lists && (!listsBefore || ++extraFrames % 30 == 0))
-            ReadPartyExtra(sceneManager);
+        bool reordered = s_foeExtra.record != state.opponent.address;
+        for (u8 i = 0; i < state.partyCount[0] && i < 6; i++)
+            reordered = reordered || s_extra[i].record != state.party[i].address;
+        if (reordered || (lists && !listsBefore) || ++extraFrames % 30 == 0)
+            ReadPartyExtra(sceneManager, state);
         listsBefore = lists;
         snap.partyCount = state.partyCount[0] < 6 ? state.partyCount[0] : 6;
         for (u8 i = 0; i < snap.partyCount; i++)
@@ -179,16 +212,26 @@ namespace OneScreen
             out.level = mon.level;
             out.hp = mon.hp;
             out.maxHp = mon.maxHp;
-            if (mon.partyIndex < 6 && s_extra[mon.partyIndex].valid)
+            if (s_extra[i].record == mon.address && s_extra[i].valid)
             {
-                const PartyExtra &extra = s_extra[mon.partyIndex];
+                const PartyExtra &extra = s_extra[i];
                 if (!extra.nickname.empty())
                     out.name = extra.nickname;
                 out.item = extra.item;
                 out.status = extra.status;
                 out.egg = extra.egg;
+                out.shiny = extra.shiny;
+                out.hiddenAbility = extra.hiddenAbility;
             }
         }
+
+        if (snap.partyCount > 0)
+        {
+            snap.activeShiny = snap.party[0].shiny;
+            snap.activeHiddenAbility = snap.party[0].hiddenAbility;
+        }
+        snap.foeShiny = s_foeExtra.shiny;
+        snap.foeHiddenAbility = s_foeExtra.hiddenAbility;
 
         if (state.menu == BattleMenu::Bag)
         {
@@ -243,6 +286,8 @@ namespace OneScreen
             ReadSnapshot(sceneManager);
         else if (!inBattle)
         {
+            for (PartyExtra &extra : s_extra) extra = PartyExtra();
+            s_foeExtra = PartyExtra();
             s_snap = Screens::BattleSnapshot();
             s_snap.afterCatch = s_enabled && afterCatch && scene == SceneDex;
         }

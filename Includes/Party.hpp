@@ -46,6 +46,7 @@ namespace OneScreen
         u16 capacity[(int)Pocket::Count] = {};  // slots per pocket
     };
 
+    Pk7 ReadPokemonParam(u32 param); // checked vtable, readable buffers, PK7 checksum
     PartyState ReadParty(u32 sceneManager);
     BagState ReadBag(void);
 

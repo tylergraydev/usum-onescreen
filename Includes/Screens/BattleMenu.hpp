@@ -39,6 +39,7 @@ namespace Screens
     {
         u16 move = 0;
         std::string name;
+        std::string description;
         u8 type = 0xFF;
         u8 effect = 0xFF;
         u8 pp = 0, maxPp = 0;
@@ -59,6 +60,7 @@ namespace Screens
         u32 status = 0;         // PK7 status word (PartyStatusName)
         std::string item;       // held item, empty if none
         bool egg = false;
+        bool shiny = false, hiddenAbility = false;
     };
 
     // One entry of the battle Bag's open pocket.
@@ -77,6 +79,8 @@ namespace Screens
         u8 gameCursor = 0;          // the game's highlighted entry
         u8 listCount = 0;           // entries in the game's list
         std::string activeName;     // the player's battler
+        bool activeShiny = false, activeHiddenAbility = false;
+        bool foeShiny = false, foeHiddenAbility = false;
         MoveRow moves[4];
         u8 moveCount = 0;
         // The battle party, in battle order.
@@ -143,8 +147,8 @@ namespace Screens
     }
 
     // Keys the menu keeps from the game while it is up (the circle pad too).
-    // Others (Y: the game's quick Poké Ball, L: move info, touch) pass. The
-    // Bag also keeps L and R (pockets).
+    // Y (quick ball) and touch pass. Moves also capture L (description);
+    // the Bag captures L/R (pockets).
     const u32 BattleMenuKeys = BattleKeys::A | BattleKeys::B | BattleKeys::DRight | BattleKeys::DLeft
                                | BattleKeys::DUp | BattleKeys::DDown;
     const u32 BattleBagKeys = BattleMenuKeys | BattleKeys::L | BattleKeys::R;
@@ -198,6 +202,7 @@ namespace Screens
 
         BattlePage Page(void) const { return m_page; }
         u8 Cursor(void) const { return m_cursor; }
+        bool DescriptionOpen(void) const { return m_description; }
         bool Pending(void) const { return m_pending; }
         u32 Stable(void) const { return m_stable; }   // frames on this page
         const std::string &Note(void) const { return m_note; }
@@ -276,6 +281,7 @@ namespace Screens
         bool m_fromGame = false;    // this page came from the game's Bag / Pokémon list
         u8 m_cursor = 0;
         u32 m_stable = 0;           // frames the game's menu has been up
+        bool m_description = false; // L toggles; reset on leaving moves
         bool m_pending = false;     // a choice was sent, the game hasn't moved yet
         u32 m_pendingFrames = 0;
         const char *m_queued = nullptr; // chosen before the menu settled
@@ -313,6 +319,9 @@ namespace Screens
         u32 m_gapFrames = 0;
         std::string m_busyText;
     };
+
+    // Description body, inside the existing moves window in every layout.
+    UI::Rect BattleDescriptionArea(BattleLayout layout);
 
     // Gen 7 type order: 0 Normal ... 17 Fairy. "?" if unknown.
     const char *TypeName(u8 type);
