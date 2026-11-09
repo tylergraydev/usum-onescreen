@@ -168,7 +168,13 @@ namespace Screens
         DrawMoveDetails(canvas, menu, snap, area);
         const Rect foot = { area.x + 4, area.Bottom() - 24, area.w - 8, Theme::PromptHeight + 2 };
         if (!Notice(canvas, foot, menu.Note()))
-            CompactText(canvas, "A Use  B Back  L Info", foot, Theme::WindowText);
+        {
+            // A third chip doesn't fit Classic's 210 px: L Info goes as text in what is left.
+            const s32 x = Prompts(canvas, foot.x, foot.y + 1, { { Theme::Button::A, "Use" }, { Theme::Button::B, "Back" } });
+            if (x < foot.Right())
+                CompactText(canvas, Theme::FormatPromptText("L Info"), Rect{ x, foot.y + 3, foot.Right() - x, 14 },
+                            Theme::WindowText);
+        }
     }
 
     // --- Pokémon list ---
