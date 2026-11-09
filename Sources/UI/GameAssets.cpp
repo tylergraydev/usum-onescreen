@@ -703,7 +703,7 @@ namespace UI
     static const char *FontGarc = "a/0/2/5";       // FFNT fonts; entry 0 is the menu font
     static const char *MoveGarc = "a/0/1/1";       // one "WD" pack, one entry per move
     static const char *ItemIconGarc = "a/0/6/1";   // item icons (LZ11 BFLIM), entry = item ID - 1 for items 1-17
-    static const u32 TypeNamesFile = 112, MoveNamesFile = 118;
+    static const u32 TypeNamesFile = 112, MoveNamesFile = 118, MoveDescriptionsFile = 117;
     static const u32 BallCount = 17;
 
     struct IconSource
@@ -859,6 +859,11 @@ namespace UI
             std::string moveError;
             if (!ReadMessageFile(read, garc, MoveNamesFile, out.moveNames, moveError))
                 out.moveNames.clear();
+            std::string descriptionError;
+            if (!ReadMessageFile(read, garc, MoveDescriptionsFile, out.moveDescriptions, descriptionError))
+                out.moveDescriptions.clear();
+            status.push_back("move descriptions: " + std::to_string(out.moveDescriptions.size())
+                             + (descriptionError.empty() ? "" : " (" + descriptionError + ")"));
             status.push_back("text: " + std::to_string(out.typeNames.size()) + " type names, "
                              + std::to_string(out.moveNames.size()) + " move names from " + garc
                              + (error.empty() && moveError.empty() ? "" : " (" + error + moveError + ")"));

@@ -29,7 +29,7 @@ namespace Screens
     // and the Bag cover the scene, as the game's own do on the bottom screen.
     static constexpr Rect CommandArea  = { 222, 48, 174, 188 };
     static constexpr Rect MovesArea    = { 186, 36, 210, 202 };
-    static constexpr Rect BarCommandArea = { 170, 182, 226, 54 };
+    static constexpr Rect BarCommandArea = { 170, 166, 226, 70 };
     static constexpr Rect BarMovesArea   = { 170, 74, 226, 164 };
     static constexpr Rect RailCommandArea = { 202, 52, 194, 186 };
     static constexpr Rect RailMovesArea  = { 170, 38, 226, 200 };
@@ -39,6 +39,13 @@ namespace Screens
     // and so do the battle's other questions: their helper goes at the top.
     static constexpr Rect CatchArea    = { 166, 8, 230, 78 };
     static constexpr Rect BagArea      = { 12, 8, 376, 224 };
+
+    Rect BattleDescriptionArea(BattleLayout layout)
+    {
+        const Rect area = layout == BattleLayout::Bar ? BarMovesArea
+                          : layout == BattleLayout::Rail ? RailMovesArea : MovesArea;
+        return Inset(area, 8, 25, 8, 25);
+    }
 
     static std::string Format(const char *fmt, unsigned a, unsigned b = 0)
     {
@@ -100,7 +107,17 @@ namespace Screens
         }
         const Rect foot = { area.x + 4, area.Bottom() - Theme::PromptHeight - 6, area.w - 8, Theme::PromptHeight + 2 };
         if (!Notice(canvas, foot, menu.Note()))
-            Prompts(canvas, area.x + 8, foot.y + 1, { { Theme::Button::A, "Choose" } });
+        {
+            if (snap.activeShiny || snap.activeHiddenAbility || snap.foeShiny || snap.foeHiddenAbility)
+            {
+                UI::TextStyle hint;
+                hint.font = Font::Small;
+                hint.color = Theme::WindowText;
+                UI::DrawText(canvas, "A Choose", Rect{ foot.x + 4, foot.y + 1, area.w - 106, foot.h }, hint);
+            }
+            else
+                Prompts(canvas, area.x + 8, foot.y + 1, { { Theme::Button::A, "Choose" } });
+        }
     }
 
     // --- Move list ---
@@ -151,7 +168,13 @@ namespace Screens
         DrawMoveDetails(canvas, menu, snap, area);
         const Rect foot = { area.x + 4, area.Bottom() - 24, area.w - 8, Theme::PromptHeight + 2 };
         if (!Notice(canvas, foot, menu.Note()))
-            Prompts(canvas, foot.x, foot.y + 1, { { Theme::Button::A, "Use" }, { Theme::Button::B, "Back" } });
+        {
+            // A third chip doesn't fit Classic's 210 px: L Info goes as text in what is left.
+            const s32 x = Prompts(canvas, foot.x, foot.y + 1, { { Theme::Button::A, "Use" }, { Theme::Button::B, "Back" } });
+            if (x < foot.Right())
+                CompactText(canvas, Theme::FormatPromptText("L Info"), Rect{ x, foot.y + 3, foot.Right() - x, 14 },
+                            Theme::WindowText);
+        }
     }
 
     // --- Pokémon list ---
@@ -265,7 +288,11 @@ namespace Screens
             x += widths[i] + 3;
         }
         if (!bar)
-            CompactText(canvas, Theme::FormatPromptText("A Choose"), Rect{ area.x + 12, area.Bottom() - 20, area.w - 24, 16 }, Theme::WindowText);
+        {
+            const bool markers = snap.activeShiny || snap.activeHiddenAbility || snap.foeShiny || snap.foeHiddenAbility;
+            CompactText(canvas, Theme::FormatPromptText("A Choose"), Rect{ area.x + 12, area.Bottom() - 20,
+                        markers ? area.w - 110 : area.w - 24, 16 }, Theme::WindowText);
+        }
     }
 
     static void EffectMarker(Canvas &canvas, const Rect &r, u8 effect)
@@ -330,7 +357,7 @@ namespace Screens
         DrawMoveDetails(canvas, menu, snap, area);
         const Rect foot = { area.x + 5, area.Bottom() - 19, area.w - 10, 13 };
         if (menu.Note().empty())
-            CompactText(canvas, Theme::FormatPromptText("A Use   B Back"), foot, Theme::WindowText);
+            CompactText(canvas, Theme::FormatPromptText("A Use  B Back  L Info"), foot, Theme::WindowText);
         else
             CompactText(canvas, menu.Note(), foot, Theme::WindowText);
     }
@@ -346,6 +373,8 @@ namespace Screens
             PartyMonView mon;
             mon.valid = true;
             mon.egg = m.egg;
+            mon.shiny = m.shiny;
+            mon.hiddenAbility = m.hiddenAbility;
             mon.name = m.name;
             mon.species = m.species;
             mon.level = m.level;
@@ -581,13 +610,53 @@ namespace Screens
         return m_page == BattlePage::Party ? PartyRadius : m_page == BattlePage::Bag ? 12 : Theme::WindowRadius;
     }
 
+    static void DrawBattlerMarkers(Canvas &canvas, const BattleMenu &menu, const BattleSnapshot &snap)
+    {
+        if (!menu.Note().empty()) return; // never draw over a refusal/status note
+        const Rect area = menu.Area();
+        const s32 y = menu.Layout() == BattleLayout::Bar ? 187 : area.Bottom() - 17;
+        s32 x = area.Right() - 94;
+        for (u8 side = 0; side < 2; side++, x += 44)
+        {
+            const bool shiny = side == 0 ? snap.activeShiny : snap.foeShiny;
+            const bool ha = side == 0 ? snap.activeHiddenAbility : snap.foeHiddenAbility;
+            if (!shiny && !ha) continue;
+            CompactText(canvas, side == 0 ? "P" : "F", Rect{ x, y, 8, 10 }, Theme::WindowText);
+            if (shiny) Theme::DrawShiny(canvas, x + 9, y);
+            if (ha)
+            {
+                const Rect pill = { x + 22, y, 20, 10 };
+                canvas.FillRoundRect(pill, 3, Theme::AccentText);
+                CompactText(canvas, "HA", pill, Theme::WindowLine, Align::Center);
+            }
+        }
+    }
+
     void BattleMenu::Draw(Canvas &canvas, const BattleSnapshot &snap) const
     {
+        if (m_page == BattlePage::Moves && m_description)
+        {
+            Theme::DrawWindow(canvas, Area());
+            const MoveRow empty;
+            const MoveRow &row = m_cursor < snap.moveCount && m_cursor < 4 ? snap.moves[m_cursor] : empty;
+            const Rect body = BattleDescriptionArea(m_layout);
+            CompactText(canvas, row.name, Rect{ body.x, Area().y + 5, body.w, 16 }, Theme::WindowText);
+            UI::TextStyle text;
+            text.font = Font::Small;
+            text.color = Theme::WindowText;
+            const auto lines = WrapText(row.description.empty() ? "Description unavailable" : row.description, body.w, text);
+            const s32 pitch = LineHeight(text) + 2;
+            for (size_t i = 0; i < lines.size() && (s32)(i + 1) * pitch <= body.h; i++)
+                UI::DrawText(canvas, lines[i], Rect{ body.x, body.y + (s32)i * pitch, body.w, pitch }, text);
+            CompactText(canvas, Theme::FormatPromptText("L/B Close  Up/Down Move"), Rect{ body.x, Area().Bottom() - 20, body.w, 14 }, Theme::WindowText);
+            return;
+        }
         switch (m_page)
         {
         case BattlePage::Command:
             if (m_layout == BattleLayout::Classic) DrawCommand(canvas, *this, snap);
             else DrawNewCommand(canvas, *this, snap);
+            DrawBattlerMarkers(canvas, *this, snap);
             break;
         case BattlePage::Moves:
             if (m_layout == BattleLayout::Classic) DrawMoves(canvas, *this, snap);
@@ -606,7 +675,9 @@ namespace Screens
     {
         std::string key = Format("%u %u", (unsigned)m_page, m_cursor) + (m_pending ? "p" : "") + "|" + m_note + "|"
                           + m_busyText;
-        key += Format("|layout %u", (unsigned)m_layout);
+        key += Format("|layout %u", (unsigned)m_layout) + (m_description ? "|description" : "");
+        key += Format("|markers %u %u", snap.activeShiny, snap.activeHiddenAbility)
+               + Format(" %u %u", snap.foeShiny, snap.foeHiddenAbility);
         switch (m_page)
         {
         case BattlePage::Command:
@@ -616,7 +687,7 @@ namespace Screens
             for (u8 i = 0; i < snap.moveCount; i++)
             {
                 const MoveRow &row = snap.moves[i];
-                key += "|" + row.name + row.typeName + Format(" %u %u", row.move, row.type)
+                key += "|" + row.name + row.typeName + row.description + Format(" %u %u", row.move, row.type)
                        + Format(" %u %u", row.effect, row.pp) + Format(" %u", row.maxPp)
                        + Format(" %u %u", row.power, row.accuracy) + Format(" %u", row.category);
             }
@@ -629,7 +700,8 @@ namespace Screens
             for (u8 i = 0; i < snap.partyCount; i++)
             {
                 const BattlePartyMon &m = snap.party[i];
-                key += "|" + m.name + m.item + Format(" %u %u", m.level, m.hp) + Format(" %u %u", m.maxHp, m.status);
+                key += "|" + m.name + m.item + Format(" %u %u", m.level, m.hp) + Format(" %u %u", m.maxHp, m.status)
+                       + Format(" %u %u", m.shiny, m.hiddenAbility);
             }
             if (m_page == BattlePage::Bag)
                 for (u8 i = 0; i < snap.bagItemCount; i++)

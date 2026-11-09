@@ -99,6 +99,7 @@ namespace OneScreen
         // PK7 AbilityNumber is +0x15 (low 3 bits); +0x16 is markings.
         mon.hiddenAbility = (plain[0x15] & 7) == 4;
         const u32 pid = Get32(plain, 0x18);
+        mon.personality = pid;
         mon.shiny = (Get16(plain, 0x0C) ^ Get16(plain, 0x0E) ^ (pid >> 16) ^ (pid & 0xFFFF)) < 16;
         const u32 iv32 = Get32(plain, 0x74);
         const u8 storedStat[6] = { 0, 1, 2, 4, 5, 3 };
@@ -159,6 +160,21 @@ namespace OneScreen
         slot.freeSpace = (word >> 20) & 0x3FF;
         slot.isNew = (word >> 30) & 1;
         return slot;
+    }
+
+    int MatchPartyIdentity(const Pk7 *party, u32 count, u16 species, bool havePid, u32 pid)
+    {
+        int found = -1;
+        for (u32 i = 0; i < count && i < 6; i++)
+        {
+            if (party[i].form == Pk7Form::Invalid || party[i].species != species
+                || (havePid && party[i].personality != pid))
+                continue;
+            if (found != -1)
+                return -1;
+            found = (int)i;
+        }
+        return found;
     }
 
     u32 DecryptMsgLine(const u16 *encrypted, u32 length, u32 line, u16 *out, u32 cap)

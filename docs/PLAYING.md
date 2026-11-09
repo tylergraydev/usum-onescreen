@@ -183,6 +183,14 @@ The defaults in the settings file's `[scenes]` section are: off for the title sc
 
 On the first run the plugin writes a commented `usum-onescreen.ini` in the root of the emulated SD card (`%APPDATA%\Azahar\sdmc\usum-onescreen.ini`). It sets the keys (`panel_key`, `touch_key`, `map_key`, cursor speed), the panel `size` and `corner`, `auto`, the battle menu `layout`, and the per-scene views. Unknown keys and bad values are skipped and logged. **Reload settings file** in the plugin menu (**Select**) reads it again without restarting. The full list is in the "Settings" section of [README.md](../README.md).
 
+On the native move list, **L** toggles the selected move's in-game description.
+**Up/Down** changes the selected move while reading; **L or B** closes the
+text, and **A** is ignored until it is closed. L is captured on this page;
+Bag L/R still changes pockets. The battle Pokemon list shows shiny stars
+and **HA** (hidden ability) pills. Command-menu badges use **P** for your
+active Pokemon and **F** for client 1's first foe, when readable. Foe data
+and the new controls still need emulator verification; see [BATTLE-UI.md](BATTLE-UI.md).
+
 ### Battle menu layout
 
 `[battle] layout` picks how the native battle menu looks: `classic` (the default, the original column on the right of the top screen), `bar` or `rail` (horizontal layouts, see [BATTLE-UI.md](BATTLE-UI.md)). Case doesn't matter; a bad value is logged and the default is kept.

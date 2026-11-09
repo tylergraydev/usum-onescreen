@@ -243,3 +243,22 @@ Full write-up: [ROTOM-FIELD.md](ROTOM-FIELD.md). Used by `Sources/Screens/RotomP
 - Rotom's data (main image, vtable `0x648698`; `0x33F81310`, SaveData `+0xF6F9E8` here): `+0x5A` bit 0 = a chat is ready, bits 1-7 count to 10 (`0x2ED50C`, called from `0x3A67E0`); `+0x5B` bits 0-6 affection (≤ 60, `0x2ED66C`); `+0x08` eight request slots (u32 line, u32 extra; empty `0x7FFFFFFF`, `-1`; `0x2ED650`, `0x2ED628`) for chats the field starts. Both counters read 0 after Continue and rose about once per 30-60 s; ready came ~5 min after boot and after a chat.
 - Message file 89 of `a/0/3/<lang>` (`a/0/3/2` English, 1488 lines): Rotom's lines. `[VAR 0100]` the player's name, `[VAR 0189]` what Rotom calls the player (the name on this save), `[VAR BE00]`/`[VAR BE01]` line/page breaks.
 - Touch on Rotom (FieldMenu `0x7F7C74`, applet vtable slot 21): the face (`field.rotom_face`) opens the Pokédex; the left eye (86,48) starts a chat or the Roto Loto while `+0x5A` bit 0 is set, else does nothing visible. During the Roto Loto any touch goes on (`0x7F72C0`).
+
+## Battle descriptions / Pokemon identity and markers (#2 / #13)
+
+| Location | Meaning | Verification |
+|---|---|---|
+| RomFS `a/0/3/<lang>`, dat 117, line = move ID | Move description (names dat 118); English 730 lines | **Verified offline** by decoding local update GARC; runtime display pending |
+| `0x671A10` u8 | Current language 0..9 for asset loader | Existing RE2 path, unchanged |
+| Battle scene +0x94 -> view +0xD0 -> container +4 + client*0x1C | Six record pointers; count +0x18; record[0] active | Existing live RE1/research path; observed container 0x30000400 is NOT hardcoded |
+| Battler record +0x00 u32 | Candidate battle-owned PokemonParam pointer | **Static inference, runtime unverified**: Battle+0x7DEF4 loads it, +0x7DEFC passes it to imported accessor +0x1810; +0x7DF00..+0x7DF14 passes it to +0x7DF18 (battle HP/ability refresh) |
+| PokemonParam vtable `0x649374`, +4 core pointer, +8 calc pointer | Reuse `ReadPokemonParam` / `DecodePk7` | Existing field-party layout verified in RE3; battle use **unverified**, guarded by vtable/readability/checksum/species |
+| Unshuffled PK7 core +0x0C u16, +0x0E u16, +0x18 u32 | TID, SID, PID; shiny XOR <16 | Existing Party/Boxes decoder; synthetic tests across encrypted/decrypted forms and all shuffles |
+| Unshuffled PK7 core +0x15 low 3 bits | Ability slot 4 = HA (1/2 = ordinary slots) | Existing Party/Boxes decoder, host-tested; battler ability ID +0x16 is insufficient |
+| GameManager `*(0x6A59C4)` +0x24 -> GameData +0x0C -> PokeParty | Field-party metadata fallback, six Param pointers, count +0x18 | Existing RE3; now matched by PID+species when known or unique species otherwise; **never battle-team index** |
+
+No new absolute game addresses. The PokemonParam candidate is followed on
+both sides, but the foe never falls back to the player's field party.
+Unreadable/ambiguous data suppresses markers; P/F mean client 0/client 1
+record 0, not all active battlers. Runtime validation and test recipes:
+[BATTLE-UI.md](BATTLE-UI.md#review--emulator-checks).
