@@ -205,7 +205,7 @@ namespace UsumOneScreen
             var hint = Caption("21:9 widescreen looks best on High or Ultra.");
             g.Controls.Add(hint, 0, 3); g.SetColumnSpan(hint, 4);
             var buttons = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill };
-            var backups = new Button { Text = "Backups\u2026", AutoSize = true };
+            var backups = new Button { Text = "Saves\u2026", AutoSize = true };
             var cheats = new Button { Text = "Cheats\u2026", AutoSize = true };
             backups.Click += (s, e) => { if (!busy) OptionDialogs.ShowBackups(this, home); };
             cheats.Click += (s, e) => { if (!busy) OptionDialogs.ShowCheats(this, home); };

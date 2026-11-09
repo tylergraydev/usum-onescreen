@@ -20,8 +20,14 @@ namespace UsumOneScreen
                          start the game; --wait prints the plugin's boot log
   set KEY=VALUE...       plugin settings (panel_key touch_key map_key cursor_move
                          cursor_speed size corner auto aspect) and controls=PRESET
-  backup / backups       create / list save backups
+  backup / backups (or list)  create / list save backups
   restore NAME           restore a backup (backs up the current save first)
+  slot save NAME / load NAME / list / rename OLD NEW / delete NAME
+                         named saves per game; load backs up current save first
+  export PATH [--slot NAME | --backup NAME]
+                         export save ZIP to a new file (default: current save)
+  import PATH [--name NAME]
+                         import matching save ZIP into a new slot
   cheats [on NAME|off NAME]  list / change cheats
   set graphics=keep|native|high|ultra  set rendering resolution
   status                 show the setup
@@ -57,12 +63,22 @@ namespace UsumOneScreen
                         Leftover(list);
                         Console.WriteLine(Backups.Create(home) ?? "No save yet; skipped."); return 0;
                     case "backups":
+                    case "list":
                         Leftover(list);
                         foreach (var path in Backups.List(home)) Console.WriteLine(System.IO.Path.GetFileName(path) + "  " + Backups.Size(home, path) + " bytes");
                         return 0;
                     case "restore":
                         if (list.Count != 1) throw new SetupException("restore needs one backup NAME");
                         Backups.Restore(home, list[0]); Console.WriteLine("Save restored."); return 0;
+                    case "slot": return SlotCommand(home, list);
+                    case "export":
+                        string slot = Take(list, "--slot"), backup = Take(list, "--backup");
+                        if (list.Count != 1) throw new SetupException("export needs PATH [--slot NAME | --backup NAME]");
+                        SaveArchive.Export(home, list[0], slot, backup); Console.WriteLine("Save exported."); return 0;
+                    case "import":
+                        string name = Take(list, "--name");
+                        if (list.Count != 1) throw new SetupException("import needs PATH [--name NAME]");
+                        Console.WriteLine("Slot imported: " + SaveArchive.Import(home, list[0], name)); return 0;
                     case "cheats": return CheatCommand(home, list);
                     case "status": return Status(home);
                     case "snapshot": return Snapshot(home, list);
@@ -76,6 +92,21 @@ namespace UsumOneScreen
                 Console.Error.WriteLine("error: " + e.Message);
                 return 1;
             }
+        }
+
+        static int SlotCommand(Home home, List<string> args)
+        {
+            if (args.Count == 1 && args[0] == "list")
+            {
+                foreach (string path in SaveSlots.List(home)) Console.WriteLine(SaveSlots.Name(path) + "  " + Backups.Size(home, System.IO.Path.Combine(path, "data")) + " bytes");
+                return 0;
+            }
+            if (args.Count == 3 && args[0] == "rename") SaveSlots.Rename(home, args[1], args[2]);
+            else if (args.Count == 2 && args[0] == "save") SaveSlots.Save(home, args[1]);
+            else if (args.Count == 2 && args[0] == "load") SaveSlots.Load(home, args[1]);
+            else if (args.Count == 2 && args[0] == "delete") SaveSlots.Delete(home, args[1]);
+            else throw new SetupException("slot needs save NAME, load NAME, list, rename OLD NEW or delete NAME");
+            Console.WriteLine("Slot " + args[0] + " complete."); return 0;
         }
 
         static int Window(Home home)
