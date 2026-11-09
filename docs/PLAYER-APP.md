@@ -59,7 +59,7 @@ It never ships, downloads or explains how to get game files or keys.
 ## Save protection and game options
 
 The launcher now backs up the selected game's portable save before every Play,
-with a Backups dialog and `backup`, `backups`, `restore NAME` CLI commands.
+with a Saves dialog and `backup`, `backups` (also `list`), `restore NAME` CLI commands.
 It follows Home.cs's existing ID0/ID1 enumeration under
 `azahar/user/sdmc/Nintendo 3DS/<id0>/<id1>/title/00040000/<001b5000 or 001b5100>/data/`.
 Snapshots live in `<home>/backups/<UPPERCASE TITLEID>/<yyyyMMdd-HHmmss>/`, with
@@ -69,8 +69,34 @@ and replaces the save with rollback on a failed swap. Missing saves are skipped;
 ambiguous or linked paths are refused. Extdata is excluded because Home.cs has
 no known extdata path. The real `%APPDATA%/Azahar` remains unused.
 
+Permanent named slots are separate from the ten rotating backups:
+`<home>/slots/<UPPERCASE TITLEID>/<GUID>/` contains UTF-8 `name.txt`, `data/`,
+and a relative `source.txt` for locally captured saves. Names are case-insensitively
+unique per game, 1-64 characters, without path/control characters or edge whitespace
+or trailing dots. Save/load/rename/delete work through the Saves dialog and
+`slot save NAME`, `slot load NAME`, `slot list`, `slot rename OLD NEW`,
+`slot delete NAME`. Loading uses the existing staged restore and safety backup;
+a failed safety backup leaves the active save intact. Slots are never pruned.
+
+Saves has Named slots and Backups tabs, with sizes, folder access and selected-item
+export. A bottom row exports the current save or imports a ZIP into a new named
+slot. Loading/restoring/deleting confirms in the UI; explicit CLI commands do not.
+`export PATH [--slot NAME | --backup NAME]` exports to a new file; `import PATH
+[--name NAME]` creates a slot (default name: filename stem). ZIPs contain only
+`data/` and `manifest.txt` with format version 1, game `title_id`, UTC export
+`date`, `source`, and `launcher_version` from the assembly. Import checks the
+selected game's exact title, refuses missing metadata, traversal, absolute/device
+paths, links, duplicate names and unexpected entries, and caps uncompressed data
+at 256 MiB / 4096 entries. Raw files/folders are deliberately unsupported because
+they lack reliable title metadata. The manifest is a declaration, not proof of
+a save's internal game format. Export cannot overwrite an existing file or write
+under the emulator, slots or backups trees. Imported slots omit SD identities;
+load uses the current save or a sole existing identity, otherwise asks the player
+to start the game once. Synthetic regression tests cover these operations;
+interactive Saves dialog and real save imports still need player validation.
+
 A Game options group holds Widescreen, Battle menu, Text and battle speed,
-Graphics and Button icons; Backups and Cheats buttons sit below them. The layout
+Graphics and Button icons; Saves and Cheats buttons sit below them. The layout
 uses autosizing and scrolling for smaller windows and high DPI. Options read back
 from the INIs on opening. Mixed speed settings remain Custom until changed.
 Graphics defaults to Keep (no resolution writes); Native/High/Ultra set

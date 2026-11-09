@@ -19,13 +19,13 @@ namespace UsumOneScreen
                 if ((Directory.Exists(p) || File.Exists(p)) && (File.GetAttributes(p) & FileAttributes.ReparsePoint) != 0)
                     throw new SetupException("Save backups refuse linked files or folders.");
         }
-        static void CheckTree(Home home, string path)
+        internal static void CheckTree(Home home, string path)
         {
             Safe(home, path);
             foreach (string file in Directory.GetFiles(path)) Safe(home, file);
             foreach (string dir in Directory.GetDirectories(path)) CheckTree(home, dir);
         }
-        static void Copy(Home home, string source, string target)
+        internal static void Copy(Home home, string source, string target)
         {
             Safe(home, source); Safe(home, target);
             Directory.CreateDirectory(target);
@@ -102,14 +102,28 @@ namespace UsumOneScreen
             string backup = Path.Combine(Folder(home), name);
             Safe(home, backup);
             if (!Directory.Exists(backup)) throw new SetupException("Backup not found.");
+            Safe(home, Path.Combine(backup, "source.txt"));
+            if (!File.Exists(Path.Combine(backup, "source.txt"))) throw new SetupException("Invalid backup save path.");
+            RestoreSnapshot(home, backup);
+        }
+        internal static void RestoreSnapshot(Home home, string backup, string fallbackTarget = null)
+        {
+            if (home.IsRunning()) throw new SetupException("Close Azahar before restoring a save.");
             CheckTree(home, backup);
-            string relative = File.ReadAllText(Path.Combine(backup, "source.txt"));
-            string[] parts = relative.Split(Path.DirectorySeparatorChar);
-            string low = (home.CurrentTitle & 0xffffffff).ToString("x8");
-            if (parts.Length != 7 || parts[0] != "Nintendo 3DS" || parts[1] == "." || parts[1] == ".." || parts[2] == "." || parts[2] == ".." ||
-                parts[3] != "title" || parts[4] != "00040000" || parts[5] != low || parts[6] != "data")
-                throw new SetupException("Invalid backup save path.");
-            string target = SavePath(home) ?? Path.Combine(home.Sdmc, relative);
+            string sourceFile = Path.Combine(backup, "source.txt");
+            string relative = File.Exists(sourceFile) ? File.ReadAllText(sourceFile) : null;
+            string target;
+            if (relative == null)
+                target = SavePath(home) ?? fallbackTarget ?? throw new SetupException("No save destination; start the game once first.");
+            else
+            {
+                string[] parts = relative.Split(Path.DirectorySeparatorChar);
+                string low = (home.CurrentTitle & 0xffffffff).ToString("x8");
+                if (parts.Length != 7 || parts.Any(p => p.Length == 0 || p.EndsWith(".") || p.EndsWith(" ") || p.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) || parts[0] != "Nintendo 3DS" ||
+                    parts[3] != "title" || parts[4] != "00040000" || parts[5] != low || parts[6] != "data")
+                    throw new SetupException("Invalid backup save path.");
+                target = SavePath(home) ?? Path.Combine(home.Sdmc, relative);
+            }
             Safe(home, target);
             if (Directory.Exists(target)) CheckTree(home, target);
             string staging = target + ".restore-" + Guid.NewGuid().ToString("N"), previous = staging + ".old";
