@@ -1,3 +1,4 @@
+#include "UI/Icons.hpp"
 #include "Screens/MapView.hpp"
 
 #include <algorithm>
@@ -202,11 +203,22 @@ namespace OneScreen
         const UI::Rect badge{ x + 4, y + (T::PromptHeight - 16) / 2, w - 8, 16 };
         canvas.FillRoundRect(badge, 8, Rgb(0xFF, 0xFF, 0xFF));
         canvas.FillRoundRect(UI::Inset(badge, 1), 7, Rgb(0x10, 0x10, 0x10));
+        if (GetSettings().glyphs != GlyphFamily::ThreeDS)
+            for (unsigned b = 0; b < 10; ++b)
+            {
+                const auto button = (T::Button)b;
+                if (T::Upper(key) == T::ButtonName(button, GlyphFamily::ThreeDS))
+                {
+                    UI::DrawControllerBadge(canvas, badge, button, GetSettings().glyphs,
+                                            T::ButtonName(button, GetSettings().glyphs));
+                    return;
+                }
+            }
         T::TextStyle s;
         s.size = T::TextSize::Small;
         s.color = T::PromptText;
         s.align = UI::Align::Center;
-        T::DrawText(canvas, key, badge, s);
+        T::DrawText(canvas, T::FormatPromptText(key), badge, s);
     }
 
     void DrawMap(UI::Canvas &canvas, const MapView &view)

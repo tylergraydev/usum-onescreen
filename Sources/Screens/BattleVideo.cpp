@@ -156,10 +156,10 @@ namespace OneScreen
             DrawScreenPrompts(canvas, area, { { Button::B, "Back" } }, {});
         }
         else
-            DrawMessageWindow(canvas, inner, "The Vs. Recorder shows something this\n"
+            DrawMessageWindow(canvas, inner, UI::Theme::FormatPromptText("The Vs. Recorder shows something this\n"
                                              "screen doesn't know yet (a list of videos?).\n"
                                              "L+R shows the bottom screen on top.\n"
-                                             "Keys go to the game here.");
+                                             "Keys go to the game here."));
     }
 
     std::string VideoScreen::Status(void) const

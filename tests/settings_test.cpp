@@ -388,6 +388,36 @@ static void TestPillarbox(void)
     CHECK(warnings.size() == 1);
 }
 
+static void TestGlyphs(void)
+{
+    std::vector<std::string> warnings;
+    CHECK(Settings{}.glyphs == GlyphFamily::ThreeDS);
+    const char *values[] = { "3ds", "xbox", "playstation", "nintendo", "auto" };
+    const GlyphFamily families[] = { GlyphFamily::ThreeDS, GlyphFamily::Xbox,
+        GlyphFamily::PlayStation, GlyphFamily::Nintendo, GlyphFamily::ThreeDS };
+    for (unsigned i = 0; i < 5; ++i)
+    {
+        const Settings s = Parse(std::string("[controls]\nglyphs = ") + values[i], warnings);
+        CHECK(warnings.empty());
+        CHECK(s.glyphs == families[i]);
+        CHECK(DescribeSettings(s).find(std::string("glyphs ") + GlyphFamilyName(families[i])) != std::string::npos);
+        SetSettings(s);
+        CHECK(GetSettings().glyphs == families[i]);
+    }
+    CHECK(Parse("[CONTROLS]\nGLYPHS = PlayStation", warnings).glyphs == GlyphFamily::PlayStation);
+    CHECK(warnings.empty());
+    CHECK(Parse("[controls]\nglyphs=xbox\nglyphs=bad", warnings).glyphs == GlyphFamily::ThreeDS);
+    CHECK(warnings.size() == 1);
+    CHECK(warnings[0].find("line 3: bad glyphs 'bad'") != std::string::npos);
+    CHECK(Parse("[controls]\nglyphs=bad", warnings).glyphs == GlyphFamily::ThreeDS);
+    CHECK(warnings.size() == 1);
+    CHECK(Parse("[controls]\nglyphs=xbox\nglyphs=", warnings).glyphs == GlyphFamily::ThreeDS);
+    CHECK(warnings.size() == 1);
+    CHECK(Parse(DefaultSettingsText(), warnings).glyphs == GlyphFamily::ThreeDS);
+    CHECK(warnings.empty());
+    SetSettings(Settings{});
+}
+
 int main(void)
 {
     TestDefaultsMatchOldBehaviour();
@@ -404,6 +434,7 @@ int main(void)
     TestBattleLayout();
     TestCurrentSettings();
     TestPillarbox();
+    TestGlyphs();
     TestSpeedSettings();
     TestSpeedPatches();
 

@@ -16,7 +16,7 @@ TESTS    := $(OUT)/image_test $(OUT)/hires_test $(OUT)/band_column_test $(OUT)/l
 
 $(OUT)/hires_test: hires_test.cpp ../Sources/UI/Raster.cpp ../Sources/UI/Text.cpp ../Sources/UI/Font.cpp ../Sources/UI/Layer.cpp $(wildcard ../Includes/UI/*.hpp)
 	@mkdir -p $(OUT)
-	$(CXX) $(CXXFLAGS) hires_test.cpp ../Sources/UI/Raster.cpp ../Sources/UI/Text.cpp ../Sources/UI/Font.cpp ../Sources/UI/Layer.cpp -o $@
+	$(CXX) $(CXXFLAGS) hires_test.cpp ../Sources/UI/Raster.cpp ../Sources/UI/Text.cpp ../Sources/UI/Font.cpp ../Sources/UI/Layer.cpp $(SETTINGS_SRCS) -o $@
 
 $(OUT)/image_test: image_test.cpp ../Sources/UI/Raster.cpp $(wildcard ../Includes/UI/*.hpp)
 	@mkdir -p $(OUT)
@@ -26,7 +26,7 @@ all: run
 
 $(OUT)/band_column_test: band_column_test.cpp ../Sources/UI/Layer.cpp ../Sources/UI/Raster.cpp $(wildcard ../Includes/UI/*.hpp) ../Includes/Settings.hpp
 	@mkdir -p $(OUT)
-	$(CXX) $(CXXFLAGS) band_column_test.cpp ../Sources/UI/Layer.cpp ../Sources/UI/Raster.cpp -o $@
+	$(CXX) $(CXXFLAGS) band_column_test.cpp ../Sources/UI/Layer.cpp ../Sources/UI/Raster.cpp $(SETTINGS_SRCS) -o $@
 
 $(OUT)/layer_runs_test: layer_runs_test.cpp ../Includes/UI/LayerRuns.hpp
 	@mkdir -p $(OUT)
@@ -42,6 +42,8 @@ $(OUT)/field_settle_test: field_settle_test.cpp ../Includes/FieldSettle.hpp
 
 SETTINGS_SRCS := ../Sources/Settings.cpp ../Sources/SettingsFile.cpp
 SETTINGS_HDRS := ../Includes/Settings.hpp ../Includes/SettingsFile.hpp
+
+$(OUT)/hires_test $(OUT)/band_column_test: $(SETTINGS_SRCS) $(SETTINGS_HDRS)
 
 $(OUT)/pc_anywhere_test: pc_anywhere_test.cpp ../Includes/PcAnywhereRules.hpp $(SETTINGS_SRCS) $(SETTINGS_HDRS)
 	@mkdir -p $(OUT)
@@ -63,7 +65,7 @@ $(OUT)/party_data_test: party_data_test.cpp ../Sources/PartyData.cpp ../Includes
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) party_data_test.cpp ../Sources/PartyData.cpp -o $@
 
-UI_SRCS  := $(addprefix ../Sources/UI/,Raster.cpp Text.cpp Font.cpp Layer.cpp Icons.cpp Demo.cpp)
+UI_SRCS  := $(SETTINGS_SRCS) $(addprefix ../Sources/UI/,Raster.cpp Text.cpp Font.cpp Layer.cpp Icons.cpp Glyphs.cpp Demo.cpp)
 UI_HDRS  := $(wildcard ../Includes/UI/*.hpp) ../Includes/Settings.hpp
 PREVIEW  := ../analysis/private/ui-demo.png
 XMENU_PREVIEW := ../analysis/private/xmenu-preview.ppm
