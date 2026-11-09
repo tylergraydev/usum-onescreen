@@ -191,6 +191,7 @@ namespace Screens
             m_forced = !m_sentPokemon;
         if (page != BattlePage::Hidden)
             m_sentPokemon = false;
+        m_description = false;
         m_page = page;
         m_menu = snap.menu;
         m_afterCatch = snap.afterCatch;
@@ -678,7 +679,7 @@ namespace Screens
             return out;
         }
         out.capture = true;
-        out.keys = BattleMenuKeys;
+        out.keys = BattleMenuKeys | (m_page == BattlePage::Moves ? BattleKeys::L : 0);
 
         if (m_pending && ++m_pendingFrames > PendingFrames)
         {
@@ -694,6 +695,18 @@ namespace Screens
         if (snap.actionRunning || m_pending)
             return out;
 
+        if (m_page == BattlePage::Moves && m_queued == nullptr && (pressed & BattleKeys::L))
+        {
+            m_description = !m_description;
+            return out;
+        }
+        if (m_description && (pressed & BattleKeys::B))
+        {
+            m_description = false;
+            return out;
+        }
+        if (m_description)
+            pressed &= ~BattleKeys::A; // reading cannot accidentally send a move
         if (m_queued == nullptr)
         {
             if (pressed & (BattleKeys::Up | BattleKeys::Down)

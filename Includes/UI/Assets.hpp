@@ -54,6 +54,8 @@ namespace UI
     // Move data and names from the game's tables; `fallback` (or an invalid
     // MoveInfo) while they aren't loaded or the ID is out of range.
     MoveInfo AssetMove(u16 move);
+    // Game-language description, message file 117; empty until assets load.
+    std::string AssetMoveDescription(u16 move);
     std::string AssetMoveName(u16 move, const std::string &fallback = "");
     std::string AssetTypeName(u8 type, const std::string &fallback = "");
 

@@ -32,6 +32,7 @@ namespace OneScreen
     {
         Pk7Form form = Pk7Form::Invalid;
         u32 encryptionConstant = 0;
+        u32 personality = 0;        // PID, plain core +0x18
         u16 species = 0;            // national dex number
         u16 heldItem = 0;
         u8  ability = 0;            // ability ID (0x14)
@@ -62,6 +63,11 @@ namespace OneScreen
     // the blocks unshuffled in RAM.)
     Pk7 DecodePk7(const u8 *core, const u8 *calc);
 
+    // Match field-party metadata to a battle identity. PID 0 is valid when
+    // havePid is true. Without a PID only a unique species match is safe.
+    // Returns -1 for missing/ambiguous/invalid entries; never uses team index.
+    int MatchPartyIdentity(const Pk7 *party, u32 count, u16 species, bool havePid, u32 pid);
+
     // Inverse of the decoding, for tests: shuffles and encrypts a plain core
     // (with a correct checksum written) and encrypts the stats.
     void EncodePk7(u8 *core, u8 *calc);
@@ -88,7 +94,7 @@ namespace OneScreen
     // tags (0x0010 ...); a plural tag keeps the singular ending. Writes at
     // most cap - 1 units and a 0. Returns the number of units written
     // (without the 0).
-    static const u32 MsgLineMax = 128;
+    static const u32 MsgLineMax = 512; // descriptions exceed the old 128-unit name limit
     u32 DecryptMsgLine(const u16 *encrypted, u32 length, u32 line, u16 *out, u32 cap);
 
     // Appends UTF-16 text (0-terminated or `cap` units) to `out` as UTF-8.

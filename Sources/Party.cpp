@@ -137,6 +137,17 @@ namespace OneScreen
         state.screenCursor = cursor < state.count ? (s8)cursor : -1;
     }
 
+    Pk7 ReadPokemonParam(u32 param)
+    {
+        if (!Readable(param, 0x10) || Read32(param) != VtPokemonParam)
+            return Pk7();
+        u8 core[Pk7CoreSize], calc[Pk7CalcSize];
+        if (!ReadBytes(Read32(param + ParamCore), core, Pk7CoreSize))
+            return Pk7();
+        const bool haveCalc = ReadBytes(Read32(param + ParamCalc), calc, Pk7CalcSize);
+        return DecodePk7(core, haveCalc ? calc : nullptr);
+    }
+
     PartyState ReadParty(u32 sceneManager)
     {
         PartyState state;
@@ -158,11 +169,7 @@ namespace OneScreen
             if (!Readable(param, 0x10) || Read32(param) != VtPokemonParam)
                 continue;
             slot.address = param;
-            u8 core[Pk7CoreSize], calc[Pk7CalcSize];
-            if (!ReadBytes(Read32(param + ParamCore), core, Pk7CoreSize))
-                continue;
-            const bool haveCalc = ReadBytes(Read32(param + ParamCalc), calc, Pk7CalcSize);
-            slot.mon = DecodePk7(core, haveCalc ? calc : nullptr);
+            slot.mon = ReadPokemonParam(param);
         }
         state.valid = true;
         ReadPartyScreen(sceneManager, state);

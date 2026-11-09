@@ -13,6 +13,8 @@
 #include <vector>
 
 #include "ActionQueue.hpp"
+#include "UI/Text.hpp"
+#include "RomfsText.hpp"
 
 using namespace OneScreen;
 using namespace OneScreen::Screens;
@@ -967,6 +969,8 @@ static void TestLayoutDrawing(void)
         for (bool moves : { false, true })
         {
             BattleSnapshot snap = moves ? MovesSnap() : CommandSnap();
+            snap.activeShiny = snap.activeHiddenAbility = true;
+            snap.foeShiny = snap.foeHiddenAbility = true;
             // Only the new composition previews use these effects; keep the
             // established Classic preview fixtures byte-for-byte unchanged.
             if (layout != BattleLayout::Classic)
@@ -1023,9 +1027,10 @@ static void TestLayoutDrawing(void)
                     std::printf("layout %u moves %u cursor %u: %u pixels outside, first %d,%d\n",
                                 (unsigned)layout, moves ? 1u : 0u, cursor, outside, firstX, firstY);
                 CHECK(outside == 0);
-                if (cursor == 0 && layout != BattleLayout::Classic && s_previewDir != nullptr)
+                if (cursor == 0 && s_previewDir != nullptr)
                 {
-                    const std::string name = layout == BattleLayout::Bar ? "battle-bar-" : "battle-rail-";
+                    const std::string name = layout == BattleLayout::Bar ? "battle-bar-"
+                                             : layout == BattleLayout::Rail ? "battle-rail-" : "battle-classic-";
                     WritePreview(pixels, std::string(s_previewDir) + "/" + name + (moves ? "moves" : "command") + ".ppm");
                 }
                 menu.Update(snap, BattleKeys::DDown);
@@ -1118,6 +1123,129 @@ static void TestMoveDetails(void)
     CHECK(std::strcmp(BattleCategoryName(2), "Special") == 0);
 }
 
+static void TestDescriptions(void)
+{
+    UI::TextStyle text;
+    text.font = UI::Font::Small;
+    CHECK(UI::WrapText("", 100, text).empty());
+    CHECK(UI::WrapText("word", 0, text).empty());
+    const auto words = UI::WrapText("one two three", 42, text);
+    CHECK(words.size() == 2 && words[0] == "one two" && words[1] == "three");
+    const auto explicitLines = UI::WrapText("one\ntwo\n\nthree", 100, text);
+    CHECK(explicitLines.size() == 4 && explicitLines[2].empty());
+    const std::string unicode = "\xC3\xA9\xC3\xA9\xC3\xA9";
+    const auto split = UI::WrapText(unicode, 6, text);
+    CHECK(split.size() == 3);
+    for (const auto &line : split) CHECK(line == "\xC3\xA9");
+    const auto longWord = UI::WrapText("abcdefgh", 18, text);
+    CHECK(longWord.size() == 3 && longWord[0] == "abc" && longWord[2] == "gh");
+    for (BattleLayout layout : { BattleLayout::Classic, BattleLayout::Bar, BattleLayout::Rail })
+    {
+        BattleSnapshot snap = MovesSnap();
+        // Synthetic long text, no shipped game descriptions.
+        snap.moves[0].description = std::string(8, 'a') + " " + std::string(40, 'b')
+            + "\nThis deliberately long synthetic description tests multiple wrapped lines without clipping.";
+        BattleMenu menu;
+        menu.SetLayout(layout);
+        const auto capture = menu.Update(snap, BattleKeys::L);
+        if (s_previewDir != nullptr)
+        {
+            std::vector<u8> pixels(400 * 240 * 3, 90);
+            UI::Surface surface{ pixels.data(), 3, 400 * 3, UI::PixelFormat::BGR8, 400, 240 };
+            UI::Canvas canvas(surface);
+            const auto before = pixels;
+            menu.Draw(canvas, snap);
+            const UI::Rect area = menu.Area();
+            for (int y = 0; y < 240; y++)
+                for (int x = 0; x < 400; x++)
+                    if (x < area.x || x >= area.Right() || y < area.y || y >= area.Bottom())
+                        CHECK(std::memcmp(&pixels[(y * 400 + x) * 3], &before[(y * 400 + x) * 3], 3) == 0);
+            WritePreview(pixels, std::string(s_previewDir) + "/battle-description-" + std::to_string((unsigned)layout) + ".ppm");
+        }
+        CHECK(menu.DescriptionOpen());
+        CHECK(HiResScreenSmoke::Run(menu.Area(), menu.Radius(), [&](UI::Canvas &canvas) { menu.Draw(canvas, snap); }));
+        CHECK(capture.capture && (capture.keys & BattleKeys::L));
+        const UI::Rect body = BattleDescriptionArea(layout), area = menu.Area();
+        CHECK(body.x >= area.x && body.y >= area.y && body.Right() <= area.Right() && body.Bottom() <= area.Bottom());
+        CHECK(body.x >= 166 && body.y >= 36 && body.Right() <= 400 && body.Bottom() <= 240);
+        const auto lines = UI::WrapText(snap.moves[0].description, body.w, text);
+        CHECK((int)lines.size() * (UI::LineHeight(text) + 2) <= body.h);
+        for (const auto &line : lines) CHECK(UI::MeasureText(line, text) <= body.w);
+        auto key = menu.DrawKey(snap);
+        snap.moves[0].description += " changed";
+        CHECK(key != menu.DrawKey(snap));
+        CHECK(menu.Update(snap, BattleKeys::A).action == nullptr);
+        menu.Update(snap, BattleKeys::DDown);
+        CHECK(menu.Cursor() == 1 && menu.DescriptionOpen());
+        CHECK(menu.DrawKey(snap) != key);
+        menu.Update(snap, BattleKeys::B);
+        CHECK(!menu.DescriptionOpen() && !menu.Pending());
+        menu.Update(snap, BattleKeys::L);
+        CHECK(menu.DescriptionOpen());
+        menu.Update(snap, BattleKeys::L);
+        CHECK(!menu.DescriptionOpen());
+        menu.Update(snap, BattleKeys::L);
+        snap.menu = GameMenu::None;
+        menu.Update(snap, 0);
+        CHECK(!menu.DescriptionOpen());
+        snap.menu = GameMenu::Moves;
+        menu.Update(snap, 0);
+        CHECK(!menu.DescriptionOpen());
+        key = menu.DrawKey(snap);
+        snap.activeShiny = true;
+        CHECK(menu.DrawKey(snap) != key);
+        snap = BattleSnapshot();
+        snap.inBattle = true;
+        snap.menu = GameMenu::Pokemon;
+        snap.partyCount = 1;
+        menu.Update(snap, 0);
+        key = menu.DrawKey(snap);
+        snap.party[0].shiny = true;
+        snap.party[0].hiddenAbility = true;
+        CHECK(menu.DrawKey(snap) != key);
+    }
+}
+
+// Optional user's own text GARC, never required or copied into the repo.
+static void TestDescriptionArchive(const char *path)
+{
+    FILE *file = std::fopen(path, "rb");
+    CHECK(file != nullptr);
+    if (!file) return;
+    std::fseek(file, 0, SEEK_END);
+    const long size = std::ftell(file);
+    std::rewind(file);
+    std::vector<u8> bytes(size > 0 ? (size_t)size : 0);
+    CHECK(std::fread(bytes.data(), 1, bytes.size(), file) == bytes.size());
+    std::fclose(file);
+    const RomfsRead read = [&](uint64_t at, void *dst, u32 count) {
+        if (at > bytes.size() || count > bytes.size() - at) return false;
+        std::memcpy(dst, bytes.data() + at, count);
+        return true;
+    };
+    uint64_t at = 0;
+    u32 count = 0;
+    std::string error;
+    CHECK(GarcEntry(read, 0, 117, at, count, error));
+    if (at > bytes.size() || count > bytes.size() - at) return;
+    const std::vector<u8> message(bytes.begin() + at, bytes.begin() + at + count);
+    std::vector<std::string> descriptions;
+    CHECK(MsgFileLines(message, descriptions, error));
+    CHECK(descriptions.size() == 730);
+    UI::TextStyle text;
+    text.font = UI::Font::Small;
+    for (BattleLayout layout : { BattleLayout::Classic, BattleLayout::Bar, BattleLayout::Rail })
+    {
+        const UI::Rect body = BattleDescriptionArea(layout);
+        for (const auto &description : descriptions)
+        {
+            const auto lines = UI::WrapText(description, body.w, text);
+            CHECK((int)lines.size() * (UI::LineHeight(text) + 2) <= body.h);
+        }
+    }
+    std::printf("description GARC: %u entries decoded, all fit each layout\n", (unsigned)descriptions.size());
+}
+
 int main(int argc, char **argv)
 {
     if (argc > 1)
@@ -1137,6 +1265,8 @@ int main(int argc, char **argv)
     TestLayouts();
     TestLayoutDrawing();
     TestMoveDetails();
+    TestDescriptions();
+    if (argc > 2) TestDescriptionArchive(argv[2]);
     if (s_failures != 0)
     {
         std::printf("battle_menu_test: %d failure(s)\n", s_failures);
