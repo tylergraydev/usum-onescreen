@@ -127,6 +127,7 @@ namespace UI
             }
             m_top[i] = (u8)top;
         }
+        m_glyphs = GetSettings().glyphs;
         m_ready = true;
         return true;
     }
@@ -155,6 +156,7 @@ namespace UI
         m_surface = pixels;
         m_area = area;
         m_likeStepX = like.stepX; m_likeStepY = like.stepY;
+        m_glyphs = GetSettings().glyphs;
         m_ready = true;
         m_hiRes = true;
         s_owners[slot] = this;
@@ -166,6 +168,7 @@ namespace UI
 
     bool Layer::Matches(const Surface &screen) const
     {
+        if (m_glyphs != GetSettings().glyphs) return false;
         const bool available = m_preferHiRes && s_hiRes.ready != nullptr && s_hiRes.ready();
         if (m_preferHiRes && m_hiRes != available) return false;
         if (m_hiRes && s_hiRes.generation != nullptr && m_generation != s_hiRes.generation()) return false;

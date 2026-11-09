@@ -265,7 +265,7 @@ namespace Screens
             x += widths[i] + 3;
         }
         if (!bar)
-            CompactText(canvas, "A Choose", Rect{ area.x + 12, area.Bottom() - 20, area.w - 24, 16 }, Theme::WindowText);
+            CompactText(canvas, Theme::FormatPromptText("A Choose"), Rect{ area.x + 12, area.Bottom() - 20, area.w - 24, 16 }, Theme::WindowText);
     }
 
     static void EffectMarker(Canvas &canvas, const Rect &r, u8 effect)
@@ -330,7 +330,7 @@ namespace Screens
         DrawMoveDetails(canvas, menu, snap, area);
         const Rect foot = { area.x + 5, area.Bottom() - 19, area.w - 10, 13 };
         if (menu.Note().empty())
-            CompactText(canvas, "A Use   B Back", foot, Theme::WindowText);
+            CompactText(canvas, Theme::FormatPromptText("A Use   B Back"), foot, Theme::WindowText);
         else
             CompactText(canvas, menu.Note(), foot, Theme::WindowText);
     }
@@ -361,9 +361,9 @@ namespace Screens
         if (!menu.Note().empty())
             view.note = menu.Note();
         else if (menu.Forced())
-            view.note = "Choose a Pok\xC3\xA9mon to send out   A Choose";
+            view.note = Theme::FormatPromptText("Choose a Pok\xC3\xA9mon to send out   A Choose");
         else
-            view.note = "A Switch   B Back";
+            view.note = Theme::FormatPromptText("A Switch   B Back");
         DrawParty(canvas, view);
 
         if (menu.PopupOpen() && menu.Cursor() < snap.partyCount)
@@ -506,7 +506,7 @@ namespace Screens
         Theme::DrawWindow(canvas, area);
         const Rect head = { area.x, area.y + 2, area.w, 26 };
         Theme::DrawText(canvas, "Choose a target", Inset(head, Theme::WindowPad, 2, Theme::WindowPad, 2), White());
-        Theme::DrawText(canvas, "As on the bottom screen (" + snap.panelKey + ")",
+        Theme::DrawText(canvas, "As on the bottom screen (" + Theme::FormatPromptText(snap.panelKey) + ")",
                         Rect{ area.x + Theme::WindowPad, head.Bottom(), area.w - 2 * Theme::WindowPad, 16 },
                         White(Theme::TextSize::Small));
         const s32 cellW = (area.w - 24) / 2;
@@ -539,23 +539,23 @@ namespace Screens
             Theme::DrawText(canvas, "Caught!", title, White());
             // A new species gets its Pokédex page first; then the nickname
             // question, where A opens a keyboard on the bottom screen.
-            Theme::DrawText(canvas, "B: next, no nickname", line, accent);
-            Theme::DrawText(canvas, "Nickname? A: yes (keyboard below)", hint1, small);
-            Theme::DrawText(canvas, snap.panelKey + ": show the bottom screen", hint2, small);
+            Theme::DrawText(canvas, Theme::FormatPromptText("B: next, no nickname"), line, accent);
+            Theme::DrawText(canvas, Theme::FormatPromptText("Nickname? A: yes (keyboard below)"), hint1, small);
+            Theme::DrawText(canvas, Theme::FormatPromptText(snap.panelKey) + ": show the bottom screen", hint2, small);
         }
         else if (menu.Prompt())
         {
             Theme::DrawText(canvas, "The game asks", title, White());
             Theme::DrawText(canvas, "The choices are below", line, accent);
-            Theme::DrawText(canvas, "Up/Down + A: choose   B: back", hint1, small);
-            Theme::DrawText(canvas, snap.panelKey + ": show the bottom screen", hint2, small);
+            Theme::DrawText(canvas, Theme::FormatPromptText("Up/Down + A: choose   B: back"), hint1, small);
+            Theme::DrawText(canvas, Theme::FormatPromptText(snap.panelKey) + ": show the bottom screen", hint2, small);
         }
         else
         {
             Theme::DrawText(canvas, "Game screen", title, White());
             Theme::DrawText(canvas, "Buttons go to the game", line, accent);
-            Theme::DrawText(canvas, "D-pad: move   A: choose   B: back", hint1, small);
-            Theme::DrawText(canvas, snap.panelKey + ": show the bottom screen", hint2, small);
+            Theme::DrawText(canvas, Theme::FormatPromptText("D-pad: move   A: choose   B: back"), hint1, small);
+            Theme::DrawText(canvas, Theme::FormatPromptText(snap.panelKey) + ": show the bottom screen", hint2, small);
         }
     }
 

@@ -205,17 +205,17 @@ namespace OneScreen
         {
         case BoxMode::Carrying:
             return "Moving " + (view.held.empty() ? std::string("a Pokémon") : view.held)
-                   + ":  A Drop   B Cancel   L/R Box";
+                   + Theme::FormatPromptText(":  A Drop   B Cancel   L/R Box");
         case BoxMode::Modal:
-            return "The game is asking on the bottom screen (L+R shows it)";
+            return Theme::FormatPromptText("The game is asking on the bottom screen (L+R shows it)");
         case BoxMode::Unknown:
-            return "Bottom screen busy (L+R shows it)";
+            return Theme::FormatPromptText("Bottom screen busy (L+R shows it)");
         default:
             break;
         }
         if (view.cursor == BoxCursorBoxList)
-            return "Box List: use the bottom screen (L+R)";
-        return "A Move   Y Details   L/R Box   B Exit";
+            return Theme::FormatPromptText("Box List: use the bottom screen (L+R)");
+        return Theme::FormatPromptText("A Move   Y Details   L/R Box   B Exit");
     }
 
     static UI::Color Mix(UI::Color a, UI::Color b, int num, int den)
