@@ -57,6 +57,140 @@ def cia(title, version, encrypted=False):
     return data
 
 
+def save_manager(run, root):
+    home = root / 'save-manager'
+    save = home / 'azahar/user/sdmc/Nintendo 3DS/id0/id1/title/00040000/001b5000/data'
+    run(['slot', 'save', 'empty', '--home', home], 1, 'No save yet')
+    run(['export', root / 'empty.zip', '--home', home], 1, 'No save data')
+    save.mkdir(parents=True)
+    (save / 'main').write_bytes(b'slot original')
+    (save / 'nested').mkdir()
+    (save / 'nested/extra').write_bytes(b'nested save')
+    extdata = save.parents[3] / 'extdata/untouched'
+    extdata.parent.mkdir()
+    extdata.write_bytes(b'not save data')
+    slots = home / f'slots/{SUN:016X}'
+    backups = home / f'backups/{SUN:016X}'
+
+    def cli(args, code=0, *messages):
+        return run([*args, '--home', home], code, *messages)
+
+    cli(['slot', 'save', 'before Elite Four'])
+    slot = next(slots.iterdir())
+    assert len(slot.name) == 32 and (slot / 'name.txt').read_text() == 'before Elite Four'
+    assert (slot / 'data/main').read_bytes() == b'slot original'
+    assert not list(slot.rglob('extdata'))
+    cli(['slot', 'list'], 0, 'before Elite Four', 'bytes')
+    for bad in ('', ' ', ' trailing', 'trailing ', 'trailing.', '.', '..', 'a/b', r'a\b',
+                'a:b', 'a*', 'a?', 'a"', 'a<', 'a>', 'a|', 'a\n', 'x' * 65):
+        cli(['slot', 'save', bad], 1, 'Slot names')
+    cli(['slot', 'save', 'BEFORE ELITE FOUR'], 1, 'already exists')
+    cli(['slot', 'save', 'other'])
+    cli(['slot', 'rename', 'other', 'BEFORE ELITE FOUR'], 1, 'already exists')
+    cli(['slot', 'rename', 'other', 'OTHER'])  # Case-only rename.
+    cli(['slot', 'rename', 'before Elite Four', 'Champion'])
+    cli(['slot', 'load', 'before Elite Four'], 1, 'Slot not found')
+    cli(['slot', 'delete', 'OTHER'])
+    assert len(list(slots.iterdir())) == 1
+    cli(['slot', 'delete', '../escape'], 1, 'Slot names')
+    (save / 'main').write_bytes(b'current before load')
+    (save / 'obsolete').write_bytes(b'remove me')
+    cli(['slot', 'load', 'champion'])
+    assert (save / 'main').read_bytes() == b'slot original'
+    assert not (save / 'obsolete').exists()
+    assert (next(backups.iterdir()) / 'data/main').read_bytes() == b'current before load'
+    assert extdata.read_bytes() == b'not save data'
+    for _ in range(12):
+        cli(['backup'])
+    assert len(list(backups.iterdir())) == 10 and slot.exists()
+    assert (slot / 'data/main').read_bytes() == b'slot original'
+    # Failure to write the safety backup must leave the current save untouched.
+    shutil.rmtree(backups)
+    backups.write_bytes(b'blocked backup directory')
+    (save / 'main').write_bytes(b'must survive failed load')
+    cli(['slot', 'load', 'Champion'], 1)
+    assert (save / 'main').read_bytes() == b'must survive failed load'
+    assert not list(save.parent.glob('*.restore-*'))
+    backups.unlink()
+    cli(['backup'])
+    backup = next(backups.iterdir()).name
+    archives = {}
+    for kind, flags in [('current', []), ('slot', ['--slot', 'Champion']), ('backup', ['--backup', backup])]:
+        archive = root / (kind + '.zip')
+        cli(['export', archive, *flags], 0, 'Save exported')
+        archives[kind] = archive
+        with zipfile.ZipFile(archive) as z:
+            manifest = dict(line.split('=', 1) for line in z.read('manifest.txt').decode().splitlines())
+            assert manifest['title_id'] == f'{SUN:016X}' and manifest['format'] == '1'
+            assert manifest['date'] and manifest['source'].startswith(kind) and manifest['launcher_version']
+            assert z.read('data/nested/extra') == b'nested save'
+            assert not any('extdata' in n for n in z.namelist())
+        cli(['import', archive, '--name', 'imported ' + kind], 0, 'Slot imported')
+    cli(['export', archives['slot']], 1, 'already exists')
+    cli(['export', root / 'bad.zip', '--slot', 'Champion', '--backup', backup], 1, 'either')
+    cli(['export', save / 'bad.zip'], 1, 'Export outside')
+    cli(['import', archives['slot'], '--name', 'Champion'], 1, 'already exists')
+    cli(['import', archives['slot']], 0, 'Slot imported: slot')
+    fresh = root / 'import-without-identity'
+    run(['import', archives['slot'], '--name', 'fresh', '--home', fresh], 0)
+    run(['slot', 'load', 'fresh', '--home', fresh], 1, 'start the game once')
+    assert not (fresh / 'azahar').exists()
+    cli(['slot', 'load', 'imported slot'])
+    assert (save / 'main').read_bytes() == b'slot original'
+    # Imported slots restore to this home's identity, even with a missing save.
+    shutil.rmtree(save)
+    cli(['slot', 'load', 'imported current'])
+    assert (save / 'main').read_bytes() == b'must survive failed load'
+    before = sorted(p.name for p in slots.iterdir())
+    before_save = (save / 'main').read_bytes()
+    with zipfile.ZipFile(archives['slot']) as z:
+        manifest = z.read('manifest.txt')
+    def bad_archive(label, entries, message):
+        archive = root / ('bad-' + label + '.zip')
+        with zipfile.ZipFile(archive, 'w') as z:
+            for path, contents in entries:
+                z.writestr(path, contents)
+        cli(['import', archive, '--name', 'refused'], 1, message)
+        assert sorted(p.name for p in slots.iterdir()) == before
+        assert (save / 'main').read_bytes() == before_save
+    bad_archive('moon', [('manifest.txt', manifest.replace(f'{SUN:016X}'.encode(), f'{MOON:016X}'.encode())),
+                         ('data/main', b'wrong game')], 'title id')
+    bad_archive('missing-title', [('manifest.txt', manifest.replace(f'title_id={SUN:016X}\n'.encode(), b'')),
+                                  ('data/main', b'unknown')], 'title id')
+    for i, path in enumerate(('../escape', 'data/../../escape', '/absolute', 'data/..\\escape',
+                              'C:/escape', 'data/main:stream', 'data/NUL', 'data/main.', 'data/main ')):
+        bad_archive(str(i), [('manifest.txt', manifest), ('data/main', b'save'), (path, b'escape')], 'Unsafe zip path')
+    assert not (root / 'escape').exists() and not (home / 'escape').exists()
+    bad_archive('case-alias', [('manifest.txt', manifest), ('data/main', b'a'), ('data/MAIN', b'b')], 'Duplicate')
+    link = zipfile.ZipInfo('data/link')
+    link.create_system = 3
+    link.external_attr = 0o120777 << 16
+    bad_archive('symlink', [('manifest.txt', manifest), (link, b'../../escape')], 'linked zip')
+    bad_archive('incomplete', [('manifest.txt', manifest.replace(b'launcher_version=', b'missing_version=')),
+                               ('data/main', b'a')], 'Incomplete save manifest')
+    bad_archive('directory-conflict', [('manifest.txt', manifest), ('data/file', b'a'),
+                                      ('data/file/nested', b'b')], '')
+    bad_archive('no-manifest', [('data/main', b'raw')], 'manifest')
+    bad_archive('empty', [('manifest.txt', manifest)], 'no save data')
+    bad_archive('unexpected', [('manifest.txt', manifest), ('source.txt', b'unsafe'), ('data/main', b'a')], 'only manifest')
+    raw = root / 'raw-main'
+    raw.write_bytes(b'not an archive')
+    cli(['import', raw, '--name', 'raw'], 1, 'Invalid save zip')
+    # Per-game slots and imports are isolated; identical names are allowed across games.
+    (home / 'usum-onescreen-app.ini').write_text(f'title_id={MOON:016X}\n')
+    assert 'Champion' not in cli(['slot', 'list'])
+    cli(['slot', 'load', 'Champion'], 1, 'Slot not found')
+    cli(['import', archives['slot'], '--name', 'Champion'], 1, 'title id')
+    moon_save = save.parent.parent / '001b5100/data'
+    moon_save.mkdir(parents=True)
+    (moon_save / 'main').write_bytes(b'moon save')
+    cli(['slot', 'save', 'Champion'])
+    assert (slot / 'data/main').read_bytes() == b'slot original'
+    assert extdata.read_bytes() == b'not save data'
+    cli(['slot', 'delete', 'Champion'])
+    assert slot.exists()
+
+
 def main():
     if not EXE.exists():
         raise SystemExit('Build player/UsumOneScreen.csproj in Release first.')
@@ -579,7 +713,8 @@ try {
         assert cheat_file.read_bytes() == sun_bytes
         run(['backup', '--home', options], 0, 'No save yet')
         assert not (options / f'backups/{MOON:016X}').exists()
-    print('PASS: save discovery/retention/restore/isolation; graphics keep/presets; cheat resources, code preservation and mutual exclusion; controller vendor/fallback mapping; options ini readback and DPI layout; battle/speed writes; validation, cross-game rejection, title state/paths, bundled source priority and immutability, installed-update checks, fallback source; offline pinned download and hash refusal; zip classification, traversal safety, reuse and state; embedded/adjacent/explicit plugin priority; widescreen choices, Auto thresholds, custom UI preservation, comment retention, invalid-value immutability, stretch sync, stale-state preservation, numeric-zero/bad-value handling and per-game cleanup.')
+        save_manager(run, root)
+    print('PASS: named slots, validation, safety backup failure/retention/isolation, ZIP round trips and title/path/link refusal; save discovery/retention/restore/isolation; graphics keep/presets; cheat resources, code preservation and mutual exclusion; controller vendor/fallback mapping; options ini readback and DPI layout; battle/speed writes; validation, cross-game rejection, title state/paths, bundled source priority and immutability, installed-update checks, fallback source; offline pinned download and hash refusal; zip classification, traversal safety, reuse and state; embedded/adjacent/explicit plugin priority; widescreen choices, Auto thresholds, custom UI preservation, comment retention, invalid-value immutability, stretch sync, stale-state preservation, numeric-zero/bad-value handling and per-game cleanup.')
 
 
 if __name__ == '__main__':
