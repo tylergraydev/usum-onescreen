@@ -52,6 +52,28 @@ namespace OneScreen
         return out;
     }
 
+    bool ParseGlyphFamily(const std::string &value, GlyphFamily &out)
+    {
+        const std::string v = Lower(Trim(value));
+        if (v == "3ds" || v == "auto") out = GlyphFamily::ThreeDS;
+        else if (v == "xbox") out = GlyphFamily::Xbox;
+        else if (v == "playstation") out = GlyphFamily::PlayStation;
+        else if (v == "nintendo") out = GlyphFamily::Nintendo;
+        else return false;
+        return true;
+    }
+
+    const char *GlyphFamilyName(GlyphFamily family)
+    {
+        switch (family)
+        {
+        case GlyphFamily::Xbox: return "xbox";
+        case GlyphFamily::PlayStation: return "playstation";
+        case GlyphFamily::Nintendo: return "nintendo";
+        default: return "3ds";
+        }
+    }
+
     bool ParseAspect(const std::string &value, float &out)
     {
         const std::string v = Lower(Trim(value));
@@ -172,7 +194,15 @@ namespace OneScreen
         const std::string k = Lower(key);
         const std::string v = Squash(value);
 
-        if (k == "instant_text")
+        if (k == "glyphs")
+        {
+            if (!ParseGlyphFamily(value, s.glyphs))
+            {
+                s.glyphs = GlyphFamily::ThreeDS;
+                return "bad glyphs '" + value + "' (use 3ds, xbox, playstation or nintendo; using 3ds)";
+            }
+        }
+        else if (k == "instant_text")
         {
             if (v != "on" && v != "off")
                 return "bad instant_text '" + value + "' (use on or off)";
@@ -303,7 +333,7 @@ namespace OneScreen
             }
             const std::string key = Trim(line.substr(0, eq));
             const std::string value = Trim(line.substr(eq + 1));
-            if (key.empty() || value.empty())
+            if (key.empty() || (value.empty() && Lower(key) != "glyphs"))
             {
                 warnings.push_back(where + "empty key or value");
                 continue;
@@ -357,6 +387,8 @@ namespace OneScreen
             "battle_bars = normal\n"
             "\n"
             "[controls]\n"
+            "; Prompt icons: 3ds, xbox, playstation or nintendo. auto means 3ds here.\n"
+            "glyphs = 3ds\n"
             "; Cycles the bottom screen view: off, panel, full. Keys: A B X Y L R ZL ZR\n"
             "; Start Select Up Down Left Right (D-pad), joined with + for a combo, or none.\n"
             "panel_key = L+R\n"
@@ -478,6 +510,7 @@ namespace OneScreen
         std::string out = "panel_key " + KeysToString(s.panelKey) + ", touch_key " + KeysToString(s.touchKey)
                           + ", map_key " + KeysToString(s.mapKey)
                           + ", pc_key " + KeysToString(s.pcKey)
+                          + ", glyphs " + GlyphFamilyName(s.glyphs)
                           + ", cursor_move " + sources[(int)s.cursorSource]
                           + ", cursor_speed " + std::to_string(s.cursorSpeed) + "\n"
                           + "size " + sizes[(int)s.panelSize] + ", corner " + corners[(int)s.panelCorner]

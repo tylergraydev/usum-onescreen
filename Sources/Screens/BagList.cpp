@@ -1006,7 +1006,7 @@ namespace OneScreen
         bool showCount = false;
         if (!view.status.empty())
         {
-            heading = view.status;
+            heading = T::FormatPanelHint(view.status);
             head.color = view.busy ? T::WindowText : T::AccentText;
         }
         else if (view.mode == BagMode::Menu && !view.menuTitle.empty())

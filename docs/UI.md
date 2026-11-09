@@ -136,3 +136,40 @@ font that CTRPF already maps (libctru's `g_sharedFont`; `uifont` logs it):
 Local only (game imagery, not in git): `analysis/private/shots/ui4-*` and
 `analysis/private/ui4/` (zooms, perf runs, font dump) in the
 `claude/ui4-fast-ui-a523de` worktree.
+
+## Controller badges
+
+`Settings::glyphs` selects `GlyphFamily` for native prompts. `Theme::Button`
+always names the logical 3DS input; do not swap A/B at call sites.
+`Theme::ButtonName` and `Theme::FormatPromptText` in `Sources/UI/Glyphs.cpp`
+share the positional mapping documented in [PLAYING.md](PLAYING.md#controller-prompt-icons).
+Use the formatter only for known control hints, not arbitrary game dialogue.
+`FormatPanelHint` converts only the fixed `(L+R` hint in mixed messages,
+preserving user names and applying the selection at draw time.
+`glyphs status` and `glyphs 3ds|xbox|playstation|nintendo` inspect/change the
+active setting without saving. INI reload applies the setting too.
+
+`Theme::DrawButtonPrompt` preserves the original 3DS badge dimensions, chip
+height, label position and `PromptWidth` for every family. The 3DS branch keeps
+the original game-asset/fallback renderer. Other families call
+`DrawControllerBadge` in `Sources/UI/Icons.cpp`: Canvas rounded circles/pills,
+lines, and rectangle outlines draw Xbox coloured letter circles, PlayStation
+coloured symbols, Nintendo letter circles, and shoulder/trigger/system labels.
+Even the lettering uses stroke paths, with no texture or font-mask dependency.
+Canvas scales these vectors from the existing 400x240 coordinates to 2.5x.
+Long system-button labels fit inside the original Start/Select badge slots.
+Custom map-key chips use vector badges for single buttons and mapped text for
+combos. Compact hints retain their original bounds and use mapped text; long names can be ellipsized by the usual text renderer.
+D-pad hints retain direction names; there are no existing stick-button badges.
+
+`Layer::Matches` rejects a cached layer when its glyph family changes, forcing
+idle menus and badges to redraw on the next frame. Host targets that link
+`Layer.cpp` or `Glyphs.cpp` must also link `Settings.cpp` and `SettingsFile.cpp`.
+
+`tests/settings_test.cpp` covers defaults, all values, auto, case tolerance,
+invalid/empty values and the warning consumed by the existing settings logger.
+`tests/theme_test.cpp` checks the mapping, constant widths, 1x/2.5x rendering
+with/without synthetic assets, live layer invalidation, and byte equality
+against the pre-change 3DS prompt renderer at 1x. With a preview directory it
+writes `glyphs-<family>-1x.ppm` and `glyphs-<family>-2.5x.ppm` for visual review;
+existing screen previews should remain byte-identical with the default `3ds`.

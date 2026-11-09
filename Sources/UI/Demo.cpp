@@ -1,4 +1,5 @@
 #include "UI/Demo.hpp"
+#include "UI/Theme.hpp"
 
 #include "UI/Icons.hpp"
 #include "UI/Layout.hpp"
@@ -67,7 +68,7 @@ namespace UI
         hint.color = TextDim;
         DrawText(canvas, "uidemo off to close", footer, hint);
         hint.align = Align::Right;
-        DrawText(canvas, "A: select  B: back", footer, hint);
+        DrawText(canvas, Theme::FormatPromptText("A: select  B: back"), footer, hint);
         const Rect footRule = body.NextFromEnd(1);
         canvas.HLine(footRule.x, footRule.y, footRule.w, Divider);
 
