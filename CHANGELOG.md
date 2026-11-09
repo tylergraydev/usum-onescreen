@@ -6,8 +6,9 @@ All notable changes for players are listed here. Versions follow [Semantic Versi
 
 ### Added
 
+- Controller prompts: Xbox, PlayStation and Nintendo vector badges with positional button mapping, live INI reload and `glyphs` test commands. The default `3ds` look is preserved.
 - Windows launcher: automatic save backups before Play (ten per game), Backups dialog with restore and folder access, and backup/list/restore CLI commands. Portable saves only; extdata is excluded.
-- Game options for graphics resolution (Keep, 1x, 3x, 5x), battle layout, text/battle speed and automatic or manual controller icon families. Controller icon drawing follows in a future plugin update.
+- Game options for graphics resolution (Keep, 1x, 3x, 5x), battle layout, text/battle speed and automatic or manual controller icon families. Native plugin prompts now draw the selected family.
 - Cheats dialog and CLI with six embedded own-code cheats, separate Sun/Moon selections, preserved boot safety guards and exclusive shiny/undo choices. Back up first; changes apply next start.
 - The native PC boxes show each Pokémon's own box icon (the game's, read from your ROM) next to its name, in the box, the party row and under the cursor while moving one.
 

@@ -20,6 +20,41 @@ The app in [`player/`](../player/README.md) detects the game from the ROM, check
 
 **Update versions:** genuine v1.2 is `0x0820` for both games. Sun also accepts a rebuilt `0x0800` update with a warning: a brand-new game stalls at its first language screen, also with the plugin loader off; an existing save plays. Moon refuses `0x0800` and all versions other than `0x0820`. A new Sun game with a genuine `0x0820` update was tested through the launcher to Kukui's intro. Moon has only limited plugin testing and its new game stalls in Azahar's opening bedroom scene. Real gamepad input, mapping in Azahar, fullscreen, decrypted base-game CIA installation and Azahar versions other than 2126.2 remain untested in-game.
 
+## Controller prompt icons
+
+Set `[controls] glyphs = 3ds|xbox|playstation|nintendo` in
+`usum-onescreen.ini`, then choose **Reload settings file** in the plugin menu.
+The default is `3ds`, preserving the original icons. The launcher resolves its
+`auto` choice before writing the file; a literal `auto` in the plugin means
+`3ds`. An invalid value falls back to `3ds` and is reported in
+`usum-onescreen.log`. This changes native plugin prompts, not input bindings,
+the game's own bottom-screen artwork, or CTRPluginFramework's own menu chrome.
+
+The mapping assumes **Azahar's default positional mapping**. A 3DS A press
+is the right face button, B is bottom, X is top, and Y is left. If you remap
+Azahar by letter instead of position, these prompts will not match your bindings.
+
+| 3DS input | Xbox | PlayStation | Nintendo |
+| --- | --- | --- | --- |
+| A (right) | B | Circle | A |
+| B (bottom) | A | Cross | B |
+| X (top) | Y | Triangle | X |
+| Y (left) | X | Square | Y |
+| L / R | LB / RB | L1 / R1 | L / R |
+| ZL / ZR | LT / RT | L2 / R2 | ZL / ZR |
+| Start / Select | Menu / View | Options / Share | + / - |
+
+D-pad directions retain their direction names. Existing native prompts have
+no stick-button badges; cursor controls still follow `cursor_move` and your
+Azahar bindings. Configuration key names and diagnostic input logs remain
+logical 3DS names.
+
+For live testing, send `glyphs 3ds`, `glyphs xbox`, `glyphs playstation`, or
+`glyphs nintendo` through the plugin's command interface. `glyphs status`
+logs the current family. These commands affect the running session only;
+reloading the file restores its value. Compact text-only hints use the mapped
+button names; prompt chips use vector controller badges.
+
 ## Manual install
 
 1. In Azahar, open **Emulation → Configure… → System**, and on the **System** tab tick **Enable 3GX plugin loader** (under "3GX Plugin Loader"). This is a global setting; it does not appear in the per-game configuration.

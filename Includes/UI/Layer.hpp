@@ -88,6 +88,7 @@ namespace UI
         s32     m_likeStepX = 0, m_likeStepY = 0;
         // Rows [m_top[i], m_area.h - m_top[i]) of column i are copied.
         u8      m_top[MaxW] = {};
+        GlyphFamily m_glyphs = GlyphFamily::ThreeDS; // invalidate cached prompts on live changes
         bool    m_ready = false;
         bool    m_hiRes = false, m_preferHiRes = false;
         u32     m_slot = 0, m_generation = 0;
