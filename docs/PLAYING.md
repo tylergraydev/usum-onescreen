@@ -20,6 +20,21 @@ The app in [`player/`](../player/README.md) detects the game from the ROM, check
 
 **Update versions:** genuine v1.2 is `0x0820` for both games. Sun also accepts a rebuilt `0x0800` update with a warning: a brand-new game stalls at its first language screen, also with the plugin loader off; an existing save plays. Moon refuses `0x0800` and all versions other than `0x0820`. A new Sun game with a genuine `0x0820` update was tested through the launcher to Kukui's intro. Moon has only limited plugin testing and its new game stalls in Azahar's opening bedroom scene. Real gamepad input, mapping in Azahar, fullscreen, decrypted base-game CIA installation and Azahar versions other than 2126.2 remain untested in-game.
 
+## Photo mode (runtime verification pending)
+
+Set `[controls] photo_key = R+Select` in `usum-onescreen.ini` and reload settings
+(the default is `none`). Hold R, then press Select to freeze the game and hide
+plugin overlays. Release the chord and press it again to exit. You can also use
+**Photo mode (close menu to enter)** in the plugin menu, or `photo on|off|status`
+in `/usum-cmd.txt`. When no chord is configured, B exits.
+
+Wait two seconds for the exit hint to disappear, then use Azahar's screenshot
+function. Held inputs stay suppressed on resume until released. Entry refuses
+saves, running plugin actions, pending PC requests and busy field states. Idle
+field and battle are supported. The game's own graphics remain visible. Camera
+nudging is deferred until position/target offsets are documented. See
+[PHOTO-MODE.md](PHOTO-MODE.md) for limitations and the runtime test checklist.
+
 ## Controller prompt icons
 
 Set `[controls] glyphs = 3ds|xbox|playstation|nintendo` in
