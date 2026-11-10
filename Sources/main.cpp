@@ -16,6 +16,7 @@
 #include "Cursor.hpp"
 #include "InputCapture.hpp"
 #include "Panel.hpp"
+#include "PhotoMode.hpp"
 #include "Party.hpp"
 #include "PcAnywhere.hpp"
 #include "QuickSave.hpp"
@@ -59,6 +60,7 @@ namespace CTRPluginFramework
     // Runs when the game is closing.
     void OnProcessExit(void)
     {
+        OneScreen::PhotoModeRequest(false);
     }
 
     // usum-onescreen.log at the SD card root is rewritten each boot, so a test
@@ -112,6 +114,7 @@ namespace CTRPluginFramework
         for (const std::string &w : warnings)
             WriteLog(Utils::Format("settings: %s %s", SettingsPath + 1, w.c_str()), false);
         OneScreen::SetSettings(settings);
+        OneScreen::ButtonsSetPhotoCombo(settings.photoKey);
         OneScreen::AutoPanelSetEnabled(settings.autoPanel);
         WriteLog("settings: " + OneScreen::DescribeSettings(settings), false);
         WriteLog(OneScreen::SetWidescreenAspect(settings.aspect), false);
@@ -372,6 +375,17 @@ namespace CTRPluginFramework
 
     static void RunCommand(const std::string &line)
     {
+        if (line == "photo on" || line == "photo off" || line == "photo status")
+        {
+            if (line != "photo status") OneScreen::PhotoModeRequest(line == "photo on");
+            WriteLog(OneScreen::PhotoModeStatus(), false);
+            return;
+        }
+        if (OneScreen::PhotoModeActive())
+        {
+            WriteLog("cmd: refused while photo mode is active: " + line, false);
+            return;
+        }
         unsigned a = 0, b = 0;
         char word[16] = {};
         int fields = 0;
@@ -803,6 +817,9 @@ namespace CTRPluginFramework
         if (!OnPluginStack())
             return;
 
+        if (OneScreen::PhotoModeUpdate(s_game->offsets.sceneManager, PollCommands))
+            return; // Do not replay the exit chord into other plugin controls.
+
         const u32 panelKey = OneScreen::GetSettings().panelKey;
         if (!OneScreen::QuickSaveRunning() && panelKey != 0 && Controller::IsKeysPressed(panelKey))
         {
@@ -957,6 +974,13 @@ namespace CTRPluginFramework
 
     static bool OnMenuOpening(void)
     {
+        if (!OneScreen::PhotoModeCanOpenMenu()) return false;
+        const u32 photoKey = OneScreen::GetSettings().photoKey;
+        if (photoKey != 0 && (Controller::GetKeysDown() & photoKey) == photoKey)
+        {
+            OneScreen::PhotoModeRequest(true);
+            return false; // photo_key may include CTRPF's default Select hotkey
+        }
         RefreshMenuNames();
         return true;
     }
@@ -1033,6 +1057,12 @@ namespace CTRPluginFramework
         box();
     }
 
+    static void RequestPhoto(MenuEntry *)
+    {
+        OneScreen::PhotoModeRequest(true);
+        WriteLog("photo: requested (menu; close menu to enter)", false);
+    }
+
     static void InitMenu(PluginMenu &menu)
     {
         MenuEntry *panel = new MenuEntry("Bottom screen on top", PanelEntry,
@@ -1058,6 +1088,9 @@ namespace CTRPluginFramework
                               "Open the PC boxes here, as at a Pokemon Center PC. Works in the overworld "
                               "when nothing else is going on; they open when this menu closes. "
                               "pc_key in usum-onescreen.ini sets a button combo for it.");
+        menu += new MenuEntry("Photo mode (close menu to enter)", nullptr, RequestPhoto,
+            "Freeze the game and hide plugin overlays after closing this menu. "
+            "Exit with photo_key, or B when no combo is configured. photo on|off|status also works.");
         menu += new MenuEntry("Quick save", nullptr, QuickSave,
                               "Save your adventure through the game's save flow after closing this menu. "
                               "Only available in the idle overworld. save_key sets an optional combo.");
