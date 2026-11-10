@@ -74,6 +74,28 @@ namespace OneScreen
         }
     }
 
+    bool ParseSidePanelMode(const std::string &value, SidePanelMode &out)
+    {
+        const std::string v = Lower(Trim(value));
+        if (v == "off") out = SidePanelMode::Off;
+        else if (v == "battle") out = SidePanelMode::Battle;
+        else if (v == "field") out = SidePanelMode::Field;
+        else if (v == "both") out = SidePanelMode::Both;
+        else return false;
+        return true;
+    }
+
+    const char *SidePanelModeName(SidePanelMode mode)
+    {
+        switch (mode)
+        {
+        case SidePanelMode::Battle: return "battle";
+        case SidePanelMode::Field: return "field";
+        case SidePanelMode::Both: return "both";
+        default: return "off";
+        }
+    }
+
     bool ParseAspect(const std::string &value, float &out)
     {
         const std::string v = Lower(Trim(value));
@@ -219,6 +241,11 @@ namespace OneScreen
             else if (v == "pattern") s.pillarbox = Pillarbox::Pattern;
             else if (v == "off") s.pillarbox = Pillarbox::Off;
             else return "bad pillarbox '" + value + "' (use tint, pattern or off)";
+        }
+        else if (k == "side_panels")
+        {
+            if (!ParseSidePanelMode(value, s.sidePanels))
+                return "bad side_panels '" + value + "' (use off, battle, field or both)";
         }
         else if (k == "aspect")
         {
@@ -371,6 +398,8 @@ namespace OneScreen
             "; Experimental 3D camera aspect: 0/off (original), 16:9, 21:9 or a positive float.\n"
             "; Only new cameras change; see docs/WIDESCREEN.md.\n"
             "aspect = 0\n"
+            "; Optional party strips in the widescreen side areas.\n"
+            "side_panels = off\n"
             "; Side bands for full-screen native menus in widescreen: tint, pattern or off.\n"
             "pillarbox = tint\n"
             "\n"
@@ -518,6 +547,7 @@ namespace OneScreen
                           + ", cursor_speed " + std::to_string(s.cursorSpeed) + "\n"
                           + "size " + sizes[(int)s.panelSize] + ", corner " + corners[(int)s.panelCorner]
                           + ", auto " + (s.autoPanel ? "on" : "off") + "\n"
+                          + "side panels " + SidePanelModeName(s.sidePanels) + "\n"
                           + "aspect " + (s.aspect == 0.0f ? std::string("off") : std::to_string(s.aspect))
                           + ", pillarbox " + pillarboxes[(int)s.pillarbox]
                           + ", battle layout " + BattleLayoutName(s.battleLayout) + "\n"

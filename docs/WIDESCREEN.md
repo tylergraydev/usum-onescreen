@@ -486,3 +486,17 @@ need closing/reopening after a live change; templates do not rewrite them.
 Pane culling and one-frame debug capture remain to be validated in-game.
 The aspect tolerance identifies top-screen calls by value rather
 than camera identity; any other camera using that same aspect will also match.
+
+## Optional side panels
+
+`[display] side_panels = off|battle|field|both` defaults to off; `panels <mode>`
+changes it live. Battle keeps its perspective hook installed: the dedicated
+callback builds stock 5:3 then scales clip X by 1/k. Full-height opaque side
+panels mask the peripheral scene, leaving a centred stock-proportioned picture.
+Left shows your party, right client 1 record 0. Field remains a party overlay.
+Existing top 2D templates still squeeze by 1/k; a bounded post-recursion fit
+keeps small decorative overflow inside +/-200 for matching 400x240 RootPane
+layouts. No extra 1/k is applied to those panes. `aspect` reports HUD root/fit
+counters. See [Side panels](SIDE-PANELS.md) for exact predicates, exclusions,
+GPU/memory costs and verification. Live aspect changes still require recreating
+old layout environments; panel-mode changes do not.
