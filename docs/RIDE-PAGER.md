@@ -41,6 +41,91 @@ the same folder.
   (Machamp, Lapras, Sharpedo here), for getting off a non-registered one, and
   for registering; and the D-pad must stay the game's in the field.
 
+## Native implementation (2026-11-09; emulator verification pending)
+
+`RidePagerScreen` runs through the existing `SubScreens` dispatch (`screens
+on|off|status`, default on). No new setting or opening hotkey: Y remains the
+game's own field key. Nothing captures the field D-pad when the Pager object
+is absent. No save-memory writes are used.
+
+- Recognition scans eight scene-stack entries for FieldMenu `+0x18420`,
+  then validates its `+0x14` list pointer against FieldMenu `+0x1848C`.
+  Field state 4 alone never activates this screen. Leaving FieldRo, closing
+  the Pager, or losing either vtable ends recognition.
+- The list's count, cursor, current ride and `+0x59` ID table drive the
+  view. Counts outside 1-7, invalid cursors/current IDs, duplicate IDs and
+  out-of-range IDs are rejected. The ID table remains an **unverified
+  interpretation**; a valid reduced list is supported but needs a mid-game
+  save to prove its meaning and the fixed 30 px geometry.
+- Names use a **fixed English table keyed by ride ID**. The repo has item
+  and move text readers, but no identified Ride Pager message file/line
+  mapping or ride-label accessor. Those unrelated text IDs are not reused.
+- Samples are `(290,30r+15)` for availability and `(44,30r+15)` for
+  registration. Three identical decoded frames are required. Unknown colours,
+  fades, changed row tables and a nonzero dialog byte `+0x64` invalidate
+  readiness immediately. Light cyan rows are usable; grey rows say
+  Unavailable. The current ride says Riding; orange `+` marks registration.
+  Registration **directions** are not inferred from the unverified save slots.
+- Up/Down press the game's own direction through the action queue; the
+  memory cursor mirrors its wrap, including grey rows. Left/Right are
+  captured and ignored inside the Pager. A (also Y) selects only a decoded
+  usable row, including the current ride for getting down. Disabled choices
+  send no action. B queues the verified Back tap `(14,224)`.
+- Rows 0/3/6 queue their verified row tap. **Rows 1/2/4/5 use a game A press
+  at the memory cursor**, because their tap points were only measured and
+  the existing action queue refuses unverified taps. Layout metadata retains
+  that distinction; the queue's verification policy is unchanged. Each
+  selection/Back action holds for 6 frames, releases, then waits 60 frames;
+  directions settle for 24 frames. No automatic retries or confirmation taps.
+- No native registration controls: only opening the `+` dialog and cancelling
+  it were observed; choosing a D-pad tile was not. X remains with the game
+  for its top-screen help. A register dialog reached through the panel is
+  left to the game; L+R exposes the bottom screen if needed.
+- Rendering uses the existing water background, theme, shared screen buffer
+  and `Layer::SetupHiRes`: 1x fallback or 2.5x staging. The panel is held off
+  while recognised, and manual L+R yields until the Pager closes, as with
+  other native screens. No change in main.cpp is needed: its existing
+  StartSubScreens/SubScreensUpdate calls run this screen.
+
+### Host checks and preview
+
+From the repo root, `./tests/run_ride_pager.ps1` compiles directly with MSVC
+C++17 and runs `tests/build/ride_pager_test.exe`, writing
+`tests/build/ride-pager-preview.ppm`. It uses an ignored build-only header to
+erase the existing GCC printf attribute for MSVC. The Makefile also includes
+this test for environments that support make; make and WSL were not used here.
+
+The test covers valid/invalid and reduced row mappings, all seven row centres,
+colour stability and invalidation, registered markers, unavailable refusal,
+current-ride selection, busy suppression, direction actions, and exact
+selection/Back input hold/release sequences using the real ActionRunner.
+Drawing is exercised at 1x and through the guarded 2.5x Layer backend.
+
+Ran: direct MSVC Ride Pager, existing native-screens and action-queue host
+builds/tests; ARM GCC C++17 syntax checks for RidePager.cpp
+and SubScreens.cpp (`-D__3DS__`, real CTRPF/libctru headers); layout generator
+and `python tools/gen_layouts.py --check`; `git diff --check`. MSVC reports
+existing warnings in Raster.cpp, GameAssets.cpp, Options.cpp and the existing
+action-queue test. The supplied rp-01 bottom screenshot was also checked at
+all 14 probe coordinates and matched these classifiers. No full plugin link or emulator run was performed.
+
+### Postgame emulator verification for Claude
+
+1. Outdoors, on foot, with `screens on` and auto both off/on: Y opens the
+   native list; verify row names, orange registrations and the two grey water
+   rides against the bottom screen. Check `screens status`/ride-pager log.
+2. Up/Down wraps and visits grey rows; A/Y there does nothing. Select Tauros
+   and Machamp, reopen, then A/Y on the current ride gets down. Try registered
+   Stoutland/Mudsdale through the Pager too (the measured-row A path).
+3. Charizard opens TownMap; the native Pager vanishes, B cancels the fly map.
+   Pager B closes while preserving a mount. After closing, all four field
+   D-pad ride shortcuts must still work normally.
+4. X help owns the top screen and returns to the Pager. L+R yields to the
+   panel until close/reopen. Repeat with `screens off`, then restore on.
+5. On water, verify Lapras/Sharpedo colours and selection. Later use a save
+   with fewer rides to verify count/ID mapping. Check no save-file changes
+   unless the player explicitly saves.
+
 ## 1. Opening
 
 - `press y` in the field outdoors, on foot or riding, opens it. Bottom

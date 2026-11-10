@@ -14,6 +14,9 @@ TESTS    := $(OUT)/quick_save_test $(OUT)/image_test $(OUT)/hires_test $(OUT)/ba
 
 .DEFAULT_GOAL := all
 
+TESTS += $(OUT)/ride_pager_test
+RIDE_PAGER_PREVIEW := $(OUT)/ride-pager-preview.ppm
+
 $(OUT)/hires_test: hires_test.cpp ../Sources/UI/Raster.cpp ../Sources/UI/Text.cpp ../Sources/UI/Font.cpp ../Sources/UI/Layer.cpp $(wildcard ../Includes/UI/*.hpp)
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) hires_test.cpp ../Sources/UI/Raster.cpp ../Sources/UI/Text.cpp ../Sources/UI/Font.cpp ../Sources/UI/Layer.cpp $(SETTINGS_SRCS) -o $@
@@ -158,6 +161,10 @@ $(OUT)/rotom_prompt_test: rotom_prompt_test.cpp $(ROTOM_SRCS) ../Includes/Screen
 THEME_SRCS := $(addprefix ../Sources/UI/,GameAssets.cpp Theme.cpp ThemeDemo.cpp) ../Sources/RomfsText.cpp ../Sources/PartyData.cpp
 THEME_PREVIEW := ../analysis/private
 
+$(OUT)/ride_pager_test: ride_pager_test.cpp ../Sources/Screens/RidePager.cpp ../Includes/Screens/RidePager.hpp ../Sources/Screens/NativeScreen.cpp ../Sources/ActionQueue.cpp ../Includes/Layouts.hpp $(THEME_SRCS) $(UI_SRCS) $(UI_HDRS)
+	@mkdir -p $(OUT)
+	$(CXX) $(CXXFLAGS) ride_pager_test.cpp ../Sources/Screens/RidePager.cpp ../Sources/Screens/NativeScreen.cpp ../Sources/ActionQueue.cpp $(THEME_SRCS) $(UI_SRCS) -o $@
+
 $(OUT)/theme_test: theme_test.cpp $(THEME_SRCS) ../Includes/RomfsText.hpp ../Includes/PartyData.hpp $(UI_SRCS) $(UI_HDRS)
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) theme_test.cpp $(THEME_SRCS) $(UI_SRCS) -o $@
@@ -183,6 +190,7 @@ $(OUT)/screen_buffer_test: screen_buffer_test.cpp ../Sources/UI/ScreenBuffer.cpp
 	$(CXX) $(CXXFLAGS) -Wno-deprecated-declarations screen_buffer_test.cpp ../Sources/UI/ScreenBuffer.cpp $(UI_SRCS) -o $@
 
 run: $(TESTS)
+	./$(OUT)/ride_pager_test $(RIDE_PAGER_PREVIEW)
 	./$(OUT)/image_test
 	./$(OUT)/hires_test
 	./$(OUT)/band_column_test
