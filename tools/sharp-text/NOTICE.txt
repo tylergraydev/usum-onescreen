@@ -1,0 +1,15 @@
+SharpText coverage data is derived from Roboto Regular Version 2.137; 2017.
+Copyright 2011 Google Inc. All Rights Reserved.
+Licensed under the Apache License, Version 2.0 (LICENSE.txt).
+
+Font project: https://github.com/googlefonts/roboto-2
+Vendored font source (CustomTkinter 5.2.2 release):
+https://github.com/TomSchimansky/CustomTkinter/blob/v5.2.2/customtkinter/assets/fonts/Roboto/Roboto-Regular.ttf
+SHA-256: 319cff6e7a31f0f2a41c475dca42890aa5d19fe16017e2290f8c1d4e14f76481
+
+Modifications: tools/gen_sharp_font.py rasterizes the English subset at 64 px,
+quantizes coverage to 4 bits, crops each glyph to its ink and packs two
+coverage samples per byte. The generated data is called SharpText. The original
+TrueType file is retained unchanged to allow offline regeneration.
+
+Keep this notice and LICENSE.txt with distributions containing these masks.

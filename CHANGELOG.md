@@ -19,6 +19,8 @@ All notable changes for players are listed here. Versions follow [Semantic Versi
 
 ### Fixed
 
+- High-resolution native System/Large menu text uses 64 px Roboto outline coverage for an English character subset, preserving system-font layout. Packed font data and cache metadata add less than 58 KiB; decoded glyphs reuse the existing cache allocation. Unsupported characters retain the runtime font; `hires off` output is unchanged.
+
 - Battle teams selected from part of the field party no longer borrow nicknames/items from the wrong slot; metadata matches Pokemon identity and suppresses ambiguous matches.
 
 - The native map no longer crashes the game with widescreen (16:9 or 21:9) on. The map picture now squeezes like the rest of the game's 2D.

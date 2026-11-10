@@ -14,6 +14,14 @@ TESTS    := $(OUT)/image_test $(OUT)/hires_test $(OUT)/band_column_test $(OUT)/l
 
 .DEFAULT_GOAL := all
 
+TESTS += $(OUT)/sharp_text_test
+# Font.cpp embeds this generated asset; edits must rebuild its host consumers.
+$(TESTS): ../Sources/UI/SharpFont.inc
+
+$(OUT)/sharp_text_test: sharp_text_test.cpp ../Sources/UI/Font.cpp ../Sources/UI/Raster.cpp ../Sources/UI/Text.cpp $(wildcard ../Includes/UI/*.hpp)
+	@mkdir -p $(OUT)
+	$(CXX) $(CXXFLAGS) sharp_text_test.cpp ../Sources/UI/Font.cpp ../Sources/UI/Raster.cpp ../Sources/UI/Text.cpp -o $@
+
 $(OUT)/hires_test: hires_test.cpp ../Sources/UI/Raster.cpp ../Sources/UI/Text.cpp ../Sources/UI/Font.cpp ../Sources/UI/Layer.cpp $(wildcard ../Includes/UI/*.hpp)
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) hires_test.cpp ../Sources/UI/Raster.cpp ../Sources/UI/Text.cpp ../Sources/UI/Font.cpp ../Sources/UI/Layer.cpp $(SETTINGS_SRCS) -o $@
@@ -179,6 +187,7 @@ $(OUT)/screen_buffer_test: screen_buffer_test.cpp ../Sources/UI/ScreenBuffer.cpp
 	$(CXX) $(CXXFLAGS) -Wno-deprecated-declarations screen_buffer_test.cpp ../Sources/UI/ScreenBuffer.cpp $(UI_SRCS) -o $@
 
 run: $(TESTS)
+	./$(OUT)/sharp_text_test
 	./$(OUT)/image_test
 	./$(OUT)/hires_test
 	./$(OUT)/band_column_test
