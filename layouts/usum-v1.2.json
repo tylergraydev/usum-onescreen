@@ -8,6 +8,89 @@
     "none": "tapped, nothing happens (listed so Phase 2 avoids it)"
   },
   "screens": {
+    "pelago": {
+      "scene": "main:0064787C + Resort CRO",
+      "buttons": {
+        "previous": {
+          "rect": [
+            6,
+            100,
+            26,
+            140
+          ],
+          "tap": [
+            16,
+            120
+          ],
+          "does": "previous isle (left direction needs emulator verification)",
+          "verified": "tap",
+          "evidence": "rp-leave/rp-p1; task brief supplies both arrow taps; original research did not exercise previous"
+        },
+        "next": {
+          "rect": [
+            294,
+            100,
+            314,
+            140
+          ],
+          "tap": [
+            303,
+            120
+          ],
+          "does": "next isle",
+          "verified": "tap",
+          "evidence": "rp-leave/rp-p1; task brief supplies both arrow taps; original research did not exercise previous"
+        },
+        "mohn": {
+          "rect": [
+            288,
+            210,
+            319,
+            238
+          ],
+          "tap": [
+            300,
+            222
+          ],
+          "does": "opens Mohn menu",
+          "verified": "tap",
+          "evidence": "rp-leave/rp-p1; task brief supplies both arrow taps; original research did not exercise previous"
+        },
+        "back": {
+          "rect": [
+            0,
+            214,
+            33,
+            239
+          ],
+          "tap": [
+            16,
+            223
+          ],
+          "does": "asks to leave",
+          "verified": "tap",
+          "evidence": "rp-leave/rp-p1; task brief supplies both arrow taps; original research did not exercise previous"
+        },
+        "yes": {
+          "rect": [
+            16,
+            78,
+            303,
+            104
+          ],
+          "tap": [
+            160,
+            92
+          ],
+          "does": "confirm leaving; follow with A",
+          "verified": "tap",
+          "evidence": "rp-leave/rp-p1; task brief supplies both arrow taps; original research did not exercise previous"
+        }
+      },
+      "notes": [
+        "Only isle controls; not a native copy of the touch playgrounds."
+      ]
+    },
     "field": {
       "scene": "FieldRo",
       "reach": "overworld, X menu closed",
