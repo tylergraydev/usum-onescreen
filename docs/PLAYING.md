@@ -100,9 +100,55 @@ These work everywhere:
 | **L+R** | Show the bottom screen on the top screen when you need it: off → corner panel → full view → off. It stays as you set it. |
 | **C-stick** | Move the touch cursor (a crosshair on the panel or full view). It starts slow for precise taps and speeds up while you hold it. |
 | **ZL** | Touch the bottom screen at the cursor, for as long as you hold it. The crosshair turns red while touching. |
-| **Select** | Open the plugin's own menu (CTRPF's default hotkey): Bottom screen on top, Auto panel, Battle layout, Instant text, Battle speed, Open PC (Boxes), View settings, Reload settings file. |
+| **Select** | Open the plugin's own menu (CTRPF's default hotkey): Bottom screen on top, Auto panel, Battle layout, Instant text, Battle speed, Open PC (Boxes), Quick save, View settings, Reload settings file. |
 
 Every other button works as normal. Each native screen below also takes the buttons listed for it.
+
+## Quick save
+
+Quick save uses the game's normal save flow. Configure an optional combo in
+`[controls]` of `usum-onescreen.ini` (reload settings after editing):
+
+```ini
+save_key = R+Y
+```
+
+The default is `none` (off). Hold R, then press Y. Once the full combo fires,
+its keys stay hidden from the game until each is released. It fires once per
+press, including on refusal. The `save` command and **Select ? Quick save** do
+the same thing; close the plugin menu to let the game run. This request is
+explicit permission to answer **Yes** to the game's save confirmation.
+
+A small native **Saving...** notice replaces the native X menu/panel during
+saving. **Saved** means the game reported write success, even if the action
+failed or timed out afterward. In Ultra Sun the game closes the X menu itself
+and returns straight to the field; random Rotom chat may follow immediately.
+Quick save waits 90 frames for the report to close, then presses B only if the
+X menu is still showing. It does not wait for an idle field.
+Logs: `save: saved`, `save: refused (reason)`, `save: failed (reason)`.
+No memory dump, save-data edit, or direct call to a game function is used.
+
+Refuses in battle, outside the field/loading, with a menu (including the native
+map) open, while talking, during an encounter, a running/queued script or event,
+in Festival Plaza, during another plugin action, or while the PC/another save
+is opening. Unknown/busy field states also refuse. The game's own X/Y handlers
+retain its save restrictions: if it does not offer its recognized save
+confirmation, quick save never answers A. A missing/disabled save prompt is
+reported as a refusal when the X menu remains up; otherwise as a failure.
+There is no retry of Yes, including on an error or timeout. On failure the
+panel is exposed if a field menu remains open, for manual recovery; a timeout
+while writing is uncertain, so wait for the game before trying again.
+
+Avoid Select combos (CTRPF owns Select) and conflicts with `pc_key`, `map_key`,
+`panel_key` or `touch_key`. Identical simultaneously completed PC/save combos
+prefer save. Keys that complete different overlapping combos on different
+reads remain separate requests. L may also act as A with the game's L=A option.
+
+Quick save's runtime observer is statically checked against both v1.2
+FieldMenu binaries. Two Ultra Sun emulator runs changed the save file and
+observed write success; the old action then timed out waiting for the X menu
+to return. The revised ending still needs an emulator check, as does Ultra
+Moon. See [QUICK-SAVE.md](QUICK-SAVE.md) for TEST-instance checks.
 
 ## Native screens
 
