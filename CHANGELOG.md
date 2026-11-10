@@ -6,6 +6,8 @@ All notable changes for players are listed here. Versions follow [Semantic Versi
 
 ### Added
 
+- Windows launcher: Visual quality alongside graphics presets, with Keep, Off, Sharpen, FXAA-style anti-aliasing and Sharpen + AA; persisted selection and original GPL-3.0 shaders installed into the portable instance. Effects require OpenGL/2D, with an unavailable reason on Vulkan or stereo and no automatic API changes. Real GPU rendering remains unverified.
+
 - Quick save through the game's X/Y save flow: optional `[controls] save_key` (default none), `save` command and Quick save plugin menu entry; guarded confirmation, native notices, refusal checks and host-tested sequence. Runtime/emulator verification pending.
 
 - Windows launcher: permanent named save slots per game (save/load/rename/delete), a Saves dialog with separate slots and rotating backups, and ZIP import/export of current saves, slots and backups. Slot loads make a safety backup first; imports verify the declared game title and reject unsafe ZIP paths. New `slot`, `export` and `import` CLI commands. Save data only; extdata is excluded.

@@ -30,6 +30,7 @@ namespace UsumOneScreen
                          import matching save ZIP into a new slot
   cheats [on NAME|off NAME]  list / change cheats
   set graphics=keep|native|high|ultra  set rendering resolution
+  set visual_quality=keep|off|sharpen|aa|sharpen-aa  OpenGL post-processing
   status                 show the setup
   snapshot PNG           draw the window into PNG and exit (for tests)
 
@@ -253,7 +254,7 @@ namespace UsumOneScreen
         {
             var ini = PluginIni.Load(home.PluginIniPath);
             bool pluginChanged = false;
-            string aspectChoice = null, graphicsChoice = null, glyphChoice = null;
+            string aspectChoice = null, graphicsChoice = null, glyphChoice = null, visualChoice = null;
             ControlPreset? controls = null;
             foreach (var a in args)
             {
@@ -271,6 +272,11 @@ namespace UsumOneScreen
                 {
                     if (!GameOptions.Graphics.Contains(value.ToLowerInvariant())) throw new SetupException("bad graphics");
                     graphicsChoice = value.ToLowerInvariant();
+                }
+                else if (key == "visual_quality")
+                {
+                    visualChoice = value.ToLowerInvariant();
+                    VisualQuality.Validate(home, visualChoice);
                 }
                 else if (key == "glyphs" && value.Equals("auto", StringComparison.OrdinalIgnoreCase)) glyphChoice = "auto";
                 else if (PluginIni.Keys.Contains(key))
@@ -293,6 +299,7 @@ namespace UsumOneScreen
             if (pluginChanged)
                 ini.Save(home.PluginIniPath);
             if (glyphChoice != null) home.SetState("glyphs", glyphChoice);
+            if (visualChoice != null) VisualQuality.Set(home, visualChoice);
             if (graphicsChoice != null) GameOptions.SetGraphics(home, graphicsChoice);
             if (aspectChoice != null)
                 home.SetState("aspect", aspectChoice);

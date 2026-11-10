@@ -24,6 +24,7 @@ namespace UsumOneScreen
         }
         public static void Sync(Home home)
         {
+            VisualQuality.Sync(home);
             string graphics = home.GetState("graphics", "keep");
             if (graphics != "keep")
             {
