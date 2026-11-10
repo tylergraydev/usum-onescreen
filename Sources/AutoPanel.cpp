@@ -6,16 +6,16 @@
 #include "Panel.hpp"
 #include "Scene.hpp"
 #include "Settings.hpp"
+#include "QuickSave.hpp"
 
 namespace OneScreen
 {
     using namespace CTRPluginFramework;
 
     // Scene IDs from SceneModule() (see docs/OFFSETS.md). The mode for each
-    // scene comes from the [scenes] settings; these two drive the X menu flag.
+    // scene comes from the [scenes] settings. SceneField and SceneBattle come
+    // from ActionQueue.hpp (via QuickSave.hpp) and drive the X menu flag.
     static const char *SceneTitle = "TitleMenu";
-    static const char *SceneField = "FieldRo";
-    static const char *SceneBattle = "Battle";
 
     static bool s_enabled = false;      // Settings::autoPanel; set at boot
     static bool s_nativeBattle = false;
@@ -34,6 +34,12 @@ namespace OneScreen
 
     bool AutoPanelUpdate(const std::string &scene, u32 gameHeld, int fieldState)
     {
+        if (QuickSaveRunning())
+        {
+            const bool changed = GetPanelMode() != PanelMode::Off;
+            SetPanelMode(PanelMode::Off);
+            return changed;
+        }
         const u32 pressed = gameHeld & ~s_prevHeld;
         s_prevHeld = gameHeld;
 

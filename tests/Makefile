@@ -10,7 +10,7 @@ OUT      := build
 PYTHON   ?= python3
 CODE_BIN ?=
 
-TESTS    := $(OUT)/image_test $(OUT)/hires_test $(OUT)/band_column_test $(OUT)/layer_runs_test $(OUT)/pillarbox_test $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/settings_file_test $(OUT)/ui_host_test $(OUT)/party_data_test $(OUT)/action_queue_test $(OUT)/xmenu_test $(OUT)/battle_menu_test $(OUT)/keyboard_test $(OUT)/pokedex_test $(OUT)/native_screens_test $(OUT)/bag_test $(OUT)/map_test $(OUT)/party_menu_test $(OUT)/boxes_test $(OUT)/field_settle_test $(OUT)/pc_anywhere_test $(OUT)/move_learn_test $(OUT)/rotom_prompt_test $(OUT)/theme_test $(OUT)/screen_buffer_test $(OUT)/poke_icons_test
+TESTS    := $(OUT)/quick_save_test $(OUT)/image_test $(OUT)/hires_test $(OUT)/band_column_test $(OUT)/layer_runs_test $(OUT)/pillarbox_test $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/settings_file_test $(OUT)/ui_host_test $(OUT)/party_data_test $(OUT)/action_queue_test $(OUT)/xmenu_test $(OUT)/battle_menu_test $(OUT)/keyboard_test $(OUT)/pokedex_test $(OUT)/native_screens_test $(OUT)/bag_test $(OUT)/map_test $(OUT)/party_menu_test $(OUT)/boxes_test $(OUT)/field_settle_test $(OUT)/pc_anywhere_test $(OUT)/move_learn_test $(OUT)/rotom_prompt_test $(OUT)/theme_test $(OUT)/screen_buffer_test $(OUT)/poke_icons_test
 
 .DEFAULT_GOAL := all
 
@@ -44,6 +44,10 @@ SETTINGS_SRCS := ../Sources/Settings.cpp ../Sources/SettingsFile.cpp
 SETTINGS_HDRS := ../Includes/Settings.hpp ../Includes/SettingsFile.hpp
 
 $(OUT)/hires_test $(OUT)/band_column_test: $(SETTINGS_SRCS) $(SETTINGS_HDRS)
+
+$(OUT)/quick_save_test: quick_save_test.cpp ../Sources/QuickSaveFlow.cpp ../Includes/QuickSaveRules.hpp ../Includes/PcAnywhereRules.hpp ../Sources/ActionQueue.cpp ../Includes/ActionQueue.hpp $(SETTINGS_SRCS) $(SETTINGS_HDRS)
+	@mkdir -p $(OUT)
+	$(CXX) $(CXXFLAGS) quick_save_test.cpp ../Sources/QuickSaveFlow.cpp ../Sources/ActionQueue.cpp $(SETTINGS_SRCS) -o $@
 
 $(OUT)/pc_anywhere_test: pc_anywhere_test.cpp ../Includes/PcAnywhereRules.hpp $(SETTINGS_SRCS) $(SETTINGS_HDRS)
 	@mkdir -p $(OUT)
@@ -187,6 +191,7 @@ run: $(TESTS)
 	./$(OUT)/settings_test
 	./$(OUT)/settings_file_test
 	./$(OUT)/field_settle_test
+	./$(OUT)/quick_save_test
 	./$(OUT)/pc_anywhere_test
 	./$(OUT)/party_data_test
 	./$(OUT)/action_queue_test
