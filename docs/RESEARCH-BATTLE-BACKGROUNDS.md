@@ -137,8 +137,12 @@ Player workflow, zero plugin code:
 3. Put the edited PNG (it can be 2x or 4x) under `load/textures/<TID>/` with
    the `pack.json` the dump wrote, then enable **Use Custom Textures**.
 
-**Unverified, needs one emulator run**: that the backdrop shows up in a dump
-(power-of-two 512x256, so it should), and its name. Also unverified: whether
+**Verified 2026-11-09** (Azahar 2126.2, Route 2 grass battle, see
+`docs/CUSTOM-BATTLE-BACKGROUNDS.md`): the backdrop pieces show up in a dump and
+recoloured copies show in battle with a `use_new_hash: true` pack.json. That
+backdrop was 256x128 / 256x64 ETC1A4 pieces (hill, rocks, bushes) plus 128x128
+grass, not a 512x256 texture; no 512x256 ETC1/ETC1A4 texture was dumped in
+that battle. Still unverified: whether
 the new hash equals CityHash64 of the GF texture's data bytes as stored in
 `a/0/8/1`. If it does, a script can name the PNGs from the player's dump
 with no texture dumping at all. GFL2 uploads the PICA-tiled data as-is, so
@@ -219,9 +223,10 @@ only the script); the background index for each place is still unmapped.
 
 Next steps, in order:
 
-1. One emulator run with Dump Textures on in a grass battle: confirm
-   `btl_G_kusa_mori01` dumps as `tex1_512x256_<hash>_13` and that a
-   repainted copy shows in battle.
+1. ~~One emulator run with Dump Textures on in a grass battle~~ Done
+   2026-11-09: dump and replacement work (guide:
+   `docs/CUSTOM-BATTLE-BACKGROUNDS.md`). Which GF texture names the Route 2
+   pieces are (no 512x256 one was dumped) is still open.
 2. Check whether that hash equals CityHash64 of the texture's data in entry 0
    (data length at header `+0x18`, data at `+0x80`). If it does, write
    `tools/battle_bg.py list|names` for the player's own dump.
