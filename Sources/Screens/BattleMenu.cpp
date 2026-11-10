@@ -239,6 +239,10 @@ namespace Screens
         if (page != BattlePage::Hidden)
             m_sentPokemon = false;
         m_description = false;
+        m_power = BattlePower::None;
+        m_powerSent = false;
+        m_powerWait = 0;
+        m_zBackPending = false;
         m_page = page;
         m_menu = snap.menu;
         m_afterCatch = snap.afterCatch;
@@ -663,7 +667,7 @@ namespace Screens
     {
         BattleMenuOutput out;
         BattlePage page = PageFor(snap);
-        if (!snap.inBattle) m_spread = false;
+        if (!snap.inBattle) { m_spread = false; m_zMode = false; }
         if (page == BattlePage::Command)
             m_seenCommand = true;
         else if (!snap.inBattle)
@@ -687,6 +691,7 @@ namespace Screens
         m_menu = snap.menu;
         if (m_stable < 0xFFFF)
             m_stable++;
+        if (m_page == BattlePage::Command && m_stable >= CommandSettleFrames) m_zMode = false;
         const u32 sig = GameSignature(snap);
         if (sig != m_gameSig)
         {
@@ -724,8 +729,17 @@ namespace Screens
             return out;
         }
         out.capture = true;
-        out.keys = BattleMenuKeys | (m_page == BattlePage::Moves ? BattleKeys::L : 0);
+        out.keys = BattleMenuKeys | (m_page == BattlePage::Moves ? BattleKeys::L | BattleKeys::R : 0);
 
+        if (m_page == BattlePage::Moves && m_zMode && !snap.actionRunning && !snap.zSlots
+            && snap.power == BattlePower::Z && (m_zBackPending || m_queued == nullptr)) {
+            m_zMode = false;
+            m_zBackPending = false;
+            m_power = BattlePower::None;
+            m_powerSent = false;
+            m_pending = false;
+            m_note.clear();
+        }
         if (m_pending && ++m_pendingFrames > PendingFrames)
         {
             // The action gave up (it logs why); let the player choose again.
@@ -740,6 +754,56 @@ namespace Screens
         if (snap.actionRunning || m_pending)
             return out;
 
+        if (m_page == BattlePage::Moves && snap.zSlots) {
+            m_zMode = true;
+            if (!m_powerSent) m_power = BattlePower::None; // also accept a manually opened Z list
+        }
+        if (m_page == BattlePage::Moves && !m_description && (pressed & BattleKeys::B) && m_zMode) {
+            m_queued = nullptr;
+            m_power = BattlePower::None;
+            m_powerSent = false;
+            m_zBackPending = true;
+            m_pending = true;
+            m_pendingFrames = 0;
+            m_note.clear();
+            out.action = "battle-z-back";
+            return out;
+        }
+        if (m_page == BattlePage::Moves && m_powerSent && m_queued != nullptr)
+        {
+            if (++m_powerWait < ListSettleFrames) return out;
+            if (!snap.powerStepSucceeded) {
+                m_queued = nullptr;
+                m_power = BattlePower::None;
+                m_powerSent = false;
+                m_zMode = snap.zSlots != 0;
+                m_note = "Power tap failed; choose again";
+                return out;
+            }
+            if (m_power == BattlePower::Z) {
+                if (!snap.zSlots) {
+                    if (m_powerWait >= ZListNoticeFrames)
+                        m_note = "Z rows unconfirmed: panel / B";
+                    return out;
+                }
+                if (!(snap.zSlots & (1u << m_cursor))) {
+                    m_queued = nullptr;
+                    m_note = "No Z-Power in this slot";
+                    return out;
+                }
+            }
+            m_note.clear();
+        }
+        if (m_page == BattlePage::Moves && m_queued == nullptr && !m_description && (pressed & BattleKeys::R))
+        {
+            if (m_zMode) m_note = "B returns to normal moves";
+            else if (snap.power == BattlePower::None) m_note = "Power button not confirmed";
+            else {
+                m_power = m_power == snap.power ? BattlePower::None : snap.power;
+                m_note.clear();
+            }
+            return out;
+        }
         if (m_page == BattlePage::Moves && m_queued == nullptr && (pressed & BattleKeys::L))
         {
             m_description = !m_description;
@@ -807,7 +871,9 @@ namespace Screens
                     for (u8 i = 0; i < snap.moveCount; i++)
                         anyPp = anyPp || snap.moves[i].pp > 0;
                     const MoveRow &row = snap.moves[m_cursor];
-                    if (row.pp == 0 && anyPp)
+                    if (m_zMode && !(snap.zSlots & (1u << m_cursor)))
+                        m_note = snap.zSlots ? "No Z-Power in this slot" : "Z rows unconfirmed: panel / B";
+                    else if (row.pp == 0 && anyPp)
                         m_note = (row.name.empty() ? std::string("That move") : row.name) + " has no PP left";
                     else {
                         m_spread = row.spread;
@@ -820,6 +886,29 @@ namespace Screens
         const u32 settle = m_page == BattlePage::Command ? CommandSettleFrames : MovesSettleFrames;
         if (m_queued != nullptr && m_stable >= settle)
         {
+            if (m_page == BattlePage::Moves && m_queued != MoveBack && m_power != BattlePower::None && !m_powerSent)
+            {
+                if (snap.power != m_power) {
+                    m_queued = nullptr;
+                    m_power = BattlePower::None;
+                    m_note = "Power unavailable: no button";
+                    return out;
+                }
+                out.tap = m_power == BattlePower::Mega ? "battle_moves.mega" : "battle_moves.z_power";
+                m_powerSent = true;
+                if (m_power == BattlePower::Z) m_zMode = true;
+                m_powerWait = 0;
+                return out;
+            }
+            if (m_page == BattlePage::Moves && m_zMode && m_queued != MoveBack) {
+                if (!(snap.zSlots & (1u << m_cursor))) {
+                    m_queued = nullptr;
+                    m_note = "No Z-Power in this slot";
+                    return out;
+                }
+                static const char *const zActions[] = {"battle-z-move1", "battle-z-move2", "battle-z-move3", "battle-z-move4"};
+                m_queued = zActions[m_cursor];
+            }
             out.action = m_queued;
             if (m_queued == CommandActions[(int)BattleCommand::Pokemon])
                 m_sentPokemon = true;

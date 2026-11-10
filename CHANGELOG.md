@@ -6,6 +6,8 @@ All notable changes for players are listed here. Versions follow [Semantic Versi
 
 ### Added
 
+- Native battle power controls: R arms a screenshot-confirmed Mega Evolution or Z-Power button before a move; L keeps descriptions. Power taps are guarded and host-tested. Static button-text probes tolerate the observed animations; Z submission permits only confirmed gold rows, and B returns once to normal moves. Repaired native flows still need emulator validation.
+
 - Compact battle foe panel with live types, caught-before marker and stat stages, plus the player's changed stages, in all three layouts.
 - Quick save through the game's X/Y save flow: optional `[controls] save_key` (default none), `save` command and Quick save plugin menu entry; guarded confirmation, native notices, refusal checks and host-tested sequence. Runtime/emulator verification pending.
 

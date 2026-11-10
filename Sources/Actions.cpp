@@ -18,6 +18,8 @@ namespace OneScreen
     using namespace CTRPluginFramework;
 
     static_assert(ActionKeyB == (u32)Key::B, "action key B");
+    static_assert(((WorldBattleMega | WorldBattleZ | WorldBattleZList | WorldBattleZSlotMask)
+                  & (WorldSaveAsk | WorldSaveDone | WorldSaveIdle)) == 0, "battle power/save flags must not overlap");
     static_assert(ActionKeyX == (u32)Key::X, "action key X");
 
     // The X menu is an overlay inside FieldRo, so the scene doesn't show it;
@@ -61,6 +63,9 @@ namespace OneScreen
     };
 
     static volatile bool s_xmenuSeen = false;   // written by the OSD callback
+    static volatile BattlePower s_powerSeen = BattlePower::None;
+    static volatile u32 s_powerFrame = 0;
+    static volatile u8 s_zSlotsSeen = 0;
     static volatile bool s_partyListSeen = false;
     static volatile bool s_page2Seen = false;
 
@@ -102,6 +107,26 @@ namespace OneScreen
         for (const PixelProbe &p : PartyListProbe)
             party = party && Matches(fb, p);
         s_partyListSeen = party;
+        BattlePowerPixel pixels[16];
+        for (unsigned i = 0; i < 16; ++i) {
+            const auto &p = BattlePowerPoints[i / 8][i % 8];
+            DecodePixel(fb.origin + p.x * fb.stepX + p.y * fb.stepY, fb.format,
+                        pixels[i].r, pixels[i].g, pixels[i].b);
+        }
+        const BattlePower power = ProbeBattlePower(pixels);
+        static BattlePower candidate = BattlePower::None;
+        static unsigned count = 0;
+        count = power == candidate ? (count < 3 ? count + 1 : 3) : 1;
+        candidate = power;
+        s_powerSeen = count >= 3 ? power : BattlePower::None;
+        BattlePowerPixel rows[12];
+        for (unsigned i = 0; i < 12; ++i) {
+            const auto &p = BattleZPoints[i / 3][i % 3];
+            DecodePixel(fb.origin + p.x * fb.stepX + p.y * fb.stepY, fb.format,
+                        rows[i].r, rows[i].g, rows[i].b);
+        }
+        s_zSlotsSeen = ProbeBattleZSlots(rows);
+        s_powerFrame = s_frames;
         return false;
     }
 
@@ -130,7 +155,7 @@ namespace OneScreen
             if (s_world.scene == SceneBattle)
                 s_world.flags |= MoveLearnWorldFlags(sceneManager);
         }
-        s_world.flags = (s_world.flags & ~(WorldXMenu | WorldXMenuPage2 | WorldPartyList)) | ActionProbeFlags();
+        s_world.flags = (s_world.flags & ~(WorldXMenu | WorldXMenuPage2 | WorldPartyList | WorldBattleMega | WorldBattleZ | WorldBattleZList | WorldBattleZSlotMask)) | ActionProbeFlags();
         const u32 save = WorldSaveAsk | WorldSaveDone | WorldSaveIdle;
         s_world.flags = (s_world.flags & ~save) | QuickSaveWorldFlags(sceneManager);
         const u32 box = WorldBoxIdle | WorldBoxModal | WorldBoxCarrying;
@@ -139,8 +164,13 @@ namespace OneScreen
 
     u32 ActionProbeFlags(void)
     {
+        const bool fresh = s_frames - s_powerFrame <= 2;
+        const BattlePower power = fresh ? s_powerSeen : BattlePower::None;
+        const u8 slots = fresh ? s_zSlotsSeen : 0;
         return (s_xmenuSeen ? WorldXMenu : 0) | (s_page2Seen ? WorldXMenuPage2 : 0)
-               | (s_partyListSeen ? WorldPartyList : 0);
+               | (s_partyListSeen ? WorldPartyList : 0)
+               | (power == BattlePower::Mega ? WorldBattleMega : power == BattlePower::Z ? WorldBattleZ : 0)
+               | (slots ? WorldBattleZList | ((u32)slots << 24) : 0);
     }
 
     static std::string DescribeWorld(const ActionWorld &world)
