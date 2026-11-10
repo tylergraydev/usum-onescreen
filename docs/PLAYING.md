@@ -20,6 +20,24 @@ The app in [`player/`](../player/README.md) detects the game from the ROM, check
 
 **Update versions:** genuine v1.2 is `0x0820` for both games. Sun also accepts a rebuilt `0x0800` update with a warning: a brand-new game stalls at its first language screen, also with the plugin loader off; an existing save plays. Moon refuses `0x0800` and all versions other than `0x0820`. A new Sun game with a genuine `0x0820` update was tested through the launcher to Kukui's intro. Moon has only limited plugin testing and its new game stalls in Azahar's opening bedroom scene. Real gamepad input, mapping in Azahar, fullscreen, decrypted base-game CIA installation and Azahar versions other than 2126.2 remain untested in-game.
 
+## Screen filters
+
+Optional `[display] filter = off|warm|cool|vignette` in `usum-onescreen.ini`
+adds a gentle warm/cool colour wash or a subtle stepped rectangular vignette.
+Default `off` adds no GPU work and preserves the original picture. Choose
+**Reload settings file** after editing; the live test command `filter warm`
+(or `cool`, `vignette`, `off`) changes the session only. Bare `filter` reports
+status. Sharpen, bloom and vivid/saturation grading are not available.
+
+Filters draw over the game's top-screen field/battle picture and hi-res plugin
+menus, before the game's display copy. Later OSD/CPU overlays and Map's picture
+window are not filtered. They require the target GPU backend with shadow and
+restore enabled, and checkerboard testing off. They work with `hires off`, but
+legacy menu presentation uses CPU fallback while any filter is selected to keep
+GX command counts small; those fallback frames can become 1x. No copy or pixel
+buffer is added. Emulator visual/stability checks, including Vulkan, are pending;
+see [GPUQUAD.md](GPUQUAD.md) for costs and verification steps.
+
 ## Controller prompt icons
 
 Set `[controls] glyphs = 3ds|xbox|playstation|nintendo` in

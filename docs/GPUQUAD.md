@@ -5,6 +5,97 @@ GX command/frame and three-minute X menu/Party soaks. Phase 2 expands that
 backend to all native layers. **Phase 2 still needs the plugin build and emulator
 checks below**; historical results do not validate the new screens.
 
+## Optional screen filters (backlog #24)
+
+`[display] filter = off|warm|cool|vignette` defaults to **off**. Live commands:
+`filter <name>` changes the session setting; bare `filter` reports selection and
+backend readiness. Reloading the INI replaces the live choice. Invalid names
+warn and preserve the previous selection. `vivid`, sharpen and bloom are not
+implemented or accepted.
+
+There is a per-frame injection point: `DisplayTransferHook` runs our list
+**before** forwarding the game's top copy (`256x512 -> 240x400`, `0x1004`).
+The pass draws directly into that tiled render target, including the field and
+battle picture when no plugin menus are visible. It uses the existing rotated
+viewport (y=112..511), with no widescreen squeeze on filter geometry. Filters
+run after hi-res bands and menus, before state restoration and the game's copy.
+OSD/CPU/legacy UI and Map's later picture copy are drawn afterwards and are not
+filtered. This is backend-independent PICA work in Azahar, rather than an
+OpenGL post-processing shader; Vulkan output still needs emulator validation.
+
+The safe point does **not** provide a separate texture of the game picture.
+Sampling the render target while writing it is a feedback hazard. TEV cannot
+read the destination framebuffer; blending can use it without texture feedback.
+Warm/cool therefore use TEV REPLACE constant RGB/alpha and source-over blending:
+`out = (tint * 24 + destination * 231) / 255`. Warm RGB is (255,180,96), cool
+(128,208,255). These are gentle washes, not saturation/contrast or LUT grading.
+Vignette draws five disjoint rectangular rings, each 10 pixels horizontally and
+6 vertically, alpha 25,20,15,10,5 from outside inward. The central 300x180 is
+untouched, and corners are not blended twice. This intentionally subtle stepped
+vignette is not a smooth radial mask. Texture units are disabled for filter
+quads; target alpha is preserved. The original shader and shadow restore suffice.
+
+**GX per recognised top present:** off adds **0**; enabled adds **0** when the
+hi-res overlay already submits its list, otherwise **1** (one total GpuQuad
+list, no transfers). Map retains its existing separate picture copy (two plugin
+commands total with the target list). No extra render pass or copy is added.
+The legacy LayerGpu presenter can use 6-8 commands alone, so any selected filter
+conservatively makes it take its existing CPU fallback, even if the filter
+backend is unavailable. This prevents stacking those transfers with the filter;
+it may reduce a fallback frame to 1x. Off preserves the original legacy path.
+
+**New persistent pixel/linear/heap buffer bytes: 0.** Tint uses 96 vertex bytes;
+vignette uses 1,920, both inside the existing 8-KiB VBO. Each filter quad adds
+120 command bytes, plus at most one 8-byte sampler write and existing alignment
+padding, inside the existing 16-KiB list. These are reused capacities, not new
+allocations. The original vertex overflow guard refuses a whole list rather
+than publish partial geometry. Filter bookkeeping adds six static bytes before
+alignment (quad index, active enum, atomic selection), plus one Settings enum
+field; executable/constant growth still reduces the plugin heap. No textures,
+shader binaries, or large static tables are added.
+
+Sharpen, true vivid/saturation grading and soft bloom need a separate source
+picture and a sampling/combine design. A full RGBA8 256x512 source is **524,288
+bytes**, plus **at least one copy GX command** per present before the drawing
+list (at least two plugin GX total; Map adds another). The existing 384,000-byte
+FB diagnostic target cannot hold that source. A cropped 240x400 source is
+384,000 bytes but needs a validated crop/tiling/high-resolution-preserving copy.
+Do not assume the current atlas blur can read the game's picture: it only reads
+plugin menu artwork. Neither copy approach is implemented or validated here.
+
+Host verification (native Windows, no make/WSL): after `vcvars64.bat`, directly
+compiled and ran the following with MSVC `/nologo /std:c++17 /EHsc /W4 /WX
+/I Includes`, executables/objects under `tests/build/`. For example, from the
+repository root in a VS developer command prompt:
+
+```bat
+cl /nologo /std:c++17 /EHsc /W4 /WX /I Includes tests/filter_test.cpp Sources/Settings.cpp Sources/SettingsFile.cpp /Fe:tests/build/filter_test.exe /Fo:tests/build/
+tests\build\filter_test.exe
+```
+
+The targets/checks run were:
+
+- `tests/filter_test.cpp Sources/Settings.cpp Sources/SettingsFile.cpp`: defaults,
+  parse/reload/live parser, rejected names, constant TEV/source-over samples,
+  every vignette pixel's coverage/alpha and zero-alpha identity.
+- `tests/settings_test.cpp Sources/Settings.cpp Sources/SettingsFile.cpp`:
+  **224 checks, zero failures**, including default-file round trip.
+- `tests/blur_test.cpp`: existing production-UV blur reference passed.
+- `python -I tests/filter_command_test.py` and `python -I
+  tests/blur_command_test.py`: real submission-site/source guards passed. These
+  prove the static one-list/no-copy structure, not GPU execution or queue timing.
+- devkitARM `arm-none-eabi-g++ -fsyntax-only` with the repository's ARM/3DS flags
+  on GpuQuad.cpp, LayerGpu.cpp, Settings.cpp and main.cpp passed.
+
+Off emits no filter vertices/register writes and leaves the old command stream
+and target bytes unchanged by construction. No emulator pixel capture or linked
+plugin build was performed. Runtime checks still required: field/battle, Party,
+X menu, Bag and Map at 1x/5x, stock/16:9/21:9, Vulkan and OpenGL; toggle all
+filters/off, hires and settings reload, inspect ring seams/orientation/tint,
+unchanged target alpha and game state, verify GX/frame=1 (Map=2), and soak for
+crashes. Check CPU fallback resolution and menu ordering too. Existing Azahar
+synchronous execution, shadow coverage, stereo and real-hardware limits apply.
+
 ## Controls and fallback
 
 `hires on|off|status` switches all native Layer users live. Readiness requires

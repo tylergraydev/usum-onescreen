@@ -294,6 +294,14 @@ namespace UI
     static u32 s_bandQuads = 0;
     static u32 s_blurQuads = 0;
     static u32 s_mipBase = 1;
+    static u32 s_filterBase = 1;
+    static ScreenFilter s_activeFilter = ScreenFilter::Off;
+
+    static bool FilterReady(void)
+    {
+        return GetScreenFilter() != ScreenFilter::Off && s_on.load() && s_hooked && s_dtHooked
+            && s_inTarget && s_shadow && s_restore && !s_test.load() && s_scratch != 0;
+    }
     static_assert(BlurPyramidBytes <= TargetW * TargetH * 4, "blur must fit existing FB scratch");
     static std::string s_why = "off";
     static u32 s_frames = 0, s_drawn = 0, s_skipped = 0, s_maxGx = 0, s_listBytes = 0, s_restored = 0;
@@ -615,6 +623,15 @@ namespace UI
             for (const Quad &q : s_active)
                 if (q.visible) write(q.destination, q.region, s_squeeze);
         }
+        // Filters cover the physical picture, including bands, without the UI
+        // squeeze. No texture reads: TEV supplies a constant source-over colour.
+        s_filterBase = s_vertexQuads;
+        s_activeFilter = FilterReady() ? GetScreenFilter() : ScreenFilter::Off;
+        for (u32 i = 0; i < ScreenFilterQuadCount(s_activeFilter); i++)
+        {
+            const auto q = ScreenFilterQuad(s_activeFilter, i);
+            write(Rect{q.x, q.y, q.w, q.h}, Rect{0, 0, 1, 1}, 1.f);
+        }
         // Append reduction geometry after the visible quads. Flush it together,
         // but only the final scene pass draws the visible prefix.
         s_mipBase = s_vertexQuads;
@@ -730,7 +747,16 @@ namespace UI
         const u32 end = reducing ? first + BlurLevelTaps(mip) : s_mipBase;
         for (u32 quad = first; quad < end; quad++)
         {
-        if (reducing || quad < s_blurQuads)
+        if (!reducing && quad >= s_filterBase)
+        {
+            const u32 env[5] = { GPU_CONSTANT | (GPU_CONSTANT << 16), 0,
+                GPU_REPLACE | (GPU_REPLACE << 16),
+                ScreenFilterQuad(s_activeFilter, quad - s_filterBase).colour, 0 };
+            GPUCMD_AddIncrementalWrites(GPUREG_TEXENV0_SOURCE, env, 5);
+            GPUCMD_AddWrite(GPUREG_TEXUNIT_CONFIG, 0); // no framebuffer/atlas sampling
+            GPUCMD_AddWrite(GPUREG_DEPTH_COLOR_MASK, (GPU_ALWAYS << 4) | (7 << 8)); // preserve target alpha
+        }
+        else if (reducing || quad < s_blurQuads)
         {
             // Reduction ignores source alpha; only the final bands are darkened.
             const u32 alpha = reducing ? BlurTapAlpha(quad - first) : 255;
@@ -745,7 +771,7 @@ namespace UI
                 GPU_REPLACE | (GPU_REPLACE << 16), 0, 0 };
             GPUCMD_AddIncrementalWrites(GPUREG_TEXENV0_SOURCE, env, 5);
         }
-        if (!reducing && (quad == 0 || quad == s_blurQuads))
+        if (!reducing && quad < s_filterBase && (quad == 0 || quad == s_blurQuads))
         {
             const bool band = quad < s_blurQuads;
             const u32 size = band ? BlurLevelSize(BlurLevels - 1) : TexW;
@@ -1032,7 +1058,7 @@ namespace UI
                 s_dtSeen[k].count++;
         }
         const u32 inFormat = (flags >> 8) & 7;
-        if ((s_test.load() || HiResReady()) && s_on.load() && s_inTarget && !s_ownPush && s_scratch != 0 && (flags & ((1 << 1) | (1 << 3) | (1 << 5))) == 0
+        if ((s_test.load() || HiResReady() || FilterReady()) && s_on.load() && s_inTarget && !s_ownPush && s_scratch != 0 && (flags & ((1 << 1) | (1 << 3) | (1 << 5))) == 0
             && outW == TargetW && outH == TargetH && inW >= outW && inH >= outH
             && ((inW == outW && inH == outH) || (flags & (1 << 2)) != 0)
             && (inFormat == GSP_RGBA8_OES || inFormat == GSP_BGR8_OES) && ((flags >> 24) & 3) == 0)
@@ -1053,6 +1079,22 @@ namespace UI
             RecursiveLock_Unlock(&s_lock);
         }
         HookContext::GetCurrent().OriginalFunction<void>(in, inW, inH, out, outW, outH, flags);
+    }
+
+    std::string FilterCommand(const std::string &args)
+    {
+        if (!args.empty())
+        {
+            ScreenFilter filter;
+            if (!ParseScreenFilter(args, filter))
+                return "filter: use off, warm, cool or vignette";
+            Settings settings = GetSettings();
+            settings.filter = filter;
+            SetSettings(settings);
+        }
+        return std::string("filter: ") + ScreenFilterName(GetScreenFilter())
+            + (GetScreenFilter() == ScreenFilter::Off ? "" : FilterReady()
+                ? " (target pass; <=1 GX total, no copy)" : " (inactive: requires target backend, shadow and restore; test off)");
     }
 
     std::string StartGpuQuad(u32 displayTransfer)
