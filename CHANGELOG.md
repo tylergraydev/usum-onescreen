@@ -6,6 +6,13 @@ All notable changes for players are listed here. Versions follow [Semantic Versi
 
 ### Added
 
+- Optional plugin-side top-screen filters: `[display] filter = off|warm|cool|vignette`
+  and live `filter <name>`. Copy-free TEV/blended quads share the existing target
+  list (off adds zero GX; enabled adds at most one). No new pixel buffers;
+  legacy menus use CPU fallback while a filter is selected to preserve the GX
+  budget. Sharpen/bloom/saturation grading deferred. Emulator validation pending.
+
+
 - Opt-in `[display] pillarbox = blur`: darkened, blurred menu-picture side bands in widescreen with the hi-res GPU overlay. Uses a box-filter pyramid instead of sparse taps to suppress horizontal streaks. Keeps one overlay GX command, reusing 21,760 bytes of existing scratch; legacy/CPU fallback uses tint. Default remains tint. Plugin build and emulator verification pending.
 
 - Quick save through the game's X/Y save flow: optional `[controls] save_key` (default none), `save` command and Quick save plugin menu entry; guarded confirmation, native notices, refusal checks and host-tested sequence. Runtime/emulator verification pending.

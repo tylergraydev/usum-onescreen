@@ -14,7 +14,11 @@ TESTS    := $(OUT)/quick_save_test $(OUT)/image_test $(OUT)/hires_test $(OUT)/ba
 
 .DEFAULT_GOAL := all
 
-TESTS += $(OUT)/blur_test
+TESTS += $(OUT)/blur_test $(OUT)/filter_test
+
+$(OUT)/filter_test: filter_test.cpp ../Sources/Settings.cpp ../Sources/SettingsFile.cpp ../Includes/Settings.hpp ../Includes/SettingsFile.hpp
+	@mkdir -p $(OUT)
+	$(CXX) $(CXXFLAGS) filter_test.cpp $(SETTINGS_SRCS) -o $@
 
 $(OUT)/blur_test: blur_test.cpp ../Includes/UI/ColumnMapping.hpp ../Includes/UI/QuadLayout.hpp ../Includes/UI/Raster.hpp ../Includes/Settings.hpp
 	@mkdir -p $(OUT)
@@ -189,6 +193,8 @@ $(OUT)/screen_buffer_test: screen_buffer_test.cpp ../Sources/UI/ScreenBuffer.cpp
 	$(CXX) $(CXXFLAGS) -Wno-deprecated-declarations screen_buffer_test.cpp ../Sources/UI/ScreenBuffer.cpp $(UI_SRCS) -o $@
 
 run: $(TESTS)
+	./$(OUT)/filter_test
+	$(PYTHON) -I filter_command_test.py
 	./$(OUT)/blur_test
 	$(PYTHON) -I blur_command_test.py
 	./$(OUT)/image_test

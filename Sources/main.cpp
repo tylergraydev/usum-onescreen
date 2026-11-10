@@ -602,6 +602,8 @@ namespace CTRPluginFramework
                 return;
             }
         }
+        else if (line == "filter" || line.compare(0, 7, "filter ") == 0 || line.compare(0, 7, "filter\t") == 0)
+            WriteLog(OneScreen::UI::FilterCommand(line == "filter" ? "" : line.substr(7)), false);
         else if (line.compare(0, 6, "hires ") == 0)
             WriteLog(OneScreen::UI::HiResCommand(line.substr(6)), false);
         else if (line.compare(0, 8, "gpuquad ") == 0)
