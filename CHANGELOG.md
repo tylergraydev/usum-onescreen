@@ -6,6 +6,8 @@ All notable changes for players are listed here. Versions follow [Semantic Versi
 
 ### Added
 
+- Native Festival Plaza hub bar: L opens Party, R Bag, Start Profile, B leaves through a guarded single Back/Quit sequence. The plaza remains visible and walkable; submenus retain game controls. Detection uses CRO ownership and real captured button colours. Host tests pass; live calibration and exit verification pending.
+
 - Native Poke Pelago isle bar: L/R switch isles, Start opens Mohn, and B leaves through the guarded Back/Yes/A flow. `action close` shares that exit and closes the returned X menu. Isle touch play stays with the game. Isle detection uses six arrow-glyph pixels verified across all five isles, avoiding scenery-dependent bar disappearance. The exit recognises the captured dimmed-isle goodbye and holds brief Ask-probe misses; Yes/A remain single inputs. Automated exit emulator recheck pending.
 
 - Quick save through the game's X/Y save flow: optional `[controls] save_key` (default none), `save` command and Quick save plugin menu entry; guarded confirmation, native notices, refusal checks and host-tested sequence. Runtime/emulator verification pending.

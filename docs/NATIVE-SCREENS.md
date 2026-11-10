@@ -223,3 +223,40 @@ changed/missing prompts, scene loss, stuck Yes,
 exit timeout, and closing the returned X menu. Existing native-screen and
 action-queue tests also run. Live verification of the recalibrated probes and
 complete exit remains pending.
+
+## Festival Plaza hub bar (backlog #11)
+
+`Screens/FestivalPlaza.*` draws a slim 392 x 24 strip at (4,216) above the
+walkable plaza. L = Party/Pokemon, R = Bag, Start = Profile, B = Leave.
+Movement, A and touch remain with the game; only fresh presses trigger the
+bar, with no queued inputs. Existing Party/Bag native screens are reused.
+Other Plaza menus stay with the game; unknown views immediately hide the bar
+and release its keys/panel override. Auto view resumes the configured scene
+policy; with auto off use the manual panel. L+R yields to the panel for the
+remainder of that hub visit.
+
+Detection requires FieldRo plus a JoinFestaSubScreen scene-stack responder,
+then three matching hub samples. Fixed button/icon pixels come from real
+`rs-fp1` and `rs-fp-walk` captures, with per-channel tolerance 20. The quit
+pill and dark message border come from `rs-fp-quit`; Battle, Trade, Link,
+list and profile captures reject both states. The source PNGs were read from
+`H:/SunnyMoon/analysis/private/research/remaining-screens/`. See the Festival
+Plaza implementation notes in `RESEARCH-REMAINING-SCREENS.md` for every
+coordinate, RGB value and unverified research item.
+
+B starts guarded Back once -> stable Quit -> settle -> tap Quit once ->
+wait for FieldRo state 0 **and** loss of the Plaza responder. Quit has three
+matching observations and a bounded six-observation hold through flicker;
+a recognised hub invalidates it immediately. The independent action observer
+keeps sampling while the bar hides. Confirmation is never retried; timeout,
+changed guards and cancellation release the existing runner's capture.
+`action close` is unchanged for Plaza; the native B exit is the supported flow.
+
+Run `powershell -NoProfile -ExecutionPolicy Bypass -File tests/run_festival_plaza.ps1`
+for direct MSVC builds: Plaza capture/action/preview tests, Pelago/native/action
+regressions and layout-generation check. Previews are
+`tests/build/festival-plaza-1x.ppm` and `festival-plaza-2.5x.ppm` (400 x 240
+and 1000 x 600); upper pixels and hi-res Layer presentation are checked.
+The changed production files also pass direct devkitARM syntax checks.
+Live calibration of colours, CRO lifetime, prompts, panel fallback and the
+complete exit remains pending; no emulator or hardware test was performed.

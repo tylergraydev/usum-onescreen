@@ -13,6 +13,7 @@
 #include "QuickSave.hpp"
 #include "Screens/MoveLearn.hpp"
 #include "Screens/Pelago.hpp"
+#include "Screens/FestivalPlaza.hpp"
 
 namespace OneScreen
 {
@@ -137,9 +138,46 @@ namespace OneScreen
         s_pelagoLock.Unlock();
     }
 
+    // Festival exit guards have an independent observer, also while the bar
+    // is hidden during the action. Never infer exit from FieldRo alone.
+    static Mutex s_festivalLock;
+    static bool s_festivalWatching = false;
+    static u32 s_festivalBottom = 0;
+    static FestivalPlazaProbe s_festivalProbe;
+
+    static bool WatchFestival(u32 sceneManager, const std::string &scene)
+    {
+        const bool active = FestivalPlazaDetected(sceneManager, scene);
+        s_festivalLock.Lock();
+        if (active != s_festivalWatching)
+        {
+            s_festivalWatching = active;
+            s_festivalBottom = 0;
+            s_festivalProbe = FestivalPlazaProbe{};
+        }
+        s_festivalLock.Unlock();
+        return active;
+    }
+    static void SampleFestival(const Screen &screen)
+    {
+        if (screen.IsTop || s_festivalLock.TryLock()) return;
+        if (s_festivalWatching)
+        {
+            const FbLayout fb = GetLayout(screen);
+            const auto &points = FestivalPlazaSamplePoints();
+            Sample samples[FestivalSampleCount];
+            for (u32 i = 0; i < points.size(); ++i)
+                DecodePixel(fb.origin + points[i].x*fb.stepX + points[i].y*fb.stepY,
+                            fb.format,samples[i].r,samples[i].g,samples[i].b);
+            s_festivalBottom = s_festivalProbe.Update(DecodeFestivalPlaza(samples));
+        }
+        s_festivalLock.Unlock();
+    }
+
     static bool ActionsOnScreen(const Screen &screen)
     {
         SamplePelago(screen);
+        SampleFestival(screen);
         if (screen.IsTop)
             return false;
         const FbLayout fb = GetLayout(screen);
@@ -161,6 +199,7 @@ namespace OneScreen
 
     void StartActions(void)
     {
+        FestivalPlazaSamplePoints();
         OSD::Run(ActionsOnScreen);
     }
 
@@ -180,6 +219,13 @@ namespace OneScreen
             if (s_world.scene == SceneBattle)
                 s_world.flags |= MoveLearnWorldFlags(sceneManager);
         }
+        const bool festival = WatchFestival(sceneManager, s_world.scene);
+        s_festivalLock.Lock();
+        s_world.flags = (s_world.flags & ~WorldFestivalMask)
+            | (festival ? WorldFestivalActive | s_festivalBottom : 0);
+        s_festivalLock.Unlock();
+        if (!festival && s_world.scene == SceneField && FieldState(sceneManager) == 0)
+            s_world.flags |= WorldFestivalField;
         WatchPelago(sceneManager, s_world.scene);
         s_pelagoLock.Lock();
         s_world.flags = (s_world.flags & ~WorldPelagoMask) | (s_pelagoWatching ? s_pelagoBottom | s_pelagoTop : 0);
@@ -239,7 +285,12 @@ namespace OneScreen
         s_frames++;
         if (!s_runner.Running())
         {
-            if (s_frames % 15 == 0) WatchPelago(sceneManager, SceneModule(sceneManager));
+            if (s_frames % 15 == 0)
+            {
+                const auto scene = SceneModule(sceneManager);
+                WatchPelago(sceneManager, scene);
+                WatchFestival(sceneManager, scene);
+            }
             if (s_capturing)
                 EndCapture();
             return;
