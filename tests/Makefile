@@ -10,7 +10,7 @@ OUT      := build
 PYTHON   ?= python3
 CODE_BIN ?=
 
-TESTS    := $(OUT)/quick_save_test $(OUT)/image_test $(OUT)/hires_test $(OUT)/band_column_test $(OUT)/layer_runs_test $(OUT)/pillarbox_test $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/settings_file_test $(OUT)/ui_host_test $(OUT)/party_data_test $(OUT)/action_queue_test $(OUT)/xmenu_test $(OUT)/battle_menu_test $(OUT)/keyboard_test $(OUT)/pokedex_test $(OUT)/native_screens_test $(OUT)/bag_test $(OUT)/map_test $(OUT)/party_menu_test $(OUT)/boxes_test $(OUT)/field_settle_test $(OUT)/pc_anywhere_test $(OUT)/move_learn_test $(OUT)/rotom_prompt_test $(OUT)/theme_test $(OUT)/screen_buffer_test $(OUT)/poke_icons_test
+TESTS    := $(OUT)/battle_widescreen_test $(OUT)/quick_save_test $(OUT)/image_test $(OUT)/hires_test $(OUT)/band_column_test $(OUT)/layer_runs_test $(OUT)/pillarbox_test $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/settings_file_test $(OUT)/ui_host_test $(OUT)/party_data_test $(OUT)/action_queue_test $(OUT)/xmenu_test $(OUT)/battle_menu_test $(OUT)/keyboard_test $(OUT)/pokedex_test $(OUT)/native_screens_test $(OUT)/bag_test $(OUT)/map_test $(OUT)/party_menu_test $(OUT)/boxes_test $(OUT)/field_settle_test $(OUT)/pc_anywhere_test $(OUT)/move_learn_test $(OUT)/rotom_prompt_test $(OUT)/theme_test $(OUT)/screen_buffer_test $(OUT)/poke_icons_test
 
 .DEFAULT_GOAL := all
 
@@ -182,7 +182,14 @@ $(OUT)/screen_buffer_test: screen_buffer_test.cpp ../Sources/UI/ScreenBuffer.cpp
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) -Wno-deprecated-declarations screen_buffer_test.cpp ../Sources/UI/ScreenBuffer.cpp $(UI_SRCS) -o $@
 
+$(OUT)/battle_widescreen_test: battle_widescreen_test.cpp ../Includes/BattleWidescreen.hpp
+	@mkdir -p $(OUT)
+	$(CXX) $(CXXFLAGS) battle_widescreen_test.cpp -o $@
+# MSVC equivalent (Developer Command Prompt, from tests/):
+# cl /nologo /std:c++17 /EHsc /W4 /WX /I ../Includes battle_widescreen_test.cpp /Fe:build/battle_widescreen_test.exe /Fo:build/battle_widescreen_test.obj
+
 run: $(TESTS)
+	./$(OUT)/battle_widescreen_test
 	./$(OUT)/image_test
 	./$(OUT)/hires_test
 	./$(OUT)/band_column_test

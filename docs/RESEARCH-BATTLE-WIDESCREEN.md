@@ -244,3 +244,76 @@ All search conclusions are [U]: absence in search results is not proof.
 4. Does gfl2 culling use the submitted projection?
 5. Which battle layouts are full-screen (B), and which panes the 30% cull hits (C)?
 6. Is the `SequencePlayer.cro` copy used during battles?
+
+## 10. Implementation (2026-11-09)
+
+- Added `BattleWidescreen.cpp/.hpp`; frame discovery uses the same
+  scene/vtable -> CroModuleOf -> Battle-name path as FastText, with a fresh
+  FIXD-header check. FastText itself is unchanged. The entry at +0x736D0
+  and divide at +0x73774 are verified before installing another Hook with
+  the existing PerspectiveHook callback. Aspect/filter/counter/ABI are shared;
+  aspect off or stock 5:3 installs no battle hook. No 2D code changed.
+- Lifetime uses a static pre-unload MITM at code.bin 0x17376C, not a guessed
+  scene-exit frame. Offline disassembly found its sole direct caller at
+  0x1732C8, passing the module base in r1 (`mov r1,r4` at 0x1732C0).
+  The wrapper submits IPC command 0x000500C2. All 17 words through the handle
+  literal at 0x1737AC match both local Sun/Moon v1.2 code.bin files and are
+  checked at startup. An unavailable guard disables battle hooking entirely.
+- A matching Battle hook is disabled before forwarding the unload IPC;
+  its slot is freed while its code is mapped. One mutex serializes unload
+  and frame operations, held through the original SDK call. Frames TryLock
+  and skip if busy. The loader callback allocates/logs nothing. Disable failure
+  vetoes unload with an error Result. Unrelated module unloads do not remove
+  Battle. No hook is reinitialized while enabled or abandoned at an old base.
+- Enable/Disable leave the CRO page permissions alone. A first version
+  wrapped them in `Process::ProtectMemory` (add write, then restore) and hung
+  every wild battle: Azahar's ldr:ro then rejected the next LoadCRO (Bag.cro,
+  "CRO original buffer is in invalid state") and the main thread spun in the
+  game's fatal handler at 0x3FD518 (gdb). Bisect: no ProtectMemory and no hook
+  = fine; ProtectMemory without the hook = same hang; hook without
+  ProtectMemory = fine, Enable -> 0 on the RX (AliasCode) page.
+- Suppress the retiring base until a frame observes another module/no Battle,
+  preventing a stale scene pointer from reinstalling during SDK cleanup.
+  Same- and changed-base reloads then get fresh checks/hooks. Missing an entire
+  out/in interval at the same base safely suppresses widening until another
+  observed transition. Installation is frame-driven, so initial matrices may
+  precede it; subsequent per-frame camera updates rebuild the projections.
+- Hook audit: seven existing plugin-owned hooks, now at most nine. CTRPF adds
+  internal hooks and optional tools/AR hooks. Installed Hook.hpp says 91 in a
+  stale comment; HookManager source uses 0x1000/12 = 341, confirmed by the
+  installed libctrpf.a DisableHook disassembly (0x155 limit, 12-byte indexing).
+  Disable frees reusable slots; repeated battles do not consume new slots.
+- Host regression tests exercise signature/address checks, each unreadable or
+  mismatched word, off/stock, unload-before-unmap, stale scenes, unrelated
+  unloads, base changes, same-base reload and failures. Fake removal asserts
+  the target is still mapped. Integrated in tests/Makefile.
+- SequencePlayer +0xE860 remains untouched. Battle full-screen 2D squeeze,
+  the 30% pane cull, finite scene/effect edges and frustum pops are follow-ups.
+  See WIDESCREEN.md for lifetime details and the runtime log/test recipe.
+
+Validation performed here (no make, WSL, plugin link, emulator or screenshots):
+
+1. From `tests/`, after the VS 2022 Community `vcvars64.bat` environment:
+   `cl /nologo /std:c++17 /EHsc /W4 /WX /I ../Includes battle_widescreen_test.cpp /Fe:build/battle_widescreen_test.exe /Fo:build/battle_widescreen_test.obj`
+   then `.\build\battle_widescreen_test.exe`: **passed**. This is the MSVC
+   equivalent compile line recorded beside the Makefile target. Environment
+   setup printed a vswhere.exe warning, but compiler and test exited 0.
+2. ARM syntax checks, using
+   `C:/devkitPro/devkitARM/bin/arm-none-eabi-g++.exe`, with exactly:
+   `-march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft -Os -mword-relocations -fomit-frame-pointer -ffunction-sections -fdata-sections -fno-strict-aliasing -Wall -fno-rtti -fno-exceptions -std=gnu++17 -D__3DS__ -I Includes -I C:/devkitPro/libctrpf/include -I C:/devkitPro/libctru/include -fsyntax-only Sources/BattleWidescreen.cpp Sources/Widescreen.cpp`
+   and a second invocation with the same flags for `Sources/main.cpp`: **passed**.
+   After the permission handling change, the same command was rerun with
+   all three files (`Sources/BattleWidescreen.cpp Sources/Widescreen.cpp Sources/main.cpp`): **passed**.
+   The MSVC compile and host test above were also rerun: **passed**.
+3. Python `struct.unpack_from` assertions checked all 17 unload words against
+   local Sun/Moon code.bin and all three perspective words against both
+   local Battle.cro files: **passed**. ARM objdump inspected the unload wrapper,
+   its direct caller and installed CTRPF HookManager. `git diff --check` passed.
+
+Claude still needs to build/link the plugin, run the full suite, compare stock
+and 21:9 wild-battle screenshots, and enter/leave twice in succession. Confirm
+both per-battle installs and pre-unload removals, growing rewrite counts,
+mid-battle aspect changes, no unload crash, effects/intro/culling behavior,
+and Moon. Runtime assumes all game CRO unloads use the checked SDK wrapper;
+the pre-unload log is part of that proof. VFP forwarding and new 3D edges
+remain unverified until those runs.

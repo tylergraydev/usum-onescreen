@@ -41,6 +41,7 @@
 #include "UI/Device.hpp"
 #include "Where.hpp"
 #include "Widescreen.hpp"
+#include "BattleWidescreen.hpp"
 #include "FastText.hpp"
 
 namespace CTRPluginFramework
@@ -817,6 +818,10 @@ namespace CTRPluginFramework
         const std::string speedLog = OneScreen::FastTextFrame(s_game->offsets.sceneManager);
         if (!speedLog.empty())
             WriteLog(speedLog, false);
+
+        const std::string battleWideLog = OneScreen::BattleWidescreenFrame(s_game->offsets.sceneManager);
+        if (!battleWideLog.empty())
+            WriteLog(battleWideLog, false);
 
         const std::string cullLog = OneScreen::WidescreenFrame();
         if (!cullLog.empty())

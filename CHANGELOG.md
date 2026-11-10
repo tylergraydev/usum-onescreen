@@ -21,6 +21,8 @@ All notable changes for players are listed here. Versions follow [Semantic Versi
 
 ### Fixed
 
+- Battle 3D now uses the configured widescreen aspect through Battle.cro's own perspective builder, with signature checks and removal before CRO unload. Emulator comparison/reload verification pending; battle 2D squeeze/culling unchanged.
+
 - Battle teams selected from part of the field party no longer borrow nicknames/items from the wrong slot; metadata matches Pokemon identity and suppresses ambiguous matches.
 
 - The native map no longer crashes the game with widescreen (16:9 or 21:9) on. The map picture now squeezes like the rest of the game's 2D.
