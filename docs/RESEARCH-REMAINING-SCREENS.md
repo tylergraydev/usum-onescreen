@@ -130,6 +130,112 @@ one-press actions and a leave action with a top-screen-message check, a few
 pixel probes (isle view vs. menu vs. prompt), host tests and one scenario on
 the postgame start point.
 
+### Native isle bar implementation (backlog #11)
+
+Implemented in `Screens/Pelago.*`, dispatched by `SubScreens.cpp`: a 392 x 24
+strip at top-screen (4,216), preserving everything above y=216. L/R tap the
+isle arrows, Start taps Mohn, and B starts `PelagoLeaveAction`. A, D-pad,
+circle pad and touch remain game controls while idle. No held-key repeats or
+queued inputs for Pelago. L+R retains the existing panel fallback (native
+screen yields until the scene ends); isle objects remain bottom/full-screen
+play. The bar hides and releases its keys immediately on an unrecognised
+bottom view, including Mohn's menus and prompts.
+
+Detection requires `main:0064787C` AND a scene-stack responder owned by the
+loaded `Resort` CRO, resolved by its name rather than a fixed load address.
+`action close` uses the same leave prefix even with `screens off`, then the
+existing BackOut step closes the returned X menu. B leaves the X menu open,
+as in the observed touch exit. Close is deliberately refused from Mohn's
+menus or an already-open question: return to the isle first.
+
+Leave: guarded Back once -> wait up to 240 frames for stable Yes/No and a
+top message -> 20 frames -> guarded Yes **once** -> wait up to 240 frames
+for dimmed isle arrows and a top message -> 45 frames ->
+guarded A **once** -> wait up to 1200 frames for FieldRo. No input retry loops.
+Scene loss, changed guards or a timeout fail the action. Cancellation uses
+the existing action runner. A failed exit can be finished with the game's
+bottom-screen controls; the plugin never repeats Yes automatically.
+
+**Capture calibration (follow-up):** Azahar built successfully and opened
+Pelago, but the initial bar never appeared. The provisional white-arrow /
+dark-window tests were wrong. Read-only 1x captures in
+`H:/SunnyMoon/analysis/private/shots/` (`pl-isle`, `pl-afterno`, `pl-ask`,
+plus `pl-xmenu2` as a negative control) provided the first calibration.
+A second retest showed the bar on Abeens and R working, but it vanished on
+the next isle: the assumed outer plates were variable isle scenery. All five
+`pl3-isle1..5-bottom.png` captures and `pl2-left-bottom.png` are now sampled
+read-only, and the detector uses the arrow glyphs alone:
+
+- Isle: mirrored interiors (16,117)/(303,117) match (136,204,255), lower bands
+  (16,120)/(303,120) match (170,221,255), and upper edges
+  (20,113)/(299,113) match (102,187,255), each within 24 per RGB channel.
+  All six points are identical across the six new captures. No outer plate
+  or scenery colour is sampled or required for Isle. The right points are
+  verified image mirrors (x -> 319-x) of the left points.
+- Ask: four Yes/No pill points match (220,255,255) within 20, while all six
+  arrow glyph positions and both y=170 points match beige (247,231,198)
+  within 20. This also excludes a third cyan menu pill and cannot match Isle.
+  The shared action observer buffer grows to the new 12-point sample count;
+  both native detection and `action close` continue using the same probes.
+- Message: (48,174)/(140,174) on Mohn's blue nameplate match (5,78,254),
+  and (40,210)/(360,210) on the message edges match
+  (207,249,240)/(196,255,255), each within 24. These points avoid lettering
+  and stay above the native bar at y=216. Both captured isle top screens,
+  the X menu, black fades and white screens fail this guard.
+- Goodbye after Yes: `pl4-afteryes-bottom.png` shows a **dimmed isle**, not
+  beige. Interiors (16,117)/(303,117) match (35,52,65), lower bands
+  (16,120)/(303,120) match (43,56,65), upper edges (20,113)/(299,113)
+  match (26,48,65), each within 20 per channel. All six are required and
+  bright Isle/Ask must be absent. Black fades and an empty beige background
+  cannot authorize A. `pl4-afteryes-top.png` matches all four existing Mohn
+  message points exactly. The goodbye condition combines both surfaces.
+  The previous beige-clear assumption caused the observed step-5 timeout
+  after Yes and has been removed. Hand-pressing A on this captured state
+  returned to FieldRo, state 4 (X menu open), as reported by the emulator test.
+- Ask stability: the logs alternated between Ask+message and message alone.
+  `PelagoBottomProbe` now accepts three matching Ask observations separated
+  by short unknown gaps, then holds Ask for up to six missing bottom samples
+  after its last match. A recognised isle or dimmed goodbye clears Ask
+  immediately; a longer unknown gap expires it. Isle/goodbye and the top
+  message still need three consecutive matches. Scene/CRO loss resets the
+  observer. The WaitFor/20-frame settle/guarded Yes uses this shared observer,
+  so brief misses no longer restart detection or invalidate the Yes guard.
+  No action retries Yes or A; the final wait remains **FieldRo**, not the
+  Pelago wrapper scene.
+
+`tests/pelago_samples.hpp` preserves actual RGB samples extracted from the
+captures, without copying or modifying the private screenshots. Host tests
+check the two original isle captures, all five new isles, the left-arrow
+capture, Ask, and the X menu negative control. Every new isle must decode as
+Isle, show the native screen after three readings, and offer the B leave
+action. Per-glyph rejection and tolerance tests require all six arrow points;
+changing unrelated isle content cannot hide the bar. Existing action
+scenarios and top-message checks remain in place.
+The shared bottom-filter tests cover alternating Ask/missing samples,
+expiry, and immediate invalidation by known views. Action tests now drive
+that same filter from captured Ask and dimmed-goodbye samples, including
+flickering Ask for both B leave and `action close`, with exactly one Yes and
+one A on successful exits. The final scene must become FieldRo. The guarded sequence, scene/CRO detection and input mappings
+are unchanged. Rerun in Azahar to confirm the bar and full leave flow;
+do not replace a failing guard with timed Yes taps. The previous-arrow
+layout uses the task coordinate; original research only exercised right.
+
+Host verification: `powershell -NoProfile -ExecutionPolicy Bypass -File
+tests/run_pelago.ps1` directly compiles and runs Pelago, native-screen and
+action-queue tests with MSVC (no make/WSL), and checks regenerated layouts.
+`tests/build/pelago-1x.ppm` and `pelago-2.5x.ppm` show the bar, with untouched
+pixels above it; the real hi-res Layer path is also exercised. The test-only
+MSVC compatibility header suppresses GCC's printf attribute, with no change
+to production code. `tests/Makefile` also includes the Pelago target.
+
+Emulator handoff: postgame save -> Pelago -> confirm status boards remain
+visible on all five isles; L and R wrap in both directions; Start opens
+Mohn; his menu/dialogue keys and isle touches work in full mode. Return to
+the isle and test B, then `action close` with native screens both on and off.
+Check one Back/Yes/A sequence, FieldRo return (~10 s), correct X-menu
+behavior, a cancelled/timed-out action, re-entry, and first-visit tutorial
+fallback. Confirm the strip does not overlap useful bottom status lines.
+
 ## Festival Plaza
 
 ### Opening, scene, leaving (seen)
