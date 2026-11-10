@@ -550,8 +550,25 @@ static void TestRunnerState(void)
     CHECK(edges == 2);
 }
 
+static void TestBattleRuleGuards(void)
+{
+    ActionWorld world;
+    world.scene = SceneBattle;
+    world.flags = WorldBattleCommand | WorldTrainerBattle | WorldRoyalBattle;
+    std::vector<std::string> log;
+    ActionRunner runner;
+    CHECK(!runner.Start(*FindAction("battle-flee"), world, log));
+    CHECK(!runner.Start(*FindAction("battle-run"), world, log));
+    CHECK(LogHas(log, "No running from a Trainer battle!"));
+    CHECK(!runner.Start(*FindAction("battle-bag"), world, log));
+    CHECK(LogHas(log, "No Bag in a Battle Royal"));
+    world.flags = WorldBattleCommand;
+    CHECK(runner.Start(*FindAction("battle-flee"), world, log));
+}
+
 int main(void)
 {
+    TestBattleRuleGuards();
     TestTables();
     TestConditions();
     TestOpenParty();
