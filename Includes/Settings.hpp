@@ -54,6 +54,7 @@ namespace OneScreen
         PanelCorner  panelCorner = PanelCorner::BottomRight;
         bool         autoPanel = false;                // native menus first; the panel is a fallback
         Pillarbox    pillarbox = Pillarbox::Tint;
+        bool         uiMotion = true;                 // frame-based native menu cursor / HP easing
         float        aspect = 0.0f;                    // 0: original camera defaults
         BattleLayout battleLayout = BattleLayout::Classic;
         bool         instantText = false;

@@ -1,3 +1,5 @@
+#include "UI/Motion.hpp"
+#include "motion_render_smoke.hpp"
 // Host tests for the native Bag's pure part (Sources/Screens/BagList.cpp):
 // tabs and actions, the list cursor, which menu entries are native, items
 // with a follow-up and the result lines, the pocket icons and descriptions
@@ -1013,6 +1015,14 @@ static void TestDraw(const char *preview)
     }
 
     view.description = "A spray-type medicine for treating wounds. It can be used to restore 20 HP to an injured Pokémon.";
+    BagView initial = view;
+    initial.mode = BagMode::List;
+    BagView moved = initial;
+    moved.cursor = 2;
+    moved.party[0].hp = 1;
+    CHECK(MotionRenderSmoke(UI::Motion::Screen::Bag, [&](UI::Canvas &c, bool target) {
+        DrawBag(c, target ? moved : initial);
+    }));
     // Synthetic pocket icons: a coloured square per pocket, lighter when not selected.
     BagAssets assets;
     for (int t = 0; t < BagTabCount; t++)
@@ -1102,6 +1112,10 @@ static void TestDraw(const char *preview)
 
 int main(int argc, char **argv)
 {
+    Settings motionOff;
+    motionOff.uiMotion = false;
+    SetSettings(motionOff);
+    UI::Motion::Begin(UI::Motion::Screen::Bag, true);
     TestTables();
     TestItems();
     TestArchive();

@@ -213,6 +213,12 @@ namespace OneScreen
             if (!ParseBattleSpeed(value, k == "battle_messages" ? s.battleMessages : s.battleBars))
                 return "bad " + key + " '" + value + "' (use normal, fast or instant)";
         }
+        else if (k == "ui_motion")
+        {
+            if (v != "on" && v != "off")
+                return "bad ui_motion '" + value + "' (use on or off)";
+            s.uiMotion = v == "on";
+        }
         else if (k == "pillarbox")
         {
             if (v == "tint") s.pillarbox = Pillarbox::Tint;
@@ -373,6 +379,8 @@ namespace OneScreen
             "aspect = 0\n"
             "; Side bands for full-screen native menus in widescreen: tint, pattern or off.\n"
             "pillarbox = tint\n"
+            "; Native X menu, Party and Bag cursor / HP motion: on or off.\n"
+            "ui_motion = on\n"
             "\n"
             "[battle]\n"
             "; Native battle menu look: classic, bar or rail. The plugin menu's\n"
@@ -520,6 +528,7 @@ namespace OneScreen
                           + ", auto " + (s.autoPanel ? "on" : "off") + "\n"
                           + "aspect " + (s.aspect == 0.0f ? std::string("off") : std::to_string(s.aspect))
                           + ", pillarbox " + pillarboxes[(int)s.pillarbox]
+                          + ", ui_motion " + (s.uiMotion ? "on" : "off")
                           + ", battle layout " + BattleLayoutName(s.battleLayout) + "\n"
                           + "instant text " + (s.instantText ? "on" : "off")
                           + ", battle messages " + BattleSpeedName(s.battleMessages)

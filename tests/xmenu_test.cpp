@@ -1,3 +1,5 @@
+#include "UI/Motion.hpp"
+#include "motion_render_smoke.hpp"
 // Host tests for the native X menu's grid, cursor and actions
 // (Sources/Screens/XMenuGrid.cpp). Build and run: make -C tests. With a path
 // argument, also writes a preview of the menu there as a PPM image.
@@ -490,6 +492,11 @@ static void TestDraw(const char *preview)
     view.cursor = E("battle_video");
     view.enabled = AllBut("qr_scanner");
     DrawXMenu(canvas, view);
+    XMenuView moved = view;
+    moved.cursor = E("pokemon");
+    CHECK(MotionRenderSmoke(UI::Motion::Screen::XMenu, [&](UI::Canvas &c, bool target) {
+        DrawXMenu(c, target ? moved : view);
+    }));
     CHECK(HiResScreenSmoke::Run(XMenuArea, XMenuRadius, [&](UI::Canvas &hi) { DrawXMenu(hi, view); }));
 
     // Nothing outside the menu's area is touched (the Layer copies only it).
@@ -529,6 +536,10 @@ static void TestDraw(const char *preview)
 
 int main(int argc, char **argv)
 {
+    Settings motionOff;
+    motionOff.uiMotion = false;
+    SetSettings(motionOff);
+    UI::Motion::Begin(UI::Motion::Screen::XMenu, true);
     TestTable();
     TestCloseAction();
     TestMove();

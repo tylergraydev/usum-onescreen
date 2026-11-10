@@ -17,6 +17,7 @@
 #include "UI/Device.hpp"
 #include "UI/Assets.hpp"
 #include "UI/Layer.hpp"
+#include "UI/Motion.hpp"
 #include "UI/ScreenBuffer.hpp"
 
 namespace OneScreen
@@ -173,6 +174,7 @@ namespace OneScreen
         }
         if (!s_showLayer)
         {
+            UI::Motion::Reset(UI::Motion::Screen::Party);
             s_layer.Hide();
             UI::ScreenBuffer::GiveBack(Owner);
             return false;
@@ -181,6 +183,7 @@ namespace OneScreen
         u8 *pixels = UI::ScreenBuffer::Borrow(Owner, fresh);
         if (pixels == nullptr)
         {
+            UI::Motion::Reset(UI::Motion::Screen::Party);
             s_layer.Hide();
             return false;       // another screen holds it: next frame
         }
@@ -195,6 +198,8 @@ namespace OneScreen
                 return false;
             redraw = true;
         }
+        UI::Motion::Begin(UI::Motion::Screen::Party, fresh);
+        redraw = redraw || UI::Motion::Active(UI::Motion::Screen::Party);
         if (redraw && s_viewLock.TryLock() == 0)
         {
             UI::Canvas canvas = s_layer.Begin();
@@ -202,9 +207,11 @@ namespace OneScreen
                 DrawSummary(canvas, s_drawSummary);
             else
                 DrawParty(canvas, s_drawParty);
+            UI::Motion::End();
             s_drawnVersion = s_viewVersion;
             s_viewLock.Unlock();
         }
+        UI::Motion::End(false);
         return s_layer.Present(fb);
     }
 

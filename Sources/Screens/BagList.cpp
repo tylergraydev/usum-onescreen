@@ -8,6 +8,7 @@
 #include "UI/Layout.hpp"
 #include "UI/Text.hpp"
 #include "UI/Theme.hpp"
+#include "UI/Motion.hpp"
 
 namespace OneScreen
 {
@@ -1079,7 +1080,10 @@ namespace OneScreen
             right -= T::MeasureText(countText, T::TextSize::Body) + 8;
             T::DrawText(canvas, ItemLabel(view, i), UI::Rect{ text.x, text.y, right - text.x, text.h }, name);
             if (i == view.cursor && listing)
-                T::DrawCursor(canvas, r.x + 14, r.y + (r.h - 2) / 2);
+            {
+                const UI::Rect cursor = UI::Motion::Cursor(UI::Motion::Screen::Bag, r, view.tab);
+                T::DrawCursor(canvas, cursor.x + 14, cursor.y + (cursor.h - 2) / 2);
+            }
         }
         // Scroll marks when the list goes on.
         const int arrowX = ListX + ListW + 1;
@@ -1118,7 +1122,12 @@ namespace OneScreen
             else
             {
                 const UI::Rect bar = { r.Right() - 54, r.y + (r.h - T::GaugeHeight - 3) / 2, 48, T::GaugeHeight + 3 };
-                T::DrawHpBar(canvas, bar, (u32)(mon.hp < 0 ? 0 : mon.hp), (u32)(mon.maxHp < 0 ? 0 : mon.maxHp));
+                unsigned identity = 2166136261u;
+                for (unsigned char c : mon.name) identity = (identity ^ c) * 16777619u;
+                identity = (identity ^ (unsigned)mon.level) * 16777619u;
+                const int hp = UI::Motion::Gauge(UI::Motion::Screen::Bag, (unsigned)i,
+                                                  mon.hp < 0 ? 0 : mon.hp, mon.maxHp < 0 ? 0 : mon.maxHp, identity);
+                T::DrawHpBar(canvas, bar, (u32)hp, (u32)(mon.maxHp < 0 ? 0 : mon.maxHp));
                 // The name first; the level after it when it fits.
                 const UI::Rect text = { r.x + 12, r.y + 1, bar.x - 6 - (r.x + 12), r.h - 2 };
                 const s32 nameW = T::DrawText(canvas, mon.name, text, name);
