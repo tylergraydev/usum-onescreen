@@ -56,6 +56,62 @@ Players run the single `UsumOneScreen-<tag>.exe`, drag their own decrypted ROM a
 
 It never ships, downloads or explains how to get game files or keys.
 
+## Launcher updates
+
+After the window opens, the launcher checks GitHub's latest stable release for
+`tylergraydev/usum-onescreen` in the background, at most once every 24 hours.
+The existing `usum-onescreen-app.ini` stores `update_last_check` (UTC, including
+failed attempts) and `update_skip_version`. Drafts, prereleases and invalid
+semantic-version tags are ignored; `v0.1.2` is newer than `0.1.1`. A private-repo
+404, rate-limit 403, offline connection or malformed response silently ends the
+startup check. Requests use HTTPS/TLS 1.2 and the anonymous User-Agent
+`UsumOneScreen-Launcher/<assembly informational version>`; no authentication or
+personal information is sent.
+
+**Check for updates** in the window and `UsumOneScreen.exe check-update [--home DIR]`
+check immediately, including a previously skipped version. The CLI reports a
+release or "Couldn't check for updates." and never installs. The window offers
+**Update**, **Skip this version**, and **Later**. Only clicking Update downloads
+and installs; close Azahar first. The launcher folder must be writable.
+
+Asset selection prefers the current exe's exact filename, then
+`UsumOneScreen-<tag>.exe`, then the documented
+`usum-onescreen-<tag>-windows.zip`. ZIP updates read only their single
+`UsumOneScreen.exe` entry; they do not replace Azahar, settings, games or saves.
+Downloads must match the API asset size. If the release includes checksum assets
+(names containing `sha256` or `checksum`), a matching SHA-256 is mandatory.
+Supported checksum lines are `HEX  filename` / `HEX *filename`, or a bare hex
+digest in `<asset-name>.sha256`. Missing coverage or a mismatch refuses the update.
+Without published checksums, size, PE headers, managed assembly identity and a
+nonempty embedded plugin are checked. This is structural verification, not a
+publisher signature; release publishing should include SHA256SUMS.
+
+The verified exe is staged beside the running exe as `<exe>.update-new`.
+A copy of the current launcher, `<exe>.update-helper.exe`, waits for the original
+process to exit. It checks Azahar is closed, revalidates the staged exe and
+extracts its embedded plugin. Existing adjacent `usum-onescreen.3gx` and installed
+Sun/Moon plugin copies in the selected home are refreshed from that same resource,
+so the adjacent-file priority cannot select an old plugin. Custom copies at these
+managed paths are replaced too. New setups continue to use the embedded resource;
+an explicit future `--plugin` choice still overrides it.
+
+The helper uses same-volume `File.Replace` for each plugin and then the exe,
+keeping `.update-old` backups and rolling back completed replacements on failure.
+It restarts the launcher with the selected `--home`, keeping its original filename.
+Failed downloads never change the live exe. Successful swaps remove backups; a
+later normal start removes the helper when it is no longer running. A failed swap
+can leave the verified stage for diagnosis/retry. This is atomic per file, not
+across the whole plugin/exe set: power loss or a failed rollback may require manual
+recovery from `.update-old` files. Do not delete those backups after an interrupted
+update until the launcher and plugin versions have been checked.
+
+`python -I player/test.py` covers version ordering, the daily throttle, skipped
+versions/manual override, quiet injected 403/404/network failures, size/hash/PE
+and embedded-plugin refusal, ZIP selection, staging, successful replacement, and
+plugin rollback when the target exe is locked. Fixtures contain synthetic plugin
+bytes; they do not validate a real 3GX. Live GitHub downloads and interactive
+update/restart still require a published release and manual validation.
+
 ## Save protection and game options
 
 The launcher now backs up the selected game's portable save before every Play,
