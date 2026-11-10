@@ -25,6 +25,7 @@ namespace OneScreen
     bool ActionCommand(const std::string &args, u32 sceneManager, std::vector<std::string> &log);
 
     bool ActionRunning(void);
+    bool ActionSucceeded(void);
 
     // Starts an action that isn't one of the built-in ones (a plugin screen's
     // own, e.g. Screens/XMenu.cpp). `def` must outlive the run. Same checks

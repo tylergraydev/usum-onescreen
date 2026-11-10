@@ -99,12 +99,15 @@ namespace OneScreen
         u32 keys = 0;                   // Press
         u32 frames = 0;                 // Tap/Press: held; Wait: length; WaitFor/BackOut: timeout
         ActionCond until;               // WaitFor
+        bool hasGuard = false;
+        ActionCond guard;              // checked immediately before the first input frame
         bool hasSkip = false;           // skip the step if `skipIf` holds when it starts
         ActionCond skipIf;
         s8 retryFrom = -1;              // WaitFor timeout: step to go back to (-1 = fail)
         u8 retries = 0;                 // how many times
         bool optional = false;          // WaitFor: a timeout (after the retries) goes on to the next step
 
+        ActionStep Guard(const ActionCond &cond) const { ActionStep s = *this; s.hasGuard = true; s.guard = cond; return s; }
         ActionStep SkipIf(const ActionCond &cond) const { ActionStep s = *this; s.hasSkip = true; s.skipIf = cond; return s; }
         ActionStep Retry(s8 from, u8 times) const       { ActionStep s = *this; s.retryFrom = from; s.retries = times; return s; }
         ActionStep Optional(void) const                 { ActionStep s = *this; s.optional = true; return s; }
@@ -176,6 +179,7 @@ namespace OneScreen
         void Cancel(std::vector<std::string> &log);
 
         bool Running(void) const { return m_def != nullptr; }
+        bool Succeeded(void) const { return m_succeeded; }
         std::string Status(void) const;
 
         // Frames a BackOut waits for the screen to settle before it taps, and
@@ -190,6 +194,7 @@ namespace OneScreen
         void Next(void);
         void Finish(bool ok, const std::string &why, const ActionWorld &world, std::vector<std::string> &log);
 
+        bool m_succeeded = false;
         const ActionDef *m_def = nullptr;
         u32 m_step = 0;
         u32 m_frame = 0;            // frames into the current step

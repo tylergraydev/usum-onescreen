@@ -8,6 +8,7 @@
 #include "Framebuffer.hpp"
 #include "Panel.hpp"
 #include "Scene.hpp"
+#include "QuickSave.hpp"
 #include "Screens/PartyScreen.hpp"
 #include "Screens/Pokedex.hpp"
 #include "Screens/Bag.hpp"
@@ -393,6 +394,19 @@ namespace OneScreen
     void XMenuUpdate(u32 sceneManager, const std::string &scene, int fieldState, std::vector<std::string> &log)
     {
         s_frames++;
+        if (QuickSaveRunning())
+        {
+            // Do not retain a stale menu probe into the frame save finishes.
+            // The action owns capture, so this screen must not end it.
+            s_shown = false;
+            s_scanWanted = false;
+            s_probeMissing = GoneFrames;
+            s_pendingUntil = 0;
+            s_prevFieldState = fieldState;
+            s_prevScene = scene;
+            Publish();
+            return;
+        }
         const bool inField = scene == SceneField;
         if ((ActionProbeFlags() & WorldXMenu) != 0)
             s_probeMissing = 0;
