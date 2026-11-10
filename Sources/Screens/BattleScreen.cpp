@@ -31,6 +31,7 @@ namespace OneScreen
     static bool s_layoutLog = false;
     static Screens::BattleMenu s_menu;
     static Screens::BattleSnapshot s_snap;
+    static bool s_powerStepRunning = false, s_powerStepSucceeded = false;
     static u32 s_frames = 0;
     static u32 s_captured = 0;      // keys this screen asked InputCapture to hold
     static std::string s_status;    // last logged Status()
@@ -173,6 +174,12 @@ namespace OneScreen
         }
         snap.kind = state.kind;
         snap.menu = (Screens::GameMenu)state.menu;
+        const u32 probes = ActionProbeFlags();
+        if (state.menu == BattleMenu::Moves) {
+            snap.zSlots = (u8)((probes & WorldBattleZSlotMask) >> 24);
+            snap.power = (probes & WorldBattleMega) ? BattlePower::Mega
+                       : (probes & WorldBattleZ) ? BattlePower::Z : BattlePower::None;
+        }
         const auto info = [&](const BattleMon &mon) {
             Screens::BattlerInfo out;
             out.name = Cached(s_speciesNames, mon.species, LookupSpecies, state);
@@ -357,6 +364,11 @@ namespace OneScreen
             s_snap.afterCatch = s_enabled && afterCatch && scene == SceneDex;
         }
         s_snap.actionRunning = ActionRunning();
+        if (s_powerStepRunning && !s_snap.actionRunning) {
+            s_powerStepSucceeded = ActionSucceeded();
+            s_powerStepRunning = false;
+        }
+        s_snap.powerStepSucceeded = s_powerStepSucceeded;
         s_snap.panelKey = KeysToString(GetSettings().panelKey);
 
         // A Pokémon wants a fifth move: the move-learning screen takes it,
@@ -398,13 +410,18 @@ namespace OneScreen
             s_step.needs = InScene(SceneBattle);
             s_step.steps.clear();
             if (out.tap != nullptr)
-                s_step.steps.push_back(StepTap(out.tap));
+                s_step.steps.push_back(std::string(out.tap) == "battle_moves.mega" ? StepBattlePower(false)
+                    : std::string(out.tap) == "battle_moves.z_power" ? StepBattlePower(true) : StepTap(out.tap));
             else
                 s_step.steps.push_back(StepPress(out.press));
             s_step.steps.push_back(StepWait(10));
             log.push_back(std::string("battle-ui: step ") + (out.tap != nullptr ? out.tap : "press B"));
-            if (!ActionStart(s_step, sceneManager, log))
-                log.push_back("battle-ui: step refused");
+            const bool power = out.tap && (std::string(out.tap) == "battle_moves.mega"
+                                          || std::string(out.tap) == "battle_moves.z_power");
+            if (power) s_powerStepSucceeded = false;
+            const bool started = ActionStart(s_step, sceneManager, log);
+            if (power) s_powerStepRunning = started;
+            if (!started) log.push_back("battle-ui: step refused");
         }
 
         // An action captures everything while it runs and then restores the

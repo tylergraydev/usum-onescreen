@@ -132,6 +132,15 @@ namespace Screens
 
     static void DrawMoveDetails(Canvas &canvas, const BattleMenu &menu, const BattleSnapshot &snap, const Rect &area);
 
+    static std::string PowerHint(const BattleMenu &menu, const BattleSnapshot &snap)
+    {
+        if (menu.ZMode()) return "Z-Power: gold rows only";
+        const BattlePower power = menu.PowerSelected() != BattlePower::None ? menu.PowerSelected() : snap.power;
+        if (power == BattlePower::None) return "";
+        return Theme::FormatPromptText(std::string("R ") + (power == BattlePower::Mega ? "Mega Evolve" : "Z-Power")
+            + (menu.PowerSent() ? " sent" : menu.PowerSelected() != BattlePower::None ? " ON" : " OFF"));
+    }
+
     static void DrawMoves(Canvas &canvas, const BattleMenu &menu, const BattleSnapshot &snap)
     {
         const Rect area = MovesArea;
@@ -158,6 +167,7 @@ namespace Screens
                             row.effect == 2 ? Theme::OptionGlint : Theme::WindowText, Align::Right);
             }
             std::string label = row.name.empty() ? Format("Move %u", row.move) : row.name;
+            if (menu.ZMode()) label = (snap.zSlots & (1u << i)) ? "Z: " + label : "Unavailable";
             if (on && menu.Pending())
                 label += "...";
             CompactText(canvas, label, Rect{ b.x + 22, b.y + 1, b.w - 32 - effectW, 15 }, Theme::WindowText);
@@ -170,6 +180,8 @@ namespace Screens
                         Rect{ b.x + 78, b.y + 17, b.w - 84, 16 }, Theme::PpTextColor(row.pp, row.maxPp));
             if (on)
                 Theme::DrawCursor(canvas, b.x + 12, b.y + 26);
+            if (menu.ZMode() && !(snap.zSlots & (1u << i)))
+                canvas.FillRoundRect(b, 5, Rgb(50,50,50,155));
         }
         DrawMoveDetails(canvas, menu, snap, area);
         const Rect foot = { area.x + 4, area.Bottom() - 24, area.w - 8, Theme::PromptHeight + 2 };
@@ -231,6 +243,14 @@ namespace Screens
         const MoveRow empty;
         const MoveRow &row = menu.Cursor() < snap.moveCount && menu.Cursor() < 4 ? snap.moves[menu.Cursor()] : empty;
         const Rect strip = { area.x + 6, area.Bottom() - 54, area.w - 12, 30 };
+        const std::string power = PowerHint(menu, snap);
+        if (!power.empty()) {
+            CompactText(canvas, power, Rect{strip.x, strip.y, strip.w, 15}, Theme::WindowText);
+            CompactText(canvas, menu.ZMode() ? "B Normal moves; base names" :
+                        std::string(BattleCategoryName(row.category)) + "  " + MoveDetailsText(row),
+                        Rect{strip.x, strip.y + 15, strip.w, 15}, Theme::WindowText);
+            return;
+        }
         if (row.category < 3)
             Theme::DrawCategoryIcon(canvas, strip.x, strip.y + 5, row.category);
         const Rect text = { strip.x + 46, strip.y, strip.w - 46, 15 };
@@ -345,6 +365,7 @@ namespace Screens
             }
             const s32 inset = bar ? 5 : 24;
             std::string label = row.name.empty() ? Format("Move %u", row.move) : row.name;
+            if (menu.ZMode()) label = (snap.zSlots & (1u << i)) ? "Z: " + label : "Unavailable";
             if (on && menu.Pending())
                 label += "...";
             CompactText(canvas, label, Rect{ b.x + inset, b.y + 1, b.w - inset - 6, 15 }, Theme::WindowText);
@@ -360,6 +381,8 @@ namespace Screens
             else
                 CompactText(canvas, EffectLabel(row.effect), Rect{ b.x + inset, b.y + 27, b.w - inset - 12, 8 },
                             row.effect == 2 ? Theme::OptionGlint : Theme::WindowText);
+            if (menu.ZMode() && !(snap.zSlots & (1u << i)))
+                canvas.FillRoundRect(b, 5, Rgb(50,50,50,155));
         }
         DrawMoveDetails(canvas, menu, snap, area);
         const Rect foot = { area.x + 5, area.Bottom() - 19, area.w - 10, 13 };
@@ -744,6 +767,8 @@ namespace Screens
             key += "|" + snap.activeName + BattleInfoKey(snap) + Format("|kind %u", (unsigned)snap.kind);
             break;
         case BattlePage::Moves:
+            key += Format("|power %u %u", (unsigned)snap.power, (unsigned)m_power)
+                   + Format(" %u %u", m_powerSent, snap.zSlots) + Format(" %u", m_zMode);
             for (u8 i = 0; i < snap.moveCount; i++)
             {
                 const MoveRow &row = snap.moves[i];

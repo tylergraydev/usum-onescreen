@@ -109,6 +109,9 @@ namespace Screens
         TargetSlot targets[4];
         bool spread = false;
         GameMenu menu = GameMenu::None;
+        BattlePower power = BattlePower::None; // fresh, stable button probe; Moves only
+        bool powerStepSucceeded = false; // action completion, never infer success from a timeout
+        u8 zSlots = 0; // confirmed gold Z bars, one bit per original move row
         u8 gameCursor = 0;          // the game's highlighted entry
         u8 listCount = 0;           // entries in the game's list
         std::string activeName;     // the player's battler
@@ -183,7 +186,7 @@ namespace Screens
     }
 
     // Keys the menu keeps from the game while it is up (the circle pad too).
-    // Y (quick ball) and touch pass. Moves also capture L (description);
+    // Y (quick ball) and touch pass. Moves capture L (description) and R (power);
     // the Bag captures L/R (pockets).
     const u32 BattleMenuKeys = BattleKeys::A | BattleKeys::B | BattleKeys::DRight | BattleKeys::DLeft
                                | BattleKeys::DUp | BattleKeys::DDown;
@@ -217,6 +220,7 @@ namespace Screens
         // same this long before the next step is chosen; a goal fails after
         // GoalFrames or GoalSteps.
         static const u32 StepSettleFrames = 12;
+        static const u32 ZListNoticeFrames = 60; // after power action: allow the Z list to animate in
         static const u32 ListSettleFrames = 24;   // a list that just slid in
         static const u32 GoalFrames = 900;
         static const u32 GoalSteps = 16;
@@ -233,6 +237,9 @@ namespace Screens
         BattlePage Page(void) const { return m_page; }
         u8 Cursor(void) const { return m_cursor; }
         bool Spread(void) const { return m_spread; }
+        BattlePower PowerSelected(void) const { return m_power; }
+        bool PowerSent(void) const { return m_powerSent; }
+        bool ZMode(void) const { return m_zMode; }
         bool DescriptionOpen(void) const { return m_description; }
         bool Pending(void) const { return m_pending; }
         u32 Stable(void) const { return m_stable; }   // frames on this page
@@ -313,6 +320,11 @@ namespace Screens
         u8 m_cursor = 0;
         u32 m_stable = 0;           // frames the game's menu has been up
         bool m_spread = false;
+        BattlePower m_power = BattlePower::None;
+        bool m_zMode = false; // survives transient unknown/hidden pages
+        bool m_zBackPending = false;
+        bool m_powerSent = false;
+        u32 m_powerWait = 0;
         bool m_description = false; // L toggles; reset on leaving moves
         bool m_pending = false;     // a choice was sent, the game hasn't moved yet
         u32 m_pendingFrames = 0;
