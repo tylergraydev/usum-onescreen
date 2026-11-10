@@ -28,6 +28,10 @@ namespace OneScreen
     const char *GlyphFamilyName(GlyphFamily family);
 
     enum class CursorSource : uint8_t { CStick, DPad, CirclePad };
+    enum class SidePanelMode : uint8_t { Off, Battle, Field, Both };
+    bool ParseSidePanelMode(const std::string &value, SidePanelMode &out);
+    const char *SidePanelModeName(SidePanelMode mode);
+
     enum class Pillarbox : uint8_t { Tint, Pattern, Off };
     enum class PanelSize : uint8_t { Half, TwoThirds };
     enum class PanelCorner : uint8_t { BottomRight, BottomLeft, TopRight, TopLeft };
@@ -54,6 +58,7 @@ namespace OneScreen
         PanelCorner  panelCorner = PanelCorner::BottomRight;
         bool         autoPanel = false;                // native menus first; the panel is a fallback
         Pillarbox    pillarbox = Pillarbox::Tint;
+        SidePanelMode sidePanels = SidePanelMode::Off;
         float        aspect = 0.0f;                    // 0: original camera defaults
         BattleLayout battleLayout = BattleLayout::Classic;
         bool         instantText = false;

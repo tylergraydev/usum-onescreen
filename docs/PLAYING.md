@@ -286,3 +286,15 @@ When something goes wrong:
    - a screenshot if the problem is visual
 
 Do not attach game files, save files or keys.
+
+## Optional side panels
+
+Under `[display]`, `side_panels = off|battle|field|both` defaults to off.
+`panels <mode>` changes it live without saving the INI; `panels` reports it.
+Battle uses a centred stock-proportioned 5:3 picture with solid side backgrounds:
+left is your party, right is the known client-1 foe (short name, level, HP/status).
+Healthy rows omit OK; 16:9 uses compact slot/bar/status markers. Field keeps a
+left party overlay on the wide scene, rather than a minimap. Full menus hide it.
+The existing top-HUD template squeeze is retained, with a bounded overflow fit
+for matching 400x240 top roots. See [Side panels](SIDE-PANELS.md) for exact layout
+coverage, unsupported effects, memory/GX cost and fresh emulator checks.

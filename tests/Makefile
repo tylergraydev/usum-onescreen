@@ -10,7 +10,7 @@ OUT      := build
 PYTHON   ?= python3
 CODE_BIN ?=
 
-TESTS    := $(OUT)/battle_widescreen_test $(OUT)/quick_save_test $(OUT)/image_test $(OUT)/hires_test $(OUT)/band_column_test $(OUT)/layer_runs_test $(OUT)/pillarbox_test $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/settings_file_test $(OUT)/ui_host_test $(OUT)/party_data_test $(OUT)/action_queue_test $(OUT)/xmenu_test $(OUT)/battle_menu_test $(OUT)/keyboard_test $(OUT)/pokedex_test $(OUT)/native_screens_test $(OUT)/bag_test $(OUT)/map_test $(OUT)/party_menu_test $(OUT)/boxes_test $(OUT)/field_settle_test $(OUT)/pc_anywhere_test $(OUT)/move_learn_test $(OUT)/rotom_prompt_test $(OUT)/theme_test $(OUT)/screen_buffer_test $(OUT)/poke_icons_test
+TESTS    := $(OUT)/side_panels_test $(OUT)/battle_widescreen_test $(OUT)/quick_save_test $(OUT)/image_test $(OUT)/hires_test $(OUT)/band_column_test $(OUT)/layer_runs_test $(OUT)/pillarbox_test $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/settings_file_test $(OUT)/ui_host_test $(OUT)/party_data_test $(OUT)/action_queue_test $(OUT)/xmenu_test $(OUT)/battle_menu_test $(OUT)/keyboard_test $(OUT)/pokedex_test $(OUT)/native_screens_test $(OUT)/bag_test $(OUT)/map_test $(OUT)/party_menu_test $(OUT)/boxes_test $(OUT)/field_settle_test $(OUT)/pc_anywhere_test $(OUT)/move_learn_test $(OUT)/rotom_prompt_test $(OUT)/theme_test $(OUT)/screen_buffer_test $(OUT)/poke_icons_test
 
 .DEFAULT_GOAL := all
 
@@ -188,7 +188,14 @@ $(OUT)/battle_widescreen_test: battle_widescreen_test.cpp ../Includes/BattleWide
 # MSVC equivalent (Developer Command Prompt, from tests/):
 # cl /nologo /std:c++17 /EHsc /W4 /WX /I ../Includes battle_widescreen_test.cpp /Fe:build/battle_widescreen_test.exe /Fo:build/battle_widescreen_test.obj
 
+SIDE_PANEL_SRCS := ../Sources/SidePanelsView.cpp ../Sources/UI/Raster.cpp ../Sources/UI/Text.cpp ../Sources/UI/Font.cpp $(SETTINGS_SRCS)
+$(OUT)/side_panels_test: side_panels_test.cpp $(SIDE_PANEL_SRCS) ../Includes/SidePanels.hpp ../Includes/BattleWidescreen.hpp $(UI_HDRS) $(SETTINGS_HDRS)
+	@mkdir -p $(OUT)
+	$(CXX) $(CXXFLAGS) side_panels_test.cpp $(SIDE_PANEL_SRCS) -o $@
+
 run: $(TESTS)
+	@mkdir -p previews
+	./$(OUT)/side_panels_test previews
 	./$(OUT)/battle_widescreen_test
 	./$(OUT)/image_test
 	./$(OUT)/hires_test
