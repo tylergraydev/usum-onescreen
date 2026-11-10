@@ -4,6 +4,7 @@
 #include <vector>
 
 #include <3ds/types.h>
+#include "PcAnywhereRules.hpp"
 
 namespace OneScreen
 {
@@ -18,6 +19,8 @@ namespace OneScreen
     // Checks the game functions and installs the event manager hook once,
     // after DetectGame/VerifyHooks. False (and PC anywhere stays off) if a
     // check fails; `report` says why.
+    PcWorld ReadPcWorld(u32 sceneManager);
+
     bool StartPcAnywhere(std::string &report);
 
     // Asks for the boxes from the plugin thread. `source` goes in the log
