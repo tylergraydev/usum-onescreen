@@ -304,3 +304,38 @@ BL=c0/r0, BR=c1/r0 are research-live mappings. True doubles reuse the SOS
 mapping by inference; true multi-client team battles remain unsupported.
 Target rectangles including the dangerous empty ally tap are tap-verified in
 JSON/generated header, but the native selection rules prohibit empty/self/ally.
+
+## Quick save observer (static analysis, emulator verification pending)
+
+`Sources/QuickSave.cpp` reads FieldMenu's `ReportDraw`; it never calls the
+save functions directly. These offsets were derived from local Ultra Sun and
+Ultra Moon v1.2 `FieldMenu.cro` files under `analysis/private/umoon-v1.2/`.
+Relevant code words agree between the two files. Runtime reads fail closed;
+no confirmation is authorized by field state 4 or elapsed time alone.
+
+- `FieldMenuFrame` vtable FieldMenu+`0x1814C`, `+0x78` ? `ReportDraw`;
+  `ReportDraw` vtable FieldMenu+`0x180B4`. Search the first eight scene-stack
+  responders for ReportDraw directly (as for RotomDraw), or its owning frame.
+  **Stack membership/path remains an in-game verification requirement.**
+- `ReportDraw` u8 `+0xE8`: answer, initially `0xFF`, callback at `+0x11CC`
+  writes 0 for Yes or 1 for No. u8 `+0xE9`: state. Main at `+0x1C5C`.
+  State 3 waits for the answer (`+0x1DC4`); 4 waits for the saving message;
+  5 polls `GameData::SaveMain`; 6/7 display success and wait to close;
+  8/9 display failure. State 10 finishes (`+0xF0 = 1`).
+- `+0x1EEC` calls the import thunk for `GameData::SaveStart`; `+0x1F24`
+  calls the `SaveMain` thunk. The branch at `+0x1F28` waits on result 1;
+  `+0x1F44` distinguishes 0 (success, message 13, state 6) from an error
+  (message 14, state 8). Success message closes itself after state 7's wait.
+- Runtime signature checks: `+0x1CB0 = E5D400E9`, `+0x1F28 = E3500001`,
+  `+0x1F44 = E3550000`, `+0x222C = E5803000`, and the relocated main
+  vtable slot at `+0x180E8 = module + 0x1C5C`.
+- Existing PC guards supply scene, field state, Festival Plaza module and
+  running/queued event checks through `ReadPcWorld`. Saving restrictions
+  specific to the game are delegated to its X/Y handlers: without ReportDraw
+  state 3 and unanswered choice, no A is injected. No unverified "can save"
+  address is added and restrictions are never bypassed.
+
+The observer latches success only after observing this request's unanswered
+confirmation and writing state 5. It then waits for the game's X menu, closes
+that identified menu with B, and waits for idle field/no events. Unknown states,
+missing objects, cancellation and timeouts cannot produce `save: saved`.

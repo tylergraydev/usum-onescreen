@@ -369,6 +369,7 @@ namespace OneScreen
                                  SceneName(world.scene).c_str()));
             return false;
         }
+        m_succeeded = false;
         m_def = &def;
         m_step = 0;
         m_frame = 0;
@@ -395,6 +396,7 @@ namespace OneScreen
 
     void ActionRunner::Finish(bool ok, const std::string &why, const ActionWorld &world, std::vector<std::string> &log)
     {
+        m_succeeded = ok;
         if (ok)
             m_lastResult = Format("%s ok in %lu frames, scene %s", m_def->name, (unsigned long)m_total,
                                   SceneName(world.scene).c_str());
@@ -445,6 +447,11 @@ namespace OneScreen
 
         const ActionStep &step = m_def->steps[m_step];
         const u32 frame = m_frame++;
+        if (frame == 0 && step.hasGuard && !step.guard.Matches(world))
+        {
+            Finish(false, "input guard changed", world, log);
+            return out;
+        }
         switch (step.kind)
         {
         case StepKind::Tap:
