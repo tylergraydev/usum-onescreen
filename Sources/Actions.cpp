@@ -116,8 +116,12 @@ namespace OneScreen
         if (now || s_frames % 5 == 0)
         {
             s_world.scene = SceneModule(sceneManager);
-            s_world.flags &= ~(WorldBattleCommand | WorldBattleMoves | WorldLearnAsk | WorldLearnList | WorldLearnConfirm);
-            const BattleMenu menu = s_world.scene == SceneBattle ? ReadBattle(sceneManager).menu : BattleMenu::None;
+            s_world.flags &= ~(WorldBattleCommand | WorldBattleMoves | WorldLearnAsk | WorldLearnList | WorldLearnConfirm
+                               | WorldTrainerBattle | WorldRoyalBattle);
+            const BattleState battle = s_world.scene == SceneBattle ? ReadBattle(sceneManager) : BattleState();
+            const BattleMenu menu = battle.menu;
+            if (!BattleCanRun(battle.kind)) s_world.flags |= WorldTrainerBattle;
+            if (!BattleHasBag(battle.kind)) s_world.flags |= WorldRoyalBattle;
             if (menu == BattleMenu::Command)
                 s_world.flags |= WorldBattleCommand;
             if (menu == BattleMenu::Moves)

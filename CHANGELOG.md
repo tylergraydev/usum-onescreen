@@ -6,6 +6,8 @@ All notable changes for players are listed here. Versions follow [Semantic Versi
 
 ### Added
 
+- Compact battle foe panel with live types, caught-before marker and stat stages, plus the player's changed stages, in all three layouts.
+
 - Windows launcher: permanent named save slots per game (save/load/rename/delete), a Saves dialog with separate slots and rotating backups, and ZIP import/export of current saves, slots and backups. Slot loads make a safety backup first; imports verify the declared game title and reject unsafe ZIP paths. New `slot`, `export` and `import` CLI commands. Save data only; extdata is excluded.
 
 - Controller prompts: Xbox, PlayStation and Nintendo vector badges with positional button mapping, live INI reload and `glyphs` test commands. The default `3ds` look is preserved.
@@ -18,6 +20,11 @@ All notable changes for players are listed here. Versions follow [Semantic Versi
 - The native PC boxes show each Pokémon's own box icon (the game's, read from your ROM) next to its name, in the box, the party row and under the cursor while moving one.
 
 ### Fixed
+
+- SOS foe info follows the last live target through record reorder and skips fainted history. Target names use the plate width, empty own-ally slots say Empty, and unavailable plates are grey with contained sub-labels. The trainer Run note now fits its pill.
+
+- SOS/Royal target screens open by their verified vtable; named target choices skip empty, fainted, self and ally slots. Known spread moves get a single confirmation.
+- Trainer Run refuses locally, Royal Bag is disabled, and forced switches survive short unknown-screen gaps. Setup-rule detection is statically traced and still needs emulator verification.
 
 - Battle teams selected from part of the field party no longer borrow nicknames/items from the wrong slot; metadata matches Pokemon identity and suppresses ambiguous matches.
 

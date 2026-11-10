@@ -262,3 +262,45 @@ both sides, but the foe never falls back to the player's field party.
 Unreadable/ambiguous data suppresses markers; P/F mean client 0/client 1
 record 0, not all active battlers. Runtime validation and test recipes:
 [BATTLE-UI.md](BATTLE-UI.md#review--emulator-checks).
+
+## Battle foe info and rules (#3/#4, 2026-11-09)
+
+Evidence: private research `foe-info.md` and `trainer-double.md` (2026-11-07),
+plus read-only disassembly of `research/battle_rel1.bin` and decoding the user's
+English base text GARC. No emulator validation occurred in this worktree.
+
+| Address/path | Meaning | Evidence status |
+|---|---|---|
+| scene `+0x94` -> view `+0xD0` -> container (observed `0x30000400`) | clients 0..3; client at `+4+c*0x1C`, six pointers and u8 count `+0x18` | research live verified SOS/Royal |
+| record `+0x1E4/5/6` u8 | current three types; 18 absent, duplicate mono-type bytes collapsed | research live initial types, static ChangeType `Battle+0x8DE48`; changed types not live tested |
+| record `+0x1EA..0x1F0` u8 | Atk/Def/SpA/SpD/Spe/Acc/Eva, stage=byte-6; reject >12 | research live Def/SpD/Acc, static getter `Battle+0x92A00` for all seven |
+| `*0x6A59C4` -> `+0x24` -> `+4` | SaveData (vtable `0x64F4A0`) | existing Pokedex and research live |
+| save `+0x23DC` | ZukanData, vtable `0x64F550`, magic `+4 = 0x2F120F17` | research live |
+| zukan `+0x8C+((species-1)>>3)` | caught bit `1<<((species-1)&7)`, species 1..807 | research live; same native Pokedex function `0x4C7A7C` |
+| Battle CRO `+0x10B848` | target screen vtable | research live SOS/Royal |
+| view `+4` -> context `+0x0C` -> setup | battle setup used by rule getters | statically traced here; NOT live verified |
+| setup u8 `+0` | battle type: 0 wild, 1 trainer; Run classifier also refuses types>=4 | static Run-refusal path; NOT live verified |
+| setup u8 `+1` -> context u8 `+0xA68` | battle format; format2 treated as Royal | copy verified statically; Royal meaning inferred, NOT live verified |
+
+New static trace (offsets relative to CRO, binary relocated at 0x100000):
+view constructor `+0x3E0FC` copies parameter word0 into view+4 and word2 into
+view+D0. `+0x93D98` reads context+C then setup byte0. `+0xF440/+0xF444`
+copies setup byte1 into context+A68. `+0x92C84` returns 1 for context format2,
+otherwise returns setup type0/1/2 unchanged, converts3 to2, defaults to1.
+Caller `+0x3578..+0x358C` sends result1 to `+0x3768`, which requests message
+`0x56` through `+0x938C4`. English message file17 line86 is the trainer Run
+refusal. This uses the classifier inputs, never the stale view+230 message ID.
+Result2/link/surrender behavior is outside this task; unrecognized types retain
+existing action behavior except the statically refused >=4 cases. Wild trial
+flags (`setup+0x324` masks0x4000/0x8000 at `+0x3598..+0x35C8`) separately
+produce trial refusal 0x118; this change does not implement trial-specific Run.
+
+Royal format2 is supported by the classifier's special refusal and four-client
+position arithmetic (`+0x5EEBC` format2 branch). Its exact semantic identity is
+still inferred, so verify raw log values in Royal and true doubles. Never infer
+trainer status from party size, OT, or message0x4E. `battle` prints raw rules.
+SOS TL=c1/r1, TR=c1/r0, BL=c0/r0, BR=c0/r1; Royal TL=c3/r0, TR=c2/r0,
+BL=c0/r0, BR=c1/r0 are research-live mappings. True doubles reuse the SOS
+mapping by inference; true multi-client team battles remain unsupported.
+Target rectangles including the dangerous empty ally tap are tap-verified in
+JSON/generated header, but the native selection rules prohibit empty/self/ally.
