@@ -225,14 +225,14 @@ namespace OneScreen
             if (!ParseAspect(value, s.aspect))
                 return "bad aspect '" + value + "' (use 0, off, a positive float, 16:9 or 21:9)";
         }
-        else if (k == "panel_key" || k == "touch_key" || k == "map_key" || k == "pc_key")
+        else if (k == "panel_key" || k == "touch_key" || k == "map_key" || k == "pc_key" || k == "save_key")
         {
             uint32_t keys = 0;
             if (!ParseKeys(value, keys))
                 return "bad key '" + value + "' (use A B X Y L R ZL ZR Start Select Up Down Left Right, "
                        "joined with +, or none)";
             (k == "panel_key" ? s.panelKey : k == "touch_key" ? s.touchKey
-                : k == "map_key" ? s.mapKey : s.pcKey) = keys;
+                : k == "map_key" ? s.mapKey : k == "pc_key" ? s.pcKey : s.saveKey) = keys;
         }
         else if (k == "cursor_move")
         {
@@ -399,6 +399,8 @@ namespace OneScreen
             "; Opens the PC boxes from the overworld, as if at a Pokemon Center PC\n"
             "; (docs/PC-ANYWHERE.md). none = off. Example: R+X (hold R, then press X).\n"
             "pc_key = none\n"
+            "; Quick save through the game menu. none = off; e.g. R+Y.\n"
+            "save_key = none\n"
             "; What moves the cursor: cstick, dpad or circlepad. dpad and circlepad still\n"
             "; reach the game as well.\n"
             "cursor_move = cstick\n"
@@ -510,6 +512,7 @@ namespace OneScreen
         std::string out = "panel_key " + KeysToString(s.panelKey) + ", touch_key " + KeysToString(s.touchKey)
                           + ", map_key " + KeysToString(s.mapKey)
                           + ", pc_key " + KeysToString(s.pcKey)
+                          + ", save_key " + KeysToString(s.saveKey)
                           + ", glyphs " + GlyphFamilyName(s.glyphs)
                           + ", cursor_move " + sources[(int)s.cursorSource]
                           + ", cursor_speed " + std::to_string(s.cursorSpeed) + "\n"

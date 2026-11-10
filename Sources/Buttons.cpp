@@ -42,6 +42,8 @@ namespace OneScreen
     // hook counts its presses and hides its keys from the game until released.
     static volatile u32 s_combo = 0;
     static volatile u32 s_comboHits = 0;
+    static volatile u32 s_saveCombo = 0, s_saveComboHits = 0;
+    static PcComboState s_saveComboState;
     static PcComboState s_comboState;   // only the hook touches it
 
     // Circle pad direction bits the HID module sets alongside the raw position.
@@ -103,21 +105,21 @@ namespace OneScreen
             s_realStickX = out[0].stickX;
             s_realStickY = out[0].stickY;
         }
-        const u32 combo = s_combo;
-        if ((combo != 0 || s_comboState.suppressed != 0) && n > 0)
+        // Evaluate both against the same unmasked input. If combos overlap,
+        // save takes priority and suppresses the PC request on that read.
+        if (n > 0)
         {
-            u32 held = 0;
+            const u32 held = s_realHeld;
+            const bool save = PcComboRead(s_saveComboState, s_saveCombo, held);
+            const bool pc = PcComboRead(s_comboState, s_combo, held);
+            if (save) s_saveComboHits = s_saveComboHits + 1;
+            else if (pc) s_comboHits = s_comboHits + 1;
+            const u32 hide = s_comboState.suppressed | s_saveComboState.suppressed;
             for (s32 i = 0; i < n; i++)
-                held |= out[i].held;
-            if (PcComboRead(s_comboState, combo, held))
-                s_comboHits = s_comboHits + 1;
-            const u32 hide = s_comboState.suppressed;
-            if (hide != 0)
-                for (s32 i = 0; i < n; i++)
-                {
-                    out[i].held &= ~hide;
-                    out[i].pressed &= ~hide;
-                }
+            {
+                out[i].held &= ~hide;
+                out[i].pressed &= ~hide;
+            }
         }
         MaskPadSamples(s_capture, s_captureRequest, out, n);
 
@@ -213,6 +215,9 @@ namespace OneScreen
     {
         s_actionKeys = keys;
     }
+
+    void ButtonsSetSaveCombo(u32 keys) { s_saveCombo = keys; }
+    u32 ButtonsSaveComboHits(void) { return s_saveComboHits; }
 
     void ButtonsSetCombo(u32 keys)
     {

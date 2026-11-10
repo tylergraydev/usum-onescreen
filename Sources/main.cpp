@@ -18,6 +18,7 @@
 #include "Panel.hpp"
 #include "Party.hpp"
 #include "PcAnywhere.hpp"
+#include "QuickSave.hpp"
 #include "UI/LayerGpu.hpp"
 #include "UI/GpuQuad.hpp"
 #include "Scene.hpp"
@@ -611,6 +612,12 @@ namespace CTRPluginFramework
                 OneScreen::UI::SetLayerGpu(line == "layergpu on");
             WriteLog(OneScreen::UI::LayerGpuStatus(), false);
         }
+        else if (line == "save")
+        {
+            std::vector<std::string> log;
+            OneScreen::QuickSaveRequest(s_game->offsets.sceneManager, log);
+            for (const std::string &l : log) WriteLog(l, false);
+        }
         else if (line == "pc" || line.compare(0, 3, "pc ") == 0)
         {
             std::vector<std::string> log;
@@ -797,7 +804,7 @@ namespace CTRPluginFramework
             return;
 
         const u32 panelKey = OneScreen::GetSettings().panelKey;
-        if (panelKey != 0 && Controller::IsKeysPressed(panelKey))
+        if (!OneScreen::QuickSaveRunning() && panelKey != 0 && Controller::IsKeysPressed(panelKey))
         {
             OneScreen::CyclePanelMode();
             OneScreen::AutoPanelManualOverride();
@@ -819,6 +826,10 @@ namespace CTRPluginFramework
         OneScreen::ActionsUpdate(s_game->offsets.sceneManager, actionLog);
         for (const std::string &line : actionLog)
             WriteLog(line, false);
+
+        std::vector<std::string> saveLog;
+        OneScreen::QuickSaveUpdate(s_game->offsets.sceneManager, saveLog);
+        for (const std::string &line : saveLog) WriteLog(line, false);
 
         if (++frames == 300)
         {
@@ -997,6 +1008,13 @@ namespace CTRPluginFramework
         }
     }
 
+    static void QuickSave(MenuEntry *)
+    {
+        std::vector<std::string> log;
+        OneScreen::QuickSaveRequest(s_game->offsets.sceneManager, log);
+        for (const std::string &line : log) WriteLog(line, false);
+    }
+
     static void ShowSettings(MenuEntry *entry)
     {
         const std::string text = OneScreen::DescribeSettings(OneScreen::GetSettings())
@@ -1040,6 +1058,9 @@ namespace CTRPluginFramework
                               "Open the PC boxes here, as at a Pokemon Center PC. Works in the overworld "
                               "when nothing else is going on; they open when this menu closes. "
                               "pc_key in usum-onescreen.ini sets a button combo for it.");
+        menu += new MenuEntry("Quick save", nullptr, QuickSave,
+                              "Save your adventure through the game's save flow after closing this menu. "
+                              "Only available in the idle overworld. save_key sets an optional combo.");
         menu += new MenuEntry("View settings", nullptr, ShowSettings,
                               "Show the settings in use, read from /usum-onescreen.ini at boot.");
         menu += new MenuEntry("Reload settings file", nullptr, ReloadSettings,

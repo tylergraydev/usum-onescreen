@@ -10,6 +10,7 @@
 #include "Framebuffer.hpp"
 #include "InputCapture.hpp"
 #include "Scene.hpp"
+#include "QuickSave.hpp"
 #include "Screens/MoveLearn.hpp"
 
 namespace OneScreen
@@ -113,7 +114,7 @@ namespace OneScreen
     // frames (the probe is per frame).
     static void ReadWorld(u32 sceneManager, bool now)
     {
-        if (now || s_frames % 5 == 0)
+        if (now || QuickSaveRunning() || s_frames % 5 == 0)
         {
             s_world.scene = SceneModule(sceneManager);
             s_world.flags &= ~(WorldBattleCommand | WorldBattleMoves | WorldLearnAsk | WorldLearnList | WorldLearnConfirm);
@@ -126,6 +127,8 @@ namespace OneScreen
                 s_world.flags |= MoveLearnWorldFlags(sceneManager);
         }
         s_world.flags = (s_world.flags & ~(WorldXMenu | WorldXMenuPage2 | WorldPartyList)) | ActionProbeFlags();
+        const u32 save = WorldSaveAsk | WorldSaveDone | WorldSaveIdle;
+        s_world.flags = (s_world.flags & ~save) | QuickSaveWorldFlags(sceneManager);
         const u32 box = WorldBoxIdle | WorldBoxModal | WorldBoxCarrying;
         s_world.flags = (s_world.flags & ~box) | (s_world.scene == SceneBox ? BoxWorldFlags(sceneManager) : 0);
     }
@@ -224,6 +227,11 @@ namespace OneScreen
 
     bool ActionStart(const ActionDef &def, u32 sceneManager, std::vector<std::string> &log)
     {
+        if (QuickSaveRunning() && &def != &QuickSaveAction())
+        {
+            log.push_back("action: refused: quick save is running");
+            return false;
+        }
         ReadWorld(sceneManager, true);
         if (!s_runner.Start(def, s_world, log))
             return false;
@@ -232,6 +240,8 @@ namespace OneScreen
             BeginCapture();
         return true;
     }
+
+    bool ActionSucceeded(void) { return s_runner.Succeeded(); }
 
     bool ActionRunning(void)
     {
