@@ -6,6 +6,10 @@ All notable changes for players are listed here. Versions follow [Semantic Versi
 
 ### Added
 
+- Windows launcher: dump-to-pack library helper and generated new-hash pack.json for packs without metadata; preserved legacy metadata with warnings, and effective per-game texture-option reads. Dump/load verified live on Azahar 2126.2 (Ultra Sun, Vulkan/NVIDIA, 2026-11-09).
+
+- Windows launcher: per-game community HD texture pack ZIP library with install, switch, Off and remove; preload/async options, maker texture dumping and folder access, plus CLI equivalents. Safe ZIP validation and staged copies; no textures or game assets are bundled.
+
 - Quick save through the game's X/Y save flow: optional `[controls] save_key` (default none), `save` command and Quick save plugin menu entry; guarded confirmation, native notices, refusal checks and host-tested sequence. Runtime/emulator verification pending.
 
 - Windows launcher: permanent named save slots per game (save/load/rename/delete), a Saves dialog with separate slots and rotating backups, and ZIP import/export of current saves, slots and backups. Slot loads make a safety backup first; imports verify the declared game title and reject unsafe ZIP paths. New `slot`, `export` and `import` CLI commands. Save data only; extdata is excluded.
