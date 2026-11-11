@@ -22,6 +22,11 @@ namespace OneScreen
 
     static const LayoutButton LayoutButtons[] =
     {
+        { "pelago.previous", 6, 100, 26, 140, 16, 120, LayoutVerified::Tap },
+        { "pelago.next", 294, 100, 314, 140, 303, 120, LayoutVerified::Tap },
+        { "pelago.mohn", 288, 210, 319, 238, 300, 222, LayoutVerified::Tap },
+        { "pelago.back", 0, 214, 33, 239, 16, 223, LayoutVerified::Tap },
+        { "pelago.yes", 16, 78, 303, 104, 160, 92, LayoutVerified::Tap },
         { "field.rotom_face", 113, 0, 207, 89, 160, 35, LayoutVerified::Tap },
         { "field.map", 29, 84, 290, 231, 160, 100, LayoutVerified::Tap },
         { "field.rotom_eye_left", 56, 17, 116, 80, 86, 48, LayoutVerified::Tap },
@@ -228,6 +233,11 @@ namespace OneScreen
         { "learn_moves.back", 0, 210, 32, 239, 16, 222, LayoutVerified::None },
         { "learn_confirm.yes", 12, 150, 306, 180, 160, 165, LayoutVerified::Tap },
         { "learn_confirm.return", 12, 184, 306, 212, 160, 197, LayoutVerified::Tap },
+        { "festival_plaza.pokemon", 170, 196, 204, 230, 187, 213, LayoutVerified::Tap },
+        { "festival_plaza.bag", 212, 196, 246, 230, 229, 213, LayoutVerified::Tap },
+        { "festival_plaza.profile", 128, 196, 162, 230, 145, 213, LayoutVerified::Tap },
+        { "festival_plaza.back", 0, 210, 33, 239, 16, 223, LayoutVerified::Tap },
+        { "festival_plaza.quit", 20, 106, 300, 134, 160, 118, LayoutVerified::Tap },
         { "strinput.excl", 21, 60, 38, 88, 30, 74, LayoutVerified::Tap },
         { "strinput.1", 41, 60, 58, 88, 50, 74, LayoutVerified::Tap },
         { "strinput.2", 61, 60, 78, 88, 70, 74, LayoutVerified::Tap },

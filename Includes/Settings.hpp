@@ -28,7 +28,19 @@ namespace OneScreen
     const char *GlyphFamilyName(GlyphFamily family);
 
     enum class CursorSource : uint8_t { CStick, DPad, CirclePad };
-    enum class Pillarbox : uint8_t { Tint, Pattern, Off };
+    enum class ScreenFilter : uint8_t { Off, Warm, Cool, Vignette };
+    bool ParseScreenFilter(const std::string &value, ScreenFilter &out);
+    const char *ScreenFilterName(ScreenFilter filter);
+    ScreenFilter GetScreenFilter(void); // atomic snapshot for the render hook
+    // Constant TEV colour (R in low byte), and unsqueezed 400x240 rectangles.
+    struct FilterQuad { int x, y, w, h; uint32_t colour; };
+    uint32_t ScreenFilterQuadCount(ScreenFilter filter);
+    FilterQuad ScreenFilterQuad(ScreenFilter filter, uint32_t index);
+    enum class SidePanelMode : uint8_t { Off, Battle, Field, Both };
+    bool ParseSidePanelMode(const std::string &value, SidePanelMode &out);
+    const char *SidePanelModeName(SidePanelMode mode);
+
+    enum class Pillarbox : uint8_t { Tint, Pattern, Off, Blur };
     enum class PanelSize : uint8_t { Half, TwoThirds };
     enum class PanelCorner : uint8_t { BottomRight, BottomLeft, TopRight, TopLeft };
     // Native battle menu look ([battle] layout): Classic is the original
@@ -53,7 +65,10 @@ namespace OneScreen
         PanelSize    panelSize = PanelSize::Half;
         PanelCorner  panelCorner = PanelCorner::BottomRight;
         bool         autoPanel = false;                // native menus first; the panel is a fallback
+        ScreenFilter filter = ScreenFilter::Off;
         Pillarbox    pillarbox = Pillarbox::Tint;
+        SidePanelMode sidePanels = SidePanelMode::Off;
+        float        fieldFov = 1.0f;                  // overworld fovy multiplier, 0.8..1.5
         float        aspect = 0.0f;                    // 0: original camera defaults
         BattleLayout battleLayout = BattleLayout::Classic;
         bool         instantText = false;
@@ -86,6 +101,10 @@ namespace OneScreen
     // names, unknown keys and bad values skipped. Anything skipped is added to
     // `warnings` as "line N: ...". Missing keys keep their defaults.
     Settings ParseSettings(const std::string &text, std::vector<std::string> &warnings);
+
+    // Shared by [display] field_fov and the live command.
+    // Finite 0.8..1.5 inclusive; invalid input leaves out unchanged.
+    bool ParseFieldFov(const std::string &value, float &out);
 
     // Shared by [display] aspect and the live command. 0/off, positive finite
     // floats, 16:9 and 21:9; invalid input leaves out unchanged.
