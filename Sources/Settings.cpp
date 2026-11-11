@@ -218,7 +218,8 @@ namespace OneScreen
             if (v == "tint") s.pillarbox = Pillarbox::Tint;
             else if (v == "pattern") s.pillarbox = Pillarbox::Pattern;
             else if (v == "off") s.pillarbox = Pillarbox::Off;
-            else return "bad pillarbox '" + value + "' (use tint, pattern or off)";
+            else if (v == "blur") s.pillarbox = Pillarbox::Blur;
+            else return "bad pillarbox '" + value + "' (use tint, pattern, off or blur)";
         }
         else if (k == "aspect")
         {
@@ -371,7 +372,7 @@ namespace OneScreen
             "; Experimental 3D camera aspect: 0/off (original), 16:9, 21:9 or a positive float.\n"
             "; Only new cameras change; see docs/WIDESCREEN.md.\n"
             "aspect = 0\n"
-            "; Side bands for full-screen native menus in widescreen: tint, pattern or off.\n"
+            "; Side bands: tint (default), pattern, off or blur (hires; otherwise tint).\n"
             "pillarbox = tint\n"
             "\n"
             "[battle]\n"
@@ -504,7 +505,7 @@ namespace OneScreen
 
     std::string DescribeSettings(const Settings &s)
     {
-        static const char *pillarboxes[] = { "tint", "pattern", "off" };
+        static const char *pillarboxes[] = { "tint", "pattern", "off", "blur" };
         static const char *sources[] = { "cstick", "dpad", "circlepad" };
         static const char *sizes[] = { "1/2", "2/3" };
         static const char *corners[] = { "bottom-right", "bottom-left", "top-right", "top-left" };

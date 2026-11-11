@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include "BattleRules.hpp"
 
 #include <3ds/types.h>
 
@@ -15,6 +16,8 @@ namespace OneScreen
         u8  level = 0;
         u16 hp = 0, maxHp = 0;
         u16 ability = 0;
+        u8 types[3] = {18, 18, 18};
+        u8 stages[7] = {6, 6, 6, 6, 6, 6, 6};
         u16 moves[4] = {};
         u8  pp[4] = {}, maxPp[4] = {};
         u8  partyIndex = 0xFF;  // record +0x19: battle-team index, NOT field-party slot
@@ -24,7 +27,7 @@ namespace OneScreen
     // PokemonPage: one Pokémon's page from the Pokémon list (Switch /
     // Restore / Summary). Question: the battle's two-choice question (Use
     // next Pokémon? / learning a move); `question` says which.
-    enum class BattleMenu { None, Command, Moves, Pokemon, Bag, Other, PokemonPage, Question };
+    enum class BattleMenu { None, Command, Moves, Pokemon, Bag, Other, PokemonPage, Question, Target };
 
     // One entry of the battle Bag's open pocket, as the game lists it.
     struct BattleBagEntry
@@ -47,7 +50,10 @@ namespace OneScreen
         u8  bagPocket = 0;      // Bag tab, 0 = leftmost
         bool bagItemPage = false;       // Bag: an item's page (Use) instead of the list
         BattleMon player, opponent;     // party slot 0 of client 0 and client 1
-        u8  partyCount[2] = {};
+        u8  partyCount[4] = {};
+        BattleMon clients[4][6];
+        BattleKind kind = BattleKind::Unknown;
+        u8 battleType = 0xFF, battleFormat = 0xFF;
         // The player's battle party in battle order (slot 0 = the active
         // battler); what the battle Pokémon list shows, slot by slot.
         BattleMon party[6];

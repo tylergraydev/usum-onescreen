@@ -288,6 +288,68 @@ def running_pid(name):
     return None
 
 
+TEST_DISPLAY = os.environ.get("USUM_TEST_DISPLAY", r"\\.\DISPLAY3")  # Tyler: test windows off the primary screen
+
+
+def place_window(pid, timeout=20.0):
+    """Move the Azahar window of `pid` onto TEST_DISPLAY (windowed, staggered by
+    how many instances run). Returns a short report; never fails the start."""
+    import ctypes
+    import ctypes.wintypes as w
+    user32 = ctypes.windll.user32
+    try:
+        user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))  # per-monitor v2: real pixels
+    except Exception:
+        pass
+
+    class MonitorInfo(ctypes.Structure):
+        _fields_ = [("cbSize", w.DWORD), ("rcMonitor", w.RECT), ("rcWork", w.RECT),
+                    ("dwFlags", w.DWORD), ("szDevice", w.WCHAR * 32)]
+
+    work = []
+    monitor_cb = ctypes.WINFUNCTYPE(ctypes.c_int, w.HMONITOR, w.HDC, ctypes.POINTER(w.RECT), w.LPARAM)
+
+    def on_monitor(handle, dc, rect, data):
+        mi = MonitorInfo()
+        mi.cbSize = ctypes.sizeof(MonitorInfo)
+        user32.GetMonitorInfoW(handle, ctypes.byref(mi))
+        if mi.szDevice.lower() == TEST_DISPLAY.lower():
+            work.append(mi.rcWork)
+        return 1
+
+    user32.EnumDisplayMonitors(0, 0, monitor_cb(on_monitor), 0)
+    if not work:
+        return f"window: display {TEST_DISPLAY} not found, left where Azahar put it"
+    area = work[0]
+
+    window_cb = ctypes.WINFUNCTYPE(ctypes.c_bool, w.HWND, w.LPARAM)
+    deadline = time.time() + timeout
+    found = []
+    while time.time() < deadline and not found:
+        def on_window(hwnd, data):
+            owner = w.DWORD()
+            user32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner))
+            if owner.value == pid and user32.IsWindowVisible(hwnd) and not user32.GetWindow(hwnd, 4):
+                found.append(hwnd)  # visible top-level window without an owner
+            return True
+        user32.EnumWindows(window_cb(on_window), 0)
+        if not found:
+            time.sleep(0.25)
+    if not found:
+        return "window: no Azahar window within %d s, not moved" % timeout
+    hwnd = found[0]
+    user32.ShowWindow(hwnd, 9)  # SW_RESTORE: never maximized/fullscreen
+    rect = w.RECT()
+    user32.GetWindowRect(hwnd, ctypes.byref(rect))
+    width = min(rect.right - rect.left, area.right - area.left)
+    height = min(rect.bottom - rect.top, area.bottom - area.top)
+    step = 40 * max(0, len(instance_emulators()) - 1)
+    x = min(area.left + 20 + step, area.right - width)
+    y = min(area.top + 20 + step, area.bottom - height)
+    user32.SetWindowPos(hwnd, 0, x, y, width, height, 0x0014)  # SWP_NOZORDER | SWP_NOACTIVATE
+    return f"window: moved to {TEST_DISPLAY} at {x},{y}"
+
+
 def cmd_start(args):
     if not exe_path(args.name).is_file():
         sys.exit(f"no instance '{args.name}' (run create first)")
@@ -323,6 +385,10 @@ def cmd_start(args):
         sys.exit("Azahar exited at once")
     state_path(args.name).write_text(json.dumps({"pid": proc.pid, "created": info[1], "exe": info[0]}))
     print(f"started '{args.name}' pid {proc.pid}")
+    try:
+        print(place_window(proc.pid))
+    except Exception as e:  # placement is a convenience; never fail a start over it
+        print(f"window: not moved ({e})")
 
     if args.wait:
         deadline = time.time() + args.wait
