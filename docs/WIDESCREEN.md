@@ -42,7 +42,7 @@ void Perspective(Matrix34or44 *out, u32 pivot,
 ```
 
 The game uses hard-float: `out` / `pivot` arrive in `r0` / `r1`, and the four
-floats in `s0`â€“`s3`. Pivot is screen rotation (0â€“4). The builder computes
+floats in `s0`Ã¢â‚¬â€œ`s3`. Pivot is screen rotation (0Ã¢â‚¬â€œ4). The builder computes
 cot(fovy/2) and divides by aspect at `0x3632C4`. Its only known callers are
 `0x4C1FF0`, `0x4C2094`, and `0x4C20E4` in camera update/blend code.
 
@@ -68,7 +68,7 @@ Battle.cro has a separate perspective builder at header-relative `+0x736D0`.
 `CroModuleOf` / `CroModuleName` discovery path, checking the loaded `FIXD`
 header and `Battle` name afresh each frame. It checks `E92D4030 E1A05001`
 at the entry and `EEC01AA9` at `+0x73774` before installing a second MITM
-instance with the **same `PerspectiveHook` callback**. This shares the existing
+instance with the **aspect-only `PerspectiveHook` callback**. This shares the existing
 `[display] aspect`, 400/240 +/-0.001 filter, hard-float forwarding and rewrite
 counter. No battle hook is installed at aspect off or stock 5:3. Other aspect
 changes use the live value on subsequent calls. Installation is frame-driven,
@@ -151,6 +151,83 @@ pane-cull behavior changes here.** Full-screen battle layouts and edge-pane
 culling remain follow-ups, as do finite stage/effect edges and possible
 frustum-culling pops exposed by the wider projection. See
 [the research notes](RESEARCH-BATTLE-WIDESCREEN.md).
+
+## Overworld field of view (#28; emulator verification pending)
+
+`[display] field_fov = 1.0` is a vertical-angle multiplier, inclusive range
+0.8?1.5. The default 1.0 preserves the incoming fovy exactly; values above
+one show more scenery, values below one zoom in. Boot and settings reload
+apply it on the next plugin frame. Invalid INI values warn and retain the
+previous valid value (or default 1.0). `fov 1.2` changes session settings;
+`fov status` (or `fov`) logs the requested scale, the currently published
+scale (1 when gated off), and a u32 count of changed fovy calls since boot.
+Invalid commands retain the current scale; commands do not write the INI.
+
+Only the code.bin perspective hook applies FOV. Battle.cro retains the
+aspect-only callback, independently of scene publication, and SequencePlayer's
+separate perspective builder remains untouched. The original incoming aspect
+must match top-screen 400/240 within 0.001, even when aspect rewriting is off.
+We multiply fovy before forwarding all six arguments through the existing
+hard-float path. The aspect override stays independent: the builder computes
+vertical cot(fovy/2), then horizontal cot(fovy/2)/aspect, so both axes use the
+same scaled angle. Nonfinite/nonpositive fovy or a result outside (0, pi)
+radians passes through without scaling. Near/far and camera data are unchanged.
+
+`WidescreenFrame` obtains the supported game's scene-manager address captured
+by `StartWidescreen`, samples `ReadPcWorld` afresh each frame, and publishes
+one lock-free atomic float. Eligibility requires FieldRo, known state 0
+(walking/standing), no script/event, no Festival Plaza, no plugin action or
+pending PC request, and no native map. Unknown states, menus, talking,
+encounter startup, battle, Refresh, TownMap and other scenes fail closed.
+This deliberately excludes scripted field cameras as well as SequencePlayer.
+The hook only reads that scalar and increments a lock-free atomic counter;
+it never resolves a CRO, scans a scene, locks, allocates or logs.
+
+**Distance is out of scope.** The identified camera offsets cover near, far,
+fovy and aspect only. No verified camera-distance field is documented; no
+address is guessed or patched.
+
+Verify in Azahar on Sun and Moon: compare the same idle outdoor/indoor camera
+at `fov 1`, `fov 0.8`, `fov 1.2` and `fov 1.5`, first with `aspect off`, then
+16:9 and 21:9. Query status twice while walking: the FOV counter should grow
+only at a non-stock scale on eligible calls. Check X menu, dialogue, scripts,
+SequencePlayer cutscenes, Refresh, map and battle (including repeated entry
+and exit); their calls must not increase that counter. Repeat with INI boot
+and reload, and ensure `fov 1` restores stock framing without resetting counts.
+
+Host coverage is `tests/field_fov_test.cpp` (parse/range/defaults, scene/event/map
+policy and combined projection math), plus the existing settings and battle
+lifetime tests. From `tests/`, the direct MSVC commands used were:
+
+```bat
+cl /nologo /std:c++17 /EHsc /W4 /WX /I ../Includes field_fov_test.cpp ../Sources/Settings.cpp ../Sources/SettingsFile.cpp /Fe:build/field_fov_test.exe /Fo:build/
+build\field_fov_test.exe
+cl /nologo /std:c++17 /EHsc /W4 /WX /I ../Includes settings_test.cpp ../Sources/Settings.cpp ../Sources/SettingsFile.cpp /Fe:build/settings_test.exe /Fo:build/
+build\settings_test.exe
+cl /nologo /std:c++17 /EHsc /W4 /WX /I ../Includes settings_file_test.cpp ../Sources/Settings.cpp ../Sources/SettingsFile.cpp /Fe:build/settings_file_test.exe /Fo:build/
+build\settings_file_test.exe
+cl /nologo /std:c++17 /EHsc /W4 /WX /I ../Includes battle_widescreen_test.cpp /Fe:build/battle_widescreen_test.exe /Fo:build/battle_widescreen_test.obj
+build\battle_widescreen_test.exe
+```
+
+The compiler environment was initialized with Visual Studio 2022 BuildTools'
+`VC/Auxiliary/Build/vcvars64.bat`. No make or WSL was used. ARM syntax checking
+also passed with this exact PowerShell command from the repo root:
+
+```powershell
+& C:/devkitPro/devkitARM/bin/arm-none-eabi-g++.exe -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft -Os -mword-relocations -fomit-frame-pointer -ffunction-sections -fdata-sections -fno-strict-aliasing -Wall -Werror -D__3DS__ -fno-rtti -fno-exceptions -std=gnu++17 -I Includes -I C:/devkitPro/libctrpf/include -I C:/devkitPro/libctru/include -fsyntax-only Sources/Widescreen.cpp Sources/Settings.cpp Sources/main.cpp
+```
+
+This is not a linked plugin build or emulator validation.
+
+Wider FOV can reveal culling/pop-in, missing geometry and scene-anchored UI
+placement problems. Publication is frame sampled, so a scene/menu/event/map
+transition between samples can retain the last scale until the next plugin
+frame; runtime checks must establish whether that transient is visible.
+Separate battle/SequencePlayer builders remain protected regardless. Strict
+instantaneous gating for every shared code.bin caller would require verified
+camera ownership or additional transition integration; it is not established
+by the known camera offsets.
 
 ## Camera findings
 
@@ -241,7 +318,7 @@ Before either write, both templates' type and all six floats are checked by
 bits: only a stock horizontal pair or the exact pair last successfully written
 to that template is accepted; all other fields must be stock. A mismatch or
 unreadable word logs `widescreen: 2d templates MISMATCH ...; no writes`.
-Success logs `widescreen: 2d templates 0x5C3180 0x5E8468 left/right ±N`.
+Success logs `widescreen: 2d templates 0x5C3180 0x5E8468 left/right Â±N`.
 A failed Patch logs `PATCH FAILED` and may leave a partial update; the aspect
 and native presentation still change. Successful writes are tracked per template.
 
@@ -353,7 +430,7 @@ the picture shows unsqueezed (wider than the rest of the game's 2D);
 Audit of native top output:
 
 - Layer presentation covers X menu, party, bag, boxes and its badge, keyboard,
-  Pokédex, battle menu, move learning, map, Rotom prompts/badge, theme preview,
+  PokÃ©dex, battle menu, move learning, map, Rotom prompts/badge, theme preview,
   and SubScreens (including options and the other native replacement screens).
   Their selection cursors are drawn into the layers and squeeze with them.
 - The UI demo also uses Layer; `uidemo direct` uses the layer while k > 1 so
