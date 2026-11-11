@@ -1,4 +1,5 @@
 #include "Widescreen.hpp"
+#include "BattleWidescreen.hpp"
 
 #include <CTRPluginFramework.hpp>
 #include <cmath>
@@ -238,6 +239,7 @@ namespace OneScreen
         const HookResult cullResult = s_calculateMtxHook.Enable();
         report += Utils::Format("\nwidescreen: pane CalculateMtx hook at %08lX -> %d",
                                 CalculateMtxAddress, (int)cullResult);
+        report += "\n" + StartBattleWidescreen((u32)PerspectiveHook);
         return result == HookResult::Success && cullResult == HookResult::Success;
     }
 

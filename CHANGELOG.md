@@ -21,6 +21,7 @@ All notable changes for players are listed here. Versions follow [Semantic Versi
 
 ### Fixed
 
+- Battle 3D now uses the configured widescreen aspect through Battle.cro's own perspective builder, with signature checks and removal before CRO unload. Emulator comparison/reload verification pending; battle 2D squeeze/culling unchanged.
 - Bottom-screen panel/full views no longer submit hundreds of GX copies at widescreen. CPU composition is used only when squeeze > 1, preserving both sizes, borders and the touch cursor; stock aspect keeps the original GPU paths and performance, and the native map remains one copy. The user's 21:9 Pokedex repro now reaches Zukan with zero unmapped reads; the final stock-GPU restoration still needs a plugin build and regression rerun. Widescreen CPU panels may cost speed and sharpness.
 
 - Battle teams selected from part of the field party no longer borrow nicknames/items from the wrong slot; metadata matches Pokemon identity and suppresses ambiguous matches.
