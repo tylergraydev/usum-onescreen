@@ -1,9 +1,82 @@
 # Panel performance
 
-What the bottom-screen panel costs Azahar, measured 2026-11-02 with
-`tools/perf.py`. **Now (P1-6):** the panel is copied by GPU transfers and costs
-Azahar 0-4% of its speed (1/2 and full), 8% for 2/3; it was ~40% (H5, below).
-The sections after "P1-6" are H5's original measurements of the old CPU copy.
+## Widescreen panel safety fallback (2026-11-10)
+
+Panel/full views use CPU composition only when `WidescreenSqueeze() > 1`.
+At squeeze <= 1 (including aspect 0), the original GPU preparation, cursor,
+filtering, two-thirds refresh cadence and flush behavior are retained. Only
+the old squeezed final-copy loops in `CopyTopColumns` and `GpuFull` are
+removed. Unsupported formats or scratch allocation failure still select the
+CPU fallback. `PanelCopyBottomRect` continues to copy the game's already-
+squeezed native map with one TextureCopy, independent of panel scratch.
+
+The reported Ultra Sun X-menu crash at 21:9 (`auto on`, `pokedex off`)
+corresponds to those two per-column GX submission loops. The CPU cursor
+squeeze loop was safe. The user's emulator check of the widescreen CPU fix
+now reaches scene Zukan with the panel shown and **0 unmapped reads**, versus
+approximately 5,800 before. The stock-aspect build previously passed the full
+regression suite without faults. The exact corruption/interrupt mechanism
+behind the command-count failures remains unproven.
+
+| Panel path | Stock total GX/present (unchanged) | Old widescreen total | New widescreen total |
+|---|---:|---:|---:|
+| Full | 8 | 7 + N | 0 |
+| Half | 5 | 4 + N | 0 |
+| Two-thirds | 3-4 | 2-3 + N | 0 |
+| Native map rectangle (per call, any aspect) | 1 | 1 | 1 |
+
+N is the number of covered destination columns. Full view previously issued
+307 commands at 16:9 and 235 at 21:9; half issued 162 and 124. Two-thirds
+adds one command on refresh frames. The stock final framebuffer copy is one
+command, but its preparation and cursor work bring the **total** to the
+counts above; the restored stock chains do not claim a two-command budget.
+These counts cover Panel.cpp, not the separate LayerGpu/GpuQuad presenters.
+
+Widescreen CPU composition uses the inverse column mapping for picture,
+border and cursor. Half-size averages 2x2 pixels; two-thirds retains its 3:2
+area filter and 229x176 box. All CPU panel draws request a CTRPF flush;
+stock GPU paths retain their original flush returns. Widescreen readback
+compares against the CPU filter; stock GPU readback remains unchanged.
+
+This is a conservative widescreen fallback. Arbitrary 16:9/21:9 squeezes
+cannot use DisplayTransfer's fixed 2x scaling; new quad texture/upload/state
+integration is deferred. CPU reads and small writes cause Azahar framebuffer
+downloads and may reduce sharpness at higher internal resolutions. Expect a
+potentially substantial slowdown **while a widescreen panel is visible**.
+Aspect 0 retains its GPU performance path. The historical ~40% CPU-copy loss
+below is context, not a measurement of this implementation. Re-measure
+panel/full at 0, 16:9 and 21:9 with `perf` / `tools/perf.py`.
+
+Host verification (no game data, WSL or make required):
+
+```powershell
+python -I tests/panel_command_test.py --generate tests/build/panel_host.hpp
+# From a Visual Studio x64 Native Tools prompt:
+cl /nologo /std:c++17 /EHsc /W4 /WX /wd4244 /wd4505 /I Includes tests/panel_command_test.cpp /Fe:tests/build/panel_command_test.exe /Fo:tests/build/panel_command_test.obj
+tests/build/panel_command_test.exe
+```
+
+The host build compiles the actual Panel.cpp and Framebuffer.hpp bodies with
+device includes replaced by stubs and transfer mocks. Host addresses use
+pointer-sized `u32`; MSVC warning 4244 is suppressed for that host widening,
+and 4505 for unused stub functions. The 2,400 cases count **all** GX calls:
+8/5/4 then 3 on stock BGR8 paths, and 0 at 16:9/21:9. They also exercise CPU
+fallback formats, framebuffer guards, flush returns, cursor/filter pixels
+and returning from widescreen to stock. A source call-graph guard rejects
+GX submissions inside loops, including via Transfer/CopyRuns; its regression
+checks explicitly reject both original squeezed-loop shapes. Tests are
+wired into `tests/Makefile` too.
+
+The user's emulator result validates the widescreen CPU approach; the final
+stock-GPU restoration still needs a plugin build and regression rerun. Host
+transfer mocks cannot prove native GX execution, game timing or sharpness.
+
+## GPU-copy performance measurements (2026-11-02)
+
+The GPU panel measurements below remain relevant at stock aspect: 0-4% of
+Azahar speed for half/full and ~8% for two-thirds. They do not describe the
+new widescreen CPU path. Sections after P1-6 contain H5's original CPU-copy
+measurements, retained as historical evidence.
 
 ## Map at widescreen: one GX command (2026-11-08)
 
@@ -60,7 +133,8 @@ commands per present 11 (plus the map's one copy), queue depth 0, fallbacks 0;
 ran 3.2 min at 21:9 and 16:9, and 1 min at 21:9 with `layergpu off`. A window
 capture of Azahar at 21:9 shows the map picture at the internal resolution
 with `layergpu on` and at 1x with `layergpu off`. The panel's own half/two-thirds/full paths
-still send one command per column at widescreen and were not tested here.
+still sent one command per column at widescreen in that build and were not
+tested there; the CPU fallback above now removes those paths.
 
 ## P1-6: GPU copy
 
@@ -76,7 +150,7 @@ From Azahar's source (master, `video_core/rasterizer_cache/rasterizer_cache.h`,
   region we want to remove it"). So drawing even a cursor or a 1-px border on
   the game's frame costs a download per frame.
 
-### What the panel does now
+### What the stock-aspect GPU panel does
 
 `Sources/Panel.cpp` queues transfers with the game's own gx library
 (DisplayTransfer `0x27A5BC`, TextureCopy `0x279E28`, see `docs/OFFSETS.md`);
