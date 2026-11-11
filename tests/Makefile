@@ -10,7 +10,7 @@ OUT      := build
 PYTHON   ?= python3
 CODE_BIN ?=
 
-TESTS    := $(OUT)/pelago_test $(OUT)/quick_save_test $(OUT)/image_test $(OUT)/hires_test $(OUT)/band_column_test $(OUT)/layer_runs_test $(OUT)/pillarbox_test $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/settings_file_test $(OUT)/ui_host_test $(OUT)/party_data_test $(OUT)/action_queue_test $(OUT)/xmenu_test $(OUT)/battle_menu_test $(OUT)/keyboard_test $(OUT)/pokedex_test $(OUT)/native_screens_test $(OUT)/bag_test $(OUT)/map_test $(OUT)/party_menu_test $(OUT)/boxes_test $(OUT)/field_settle_test $(OUT)/pc_anywhere_test $(OUT)/move_learn_test $(OUT)/rotom_prompt_test $(OUT)/theme_test $(OUT)/screen_buffer_test $(OUT)/poke_icons_test $(OUT)/battle_widescreen_test
+TESTS    := $(OUT)/field_fov_test $(OUT)/battle_widescreen_test $(OUT)/quick_save_test $(OUT)/image_test $(OUT)/hires_test $(OUT)/band_column_test $(OUT)/layer_runs_test $(OUT)/pillarbox_test $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/settings_file_test $(OUT)/ui_host_test $(OUT)/party_data_test $(OUT)/action_queue_test $(OUT)/xmenu_test $(OUT)/battle_menu_test $(OUT)/keyboard_test $(OUT)/pokedex_test $(OUT)/native_screens_test $(OUT)/bag_test $(OUT)/map_test $(OUT)/party_menu_test $(OUT)/boxes_test $(OUT)/field_settle_test $(OUT)/pc_anywhere_test $(OUT)/move_learn_test $(OUT)/rotom_prompt_test $(OUT)/theme_test $(OUT)/screen_buffer_test $(OUT)/poke_icons_test $(OUT)/pelago_test
 
 .DEFAULT_GOAL := all
 
@@ -65,6 +65,11 @@ $(OUT)/quick_save_test: quick_save_test.cpp ../Sources/QuickSaveFlow.cpp ../Incl
 $(OUT)/pc_anywhere_test: pc_anywhere_test.cpp ../Includes/PcAnywhereRules.hpp $(SETTINGS_SRCS) $(SETTINGS_HDRS)
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) pc_anywhere_test.cpp $(SETTINGS_SRCS) -o $@
+
+$(OUT)/field_fov_test: field_fov_test.cpp ../Includes/Widescreen.hpp ../Includes/PcAnywhereRules.hpp $(SETTINGS_SRCS) $(SETTINGS_HDRS)
+	@mkdir -p $(OUT)
+	$(CXX) $(CXXFLAGS) field_fov_test.cpp $(SETTINGS_SRCS) -o $@
+# MSVC: cl /nologo /std:c++17 /EHsc /W4 /WX /I ../Includes field_fov_test.cpp ../Sources/Settings.cpp ../Sources/SettingsFile.cpp /Fe:build/field_fov_test.exe /Fo:build/
 
 $(OUT)/settings_test: settings_test.cpp $(SETTINGS_SRCS) $(SETTINGS_HDRS) ../Includes/FastTextPatches.hpp
 	@mkdir -p $(OUT)
@@ -206,6 +211,7 @@ $(OUT)/battle_widescreen_test: battle_widescreen_test.cpp ../Includes/BattleWide
 # cl /nologo /std:c++17 /EHsc /W4 /WX /I ../Includes battle_widescreen_test.cpp /Fe:build/battle_widescreen_test.exe /Fo:build/battle_widescreen_test.obj
 
 run: $(TESTS)
+	./$(OUT)/field_fov_test
 	./$(OUT)/pelago_test $(OUT)
 	./$(OUT)/blur_test
 	$(PYTHON) -I blur_command_test.py
