@@ -1,5 +1,38 @@
 # Experimental widescreen (3D and 2D)
 
+## Panel presentation (2026-11-10)
+
+The bottom-screen corner panel and full view use CPU composition only when
+`WidescreenSqueeze() > 1`, including 16:9 and 21:9: **zero panel GX commands
+per present**. At squeeze <= 1 (including aspect 0), the original GPU paths
+remain: full 8, half 5, two-thirds 3-4 total commands. Their final top-screen
+copy alone is one command; preparation and cursor commands still count.
+
+The previous widescreen paths submitted one GX command per destination
+column in `CopyTopColumns` and `GpuFull`; both squeezed loops are removed.
+CPU picture, border and cursor use the same inverse column mapping, preserve
+corners, and submit no GX. Two-thirds keeps its true size and area filter.
+The native map remains one TextureCopy per call from an already-squeezed
+source. Other presenters have their own command counts.
+
+The user's emulator check at 21:9, `auto on`, `pokedex off`, open-pokedex
+now reaches Zukan with the panel shown and 0 unmapped reads (previously about
+5,800). Stock aspect previously passed the full regression suite. The final
+stock-GPU restoration still needs a rebuilt plugin and regression rerun.
+CPU panel drawing trades speed and potentially internal-resolution sharpness
+for safety only at widescreen; aspect 0 retains its GPU performance path.
+See [PERF.md](PERF.md) for full counts, rationale and direct host commands.
+
+Runtime verification: rebuild, repeat the exact 21:9 repro, then repeatedly
+open/close and touch-close the X menu; soak for several minutes and check
+Azahar for unmapped reads. Repeat half/two-thirds/full and all corners at
+16:9 and aspect 0, including live aspect changes back to stock. Re-run the
+ten panel-path regression failures (actions, memory-tour, native-boxes,
+native-options, native-party, native-passport-video, native-xmenu,
+open-each-app, wild-battle-run, xmenu-touch-close), plus native-map. Check
+border/cursor alignment and compare `perf` results. Host tests assert the
+true stock counts and zero widescreen panel GX; they cannot prove game timing.
+
 Ultra Sun / Ultra Moon USA v1.2 (`0x0820`) have byte-identical perspective
 builder code at `0x3631CC`:
 
@@ -432,13 +465,27 @@ aspect = 21:9
 pillarbox = tint
 ```
 
-`pillarbox` accepts `tint` (default), `pattern`, or `off`, case-insensitively.
+`pillarbox` accepts `tint` (default), `pattern`, `blur`, or `off`, case-insensitively.
 It applies at boot and on settings reload, including menus already open.
 Tint is an opaque dark olive, half the native `Theme::WindowFill` colour
 (`#2B2A19`), with a three-destination-column gradient towards the menu.
 It never samples or blends with the game's framebuffer. Pattern adds subtle
 diagonal stripes (eight-column/row repeat, only three RGB levels brighter)
 on the same base. Off leaves the game's scene visible in the side bands.
+
+Blur fills the sides with a stretched, blurred, half-bright copy of the native
+menu's picture. A dense first filter and three 2x2 box reductions build an 8x8
+texture before stretching it: five render passes share one GX command list.
+GX commands remain 1 per hi-res present (zero added); Map still has its existing
+separate copy. The pyramid uses 21,760 bytes of existing diagnostic scratch,
+with zero new buffer allocation or plugin heap use. The same atlas snapshot
+supplies the bands and sharp centre; there is no game framebuffer readback.
+The host high-detail reference, including 5x intermediate targets, limits adjacent
+band changes to five luminance levels (measured 1-2). The prior sparse taps showed
+horizontal streaks in emulator tests; the replacement still needs Party/Bag/Boxes
+review at 21:9/5x. `hires off` and CPU/legacy fallback use tint instead.
+See [GPUQUAD.md](GPUQUAD.md) for exact budgets and checks. Default remains tint;
+enable with `pillarbox = blur` and reload.
 
 Only top-screen layers containing the standard full-screen inset
 `{12, 8, 376, 224}` qualify, and only with squeeze greater than one.
@@ -503,11 +550,12 @@ GPU vertices apply the continuous x=200 squeeze; glyph layout is unchanged.
 Nearest-scaled pixel sprites and bilinear smooth art retain their original size.
 
 Hi-res pillarbox bands sample the twelve WriteBandColumn phases reserved at
-atlas x=1012..1023. Pattern repeats eight phases; Tint stretches phase8; edge
+atlas x=1012..1023 for Tint/Pattern. Pattern repeats eight phases; Tint stretches phase8; edge
 columns use11,10,9 outward from the menu. BandRuns uses destination coordinates
 without squeezing them again, nearest filtering for bands and bilinear for menus.
 Bands and up to four menu quads use one list/state restore: one overlay GX command,
-no hi-res CPU framebuffer writes. Off emits no bands. Original eligibility,
+no hi-res CPU framebuffer writes. Blur uses the filtered 8x8 picture described above instead
+of these phases. Off emits no bands. Original eligibility,
 SourceColumn boundaries and fallback CPU/LayerGpu behavior remain unchanged.
 
 Map's hi-res skip window is alpha0 in the layer texture. The target overlay is

@@ -28,7 +28,7 @@ namespace OneScreen
     const char *GlyphFamilyName(GlyphFamily family);
 
     enum class CursorSource : uint8_t { CStick, DPad, CirclePad };
-    enum class Pillarbox : uint8_t { Tint, Pattern, Off };
+    enum class Pillarbox : uint8_t { Tint, Pattern, Off, Blur };
     enum class PanelSize : uint8_t { Half, TwoThirds };
     enum class PanelCorner : uint8_t { BottomRight, BottomLeft, TopRight, TopLeft };
     // Native battle menu look ([battle] layout): Classic is the original
