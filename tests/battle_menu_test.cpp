@@ -492,6 +492,8 @@ struct FakeGame
             busy--;
         if (gap > 0 && --gap == 0)
             snap.menu = GameMenu::PokemonPage;
+        else if (gap == 2)
+            snap.menu = GameMenu::Other; // Royal forced send-out transition
         else if (gap == 3)
             snap.menu = GameMenu::Command;  // the game's command menu, for a moment
         Apply(out);
@@ -571,6 +573,12 @@ static void TestParty(void)
     forced.Frame(forcedMenu, BattleKeys::B);
     CHECK(!forcedMenu.Busy() && forcedMenu.Note() == "Choose a Pok\xC3\xA9mon to send out");
     CHECK(forcedMenu.Status(forced.snap).find("forced") != std::string::npos);
+
+    forced.Frame(forcedMenu, BattleKeys::A);
+    forced.Frame(forcedMenu, BattleKeys::A);
+    CHECK(forcedMenu.BusyText() == "Go, Zorua!");
+    forced.Run(forcedMenu, 200);
+    CHECK(forced.switchedTo == 1 && forced.taps.size() == 2);
 
     // A game that never answers: the goal gives up with a note.
     FakeGame deaf;
@@ -735,42 +743,200 @@ static void TestQuestion(void)
 // buttons are only measured, so a choice says to use the bottom screen.
 static void TestTarget(void)
 {
+    BattleSnapshot target = MovesSnap();
+    target.menu = GameMenu::Other;
+    target.otherVtable = TargetVtable;
+    target.targets[1] = { "Original", true, true, false };
+    BattleMenu menu;
+    menu.Update(target, 0); // recognized even with no recent move
+    CHECK(menu.Page() == BattlePage::Target && menu.Cursor() == 1);
+    CHECK(menu.Visible());
+    for (u32 key : { BattleKeys::DUp, BattleKeys::DDown, BattleKeys::DLeft, BattleKeys::DRight }) {
+        menu.Update(target, key);
+        CHECK(menu.Cursor() == 1); // empty ally/helper and self never selected
+    }
+    target.targets[0] = { "Helper", true, true, false };
+    target.targets[2] = { "Self", true, false, true };
+    target.targets[3] = { "Ally", true, false, false };
+    menu.Update(target, BattleKeys::DLeft);
+    CHECK(menu.Cursor() == 0);
+    Idle(menu, target, 40);
+    CHECK(menu.Update(target, BattleKeys::A).tap != nullptr);
+    // A target can disappear while the step is settling: recheck before tapping.
+    BattleMenu stale;
+    stale.Update(target, 0);
+    stale.Update(target, BattleKeys::A);
+    target.targets[0].live = false;
+    Idle(stale, target, 40);
+    CHECK(!stale.Busy() && stale.Note() == "Target changed, choose again");
+    target.otherVtable = 0x10C000;
+    BattleMenu unknown;
+    unknown.Update(target, 0);
+    CHECK(unknown.Page() == BattlePage::Game);
+    // Move -> command flash -> target; the four-frame flash cannot erase recognition.
+    BattleSnapshot move = MovesSnap();
+    move.moves[0].spread = true;
+    BattleMenu spread;
+    spread.Update(move, 0);
+    Idle(spread, move, 15);
+    spread.Update(move, BattleKeys::A);
+    move.menu = GameMenu::Command;
+    Idle(spread, move, 4);
+    target.menu = GameMenu::Target;
+    spread.Update(target, 0);
+    CHECK(spread.Page() == BattlePage::Target && spread.Spread());
+    CHECK(spread.Cursor() == 1 && IsSpreadMove(57) && !IsSpreadMove(85));
+    CHECK(FirstTarget(target.targets) == 1);
+    Idle(spread, target, 40);
+    CHECK(spread.Update(target, BattleKeys::A).tap != nullptr);
+    target.menu = GameMenu::None;
+    for (u32 i = 0; i < 40; i++) CHECK(spread.Update(target, 0).tap == nullptr);
+    CHECK(!spread.Busy());
+    target.menu = GameMenu::Target;
+    target.targets[1].live = false;
+    CHECK(FirstTarget(target.targets) == 0xFF);
+    CHECK(spread.Update(target, BattleKeys::A).tap == nullptr && !spread.Busy());
+    for (u8 i = 0; i < TargetCount; i++)
+        CHECK(FindLayoutButton(TargetButton(i))->verified == LayoutVerified::Tap);
+}
+
+static void TestFoeRules(void)
+{
+    struct Record { u32 address; u16 species, hp, maxHp; u8 stages[7]; };
+    Record foes[6] = {{10, 546, 20, 20, {6,6,6,6,6,6,6}},
+                      {20, 546, 20, 20, {6,12,6,6,6,6,6}},
+                      {30, 546, 0, 20, {6,6,6,6,6,6,6}}};
+    CHECK(LiveFoeRecord(foes, 0) == 0);
+    CHECK(LiveFoeRecord(foes, 20) == 1);
+    std::swap(foes[0], foes[2]); // fainted record 0; live helper has Def +6
+    CHECK(LiveFoeRecord(foes, 30) == 1);
+    CHECK(StatStagesText(foes[LiveFoeRecord(foes, 30)].stages) == "Def+6");
+    std::swap(foes[0], foes[1]);
+    CHECK(LiveFoeRecord(foes, 20) == 0); // follows identity through reorder
+    foes[0].hp = 0;
+    CHECK(LiveFoeRecord(foes, 20) == 2); // selected foe fainted: use other live foe
+    foes[2].hp = 0;
+    CHECK(LiveFoeRecord(foes, 20) == 0xFF);
+    Record bench{40, 9, 100, 100, {6,6,6,6,6,6,6}};
+    TargetSlot empty = MakeTargetSlot(BattleKind::Wild, 0, 3, bench, "Blastoise");
+    CHECK(empty.name.empty() && !empty.live && !TargetSelectable(empty));
+    CHECK(MakeTargetSlot(BattleKind::Trainer, 0, 3, bench, "Blastoise").name.empty());
+    CHECK(MakeTargetSlot(BattleKind::Trainer, 1, 3, bench, "Blastoise").live);
+    CHECK(MakeTargetSlot(BattleKind::Royal, 2, 3, bench, "Blastoise").name == "Blastoise");
+    CHECK(TargetRecord(BattleKind::Wild, 0).client == 1 && TargetRecord(BattleKind::Wild, 0).record == 1);
+    CHECK(TargetRecord(BattleKind::Wild, 1).record == 0);
+    CHECK(TargetRecord(BattleKind::Royal, 0).client == 3 && TargetRecord(BattleKind::Royal, 3).client == 1);
+    CHECK(DecodeBattleKind(0, 0) == BattleKind::Wild);
+    CHECK(DecodeBattleKind(1, 0) == BattleKind::Trainer);
+    CHECK(DecodeBattleKind(1, 2) == BattleKind::Royal);
+    CHECK(DecodeBattleKind(255, 255) == BattleKind::Unknown);
+    for (BattleKind kind : { BattleKind::Trainer, BattleKind::Royal }) {
+        BattleSnapshot snap = CommandSnap(); snap.kind = kind;
+        BattleMenu menu; Idle(menu, snap, 40);
+        menu.Update(snap, BattleKeys::DUp);
+        CHECK(menu.Cursor() == (u8)BattleCommand::Run);
+        CHECK(menu.Update(snap, BattleKeys::A).action == nullptr);
+        CHECK(menu.Note() == "Can't run from a trainer");
+        CHECK(HiResScreenSmoke::Run(menu.Area(), menu.Radius(), [&](UI::Canvas &hi) { menu.Draw(hi, snap); }));
+        if (kind == BattleKind::Trainer && s_previewDir) {
+            std::vector<u8> pixels(400 * 240 * 3, 0);
+            UI::Surface surface{pixels.data(), 3, 400 * 3, UI::PixelFormat::BGR8, 400, 240};
+            UI::Canvas canvas(surface);
+            menu.Draw(canvas, snap);
+            WritePreview(pixels, std::string(s_previewDir) + "/battle-trainer-run.ppm");
+        }
+    }
+    BattleSnapshot royal = CommandSnap(); royal.kind = BattleKind::Royal;
+    BattleMenu menu; Idle(menu, royal, 40);
+    menu.Update(royal, BattleKeys::DDown);
+    CHECK(menu.Cursor() == (u8)BattleCommand::Pokemon && !BattleHasBag(royal.kind));
+    u8 stages[] = {6, 5, 7, 4, 12, 0, 255};
+    CHECK(StatStagesText(stages) == "Def-1 SpA+1 SpD-2 Spe+6 Acc-6");
+    CHECK(!CaughtBit(0, 255) && !CaughtBit(808, 255));
+    CHECK(CaughtByte(1) == 0 && CaughtMask(1) == 1);
+    CHECK(CaughtByte(8) == 0 && CaughtMask(8) == 128);
+    CHECK(CaughtByte(9) == 1 && CaughtMask(9) == 1);
+    const u8 types[] = {9, 9, 18};
+    const u8 three[] = {1, 12, 13};
+    CHECK(BattlerTypesText(types) == "Fire");
+    CHECK(BattlerTypesText(three) == "Fighting / Electric / Psychic");
+    CHECK(CaughtBit(807, 64) && !CaughtBit(807, 32));
+    for (BattleLayout layout : {BattleLayout::Classic, BattleLayout::Bar, BattleLayout::Rail}) {
+        const UI::Rect r = BattleInfoArea(layout);
+        CHECK(r.x >= 0 && r.y >= 0 && r.Right() <= 400 && r.Bottom() <= 240);
+        CHECK(r.Right() <= 240 || r.y >= 36);
+        CHECK(r.x >= 166 || r.Bottom() <= 180);
+    }
+    BattleSnapshot panel;
+    panel.foeInfo.name = "Hypno";
+    panel.foeInfo.types[0] = 1; panel.foeInfo.types[1] = 12; panel.foeInfo.types[2] = 13;
+    panel.foeInfo.caught = true;
+    for (u8 i = 0; i < 7; i++) { panel.foeInfo.stages[i] = 12; panel.playerInfo.stages[i] = 0; }
+    std::vector<u8> pixels(400 * 240 * 3, 0);
+    UI::Surface surface{ pixels.data(), 3, 400 * 3, UI::PixelFormat::BGR8, 400, 240 };
+    for (BattleLayout layout : {BattleLayout::Classic, BattleLayout::Bar, BattleLayout::Rail}) {
+        std::fill(pixels.begin(), pixels.end(), 0);
+        UI::Canvas canvas(surface);
+        DrawBattleInfo(canvas, panel, layout);
+        const UI::Rect r = BattleInfoArea(layout);
+        CHECK(HiResScreenSmoke::Run(r, 8, [&](UI::Canvas &hi) { DrawBattleInfo(hi, panel, layout); }));
+        for (s32 y = 0; y < 240; y++) for (s32 x = 0; x < 400; x++) {
+            if (x >= r.x && x < r.Right() && y >= r.y && y < r.Bottom()) continue;
+            const size_t at = (y * 400 + x) * 3;
+            CHECK(pixels[at] == 0 && pixels[at+1] == 0 && pixels[at+2] == 0);
+        }
+        if (s_previewDir) WritePreview(pixels, std::string(s_previewDir) + "/battle-foe-info.ppm");
+    }
+    BattleSnapshot snap = CommandSnap();
+    menu = BattleMenu(); Idle(menu, snap, 40);
+    const std::string before = menu.DrawKey(snap);
+    snap.foeInfo.stages[0] = 7;
+    CHECK(menu.DrawKey(snap) != before);
+    CHECK(menu.DrawKey(snap) == menu.DrawKey(snap));
+}
+
+static void TestTargetDrawing(void)
+{
     BattleSnapshot snap = MovesSnap();
+    snap.menu = GameMenu::Target;
+    snap.targets[0] = {"Cottonee", true, true, false};
+    snap.targets[1] = {"Blastoise", false, true, false}; // fainted: keep name, dim plate
+    snap.targets[2] = {"Decidueye", true, false, true};
+    snap.targets[3] = {}; // SOS own ally must display Empty
     BattleMenu menu;
     menu.Update(snap, 0);
-    Idle(menu, snap, BattleMenu::MovesSettleFrames);
-    CHECK(menu.Update(snap, BattleKeys::A).action != nullptr);
-    BattleSnapshot gap = snap;
-    gap.menu = GameMenu::None;
-    Idle(menu, gap, 20);
-    BattleSnapshot target = snap;
-    target.menu = GameMenu::Other;
-    target.otherVtable = 0x10C000;
-    const BattleMenuOutput out = menu.Update(target, 0);
-    CHECK(menu.Page() == BattlePage::Target && out.capture && menu.Visible());
-    CHECK(menu.Area().y >= 36 && menu.Area().x >= 166);
-    menu.Update(target, BattleKeys::DRight);
-    CHECK(menu.Cursor() == 1);
-    menu.Update(target, BattleKeys::DDown);
-    CHECK(menu.Cursor() == 3);
-    CHECK(menu.Status(target).find("Bottom right") != std::string::npos);
-    Idle(menu, target, BattleMenu::ListSettleFrames + BattleMenu::StepSettleFrames);
-    menu.Update(target, BattleKeys::A);
-    BattleMenuOutput step;
-    for (u32 i = 0; i < 60 && step.tap == nullptr; i++)
-        step = menu.Update(target, 0);
-    CHECK(step.tap == nullptr && !menu.Busy());
-    CHECK(menu.Note() == "Not tried in the game yet: use the bottom screen");
-    for (u8 i = 0; i < TargetCount; i++)
-        CHECK(FindLayoutButton(TargetButton(i)) != nullptr);
-    CHECK(FindLayoutButton("battle_target.back") != nullptr);
-
-    // The same screen with no move sent lately (an intro object, a prompt):
-    // the helper, as before.
-    BattleMenu other;
-    other.Update(target, 0);
-    CHECK(other.Page() == BattlePage::Game);
-    Idle(menu, snap, 1);
+    for (float scale : {1.f, 2.5f}) {
+        const s32 w = (s32)(400 * scale), h = (s32)(240 * scale);
+        const auto render = [&](const BattleSnapshot &state) {
+            std::vector<u8> pixels(w * h * 3, 0);
+            UI::Surface surface{pixels.data(), 3, w * 3, UI::PixelFormat::BGR8, w, h};
+            UI::Canvas canvas(surface, 0, 0, scale);
+            menu.Draw(canvas, state);
+            return pixels;
+        };
+        const auto pixels = render(snap);
+        // All unavailable categories have a neutral, darker fill; live foe stays blue.
+        for (u8 plate = 0; plate < 4; plate++) {
+            const s32 x = (s32)((194 + (plate % 2) * 101 + 45) * scale);
+            const s32 y = (s32)((86 + (plate / 2) * 56 + 6) * scale);
+            const size_t p = (y * w + x) * 3;
+            if (plate) CHECK(pixels[p] == pixels[p+1] && pixels[p+1] == pixels[p+2] && pixels[p] < 160);
+            else CHECK(pixels[p] != pixels[p+2]);
+        }
+        // Last letters must affect pixels: these names fit the real plate width.
+        // This fails if a standard row's cursor insets truncate them to 5-6 letters.
+        for (u8 plate = 0; plate < 3; plate++) {
+            BattleSnapshot changed = snap;
+            changed.targets[plate].name.back() = 'X';
+            CHECK(render(changed) != pixels);
+        }
+        BattleSnapshot explicitEmpty = snap;
+        explicitEmpty.targets[3].name = "Empty";
+        CHECK(render(explicitEmpty) == pixels);
+        if (scale == 1 && s_previewDir)
+            WritePreview(pixels, std::string(s_previewDir) + "/battle-target-sos.ppm");
+    }
+    CHECK(HiResScreenSmoke::Run(menu.Area(), menu.Radius(), [&](UI::Canvas &hi) { menu.Draw(hi, snap); }));
 }
 
 // Every step the menu can send is a known, verified button (one, Run,
@@ -1048,7 +1214,7 @@ static void TestLayoutDrawing(void)
         other[5].menu = GameMenu::Bag;
         other[5].bagPick = true;
         other[5].bagPickCursor = 1;
-        other[6].menu = GameMenu::Other;
+        other[6].menu = GameMenu::Target;
         for (const BattleSnapshot &snap : other)
         {
             BattleMenu classic, styled;
@@ -1260,6 +1426,8 @@ int main(int argc, char **argv)
     TestBag();
     TestQuestion();
     TestTarget();
+    TestFoeRules();
+    TestTargetDrawing();
     TestButtons();
     TestDrawing();
     TestLayouts();
