@@ -36,6 +36,8 @@ namespace UI
     bool HiResReady(void);
     bool UpdateGpuQuad(u32 slot, const Surface &source, const Rect &region, const Rect &destination, bool dirty);
     void HideGpuQuad(u32 slot);
+    // Copy-free target filter; works with hires off, requires shadow/restore.
+    std::string FilterCommand(const std::string &args);
     std::string HiResCommand(const std::string &args);
 
     // Installs the ProcessCommandList hook. displayTransfer is the game's gx

@@ -128,6 +128,11 @@ namespace UI
     {
         if (!s_on || s_displayTransfer == nullptr || s_textureCopy == nullptr)
             return false;
+        // Reserve the filter's one target list. Legacy presentation can use
+        // eight GX commands by itself; use the existing CPU fallback rather
+        // than add that work to a filtered frame. Off retains the original path.
+        if (GetScreenFilter() != ScreenFilter::Off)
+            return Fallback("screen filter reserves GX budget");
         if (screen.format != PixelFormat::BGR8 || screen.height != (s32)Len || screen.width > (s32)MaxLines
             || screen.stepX != (s32)Len * 3 || (screen.stepY != 3 && screen.stepY != -3))
             return Fallback("screen not BGR8 columns");
