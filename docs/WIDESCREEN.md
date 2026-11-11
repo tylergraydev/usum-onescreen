@@ -388,13 +388,27 @@ aspect = 21:9
 pillarbox = tint
 ```
 
-`pillarbox` accepts `tint` (default), `pattern`, or `off`, case-insensitively.
+`pillarbox` accepts `tint` (default), `pattern`, `blur`, or `off`, case-insensitively.
 It applies at boot and on settings reload, including menus already open.
 Tint is an opaque dark olive, half the native `Theme::WindowFill` colour
 (`#2B2A19`), with a three-destination-column gradient towards the menu.
 It never samples or blends with the game's framebuffer. Pattern adds subtle
 diagonal stripes (eight-column/row repeat, only three RGB levels brighter)
 on the same base. Off leaves the game's scene visible in the side bands.
+
+Blur fills the sides with a stretched, blurred, half-bright copy of the native
+menu's picture. A dense first filter and three 2x2 box reductions build an 8x8
+texture before stretching it: five render passes share one GX command list.
+GX commands remain 1 per hi-res present (zero added); Map still has its existing
+separate copy. The pyramid uses 21,760 bytes of existing diagnostic scratch,
+with zero new buffer allocation or plugin heap use. The same atlas snapshot
+supplies the bands and sharp centre; there is no game framebuffer readback.
+The host high-detail reference, including 5x intermediate targets, limits adjacent
+band changes to five luminance levels (measured 1-2). The prior sparse taps showed
+horizontal streaks in emulator tests; the replacement still needs Party/Bag/Boxes
+review at 21:9/5x. `hires off` and CPU/legacy fallback use tint instead.
+See [GPUQUAD.md](GPUQUAD.md) for exact budgets and checks. Default remains tint;
+enable with `pillarbox = blur` and reload.
 
 Only top-screen layers containing the standard full-screen inset
 `{12, 8, 376, 224}` qualify, and only with squeeze greater than one.
@@ -459,11 +473,12 @@ GPU vertices apply the continuous x=200 squeeze; glyph layout is unchanged.
 Nearest-scaled pixel sprites and bilinear smooth art retain their original size.
 
 Hi-res pillarbox bands sample the twelve WriteBandColumn phases reserved at
-atlas x=1012..1023. Pattern repeats eight phases; Tint stretches phase8; edge
+atlas x=1012..1023 for Tint/Pattern. Pattern repeats eight phases; Tint stretches phase8; edge
 columns use11,10,9 outward from the menu. BandRuns uses destination coordinates
 without squeezing them again, nearest filtering for bands and bilinear for menus.
 Bands and up to four menu quads use one list/state restore: one overlay GX command,
-no hi-res CPU framebuffer writes. Off emits no bands. Original eligibility,
+no hi-res CPU framebuffer writes. Blur uses the filtered 8x8 picture described above instead
+of these phases. Off emits no bands. Original eligibility,
 SourceColumn boundaries and fallback CPU/LayerGpu behavior remain unchanged.
 
 Map's hi-res skip window is alpha0 in the layer texture. The target overlay is

@@ -14,6 +14,11 @@ TESTS    := $(OUT)/battle_widescreen_test $(OUT)/quick_save_test $(OUT)/image_te
 
 .DEFAULT_GOAL := all
 
+TESTS += $(OUT)/blur_test
+
+$(OUT)/blur_test: blur_test.cpp ../Includes/UI/ColumnMapping.hpp ../Includes/UI/QuadLayout.hpp ../Includes/UI/Raster.hpp ../Includes/Settings.hpp
+	@mkdir -p $(OUT)
+	$(CXX) $(CXXFLAGS) blur_test.cpp -o $@
 TESTS += $(OUT)/panel_command_test
 
 $(OUT)/panel_host.hpp: panel_command_test.py panel_host_stubs.hpp ../Sources/Panel.cpp ../Includes/Framebuffer.hpp
@@ -197,6 +202,8 @@ $(OUT)/battle_widescreen_test: battle_widescreen_test.cpp ../Includes/BattleWide
 # cl /nologo /std:c++17 /EHsc /W4 /WX /I ../Includes battle_widescreen_test.cpp /Fe:build/battle_widescreen_test.exe /Fo:build/battle_widescreen_test.obj
 
 run: $(TESTS)
+	./$(OUT)/blur_test
+	$(PYTHON) -I blur_command_test.py
 	./$(OUT)/battle_widescreen_test
 	$(PYTHON) -I panel_command_test.py
 	./$(OUT)/panel_command_test
