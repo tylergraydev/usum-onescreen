@@ -10,7 +10,7 @@ OUT      := build
 PYTHON   ?= python3
 CODE_BIN ?=
 
-TESTS    := $(OUT)/side_panels_test $(OUT)/battle_widescreen_test $(OUT)/quick_save_test $(OUT)/image_test $(OUT)/hires_test $(OUT)/band_column_test $(OUT)/layer_runs_test $(OUT)/pillarbox_test $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/settings_file_test $(OUT)/ui_host_test $(OUT)/party_data_test $(OUT)/action_queue_test $(OUT)/xmenu_test $(OUT)/battle_menu_test $(OUT)/keyboard_test $(OUT)/pokedex_test $(OUT)/native_screens_test $(OUT)/bag_test $(OUT)/map_test $(OUT)/party_menu_test $(OUT)/boxes_test $(OUT)/field_settle_test $(OUT)/pc_anywhere_test $(OUT)/move_learn_test $(OUT)/rotom_prompt_test $(OUT)/theme_test $(OUT)/screen_buffer_test $(OUT)/poke_icons_test $(OUT)/field_fov_test $(OUT)/pelago_test
+TESTS    := $(OUT)/festival_plaza_test $(OUT)/pelago_test $(OUT)/quick_save_test $(OUT)/image_test $(OUT)/hires_test $(OUT)/band_column_test $(OUT)/layer_runs_test $(OUT)/pillarbox_test $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/settings_file_test $(OUT)/ui_host_test $(OUT)/party_data_test $(OUT)/action_queue_test $(OUT)/xmenu_test $(OUT)/battle_menu_test $(OUT)/keyboard_test $(OUT)/pokedex_test $(OUT)/native_screens_test $(OUT)/bag_test $(OUT)/map_test $(OUT)/party_menu_test $(OUT)/boxes_test $(OUT)/field_settle_test $(OUT)/pc_anywhere_test $(OUT)/move_learn_test $(OUT)/rotom_prompt_test $(OUT)/theme_test $(OUT)/screen_buffer_test $(OUT)/poke_icons_test $(OUT)/side_panels_test $(OUT)/battle_widescreen_test $(OUT)/field_fov_test
 
 .DEFAULT_GOAL := all
 
@@ -208,6 +208,10 @@ $(OUT)/pelago_test: pelago_test.cpp pelago_samples.hpp ../Sources/Screens/Pelago
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) pelago_test.cpp ../Sources/Screens/Pelago.cpp ../Sources/Screens/NativeScreen.cpp ../Sources/ActionQueue.cpp $(THEME_SRCS) $(UI_SRCS) -o $@
 
+$(OUT)/festival_plaza_test: festival_plaza_test.cpp festival_plaza_samples.hpp ../Sources/Screens/FestivalPlaza.cpp ../Includes/Screens/FestivalPlaza.hpp ../Sources/ActionQueue.cpp ../Includes/Layouts.hpp $(THEME_SRCS) $(UI_SRCS) $(UI_HDRS)
+	@mkdir -p $(OUT)
+	$(CXX) $(CXXFLAGS) festival_plaza_test.cpp ../Sources/Screens/FestivalPlaza.cpp ../Sources/ActionQueue.cpp $(THEME_SRCS) $(UI_SRCS) -o $@
+
 $(OUT)/battle_widescreen_test: battle_widescreen_test.cpp ../Includes/BattleWidescreen.hpp
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) battle_widescreen_test.cpp -o $@
@@ -220,6 +224,7 @@ $(OUT)/side_panels_test: side_panels_test.cpp $(SIDE_PANEL_SRCS) ../Includes/Sid
 	$(CXX) $(CXXFLAGS) side_panels_test.cpp $(SIDE_PANEL_SRCS) -o $@
 
 run: $(TESTS)
+	./$(OUT)/festival_plaza_test $(OUT)
 	./$(OUT)/filter_test
 	$(PYTHON) -I filter_command_test.py
 	@mkdir -p previews

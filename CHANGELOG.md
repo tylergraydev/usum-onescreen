@@ -6,6 +6,8 @@ All notable changes for players are listed here. Versions follow [Semantic Versi
 
 ### Added
 
+- Native Festival Plaza hub bar: L opens Party, R Bag, Start Profile, B leaves through a guarded single Back/Quit sequence. The plaza remains visible and walkable; submenus retain game controls. Detection uses CRO ownership and real captured button colours. Host tests pass; live calibration and exit verification pending.
+
 - Optional plugin-side top-screen filters: `[display] filter = off|warm|cool|vignette`
   and live `filter <name>`. Copy-free TEV/blended quads share the existing target
   list (off adds zero GX; enabled adds at most one). No new pixel buffers;
