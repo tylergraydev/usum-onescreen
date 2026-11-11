@@ -6,6 +6,8 @@ All notable changes for players are listed here. Versions follow [Semantic Versi
 
 ### Added
 
+- Opt-in `[display] pillarbox = blur`: darkened, blurred menu-picture side bands in widescreen with the hi-res GPU overlay. Uses a box-filter pyramid instead of sparse taps to suppress horizontal streaks. Keeps one overlay GX command, reusing 21,760 bytes of existing scratch; legacy/CPU fallback uses tint. Default remains tint. Plugin build and emulator verification pending.
+
 - Quick save through the game's X/Y save flow: optional `[controls] save_key` (default none), `save` command and Quick save plugin menu entry; guarded confirmation, native notices, refusal checks and host-tested sequence. Runtime/emulator verification pending.
 
 - Windows launcher: permanent named save slots per game (save/load/rename/delete), a Saves dialog with separate slots and rotating backups, and ZIP import/export of current saves, slots and backups. Slot loads make a safety backup first; imports verify the declared game title and reject unsafe ZIP paths. New `slot`, `export` and `import` CLI commands. Save data only; extdata is excluded.
