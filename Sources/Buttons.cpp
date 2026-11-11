@@ -43,6 +43,8 @@ namespace OneScreen
     static volatile u32 s_combo = 0;
     static volatile u32 s_comboHits = 0;
     static volatile u32 s_saveCombo = 0, s_saveComboHits = 0;
+    static volatile u32 s_photoCombo = 0, s_photoComboHits = 0, s_photoComboReads = 0;
+    static PcComboState s_photoComboState;
     static PcComboState s_saveComboState;
     static PcComboState s_comboState;   // only the hook touches it
 
@@ -105,16 +107,18 @@ namespace OneScreen
             s_realStickX = out[0].stickX;
             s_realStickY = out[0].stickY;
         }
-        // Evaluate both against the same unmasked input. If combos overlap,
-        // save takes priority and suppresses the PC request on that read.
+        // Evaluate all against the same unmasked input. If combos overlap,
+        // photo takes priority, then save, then PC.
         if (n > 0)
         {
             const u32 held = s_realHeld;
+            const bool photo = PcComboRead(s_photoComboState, s_photoCombo, held);
             const bool save = PcComboRead(s_saveComboState, s_saveCombo, held);
             const bool pc = PcComboRead(s_comboState, s_combo, held);
-            if (save) s_saveComboHits = s_saveComboHits + 1;
+            if (photo) s_photoComboHits = s_photoComboHits + 1;
+            else if (save) s_saveComboHits = s_saveComboHits + 1;
             else if (pc) s_comboHits = s_comboHits + 1;
-            const u32 hide = s_comboState.suppressed | s_saveComboState.suppressed;
+            const u32 hide = s_comboState.suppressed | s_saveComboState.suppressed | s_photoComboState.suppressed;
             for (s32 i = 0; i < n; i++)
             {
                 out[i].held &= ~hide;
@@ -122,6 +126,7 @@ namespace OneScreen
             }
         }
         MaskPadSamples(s_capture, s_captureRequest, out, n);
+        if (n > 0) s_photoComboReads = s_photoComboReads + 1;
 
         const u32 action = s_actionKeys;
         if ((action != 0 || s_actionLastSeen != 0) && out != nullptr && max > 0 && count != nullptr)
@@ -215,6 +220,10 @@ namespace OneScreen
     {
         s_actionKeys = keys;
     }
+
+    void ButtonsSetPhotoCombo(u32 keys) { s_photoCombo = keys; }
+    u32 ButtonsPhotoComboHits(void) { return s_photoComboHits; }
+    u32 ButtonsPhotoComboReads(void) { return s_photoComboReads; }
 
     void ButtonsSetSaveCombo(u32 keys) { s_saveCombo = keys; }
     u32 ButtonsSaveComboHits(void) { return s_saveComboHits; }
