@@ -1,6 +1,7 @@
 #include "BattleWidescreen.hpp"
 #include "Scene.hpp"
 #include "Widescreen.hpp"
+#include "SidePanels.hpp"
 
 #include <CTRPluginFramework.hpp>
 
@@ -14,6 +15,24 @@ namespace OneScreen
     static u32 s_callback = 0, s_unloads = 0;
     static u32 s_reportedUnloads = 0;
     static bool s_ready = false;
+
+    static void BattlePerspectiveHook(float *out, u32 pivot, float fovy, float aspect, float near, float far)
+    {
+        const float squeeze = WidescreenSqueeze();
+        if (SidePanelsBattleProjection(squeeze, GetSettings().sidePanels, aspect, pivot))
+        {
+            // All seven checked Battle callers use pivot 0. This is a row-major
+            // 4x4: builder stores cot(fovy/2)/aspect at +0, cot(fovy/2) at +0x14.
+            HookContext::GetCurrent().OriginalFunction<void>(out, pivot, fovy, aspect, near, far);
+            SidePanelsScaleProjection(out, squeeze);
+        }
+        else
+        {
+            // Preserve the existing widescreen filter/counters and hard-float ABI.
+            using Callback = void (*)(float *, u32, float, float, float, float);
+            reinterpret_cast<Callback>(s_callback)(out, pivot, fovy, aspect, near, far);
+        }
+    }
 
     static bool ReadWord(uint32_t address, uint32_t &word)
     {
@@ -31,7 +50,7 @@ namespace OneScreen
     // Azahar; unverified on hardware).
     static HookResult ChangeBattleHook(u32 address, bool install)
     {
-        if (install) s_battleHook.InitializeForMitm(address, s_callback);
+        if (install) s_battleHook.InitializeForMitm(address, (u32)BattlePerspectiveHook);
         return install ? s_battleHook.Enable() : s_battleHook.Disable();
     }
 
@@ -50,7 +69,7 @@ namespace OneScreen
         const bool hadHook = s_lifetime.active != 0 && s_lifetime.active == module;
         if (!s_lifetime.BeforeUnload(module, RemoveBattleHook))
             return 0xFFFFFFFF; // Refuse to unmap a module with a live hook.
-        if (hadHook) ++s_unloads;
+        if (hadHook) { ++s_unloads; SetBattlePanelsHud(false); }
         return HookContext::GetCurrent().OriginalFunction<u32>(process, module, zero, size);
     }
 
@@ -80,11 +99,13 @@ namespace OneScreen
                 || CroModuleName(module) != "Battle") module = 0;
         }
         HookResult result = HookResult::Success;
-        const B::Event event = s_lifetime.Update(module, WidescreenSqueeze() != 1.0f, ReadWord,
+        const B::Event event = s_lifetime.Update(module, SidePanelsBattleHook(WidescreenSqueeze()), ReadWord,
             [&](uint32_t address) {
                 result = ChangeBattleHook(address, true);
                 return result == HookResult::Success;
             }, RemoveBattleHook);
+        SetBattlePanelsHud(module != 0 && s_lifetime.active == module && WidescreenSqueeze() > 1.f
+            && SidePanelsInclude(GetSettings().sidePanels, true));
         const u32 unloads = s_unloads;
         s_lifetimeLock.Unlock();
 
