@@ -339,6 +339,17 @@ namespace OneScreen
             log.push_back(Format("action: %s refused: %s is running", def.name, m_def->name));
             return false;
         }
+        if ((world.flags & WorldTrainerBattle) != 0
+            && (std::strcmp(def.name, "battle-flee") == 0 || std::strcmp(def.name, "battle-run") == 0))
+        {
+            log.push_back("action: No running from a Trainer battle!");
+            return false;
+        }
+        if ((world.flags & WorldRoyalBattle) != 0 && std::strcmp(def.name, "battle-bag") == 0)
+        {
+            log.push_back("action: No Bag in a Battle Royal");
+            return false;
+        }
         if (s_menuPrepare != nullptr)
             for (const ActionStep &step : def.steps)
                 if (step.kind == StepKind::XMenuEntry)

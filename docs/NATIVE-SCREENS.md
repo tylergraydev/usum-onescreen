@@ -1,6 +1,7 @@
-# Native Options, Trainer Passport and Battle Video (W5-3)
+# Native Options, Trainer Passport, Battle Video and Poke Pelago
 
-Three of the X menu's page-2 screens have a top-screen version. As with the
+Three of the X menu's page-2 screens have a full top-screen version; Poke
+Pelago adds a slim isle bar (backlog #11, below). As with the
 native X menu (`docs/XMENU.md`), the game's own screen still runs, on the
 hidden bottom screen; the native screen mirrors it and drives it through the
 action layer (`docs/ACTIONS.md`). Each opens from the native X menu, whose
@@ -11,6 +12,7 @@ footer now says which entries open on the top screen (`XMenuOpensNative`).
 | Options | `Config` | bottom-screen pixels (cursor, values); the save's ConfigSave word to check them | D-pad / circle pad, A (B left to the game) |
 | Trainer Passport | `TrainerPass` | memory (card values, page, stamp text); pixels (stamp earned) | Left/Right, L/R (A kept, B left to the game) |
 | Battle Video | `BattleVideoPlayer` | bottom-screen pixels (intro / empty recorder) | A (B left to the game) |
+| Poke Pelago | `main:0064787C` + `Resort` | bottom-screen isle probes; action layer also samples the top message | L/R, Start, B (isle only) |
 
 ## Files
 
@@ -23,12 +25,12 @@ footer now says which entries open on the top screen (`XMenuOpensNative`).
   `tests/native_screens_test.cpp`; `make -C tests` also writes previews to
   `analysis/private/native-*.ppm`.
 - `Includes/Screens/SubScreens.hpp`, `Sources/Screens/SubScreens.cpp`: the
-  plugin glue for all three (memory reads, the OSD callback, panel, input).
+  plugin glue for these screens (memory reads, the OSD callback, panel, input).
 
 ## How a screen runs (SubScreens.cpp)
 
 - When the scene (`SceneModule()`, checked 4 times a second) is one of the
-  three, that screen begins. Every frame the OSD callback samples the
+  registered screens, that screen begins. Every frame the OSD callback samples the
   bottom-screen points the screen asks for (at most 160) and the plugin
   thread hands them over; the screen decodes them and logs what changed.
 - It shows (and takes keys) once its samples decode (`Ready`). From the
@@ -39,8 +41,8 @@ footer now says which entries open on the top screen (`XMenuOpensNative`).
   and no action runs; each press (or repeat of a held direction: 15 frames,
   then every 5) becomes at most one action, a key press on the game's screen
   (`options-up`, `passport-next`, `video-open`, ...); a key pressed while
-  one runs is handled after it (the last such key only). B is never captured: the
-  game's B does what it always does, and the screen goes when the scene does.
+  one runs is handled after it (the last such key only). B is left to the game on those three screens;
+  Pelago alone captures B on the isle view to drive its touch-only exit.
 - Drawing: one `UI::Layer` over the screen's area, redrawn only when its
   `DrawKey()` changes or the game font finishes loading (a screen opening
   calls `UI::RequestAssets()`); screen state is shared with the OSD callback under a
@@ -169,3 +171,55 @@ is earned on this save, so "earned" was only seen on page 1.
 - `scenarios/native-passport-video.txt`: the passport's card and pages 1-3
   and back, no turn left of page 1, A kept; B. Battle Video: intro, A, empty
   recorder, A ignored, B; B from the intro; `check-save`.
+
+## Poke Pelago isle bar (backlog #11)
+
+`Screens/Pelago.hpp` / `Screens/Pelago.cpp` add a slim top-screen bar at
+(4,216), 392 x 24. It preserves the game's isle status boards above the strip.
+L/R switch isles, Start opens Mohn, B leaves through Back -> Yes -> A.
+The shared action waits for guarded pixel states and FieldRo, with no Yes
+retry. `action close` uses the same sequence and then closes the returned
+X menu; B leaves that menu open. Detection requires both `main:0064787C`
+and a `Resort` responder in the scene stack.
+
+Unlike the full native replacements above, Pelago captures only L/R, Start
+and B on a recognised isle view. Other idle keys and touch stay with the game;
+Mohn, dialogue and unrecognised views hide the strip and release its keys.
+The action layer still captures input during each short action/leave flow.
+L+R shows the existing full-panel fallback and yields the native bar until
+Pelago ends. There is no native isle playground or Mohn menu.
+
+Isle, Ask and Mohn-message probes are calibrated from the real 1x
+`pl-isle`, `pl-afterno`, `pl-ask`, all five `pl3-isle1..5` and `pl2-left`
+captures, with per-point RGB tolerances. Isle detection uses three mirrored
+glyph pixels per arrow: interiors (136,204,255), lower bands (170,221,255),
+and upper edges (102,187,255), each within 24 per channel. The outer scenery
+checks were removed after the bar vanished when switching away from Abeens.
+All six arrow samples are identical on all five isles. Yes/No pills remain
+pale cyan on beige. The message uses the blue nameplate
+and cyan box edges, sampled above the native bar. Host regression fixtures
+preserve the captured pixels in `tests/pelago_samples.hpp`, including a
+captured X menu negative control. The post-Yes capture `pl4-afteryes` shows
+Mohn's same message box over a dimmed isle. The goodbye guard now requires
+six dimmed arrow pixels within 20 per channel, rather than beige; black fades
+and bright Isle/Ask do not match. Ask requires three matching observations
+and holds through up to six missing bottom samples, clearing immediately on
+a recognised isle/goodbye view. The shared filter is exercised by the host
+sequence tests with alternating Ask/missing samples; Yes and A remain
+single inputs, followed by a wait for FieldRo.
+Emulator retests now confirm the bar across all five isles. The latest retest
+exposed the old beige-goodbye timeout fixed here; hand-pressing A on the
+dimmed goodbye returned to FieldRo with the X menu open. Automated leave
+and close need another live check with the new goodbye guard/Ask hold.
+See `RESEARCH-REMAINING-SCREENS.md`
+for coordinates, tolerances, guarded exit and handoff. Unknown states refuse
+close; `screens off` retains the independent action pixel observer.
+
+Run `powershell -NoProfile -ExecutionPolicy Bypass -File tests/run_pelago.ps1`
+for direct MSVC host builds and tests. `tests/build/pelago-1x.ppm` and
+`pelago-2.5x.ppm` preview the bar at both scales. Capture-backed decoding
+tests accompany synthetic tests of key mapping, entry refusal,
+changed/missing prompts, scene loss, stuck Yes,
+exit timeout, and closing the returned X menu. Existing native-screen and
+action-queue tests also run. Live verification of the recalibrated probes and
+complete exit remains pending.
