@@ -1,6 +1,11 @@
 #include "Widescreen.hpp"
 #include "BattleWidescreen.hpp"
 #include "SidePanels.hpp"
+#include "Game.hpp"
+#include "PcAnywhere.hpp"
+#include "Settings.hpp"
+#include "Screens/Map.hpp"
+#include <atomic>
 
 #include <CTRPluginFramework.hpp>
 #include <cmath>
@@ -18,6 +23,11 @@ namespace OneScreen
     void SetBattlePanelsHud(bool enabled) { s_battlePanelsHud = enabled; }
     bool BattlePanelsHudActive(void) { return s_battlePanelsHud; }
 
+    static_assert(std::atomic<float>::is_always_lock_free, "FOV publication must be lock-free");
+    static_assert(std::atomic<uint32_t>::is_always_lock_free, "FOV counter must be lock-free");
+    static std::atomic<float> s_fieldScale{1.0f};
+    static std::atomic<uint32_t> s_fovRewritten{0};
+    static u32 s_sceneManager = 0;
     static volatile float s_aspect = 0.0f;
     static volatile u32 s_rewritten = 0;
     static volatile u32 s_culled = 0;
@@ -136,9 +146,9 @@ namespace OneScreen
                                 float aspect, float near, float far)
     {
         const float active = s_aspect;
-        if (active != 0.0f && std::fabs(aspect - 400.0f / 240.0f) <= 0.001f)
+        if (active != 0.0f && TopPerspective(aspect))
         {
-            aspect = active;
+            aspect = PerspectiveAspect(aspect, active);
             s_rewritten++;
         }
         HookContext::GetCurrent().OriginalFunction<void>(out, pivot, fovy, aspect, near, far);
@@ -183,6 +193,17 @@ namespace OneScreen
         VisitBattlePanes(root, [&](u8 *pane) {
             SidePanelsScaleHud(reinterpret_cast<float *>(pane+0x48),scale);
         });
+    }
+
+    // Only code.bin uses this wrapper. Battle keeps the aspect-only callback,
+    // even if a scene transition occurs between plugin frame publications.
+    static void FieldPerspectiveHook(Matrix34or44 *out, u32 pivot, float fovy,
+                                     float aspect, float near, float far)
+    {
+        const float scaled = FieldFovY(fovy, s_fieldScale.load(std::memory_order_relaxed), aspect);
+        if (scaled != fovy && std::isfinite(fovy))
+            s_fovRewritten.fetch_add(1, std::memory_order_relaxed);
+        PerspectiveHook(out, pivot, scaled, aspect, near, far);
     }
 
     struct DrawInfo;
@@ -276,6 +297,12 @@ namespace OneScreen
 
     std::string WidescreenFrame(void)
     {
+        // Fresh scene/event reads on the plugin thread, never the 15-frame
+        // logging cache. Publish only one scalar for the game thread.
+        const float requested = GetSettings().fieldFov;
+        const bool allowed = s_sceneManager != 0 && requested != 1.0f
+            && FieldFovAllowed(ReadPcWorld(s_sceneManager), MapIsOpen());
+        s_fieldScale.store(allowed ? requested : 1.0f, std::memory_order_relaxed);
         if (!s_captureCullNames)
             return {};
         s_captureCullNames = false;
@@ -292,7 +319,9 @@ namespace OneScreen
 
     bool StartWidescreen(std::string &report)
     {
-        s_perspectiveHook.InitializeForMitm(PerspectiveAddress, (u32)PerspectiveHook);
+        const GameInfo *game = DetectGame();
+        s_sceneManager = game ? game->offsets.sceneManager : 0;
+        s_perspectiveHook.InitializeForMitm(PerspectiveAddress, (u32)FieldPerspectiveHook);
         const HookResult result = s_perspectiveHook.Enable();
         report = Utils::Format("widescreen: perspective hook at %08lX -> %d",
                                PerspectiveAddress, (int)result);
@@ -302,6 +331,23 @@ namespace OneScreen
                                 CalculateMtxAddress, (int)cullResult);
         report += "\n" + StartBattleWidescreen((u32)PerspectiveHook);
         return result == HookResult::Success && cullResult == HookResult::Success;
+    }
+
+    std::string DescribeFieldFov(void)
+    {
+        return Utils::Format("fov: scale %.7g; published %.7g; rewritten %lu since boot",
+            (double)GetSettings().fieldFov, (double)s_fieldScale.load(std::memory_order_relaxed),
+            (unsigned long)s_fovRewritten.load(std::memory_order_relaxed));
+    }
+
+    std::string SetFieldFov(float scale)
+    {
+        if (!std::isfinite(scale) || scale < 0.8f || scale > 1.5f)
+            return "fov: invalid scale (use 0.8..1.5; 1 = stock)";
+        Settings settings = GetSettings();
+        settings.fieldFov = scale;
+        SetSettings(settings);
+        return DescribeFieldFov();
     }
 
     std::string DescribeWidescreenAspect(void)

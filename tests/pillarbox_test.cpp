@@ -92,7 +92,7 @@ static void TestPixels()
         for (int layout : { 0, 1, 2 })
             for (int width : { 400, 320 })
                 for (float squeeze : { 1.f, 16.f / 15.f, 1.4f })
-                    for (const auto mode : { Pillarbox::Tint, Pillarbox::Pattern, Pillarbox::Off })
+                    for (const auto mode : { Pillarbox::Tint, Pillarbox::Pattern, Pillarbox::Off, Pillarbox::Blur })
                         for (const Rect area : { XMenuArea, Rect{0, 0, 400, 240}, Rect{170, 182, 226, 54}, Rect{12, 6, 376, 182}, Rect{296, 4, 100, 22}, Rect{0, 0, 320, 240} })
                         {
                             if (area.Right() > width) continue;

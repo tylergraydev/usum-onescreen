@@ -239,6 +239,7 @@ namespace CTRPluginFramework
     //   vtscan NAME   (global -> object -> vtable scan to /usum-vt-NAME.bin)
     //   scene   (log the current scene's module name)
     //   panels [off|battle|field|both] (optional party strips)
+    //   fov SCALE|status    (idle overworld fovy multiplier, 0.8..1.5)
     //   aspect [VALUE|off]   (inspect / set perspective aspect; docs/WIDESCREEN.md)
     //   cullnames            (log culled pane names for the next frame, max 32)
     //   battle   (log the battle state, docs/RE1-battle.md; also logged on change)
@@ -429,6 +430,15 @@ namespace CTRPluginFramework
                 WriteLog(std::string("panels: ") + OneScreen::SidePanelModeName(settings.sidePanels), false);
             }
             else WriteLog("panels: invalid mode (use off, battle, field or both)", false);
+        }
+        else if (line == "fov" || line == "fov status")
+            WriteLog(OneScreen::DescribeFieldFov(), false);
+        else if (line.compare(0, 4, "fov ") == 0 || line.compare(0, 4, "fov\t") == 0)
+        {
+            float scale;
+            WriteLog(OneScreen::ParseFieldFov(line.substr(4), scale)
+                ? OneScreen::SetFieldFov(scale)
+                : "fov: invalid scale (use 0.8..1.5; 1 = stock)", false);
         }
         else if (line == "aspect")
             WriteLog(OneScreen::DescribeWidescreenAspect(), false);

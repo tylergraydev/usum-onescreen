@@ -96,6 +96,19 @@ namespace OneScreen
         }
     }
 
+    bool ParseFieldFov(const std::string &value, float &out)
+    {
+        const std::string v = Trim(value);
+        char *end = nullptr;
+        errno = 0;
+        const float scale = std::strtof(v.c_str(), &end);
+        if (v.empty() || *end != '\0' || errno == ERANGE
+            || !std::isfinite(scale) || scale < 0.8f || scale > 1.5f)
+            return false;
+        out = scale;
+        return true;
+    }
+
     bool ParseAspect(const std::string &value, float &out)
     {
         const std::string v = Lower(Trim(value));
@@ -240,7 +253,13 @@ namespace OneScreen
             if (v == "tint") s.pillarbox = Pillarbox::Tint;
             else if (v == "pattern") s.pillarbox = Pillarbox::Pattern;
             else if (v == "off") s.pillarbox = Pillarbox::Off;
-            else return "bad pillarbox '" + value + "' (use tint, pattern or off)";
+            else if (v == "blur") s.pillarbox = Pillarbox::Blur;
+            else return "bad pillarbox '" + value + "' (use tint, pattern, off or blur)";
+        }
+        else if (k == "field_fov")
+        {
+            if (!ParseFieldFov(value, s.fieldFov))
+                return "bad field_fov '" + value + "' (use a scale from 0.8 to 1.5)";
         }
         else if (k == "side_panels")
         {
@@ -400,7 +419,9 @@ namespace OneScreen
             "aspect = 0\n"
             "; Optional party strips in the widescreen side areas.\n"
             "side_panels = off\n"
-            "; Side bands for full-screen native menus in widescreen: tint, pattern or off.\n"
+            "; Idle overworld vertical FOV multiplier: 0.8..1.5; 1 is stock.\n"
+            "field_fov = 1.0\n"
+            "; Side bands: tint (default), pattern, off or blur (hires; otherwise tint).\n"
             "pillarbox = tint\n"
             "\n"
             "[battle]\n"
@@ -533,7 +554,7 @@ namespace OneScreen
 
     std::string DescribeSettings(const Settings &s)
     {
-        static const char *pillarboxes[] = { "tint", "pattern", "off" };
+        static const char *pillarboxes[] = { "tint", "pattern", "off", "blur" };
         static const char *sources[] = { "cstick", "dpad", "circlepad" };
         static const char *sizes[] = { "1/2", "2/3" };
         static const char *corners[] = { "bottom-right", "bottom-left", "top-right", "top-left" };
@@ -549,6 +570,7 @@ namespace OneScreen
                           + ", auto " + (s.autoPanel ? "on" : "off") + "\n"
                           + "side panels " + SidePanelModeName(s.sidePanels) + "\n"
                           + "aspect " + (s.aspect == 0.0f ? std::string("off") : std::to_string(s.aspect))
+                          + ", field_fov " + std::to_string(s.fieldFov)
                           + ", pillarbox " + pillarboxes[(int)s.pillarbox]
                           + ", battle layout " + BattleLayoutName(s.battleLayout) + "\n"
                           + "instant text " + (s.instantText ? "on" : "off")
