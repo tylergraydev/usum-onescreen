@@ -6,6 +6,7 @@ All notable changes for players are listed here. Versions follow [Semantic Versi
 
 ### Added
 
+- Windows launcher: quiet daily stable-release checks, a manual Check for updates entry and `check-update` CLI command, plus skip-version settings. User-approved updates verify release assets, stage beside the exe, and use a helper with replacement backups/rollback; adjacent and installed plugins are refreshed from the new exe's embedded resource.
 - Native Festival Plaza hub bar: L opens Party, R Bag, Start Profile, B leaves through a guarded single Back/Quit sequence. The plaza remains visible and walkable; submenus retain game controls. Detection uses CRO ownership and real captured button colours. Host tests pass; live calibration and exit verification pending.
 
 - Optional plugin-side top-screen filters: `[display] filter = off|warm|cool|vignette`
