@@ -4,10 +4,12 @@
 #include <cstdlib>
 #include <cerrno>
 #include <cmath>
+#include <atomic>
 
 namespace OneScreen
 {
     static Settings s_current;
+    static std::atomic<ScreenFilter> s_filter{ScreenFilter::Off};
 
     struct KeyName
     {
@@ -50,6 +52,59 @@ namespace OneScreen
             if (c != '-' && c != '_' && c != ' ' && c != '\t')
                 out += c;
         return out;
+    }
+
+    bool ParseScreenFilter(const std::string &value, ScreenFilter &out)
+    {
+        const std::string v = Lower(Trim(value));
+        if (v == "off") out = ScreenFilter::Off;
+        else if (v == "warm") out = ScreenFilter::Warm;
+        else if (v == "cool") out = ScreenFilter::Cool;
+        else if (v == "vignette") out = ScreenFilter::Vignette;
+        else return false;
+        return true;
+    }
+
+    const char *ScreenFilterName(ScreenFilter filter)
+    {
+        switch (filter)
+        {
+        case ScreenFilter::Warm: return "warm";
+        case ScreenFilter::Cool: return "cool";
+        case ScreenFilter::Vignette: return "vignette";
+        default: return "off";
+        }
+    }
+
+    ScreenFilter GetScreenFilter(void) { return s_filter.load(); }
+
+    uint32_t ScreenFilterQuadCount(ScreenFilter filter)
+    {
+        switch (filter)
+        {
+        case ScreenFilter::Warm: case ScreenFilter::Cool: return 1;
+        case ScreenFilter::Vignette: return 20;
+        default: return 0;
+        }
+    }
+
+    FilterQuad ScreenFilterQuad(ScreenFilter filter, uint32_t index)
+    {
+        if (index >= ScreenFilterQuadCount(filter)) return {0, 0, 0, 0, 0};
+        // Source-over at 24/255: gentle amber or blue wash, not saturation grading.
+        if (filter == ScreenFilter::Warm) return {0, 0, 400, 240, 0x1860B4FF};
+        if (filter == ScreenFilter::Cool) return {0, 0, 400, 240, 0x18FFD080};
+        // Five disjoint rectangular rings, with an untouched centre. Shared
+        // edges have no overlap, so the corners are not darkened twice.
+        const int ring = (int)(index / 4), x = ring * 10, y = ring * 6;
+        const uint32_t colour = (uint32_t)(25 - ring * 5) << 24;
+        switch (index % 4)
+        {
+        case 0: return {x, y, 400 - 2*x, 6, colour};
+        case 1: return {x, 234 - y, 400 - 2*x, 6, colour};
+        case 2: return {x, y + 6, 10, 228 - 2*y, colour};
+        default: return {390 - x, y + 6, 10, 228 - 2*y, colour};
+        }
     }
 
     bool ParseGlyphFamily(const std::string &value, GlyphFamily &out)
@@ -248,6 +303,11 @@ namespace OneScreen
             if (!ParseBattleSpeed(value, k == "battle_messages" ? s.battleMessages : s.battleBars))
                 return "bad " + key + " '" + value + "' (use normal, fast or instant)";
         }
+        else if (k == "filter")
+        {
+            if (!ParseScreenFilter(value, s.filter))
+                return "bad filter '" + value + "' (use off, warm, cool or vignette)";
+        }
         else if (k == "pillarbox")
         {
             if (v == "tint") s.pillarbox = Pillarbox::Tint;
@@ -423,6 +483,8 @@ namespace OneScreen
             "field_fov = 1.0\n"
             "; Side bands: tint (default), pattern, off or blur (hires; otherwise tint).\n"
             "pillarbox = tint\n"
+            "; Top-screen GPU filter: off (default), warm, cool or vignette.\n"
+            "filter = off\n"
             "\n"
             "[battle]\n"
             "; Native battle menu look: classic, bar or rail. The plugin menu's\n"
@@ -570,6 +632,7 @@ namespace OneScreen
                           + ", auto " + (s.autoPanel ? "on" : "off") + "\n"
                           + "side panels " + SidePanelModeName(s.sidePanels) + "\n"
                           + "aspect " + (s.aspect == 0.0f ? std::string("off") : std::to_string(s.aspect))
+                          + ", filter " + ScreenFilterName(s.filter)
                           + ", field_fov " + std::to_string(s.fieldFov)
                           + ", pillarbox " + pillarboxes[(int)s.pillarbox]
                           + ", battle layout " + BattleLayoutName(s.battleLayout) + "\n"
@@ -590,5 +653,6 @@ namespace OneScreen
     void SetSettings(const Settings &settings)
     {
         s_current = settings;
+        s_filter.store(settings.filter);
     }
 }

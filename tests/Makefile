@@ -14,7 +14,11 @@ TESTS    := $(OUT)/side_panels_test $(OUT)/battle_widescreen_test $(OUT)/quick_s
 
 .DEFAULT_GOAL := all
 
-TESTS += $(OUT)/blur_test
+TESTS += $(OUT)/blur_test $(OUT)/filter_test
+
+$(OUT)/filter_test: filter_test.cpp ../Sources/Settings.cpp ../Sources/SettingsFile.cpp ../Includes/Settings.hpp ../Includes/SettingsFile.hpp
+	@mkdir -p $(OUT)
+	$(CXX) $(CXXFLAGS) filter_test.cpp $(SETTINGS_SRCS) -o $@
 
 $(OUT)/blur_test: blur_test.cpp ../Includes/UI/ColumnMapping.hpp ../Includes/UI/QuadLayout.hpp ../Includes/UI/Raster.hpp ../Includes/Settings.hpp
 	@mkdir -p $(OUT)
@@ -216,6 +220,8 @@ $(OUT)/side_panels_test: side_panels_test.cpp $(SIDE_PANEL_SRCS) ../Includes/Sid
 	$(CXX) $(CXXFLAGS) side_panels_test.cpp $(SIDE_PANEL_SRCS) -o $@
 
 run: $(TESTS)
+	./$(OUT)/filter_test
+	$(PYTHON) -I filter_command_test.py
 	@mkdir -p previews
 	./$(OUT)/side_panels_test previews
 	./$(OUT)/field_fov_test
