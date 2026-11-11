@@ -339,3 +339,24 @@ The observer latches success only after observing this request's unanswered
 confirmation and writing state 5. It then waits for the game's X menu, closes
 that identified menu with B, and waits for idle field/no events. Unknown states,
 missing objects, cancellation and timeouts cannot produce `save: saved`.
+
+## Battle widescreen implementation (#27)
+
+USA Sun/Moon v1.2; statically checked against both local games, emulator
+verification pending. Offsets are from the loaded CRO header, never a fixed
+runtime Battle base.
+
+| Location | Checked words / purpose |
+| --- | --- |
+| Battle +0x736D0, +0x736D4 | `E92D4030 E1A05001`: second perspective MITM entry, shared callback with main-image 0x3631CC |
+| Battle +0x73774 | `EEC01AA9`: aspect divide signature, checked before hooking |
+| code.bin 0x17376C..0x1737AC | Entire 17-word SDK unload wrapper checked; prologue `E92D4070`, IPC command literal `000500C2` at 0x1737A8, handle address literal `0069EB28` at 0x1737AC |
+| code.bin 0x1732C0 / 0x1732C8 | `mov r1,r4` / call unload wrapper: r1 holds the CRO base; pre-unload hook forwards r0-r3 and Result |
+| SequencePlayer +0xE860 | Separate perspective copy; intentionally unpatched |
+
+The unload signature includes all instructions/literals (`UnloadWords` in
+`Includes/BattleWidescreen.hpp`). The adjacent wrapper at 0x1737B0 has a
+similar prologue but command `000100C2`; it is not our unload target.
+Battle +0x7434C rebuilds the three projections, +0x4211C initializes them,
+and +0x3F410 updates the camera. Only +0x736D0 is hooked inside Battle.
+Lifetime, slot capacity and verification: [WIDESCREEN.md](WIDESCREEN.md#cro-lifetime).

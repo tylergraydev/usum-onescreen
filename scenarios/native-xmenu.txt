@@ -139,12 +139,14 @@ wait-scene Kawaigari 10
 sleep 3
 shot refresh
 # The first visit shows a tutorial that B skips; its back button sometimes
-# needs a second tap.
+# needs a second tap. Tap only while Refresh is still up: the X menu's own
+# close button sits at the same spot, and a tap that lands just after the
+# field returns closes it (seen at 21:9).
 mark
 send press b
 sleep 3
 repeat 4 until-scene FieldRo
-  send move 14 222; tap 4
+  if-scene Kawaigari send move 14 222; tap 4
   sleep 5
 end
 expect-log ^xmenu: shown 15

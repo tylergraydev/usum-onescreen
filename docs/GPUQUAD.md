@@ -69,8 +69,102 @@ concurrently by another producer. The shader-shadow RecursiveLock remains separa
 
 ## Bands and Map window
 
+### Opt-in blurred-picture bands
+
+`[display] pillarbox = blur` now low-passes the current menu atlas through a
+64x64 -> 32x32 -> 16x16 -> 8x8 render-to-texture pyramid. The old nine sparse
+full-resolution taps built and passed the host suite, but Ultra Sun at 21:9/5x
+showed noisy horizontal streaks in Party/Bag: the taps aliased text and borders.
+That emulator result does not validate this replacement, which needs a new run.
+
+The first level averages a dense 4x4 bilinear grid per pixel, using running
+source-over weights `1/(tap+1)` rounded to eight bits. Each later level explicitly
+averages four neighbours at half-input-texel offsets. These explicit offsets keep
+the kernel's logical footprint when Azahar renders intermediate targets at 5x;
+relying only on bilinear 2:1 resizing would shrink the effective blur radius.
+At 1x the final texel integrates 1024 bilinear source samples, rather than nine.
+A source guard inset contains all shifted footprints inside the owning atlas
+allocation, including at higher raster scales. Each level uses a separate aligned
+scratch range, framebuffer flush/invalidate and texture-cache clear before reuse.
+
+The final 8x8 texture is bilinear-filtered, stretched across the full 400x240
+picture and cropped into the two side bands. Only then is RGB multiplied by
+128/255; alpha is forced opaque so the game scene cannot bleed through. Sharp
+menu textures, rounded corners and skip alpha keep their original sampling.
+If generic publishers overlap, the last eligible slot owns the blurred background;
+native primary menus already have exclusive ownership.
+
+**Five render passes: four reductions (16+4+4+4 draws), then the scene (two band
+draws plus visible menus). One GX command list and one state restore total.**
+**Added GX commands per present: zero (1 before, 1 after)**; Map retains its
+separate picture copy (2 plugin commands before and after). Counts exclude the
+game's own lists/transfers. No DisplayTransfer, TextureCopy, CPU image processing
+or readback is added. Tint remains the default; `hires off`, unavailable backend
+and CPU/legacy LayerGpu presentation use tint for Blur.
+
+**Working pixel buffer: 21,760 bytes, all reused from the existing 384,000-byte
+FB diagnostic target. New allocated buffer bytes: 0.** The four disjoint RGBA8
+levels occupy 16,384 + 4,096 + 1,024 + 256 bytes. Diagnostic FB mode cannot run
+hi-res publishing concurrently. The scratch allocation, plugin heap, 8-KiB VBO
+and 16-KiB list allocation are unchanged. The old 85-byte alpha array is removed;
+blur metadata is now two 4-byte counters (8 bytes before alignment). Normal blur
+plus four visible menus needs 34 quads/3264 VBO bytes. Arbitrary mixed publishers
+still fail the existing overflow guard rather than submitting a partial frame.
+
+`blur_test` now renders high-detail alternating rows, checkerboard, thin stripes
+and noise with a large brightness shape through the **production reduction UVs**.
+The reference models bilinear sampling, RGBA8 quantization, all blend weights,
+clamping and final darkening, with intermediate raster scales 1 and 5. At both
+16:9 and 21:9, across Party/Bag and an offset atlas region, it asserts a maximum
+adjacent row/column difference <=5 over the bands, retained large shapes, exact
+constant darkening and no neighbour contamination. Measured maxima: **1-2 levels**;
+the rejected sparse kernel gives **15-48 levels** on the same fixture and fails
+the same bound. White becomes 128, black stays 0. No external pictures are needed.
+`blur_command_test.py` guards the real submission sites and in-list reduction loop.
+Settings and multi-format/corner/skip fallback tests remain in place.
+
+Host math does not prove PICA output. Rebuild and soak Party, Bag and Boxes at
+21:9/5x (also 1x and 16:9), inspecting gradient smoothness, correct orientation,
+no stale/corrupted bands, centre sharpness, heap and `gpuquad status` GX/frame=1.
+Toggle hires, reload settings, close/reopen and change pages. Four new offscreen
+targets introduce cache/target-switching risk; measure performance in Azahar.
+Map's later picture copy is absent from the menu atlas, so transparent window
+pixels contribute their stored RGB (normally black), rather than the map picture.
+
+Targeted Windows verification for this change used the Makefile's expanded
+source lists directly with native MSVC (no host g++/clang++ was installed),
+without make or WSL. After `vcvars64.bat` from VS 2022 Community, these exact
+successful compile/run commands ran from `tests/`:
+
+```bat
+cl /nologo /std:c++17 /EHsc /W4 /WX /I ../Includes blur_test.cpp /Fe:build/blur_test.exe /Fo:build/
+build\blur_test.exe
+cl /nologo /std:c++17 /EHsc /W4 /WX /I ../Includes settings_test.cpp ../Sources/Settings.cpp ../Sources/SettingsFile.cpp /Fe:build/settings_test.exe /Fo:build/
+build\settings_test.exe
+cl /nologo /std:c++17 /EHsc /W4 /WX /wd4244 /I ../Includes hires_test.cpp ../Sources/UI/Raster.cpp ../Sources/UI/Text.cpp ../Sources/UI/Font.cpp ../Sources/UI/Layer.cpp ../Sources/Settings.cpp ../Sources/SettingsFile.cpp /Fe:build/hires_test.exe /Fo:build/
+build\hires_test.exe
+cl /nologo /std:c++17 /EHsc /W4 /WX /wd4244 /wd4701 /D_CRT_SECURE_NO_WARNINGS /FI<worktree>/tests/build/msvc_gnu.hpp /I ../Includes pillarbox_test.cpp ../Sources/Screens/XMenuGrid.cpp ../Sources/ActionQueue.cpp ../Sources/UI/GameAssets.cpp ../Sources/UI/Theme.cpp ../Sources/UI/ThemeDemo.cpp ../Sources/RomfsText.cpp ../Sources/PartyData.cpp ../Sources/Settings.cpp ../Sources/SettingsFile.cpp ../Sources/UI/Raster.cpp ../Sources/UI/Text.cpp ../Sources/UI/Font.cpp ../Sources/UI/Layer.cpp ../Sources/UI/Icons.cpp ../Sources/UI/Glyphs.cpp ../Sources/UI/Demo.cpp /Fe:build/pillarbox_test.exe /Fo:build/
+build\pillarbox_test.exe
+```
+
+The ignored `build/msvc_gnu.hpp` contains only `#define __attribute__(x)` for
+ActionQueue's existing GCC format annotation. The warning exceptions cover
+existing numeric conversions, GameAssets uninitialized-variable diagnostics and
+CRT deprecation; no production sources were changed to accommodate MSVC.
+The four targeted tests passed again after the low-pass correction (settings: 224 checks; pillarbox: zero failures). Initial strict
+MSVC UI builds failed on those existing compiler incompatibilities before these
+flags/shim were applied. From the repository root, these also passed:
+
+```powershell
+python -I tests/blur_command_test.py
+& C:/devkitPro/devkitARM/bin/arm-none-eabi-g++.exe -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft -Os -mword-relocations -fomit-frame-pointer -ffunction-sections -fdata-sections -fno-strict-aliasing -Wall -D__3DS__ -fno-rtti -fno-exceptions -std=gnu++17 -I Includes -I C:/devkitPro/libctrpf/include -I C:/devkitPro/libctru/include -fsyntax-only Sources/UI/GpuQuad.cpp
+git diff --check
+```
+
+No plugin link/build, full host suite or emulator check was run here.
+
 PillarboxColumns retains the existing eligibility and SourceColumn boundaries:
-top full-menu insets, squeeze >1, Tint/Pattern enabled. BandRuns emits destination
+top full-menu insets, squeeze >1, Tint/Pattern/Blur enabled. BandRuns emits destination
 coordinate strips **without applying squeeze again**. Pattern uses eight-column
 phase runs; Tint stretches phase 8. The three columns touching the menu are phases
 11,10,9 outward, as in WriteBandColumn. Bands use nearest texture sampling and
@@ -117,7 +211,8 @@ A dirty upload still seeds/copies and flushes the 4-MiB atlas as in phase 1;
 CPU time is not measured for phase 2. Unchanged layers only renew metadata, with
 no clear, rasterization, tiling or texture flush. Corner masking now visits only
 four radius-sized squares, rather than computing sqrt over the full surface.
-Bands add at most 58 strips, no GX submissions; vertex capacity is 8 KiB and
+Tint/Pattern bands add at most 58 strips, no GX submissions; Blur uses the fixed
+four reduction passes and two band draws described above. Vertex capacity is 8 KiB and
 cache flush covers the actual vertices. Typical 16:9/21:9 uses far fewer strips.
 
 Normal screens gate Begin on version/DrawKey or data equality. Party/summary,
