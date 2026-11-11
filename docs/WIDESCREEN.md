@@ -1,5 +1,38 @@
 # Experimental widescreen (3D and 2D)
 
+## Panel presentation (2026-11-10)
+
+The bottom-screen corner panel and full view use CPU composition only when
+`WidescreenSqueeze() > 1`, including 16:9 and 21:9: **zero panel GX commands
+per present**. At squeeze <= 1 (including aspect 0), the original GPU paths
+remain: full 8, half 5, two-thirds 3-4 total commands. Their final top-screen
+copy alone is one command; preparation and cursor commands still count.
+
+The previous widescreen paths submitted one GX command per destination
+column in `CopyTopColumns` and `GpuFull`; both squeezed loops are removed.
+CPU picture, border and cursor use the same inverse column mapping, preserve
+corners, and submit no GX. Two-thirds keeps its true size and area filter.
+The native map remains one TextureCopy per call from an already-squeezed
+source. Other presenters have their own command counts.
+
+The user's emulator check at 21:9, `auto on`, `pokedex off`, open-pokedex
+now reaches Zukan with the panel shown and 0 unmapped reads (previously about
+5,800). Stock aspect previously passed the full regression suite. The final
+stock-GPU restoration still needs a rebuilt plugin and regression rerun.
+CPU panel drawing trades speed and potentially internal-resolution sharpness
+for safety only at widescreen; aspect 0 retains its GPU performance path.
+See [PERF.md](PERF.md) for full counts, rationale and direct host commands.
+
+Runtime verification: rebuild, repeat the exact 21:9 repro, then repeatedly
+open/close and touch-close the X menu; soak for several minutes and check
+Azahar for unmapped reads. Repeat half/two-thirds/full and all corners at
+16:9 and aspect 0, including live aspect changes back to stock. Re-run the
+ten panel-path regression failures (actions, memory-tour, native-boxes,
+native-options, native-party, native-passport-video, native-xmenu,
+open-each-app, wild-battle-run, xmenu-touch-close), plus native-map. Check
+border/cursor alignment and compare `perf` results. Host tests assert the
+true stock counts and zero widescreen panel GX; they cannot prove game timing.
+
 Ultra Sun / Ultra Moon USA v1.2 (`0x0820`) have byte-identical perspective
 builder code at `0x3631CC`:
 
@@ -13,7 +46,7 @@ floats in `s0`â€“`s3`. Pivot is screen rotation (0â€“4). The builder c
 cot(fovy/2) and divides by aspect at `0x3632C4`. Its only known callers are
 `0x4C1FF0`, `0x4C2094`, and `0x4C20E4` in camera update/blend code.
 
-The plugin installs two CTRPF MITM hooks at startup, alongside the input hooks,
+The plugin installs two graphics MITM hooks plus the CRO unload guard at startup, alongside the input hooks,
 after game detection and hook verification. It logs
 `widescreen: perspective hook at 003631CC -> N` (`0` = success).
 With a nonzero active aspect, incoming aspects within 0.001 of 400/240
@@ -27,6 +60,97 @@ Like `Buttons.cpp`, it uses `Hook::InitializeForMitm` and `Enable`, then calls
 The installed CTRPF header's void overload obtains `GetCallCode()` and invokes
 it through a typed function pointer, preserving float argument types. Runtime
 validation of the MITM path with these VFP arguments is still needed.
+
+## Battle 3D (#27; emulator verification pending)
+
+Battle.cro has a separate perspective builder at header-relative `+0x736D0`.
+`BattleWidescreen.cpp` follows FastText's scene-manager -> scene -> vtable ->
+`CroModuleOf` / `CroModuleName` discovery path, checking the loaded `FIXD`
+header and `Battle` name afresh each frame. It checks `E92D4030 E1A05001`
+at the entry and `EEC01AA9` at `+0x73774` before installing a second MITM
+instance with the **same `PerspectiveHook` callback**. This shares the existing
+`[display] aspect`, 400/240 +/-0.001 filter, hard-float forwarding and rewrite
+counter. No battle hook is installed at aspect off or stock 5:3. Other aspect
+changes use the live value on subsequent calls. Installation is frame-driven,
+so the first battle initialization projections can precede installation; the
+per-frame battle camera setter rebuilds them afterwards.
+
+### CRO lifetime
+
+Frame polling cannot safely notice an unload after it happens: CTRPF
+`Disable()` unconditionally writes the saved instruction to its target.
+Before allowing a battle hook, startup verifies **all 17 words**, including
+instructions and literals, in the main-image SDK unload IPC wrapper
+`0x17376C..0x1737AC`, then hooks its entry. The wrapper sends command
+`0x000500C2`; its caller at `0x1732C0` puts the CRO header base in r1.
+The checked bytes match the local Sun and Moon v1.2 code.bin files.
+
+The pre-unload callback removes a matching battle hook **before calling the
+original SDK wrapper**, while its target is still mapped. The same mutex
+covers frame discovery/install/remove and the entire unload IPC. Frames use
+TryLock and skip work during unload. Unrelated CRO unloads leave Battle alone.
+The callback forwards all four integer arguments and the Result, allocates
+and logs nothing, and defers its removal counter log to a frame. A failed
+Disable vetoes the unload with an error Result rather than forwarding it with
+a live target. A missing/mismatched unload signature or failed guard hook
+leaves battle widening disabled.
+
+Enable/Disable write the Battle.cro target without touching page permissions.
+Do not add `Process::ProtectMemory` here: on Battle.cro's text (RX, AliasCode)
+it made Azahar's ldr:ro refuse the next LoadCRO at battle start ("CRO original
+buffer is in invalid state", Bag.cro) and the game spun in its fatal handler
+at 0x3FD518. CTRPF's hook writes succeed on that RX page in Azahar as-is
+(unverified on hardware).
+
+Scene changes and aspect off/stock also remove the battle hook while mapped;
+the unload guard covers unloads occurring between frames. A retiring base is
+suppressed until polling sees a different module (including no Battle), so
+stale scene pointers during SDK cleanup cannot reinstall into freed memory.
+Then a fresh signature check/Enable handles another battle at either the same
+or a different base. If an entire out/in transition at the same base is missed
+by polling, widening stays suppressed until a scene transition is observed.
+The hook object is reused only after Disable; no abandoned hooks accumulate.
+This relies on the game's CRO unloads using the checked SDK wrapper; confirm
+the removal log and repeat-battle stability in Azahar.
+
+### Hook capacity
+
+There were seven plugin-owned hooks: Buttons (1), Cursor (1), PcAnywhere (1),
+Widescreen (2), GpuQuad (2). This adds one permanent pre-unload hook and at
+most one battle hook: **nine plugin-owned enabled hooks at maximum** (some
+existing hooks are optional). CTRPF owns additional hooks, including OSD,
+CRO-load and shared-memory mapping; tools/Action Replay can add more.
+
+The installed `Hook.hpp` comment says 91, but the inspected HookManager source
+defines `MAX_HOOKS = 0x1000 / sizeof(HookWrapper)`, with three 32-bit fields:
+**341 slots**. Disassembly of the installed `libctrpf.a` confirms the
+`0x155` limit and 12-byte wrapper indexing in DisableHook. Slots are freed
+by DisableHook and reused by GetFreeAsmWrapper/GetFreeHookWrapper. Capacity
+does not decrease per battle. Enable failures, including TooManyHooks, are
+reported and leave the battle hook inactive.
+
+### Verification and remaining scope
+
+Host coverage: `tests/battle_widescreen_test.cpp`, part of `tests/Makefile`.
+It checks all entry/divide and unload-wrapper signature words, unreadable
+memory, address alignment/overflow, load/unload ordering, stale scenes,
+same/different-base reload, unrelated unload, aspect toggling, and failure
+paths. Fake removal asserts that its target is still mapped.
+
+For the plugin build/full suite and Azahar checks, use 21:9 and compare the
+same wild-battle camera pose against aspect off. Expect more scenery and
+narrower models in the raw 400x240 picture. Check startup
+`CRO pre-unload hook ... -> 0`, per-battle `perspective +736D0 -> 0`, growing
+`aspect` rewrite count, and `battle hook removed before CRO unload` on exit.
+Enter/leave twice in a row, then repeat at stock/off and on Moon. Also test
+aspect changes mid-battle, running, trainer battles and battle effects.
+
+SequencePlayer.cro's separate builder at `+0xE860` is intentionally untouched;
+investigate it if sequences still stretch. **No 2D template squeeze or 30%
+pane-cull behavior changes here.** Full-screen battle layouts and edge-pane
+culling remain follow-ups, as do finite stage/effect edges and possible
+frustum-culling pops exposed by the wider projection. See
+[the research notes](RESEARCH-BATTLE-WIDESCREEN.md).
 
 ## Camera findings
 
