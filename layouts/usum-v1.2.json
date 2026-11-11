@@ -8,6 +8,89 @@
     "none": "tapped, nothing happens (listed so Phase 2 avoids it)"
   },
   "screens": {
+    "pelago": {
+      "scene": "main:0064787C + Resort CRO",
+      "buttons": {
+        "previous": {
+          "rect": [
+            6,
+            100,
+            26,
+            140
+          ],
+          "tap": [
+            16,
+            120
+          ],
+          "does": "previous isle (left direction needs emulator verification)",
+          "verified": "tap",
+          "evidence": "rp-leave/rp-p1; task brief supplies both arrow taps; original research did not exercise previous"
+        },
+        "next": {
+          "rect": [
+            294,
+            100,
+            314,
+            140
+          ],
+          "tap": [
+            303,
+            120
+          ],
+          "does": "next isle",
+          "verified": "tap",
+          "evidence": "rp-leave/rp-p1; task brief supplies both arrow taps; original research did not exercise previous"
+        },
+        "mohn": {
+          "rect": [
+            288,
+            210,
+            319,
+            238
+          ],
+          "tap": [
+            300,
+            222
+          ],
+          "does": "opens Mohn menu",
+          "verified": "tap",
+          "evidence": "rp-leave/rp-p1; task brief supplies both arrow taps; original research did not exercise previous"
+        },
+        "back": {
+          "rect": [
+            0,
+            214,
+            33,
+            239
+          ],
+          "tap": [
+            16,
+            223
+          ],
+          "does": "asks to leave",
+          "verified": "tap",
+          "evidence": "rp-leave/rp-p1; task brief supplies both arrow taps; original research did not exercise previous"
+        },
+        "yes": {
+          "rect": [
+            16,
+            78,
+            303,
+            104
+          ],
+          "tap": [
+            160,
+            92
+          ],
+          "does": "confirm leaving; follow with A",
+          "verified": "tap",
+          "evidence": "rp-leave/rp-p1; task brief supplies both arrow taps; original research did not exercise previous"
+        }
+      },
+      "notes": [
+        "Only isle controls; not a native copy of the touch playgrounds."
+      ]
+    },
     "field": {
       "scene": "FieldRo",
       "reach": "overworld, X menu closed",
@@ -424,6 +507,90 @@
         "return": {"rect": [12, 184, 306, 212], "tap": [160, 197], "does": "Return to the move-selection screen", "verified": "tap", "evidence": "v-row1/3/4 -> v-back: back on the list, cursor on that row"}
       },
       "notes": ["WazaOshie object +0xB4 byte 1 = 1 while this page is up, +0xB8 the row it is about (0-3, 4 = the new move)"]
+    },
+    "festival_plaza": {
+      "scene": "FieldRo",
+      "reach": "X menu: Festival Plaza; JoinFestaSubScreen CRO",
+      "buttons": {
+        "pokemon": {
+          "rect": [
+            170,
+            196,
+            204,
+            230
+          ],
+          "tap": [
+            187,
+            213
+          ],
+          "does": "opens native Party",
+          "verified": "tap",
+          "evidence": "docs/RESEARCH-REMAINING-SCREENS.md Festival Plaza; rs-fp1 / rs-fp-quit / rs-fp-prof2; Party capture not copied"
+        },
+        "bag": {
+          "rect": [
+            212,
+            196,
+            246,
+            230
+          ],
+          "tap": [
+            229,
+            213
+          ],
+          "does": "opens native Bag",
+          "verified": "tap",
+          "evidence": "docs/RESEARCH-REMAINING-SCREENS.md Festival Plaza; rs-fp1 / rs-fp-quit / rs-fp-prof2; Party capture not copied"
+        },
+        "profile": {
+          "rect": [
+            128,
+            196,
+            162,
+            230
+          ],
+          "tap": [
+            145,
+            213
+          ],
+          "does": "opens JoinFestaProfile",
+          "verified": "tap",
+          "evidence": "docs/RESEARCH-REMAINING-SCREENS.md Festival Plaza; rs-fp1 / rs-fp-quit / rs-fp-prof2; Party capture not copied"
+        },
+        "back": {
+          "rect": [
+            0,
+            210,
+            33,
+            239
+          ],
+          "tap": [
+            16,
+            223
+          ],
+          "does": "opens quit prompt",
+          "verified": "tap",
+          "evidence": "docs/RESEARCH-REMAINING-SCREENS.md Festival Plaza; rs-fp1 / rs-fp-quit / rs-fp-prof2; Party capture not copied"
+        },
+        "quit": {
+          "rect": [
+            20,
+            106,
+            300,
+            134
+          ],
+          "tap": [
+            160,
+            118
+          ],
+          "does": "quits Festival Plaza (equivalent to Y)",
+          "verified": "tap",
+          "evidence": "docs/RESEARCH-REMAINING-SCREENS.md Festival Plaza; rs-fp1 / rs-fp-quit / rs-fp-prof2; Party capture not copied"
+        }
+      },
+      "notes": [
+        "USA v1.2 English; icon rects approximate; live calibration pending"
+      ]
     },
     "strinput": {
       "scene": "any (StrInput CRO; seen over Zukan)",
