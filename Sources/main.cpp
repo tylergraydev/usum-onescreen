@@ -41,6 +41,8 @@
 #include "UI/Device.hpp"
 #include "Where.hpp"
 #include "Widescreen.hpp"
+#include "BattleWidescreen.hpp"
+#include "SidePanels.hpp"
 #include "FastText.hpp"
 
 namespace CTRPluginFramework
@@ -236,6 +238,8 @@ namespace CTRPluginFramework
     //   poke ADDR VALUE | pokef ADDR FLOAT   (write data memory; hex ADDR/VALUE, decimal FLOAT)
     //   vtscan NAME   (global -> object -> vtable scan to /usum-vt-NAME.bin)
     //   scene   (log the current scene's module name)
+    //   panels [off|battle|field|both] (optional party strips)
+    //   fov SCALE|status    (idle overworld fovy multiplier, 0.8..1.5)
     //   aspect [VALUE|off]   (inspect / set perspective aspect; docs/WIDESCREEN.md)
     //   cullnames            (log culled pane names for the next frame, max 32)
     //   battle   (log the battle state, docs/RE1-battle.md; also logged on change)
@@ -414,6 +418,27 @@ namespace CTRPluginFramework
                 OneScreen::SetSettings(settings);
                 WriteLog(std::string("glyphs: ") + OneScreen::GlyphFamilyName(settings.glyphs), false);
             }
+        }
+        else if (line == "panels")
+            WriteLog(std::string("panels: ") + OneScreen::SidePanelModeName(OneScreen::GetSettings().sidePanels), false);
+        else if (line.compare(0, 7, "panels ") == 0 || line.compare(0, 7, "panels\t") == 0)
+        {
+            auto settings = OneScreen::GetSettings();
+            if (OneScreen::ParseSidePanelMode(line.substr(7), settings.sidePanels))
+            {
+                OneScreen::SetSettings(settings);
+                WriteLog(std::string("panels: ") + OneScreen::SidePanelModeName(settings.sidePanels), false);
+            }
+            else WriteLog("panels: invalid mode (use off, battle, field or both)", false);
+        }
+        else if (line == "fov" || line == "fov status")
+            WriteLog(OneScreen::DescribeFieldFov(), false);
+        else if (line.compare(0, 4, "fov ") == 0 || line.compare(0, 4, "fov\t") == 0)
+        {
+            float scale;
+            WriteLog(OneScreen::ParseFieldFov(line.substr(4), scale)
+                ? OneScreen::SetFieldFov(scale)
+                : "fov: invalid scale (use 0.8..1.5; 1 = stock)", false);
         }
         else if (line == "aspect")
             WriteLog(OneScreen::DescribeWidescreenAspect(), false);
@@ -602,6 +627,8 @@ namespace CTRPluginFramework
                 return;
             }
         }
+        else if (line == "filter" || line.compare(0, 7, "filter ") == 0 || line.compare(0, 7, "filter\t") == 0)
+            WriteLog(OneScreen::UI::FilterCommand(line == "filter" ? "" : line.substr(7)), false);
         else if (line.compare(0, 6, "hires ") == 0)
             WriteLog(OneScreen::UI::HiResCommand(line.substr(6)), false);
         else if (line.compare(0, 8, "gpuquad ") == 0)
@@ -818,6 +845,10 @@ namespace CTRPluginFramework
         if (!speedLog.empty())
             WriteLog(speedLog, false);
 
+        const std::string battleWideLog = OneScreen::BattleWidescreenFrame(s_game->offsets.sceneManager);
+        if (!battleWideLog.empty())
+            WriteLog(battleWideLog, false);
+
         const std::string cullLog = OneScreen::WidescreenFrame();
         if (!cullLog.empty())
             WriteLog(cullLog, false);
@@ -927,6 +958,7 @@ namespace CTRPluginFramework
         for (const std::string &line : themeLog)
             WriteLog(line, false);
 
+        OneScreen::SidePanelsUpdate(s_game->offsets.sceneManager);
         OneScreen::ShotPoll();
         PollCommands();
     }
@@ -1114,6 +1146,7 @@ namespace CTRPluginFramework
         OneScreen::StartPartyScreen();
         OneScreen::StartBoxes();
         OneScreen::StartThemeScreen();
+        OneScreen::StartSidePanels();
         OneScreen::StartPanel(OneScreen::PanelMode::Off, s_game->offsets.gxDisplayTransfer.address,
                               s_game->offsets.gxTextureCopy.address);
         OneScreen::StartActions();
