@@ -11,6 +11,9 @@ namespace UI
 {
     // Overlay backend evolved from the verified spike (docs/GPUQUAD.md).
     // Four textured layers and pillarbox strips share one PICA list/restore.
+    // Blur builds a 64->32->16->8 box-filter pyramid, then draws two dark bands.
+    // Five render passes share that list/restore: zero added GX commands or
+    // allocations; 21,760 bytes of the existing FB diagnostic scratch are reused.
     //
     // Both modes run one PICA command list (our state, the draw, then the
     // game's state restored). `mode fb`, from the OSD callback:

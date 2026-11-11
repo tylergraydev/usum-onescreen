@@ -292,6 +292,9 @@ namespace UI
     static u32 s_uploads = 0, s_contentBusy = 0;
     static u32 s_vertexQuads = 1;
     static u32 s_bandQuads = 0;
+    static u32 s_blurQuads = 0;
+    static u32 s_mipBase = 1;
+    static_assert(BlurPyramidBytes <= TargetW * TargetH * 4, "blur must fit existing FB scratch");
     static std::string s_why = "off";
     static u32 s_frames = 0, s_drawn = 0, s_skipped = 0, s_maxGx = 0, s_listBytes = 0, s_restored = 0;
     static u32 s_unseenRegs = 0, s_unseenCode = 0;
@@ -555,25 +558,49 @@ namespace UI
         float *v = (float *)(s_scratch + OffVbo);
         s_vertexQuads = 0;
         bool overflow = false;
-        const auto write = [&](const Rect &r, const Rect &tex, float squeeze) {
+        const auto write = [&](const Rect &r, const Rect &tex, float squeeze, s32 texSize = TexW) {
             // Also guard arbitrary public publishers, whose destinations may
             // request several overlapping full-screen sets of bands.
             if (s_vertexQuads >= 0x2000 / (24 * sizeof(float)))
             { overflow = true; return; }
-            QuadVertices(v, r, tex, TexW, TexH, squeeze, s_stepY < 0);
+            QuadVertices(v, r, tex, texSize, texSize, squeeze, s_stepY < 0);
             v += 24;
             s_vertexQuads++;
         };
-        s_bandQuads = 0;
+        s_bandQuads = s_blurQuads = 0;
+        const Quad *blur = nullptr;
         if (s_activeTest) write(Rect{ 0, 20, 400, 200 }, Rect{ 0, 0, (s32)TexW, 512 }, s_squeeze);
         else if (HiResReady())
         {
+            // The last eligible slot owns the background if generic publishers
+            // overlap; native primary menus already have exclusive ownership.
+            ColumnRange blurRange{};
+            for (const Quad &q : s_active)
+            {
+                if (!q.visible || q.bands != Pillarbox::Blur || q.region.w < 3 || q.region.h < 3) continue;
+                Surface screen{};
+                screen.width = ScreenW; screen.height = ScreenH;
+                screen.squeeze = s_squeeze; screen.pillarbox = q.bands;
+                const auto range = PillarboxColumns(screen, q.destination);
+                if (range.active && (range.begin > 0 || range.end < ScreenW))
+                { blur = &q; blurRange = range; }
+            }
+            if (blur) BlurBandRuns(blurRange, [&](int x, int width) {
+                float *const first = v;
+                const u32 before = s_vertexQuads;
+                const s32 size = BlurLevelSize(BlurLevels - 1);
+                write(Rect{ x, 0, width, ScreenH }, Rect{ 0, 0, size, size }, 1.f, size);
+                if (before == s_vertexQuads) return;
+                for (int i = 0; i < 4; i++)
+                    first[i * 6 + 4] = (float)(i < 2 ? x : x + width) / ScreenW;
+            });
+            s_blurQuads = s_vertexQuads;
             // Destination-coordinate bands are deliberately not squeezed again.
             // Pattern runs use all eight phases then repeat; tint stretches one
             // phase. The three edge columns retain phases 9,10,11 exactly.
             for (const Quad &q : s_active)
             {
-                if (!q.visible || q.bands == Pillarbox::Off) continue;
+                if (!q.visible || q.bands == Pillarbox::Off || q.bands == Pillarbox::Blur) continue;
                 Surface screen{};
                 screen.width = ScreenW; screen.height = ScreenH;
                 screen.squeeze = s_squeeze; screen.pillarbox = q.bands;
@@ -588,6 +615,17 @@ namespace UI
             for (const Quad &q : s_active)
                 if (q.visible) write(q.destination, q.region, s_squeeze);
         }
+        // Append reduction geometry after the visible quads. Flush it together,
+        // but only the final scene pass draws the visible prefix.
+        s_mipBase = s_vertexQuads;
+        if (blur)
+            for (u32 level = 0; level < BlurLevels; level++)
+                for (u32 tap = 0; tap < BlurLevelTaps(level); tap++)
+                {
+                    if (s_vertexQuads >= 0x2000 / (24 * sizeof(float))) { overflow = true; break; }
+                    BlurPassVertices(v, blur->region, level, tap);
+                    v += 24; s_vertexQuads++;
+                }
         if (overflow) s_vertexQuads = 0; // never submit a partial/overrun list
     }
 
@@ -601,15 +639,19 @@ namespace UI
     // (the game's own, 256x512, cropped by its DisplayTransfer) keeps the
     // visible rows at the start of memory, which is window y = targetH - 400
     // (window y runs bottom to top, memory rows top to bottom).
-    static void EmitDraw(u32 target = 0, u32 targetW = TargetW, u32 targetH = TargetH, bool rgb8 = false)
+    static void EmitDraw(u32 target = 0, u32 targetW = TargetW, u32 targetH = TargetH, bool rgb8 = false, s32 mip = -1)
     {
-        const u32 viewY = targetH - TargetH;
-        const u32 tex = Pa(s_scratch + s_front), vbo = Pa(s_scratch + OffVbo);
+        const bool reducing = mip >= 0;
+        const u32 viewW = reducing ? targetW : TargetW, viewH = reducing ? targetH : TargetH;
+        const u32 viewY = reducing ? 0 : targetH - TargetH;
+        const u32 texSize = mip > 0 ? BlurLevelSize(mip - 1) : TexW;
+        const u32 tex = Pa(s_scratch + (mip > 0 ? OffTarget + BlurLevelOffset(mip - 1) : s_front));
+        const u32 vbo = Pa(s_scratch + OffVbo);
 
         GPUCMD_AddWrite(GPUREG_FRAMEBUFFER_FLUSH, 1);
         GPUCMD_AddWrite(GPUREG_FRAMEBUFFER_INVALIDATE, 1);
 
-        // Render target: tiled RGBA8 (or RGB8) 240x400, no depth buffer.
+        // Tiled RGBA8/RGB8 scene or square RGBA8 reduction, no depth buffer.
         const u32 dim = targetW | ((targetH - 1) << 12) | (1 << 24);
         GPUCMD_AddWrite(GPUREG_COLORBUFFER_FORMAT, rgb8 ? (1 | (GPU_RB_RGB8 << 16)) : (2 | (GPU_RB_RGBA8 << 16)));
         GPUCMD_AddWrite(GPUREG_DEPTHBUFFER_LOC, 0);
@@ -623,10 +665,10 @@ namespace UI
         GPUCMD_AddWrite(GPUREG_DEPTHBUFFER_WRITE, 0);
 
         // Viewport, scissor, culling, clipping, early depth.
-        GPUCMD_AddWrite(GPUREG_VIEWPORT_WIDTH, f32tof24(TargetW / 2.0f));
-        GPUCMD_AddWrite(GPUREG_VIEWPORT_INVW, f32tof31(2.0f / TargetW) << 1);
-        GPUCMD_AddWrite(GPUREG_VIEWPORT_HEIGHT, f32tof24(TargetH / 2.0f));
-        GPUCMD_AddWrite(GPUREG_VIEWPORT_INVH, f32tof31(2.0f / TargetH) << 1);
+        GPUCMD_AddWrite(GPUREG_VIEWPORT_WIDTH, f32tof24(viewW / 2.0f));
+        GPUCMD_AddWrite(GPUREG_VIEWPORT_INVW, f32tof31(2.0f / viewW) << 1);
+        GPUCMD_AddWrite(GPUREG_VIEWPORT_HEIGHT, f32tof24(viewH / 2.0f));
+        GPUCMD_AddWrite(GPUREG_VIEWPORT_INVH, f32tof31(2.0f / viewH) << 1);
         GPUCMD_AddWrite(GPUREG_VIEWPORT_XY, viewY << 16);
         GPUCMD_AddWrite(GPUREG_SCISSORTEST_MODE, 0);
         GPUCMD_AddWrite(GPUREG_FACECULLING_CONFIG, 0);
@@ -644,10 +686,10 @@ namespace UI
         GPUCMD_AddWrite(GPUREG_STENCIL_OP, 0);
         GPUCMD_AddWrite(GPUREG_DEPTH_COLOR_MASK, (GPU_ALWAYS << 4) | (0xF << 8));
 
-        // Texture unit 0: shared RGBA8 1024x1024 atlas, bilinear, clamped.
+        // Texture unit 0: atlas or previous reduction level, bilinear, clamped.
         GPUCMD_AddWrite(GPUREG_TEXUNIT_CONFIG, 0x00011001);
         GPUCMD_AddWrite(GPUREG_TEXUNIT0_BORDER_COLOR, 0);
-        GPUCMD_AddWrite(GPUREG_TEXUNIT0_DIM, TexH | (TexW << 16));
+        GPUCMD_AddWrite(GPUREG_TEXUNIT0_DIM, texSize | (texSize << 16));
         GPUCMD_AddWrite(GPUREG_TEXUNIT0_PARAM, GPU_TEXTURE_MAG_FILTER(GPU_LINEAR) | GPU_TEXTURE_MIN_FILTER(GPU_LINEAR)
                                                | GPU_TEXTURE_WRAP_S(GPU_CLAMP_TO_EDGE) | GPU_TEXTURE_WRAP_T(GPU_CLAMP_TO_EDGE));
         GPUCMD_AddWrite(GPUREG_TEXUNIT0_LOD, 0);
@@ -684,12 +726,38 @@ namespace UI
         GPUCMD_AddIncrementalWrites(GPUREG_VSH_ATTRIBUTES_PERMUTATION_LOW, permutation, 2);
 
         // Draw 4 vertices as a triangle strip (citro3d's C3D_DrawArrays).
-        for (u32 quad = 0; quad < s_vertexQuads; quad++)
+        const u32 first = reducing ? s_mipBase + (mip == 0 ? 0 : BlurFilterTaps + (mip - 1) * 4) : 0;
+        const u32 end = reducing ? first + BlurLevelTaps(mip) : s_mipBase;
+        for (u32 quad = first; quad < end; quad++)
         {
-        if (quad == 0 || quad == s_bandQuads)
+        if (reducing || quad < s_blurQuads)
+        {
+            // Reduction ignores source alpha; only the final bands are darkened.
+            const u32 alpha = reducing ? BlurTapAlpha(quad - first) : 255;
+            const u32 colour = reducing ? 0x00FFFFFF : 0x00808080;
+            const u32 env[5] = { GPU_TEXTURE0 | (GPU_CONSTANT << 4) | (GPU_CONSTANT << 16),
+                0, GPU_MODULATE | (GPU_REPLACE << 16), (alpha << 24) | colour, 0 };
+            GPUCMD_AddIncrementalWrites(GPUREG_TEXENV0_SOURCE, env, 5);
+        }
+        else if (quad == s_blurQuads)
+        {
+            const u32 env[5] = { GPU_TEXTURE0 | (GPU_TEXTURE0 << 16), 0,
+                GPU_REPLACE | (GPU_REPLACE << 16), 0, 0 };
+            GPUCMD_AddIncrementalWrites(GPUREG_TEXENV0_SOURCE, env, 5);
+        }
+        if (!reducing && (quad == 0 || quad == s_blurQuads))
+        {
+            const bool band = quad < s_blurQuads;
+            const u32 size = band ? BlurLevelSize(BlurLevels - 1) : TexW;
+            const u32 address = band ? Pa(s_scratch + OffTarget + BlurLevelOffset(BlurLevels - 1)) : tex;
+            GPUCMD_AddWrite(GPUREG_TEXUNIT0_DIM, size | (size << 16));
+            GPUCMD_AddWrite(GPUREG_TEXUNIT0_ADDR1, address >> 3);
+            GPUCMD_AddWrite(GPUREG_TEXUNIT_CONFIG, 0x00011001); // texture-cache clear
+        }
+        if (reducing || quad == 0 || quad == s_blurQuads || quad == s_bandQuads)
             GPUCMD_AddWrite(GPUREG_TEXUNIT0_PARAM,
-                GPU_TEXTURE_MAG_FILTER(quad < s_bandQuads ? GPU_NEAREST : GPU_LINEAR)
-                | GPU_TEXTURE_MIN_FILTER(quad < s_bandQuads ? GPU_NEAREST : GPU_LINEAR)
+                GPU_TEXTURE_MAG_FILTER(!reducing && quad >= s_blurQuads && quad < s_bandQuads ? GPU_NEAREST : GPU_LINEAR)
+                | GPU_TEXTURE_MIN_FILTER(!reducing && quad >= s_blurQuads && quad < s_bandQuads ? GPU_NEAREST : GPU_LINEAR)
                 | GPU_TEXTURE_WRAP_S(GPU_CLAMP_TO_EDGE) | GPU_TEXTURE_WRAP_T(GPU_CLAMP_TO_EDGE));
         GPUCMD_AddMaskedWrite(GPUREG_PRIMITIVE_CONFIG, 2, GPU_TRIANGLE_STRIP);
         GPUCMD_AddWrite(GPUREG_RESTART_PRIMITIVE, 1);
@@ -815,6 +883,10 @@ namespace UI
 
         // Our draw, walked into a blank register file to learn what it touches.
         GPUCMD_SetBuffer((u32 *)list, ListWords, 0);
+        if (s_blurQuads != 0)
+            for (u32 level = 0; level < BlurLevels; level++)
+                EmitDraw(Pa(s_scratch + OffTarget + BlurLevelOffset(level)),
+                         BlurLevelSize(level), BlurLevelSize(level), false, level);
         EmitDraw(targetPa, targetW, targetH, rgb8);
         u32 *buf;
         u32 size, drawWords;
@@ -976,7 +1048,7 @@ namespace UI
             if (words != 0)
             {
                 PushList(words);
-                Done(t0, words, restored, 1);
+                Done(t0, words, restored, OverlayGxCommands);
             }
             RecursiveLock_Unlock(&s_lock);
         }
