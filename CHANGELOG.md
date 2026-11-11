@@ -6,6 +6,9 @@ All notable changes for players are listed here. Versions follow [Semantic Versi
 
 ### Added
 
+- Windows launcher: dump-to-pack library helper and generated new-hash pack.json for packs without metadata; preserved legacy metadata with warnings, and effective per-game texture-option reads. Dump/load verified live on Azahar 2126.2 (Ultra Sun, Vulkan/NVIDIA, 2026-11-09).
+
+- Windows launcher: per-game community HD texture pack ZIP library with install, switch, Off and remove; preload/async options, maker texture dumping and folder access, plus CLI equivalents. Safe ZIP validation and staged copies; no textures or game assets are bundled.
 - Windows launcher: quiet daily stable-release checks, a manual Check for updates entry and `check-update` CLI command, plus skip-version settings. User-approved updates verify release assets, stage beside the exe, and use a helper with replacement backups/rollback; adjacent and installed plugins are refreshed from the new exe's embedded resource.
 - Native Festival Plaza hub bar: L opens Party, R Bag, Start Profile, B leaves through a guarded single Back/Quit sequence. The plaza remains visible and walkable; submenus retain game controls. Detection uses CRO ownership and real captured button colours. Host tests pass; live calibration and exit verification pending.
 
