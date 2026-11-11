@@ -79,6 +79,7 @@ namespace OneScreen
     static bool UiDemoOnScreen(const CTRPluginFramework::Screen &) { return false; }
     static bool BattleScreenOnScreen(const CTRPluginFramework::Screen &) { return false; }
     static bool ShotOnScreen(const CTRPluginFramework::Screen &) { return false; }
+    static bool PhotoModeActive() { return false; }
     namespace UI
     {
         static void StartLayerGpu(u32, u32) {}

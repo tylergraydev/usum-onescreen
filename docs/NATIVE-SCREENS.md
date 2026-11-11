@@ -172,6 +172,26 @@ is earned on this save, so "earned" was only seen on page 1.
   and back, no turn left of page 1, A kept; B. Battle Video: intro, A, empty
   recorder, A ignored, B; B from the intro; `check-save`.
 
+## Ride Pager (backlog #10)
+
+The native Pager is also dispatched by SubScreens, but is recognised by its
+FieldMenu scene-stack applet/list vtables, not by a separate scene: FieldRo
+stays active. `RidePager.hpp` / `RidePager.cpp` own recognition, row memory,
+colour decoding, guarded selection and drawing. It follows the game's Y;
+field D-pad shortcuts remain with the game. Inside it, Up/Down navigate,
+A/Y selects or gets down, B taps Back. Grey rows send no action; Riding and
+orange + mark the current and registered rides. Registration controls are
+omitted pending tile-selection research. Names currently use a fixed English
+ride-ID table; the game's ride-label text mapping is not located.
+
+The existing `screens` toggle, panel ownership, action lifecycle and
+SetupHiRes drawing apply. The four measured-only row coordinates use the
+game's A at its memory cursor rather than bypassing tap verification.
+See [RIDE-PAGER.md](RIDE-PAGER.md#native-implementation-2026-11-09-emulator-verification-pending)
+for evidence limits and emulator checks. `tests/run_ride_pager.ps1` directly
+builds/runs the host test and writes `tests/build/ride-pager-preview.ppm`;
+the test is also wired into tests/Makefile. Runtime verification is pending.
+
 ## Poke Pelago isle bar (backlog #11)
 
 `Screens/Pelago.hpp` / `Screens/Pelago.cpp` add a slim top-screen bar at

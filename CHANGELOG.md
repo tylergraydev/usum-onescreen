@@ -8,6 +8,12 @@ All notable changes for players are listed here. Versions follow [Semantic Versi
 
 - Native battle power controls: R arms a screenshot-confirmed Mega Evolution or Z-Power button before a move; L keeps descriptions. Power taps are guarded and host-tested. Static button-text probes tolerate the observed animations; Z submission permits only confirmed gold rows, and B returns once to normal moves. Repaired native flows still need emulator validation.
 
+- Native top-screen Ride Pager: follows the game's Y menu, shows usable/current/registered rides, selects with Up/Down and A/Y, and closes with B. Field D-pad shortcuts stay with the game; fixed English labels and no registration controls yet. Emulator verification pending.
+- Photo mode: optional `[controls] photo_key` (default none), `photo on|off|status` commands and a plugin-menu entry; freezes through CTRPF, hides plugin overlays/notices, and suppresses held inputs on resume. Host checks added; runtime/emulator verification pending. Camera nudging awaits documented offsets.
+- Windows launcher: dump-to-pack library helper and generated new-hash pack.json for packs without metadata; preserved legacy metadata with warnings, and effective per-game texture-option reads. Dump/load verified live on Azahar 2126.2 (Ultra Sun, Vulkan/NVIDIA, 2026-11-09).
+
+- Windows launcher: per-game community HD texture pack ZIP library with install, switch, Off and remove; preload/async options, maker texture dumping and folder access, plus CLI equivalents. Safe ZIP validation and staged copies; no textures or game assets are bundled.
+- Windows launcher: quiet daily stable-release checks, a manual Check for updates entry and `check-update` CLI command, plus skip-version settings. User-approved updates verify release assets, stage beside the exe, and use a helper with replacement backups/rollback; adjacent and installed plugins are refreshed from the new exe's embedded resource.
 - Native Festival Plaza hub bar: L opens Party, R Bag, Start Profile, B leaves through a guarded single Back/Quit sequence. The plaza remains visible and walkable; submenus retain game controls. Detection uses CRO ownership and real captured button colours. Host tests pass; live calibration and exit verification pending.
 
 - Optional plugin-side top-screen filters: `[display] filter = off|warm|cool|vignette`

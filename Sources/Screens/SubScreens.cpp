@@ -12,6 +12,7 @@
 #include "PartyData.hpp"
 #include "Screens/BattleVideo.hpp"
 #include "Screens/Options.hpp"
+#include "Screens/RidePager.hpp"
 #include "Screens/Pelago.hpp"
 #include "Screens/FestivalPlaza.hpp"
 #include "Screens/TrainerPassport.hpp"
@@ -32,9 +33,10 @@ namespace OneScreen
     static OptionsScreen  s_options;
     static PassportScreen s_passport;
     static VideoScreen    s_video;
+    static RidePagerScreen s_pager;
     static PelagoScreen   s_pelago;
     static FestivalPlazaScreen s_festival;
-    static NativeScreen *const s_screens[] = { &s_options, &s_passport, &s_video, &s_pelago, &s_festival };
+    static NativeScreen *const s_screens[] = { &s_options, &s_passport, &s_video, &s_pager, &s_pelago, &s_festival };
     static const int ScreenCount = sizeof(s_screens) / sizeof(s_screens[0]);
 
     // --- Shared with the OSD callback (game thread), under s_lock ---
@@ -336,7 +338,7 @@ namespace OneScreen
                 s_repeatAt = s_frames + RepeatDelay;
                 return d;
             }
-        const u32 others[] = { ScreenKey::A, ScreenKey::L, ScreenKey::R, ScreenKey::Start };
+        const u32 others[] = { ScreenKey::B, ScreenKey::A, ScreenKey::L, ScreenKey::R, ScreenKey::Start, 1u << 11 };
         for (u32 k : others)
             if (pressed & k)
                 return k;
@@ -401,10 +403,11 @@ namespace OneScreen
     void SubScreensUpdate(u32 sceneManager, const std::string &scene, std::vector<std::string> &log)
     {
         s_frames++;
+        const RidePagerState pager = ReadRidePager(sceneManager, scene);
         int active = -1;
         if (s_enabled)
             for (int i = 0; i < ScreenCount; i++)
-                if (scene == s_screens[i]->Scene()
+                if ((i == 3 ? RidePagerValid(pager) : scene == s_screens[i]->Scene())
                     && (s_screens[i] != &s_pelago || PelagoDetected(sceneManager, scene))
                     && (s_screens[i] != &s_festival || FestivalPlazaDetected(sceneManager, scene)))
                     active = i;
@@ -441,6 +444,8 @@ namespace OneScreen
         NativeScreen *ns = s_screens[s_active];
 
         s_lock.Lock();
+        if (s_active == 3)
+            s_pager.SetState(pager);
         if (s_active == 1)
         {
             if (!s_passport.HasData() && s_frames % 10 == 0)
