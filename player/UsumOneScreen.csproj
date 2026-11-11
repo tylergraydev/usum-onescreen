@@ -19,6 +19,7 @@
     <EmbeddedResource Include="cheats\*.txt" LogicalName="UsumOneScreen.Cheats.%(Filename).txt" />
     <Reference Include="System.IO.Compression" />
     <Reference Include="System.IO.Compression.FileSystem" />
+    <Reference Include="System.Web.Extensions" />
     <EmbeddedResource Include="..\usum-onescreen.3gx" LogicalName="UsumOneScreen.Plugin" Condition="Exists('..\usum-onescreen.3gx')" />
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
   </ItemGroup>
