@@ -331,14 +331,14 @@ namespace OneScreen
             if (!ParseAspect(value, s.aspect))
                 return "bad aspect '" + value + "' (use 0, off, a positive float, 16:9 or 21:9)";
         }
-        else if (k == "panel_key" || k == "touch_key" || k == "map_key" || k == "pc_key" || k == "save_key")
+        else if (k == "panel_key" || k == "touch_key" || k == "map_key" || k == "pc_key" || k == "save_key" || k == "photo_key")
         {
             uint32_t keys = 0;
             if (!ParseKeys(value, keys))
                 return "bad key '" + value + "' (use A B X Y L R ZL ZR Start Select Up Down Left Right, "
                        "joined with +, or none)";
             (k == "panel_key" ? s.panelKey : k == "touch_key" ? s.touchKey
-                : k == "map_key" ? s.mapKey : k == "pc_key" ? s.pcKey : s.saveKey) = keys;
+                : k == "map_key" ? s.mapKey : k == "pc_key" ? s.pcKey : k == "photo_key" ? s.photoKey : s.saveKey) = keys;
         }
         else if (k == "cursor_move")
         {
@@ -513,6 +513,8 @@ namespace OneScreen
             "pc_key = none\n"
             "; Quick save through the game menu. none = off; e.g. R+Y.\n"
             "save_key = none\n"
+            "; Freeze the frame and hide plugin UI. none = off; e.g. R+Select.\n"
+            "photo_key = none\n"
             "; What moves the cursor: cstick, dpad or circlepad. dpad and circlepad still\n"
             "; reach the game as well.\n"
             "cursor_move = cstick\n"
@@ -625,6 +627,7 @@ namespace OneScreen
                           + ", map_key " + KeysToString(s.mapKey)
                           + ", pc_key " + KeysToString(s.pcKey)
                           + ", save_key " + KeysToString(s.saveKey)
+                          + ", photo_key " + KeysToString(s.photoKey)
                           + ", glyphs " + GlyphFamilyName(s.glyphs)
                           + ", cursor_move " + sources[(int)s.cursorSource]
                           + ", cursor_speed " + std::to_string(s.cursorSpeed) + "\n"

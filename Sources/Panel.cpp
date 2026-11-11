@@ -1,4 +1,5 @@
 #include "Panel.hpp"
+#include "PhotoMode.hpp"
 
 #include <cstdlib>
 
@@ -795,6 +796,7 @@ namespace OneScreen
 
     static bool PanelCallback(const Screen &screen)
     {
+        if (PhotoModeActive()) return false;
         bool drew = DrawPanel(screen);
         // Drawn after the panel so test menus sit on top, and before the
         // screenshot hook so shots include them.

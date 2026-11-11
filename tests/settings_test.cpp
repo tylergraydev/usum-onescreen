@@ -27,7 +27,7 @@ static int s_checks = 0;
 
 static bool SameSettings(const Settings &a, const Settings &b)
 {
-    return a.panelKey == b.panelKey && a.touchKey == b.touchKey && a.mapKey == b.mapKey && a.pcKey == b.pcKey && a.cursorSource == b.cursorSource
+    return a.panelKey == b.panelKey && a.touchKey == b.touchKey && a.mapKey == b.mapKey && a.pcKey == b.pcKey && a.saveKey == b.saveKey && a.photoKey == b.photoKey && a.cursorSource == b.cursorSource
         && a.cursorSpeed == b.cursorSpeed && a.panelSize == b.panelSize && a.panelCorner == b.panelCorner
         && a.instantText == b.instantText && a.battleMessages == b.battleMessages && a.battleBars == b.battleBars
         && a.filter == b.filter && a.pillarbox == b.pillarbox && a.autoPanel == b.autoPanel && a.aspect == b.aspect && a.fieldFov == b.fieldFov && a.battleLayout == b.battleLayout && a.scenes == b.scenes;

@@ -6,6 +6,7 @@ All notable changes for players are listed here. Versions follow [Semantic Versi
 
 ### Added
 
+- Photo mode: optional `[controls] photo_key` (default none), `photo on|off|status` commands and a plugin-menu entry; freezes through CTRPF, hides plugin overlays/notices, and suppresses held inputs on resume. Host checks added; runtime/emulator verification pending. Camera nudging awaits documented offsets.
 - Windows launcher: dump-to-pack library helper and generated new-hash pack.json for packs without metadata; preserved legacy metadata with warnings, and effective per-game texture-option reads. Dump/load verified live on Azahar 2126.2 (Ultra Sun, Vulkan/NVIDIA, 2026-11-09).
 
 - Windows launcher: per-game community HD texture pack ZIP library with install, switch, Off and remove; preload/async options, maker texture dumping and folder access, plus CLI equivalents. Safe ZIP validation and staged copies; no textures or game assets are bundled.

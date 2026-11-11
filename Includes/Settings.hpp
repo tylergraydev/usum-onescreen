@@ -58,6 +58,7 @@ namespace OneScreen
         uint32_t     touchKey = KeyBits::ZL;            // cursor touches while held
         uint32_t     mapKey = KeyBits::ZR;              // opens / closes the native map (Screens/Map.hpp)
         uint32_t     pcKey = 0;                         // opens the PC boxes in the field (PcAnywhere.hpp); 0 = none
+        uint32_t     photoKey = 0;                      // freeze / hide plugin UI; 0 = none
         uint32_t     saveKey = 0;                       // explicit quick save request; 0 = none
         GlyphFamily glyphs = GlyphFamily::ThreeDS;
         CursorSource cursorSource = CursorSource::CStick;
