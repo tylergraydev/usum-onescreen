@@ -1,5 +1,38 @@
 # Experimental widescreen (3D and 2D)
 
+## Panel presentation (2026-11-10)
+
+The bottom-screen corner panel and full view use CPU composition only when
+`WidescreenSqueeze() > 1`, including 16:9 and 21:9: **zero panel GX commands
+per present**. At squeeze <= 1 (including aspect 0), the original GPU paths
+remain: full 8, half 5, two-thirds 3-4 total commands. Their final top-screen
+copy alone is one command; preparation and cursor commands still count.
+
+The previous widescreen paths submitted one GX command per destination
+column in `CopyTopColumns` and `GpuFull`; both squeezed loops are removed.
+CPU picture, border and cursor use the same inverse column mapping, preserve
+corners, and submit no GX. Two-thirds keeps its true size and area filter.
+The native map remains one TextureCopy per call from an already-squeezed
+source. Other presenters have their own command counts.
+
+The user's emulator check at 21:9, `auto on`, `pokedex off`, open-pokedex
+now reaches Zukan with the panel shown and 0 unmapped reads (previously about
+5,800). Stock aspect previously passed the full regression suite. The final
+stock-GPU restoration still needs a rebuilt plugin and regression rerun.
+CPU panel drawing trades speed and potentially internal-resolution sharpness
+for safety only at widescreen; aspect 0 retains its GPU performance path.
+See [PERF.md](PERF.md) for full counts, rationale and direct host commands.
+
+Runtime verification: rebuild, repeat the exact 21:9 repro, then repeatedly
+open/close and touch-close the X menu; soak for several minutes and check
+Azahar for unmapped reads. Repeat half/two-thirds/full and all corners at
+16:9 and aspect 0, including live aspect changes back to stock. Re-run the
+ten panel-path regression failures (actions, memory-tour, native-boxes,
+native-options, native-party, native-passport-video, native-xmenu,
+open-each-app, wild-battle-run, xmenu-touch-close), plus native-map. Check
+border/cursor alignment and compare `perf` results. Host tests assert the
+true stock counts and zero widescreen panel GX; they cannot prove game timing.
+
 Ultra Sun / Ultra Moon USA v1.2 (`0x0820`) have byte-identical perspective
 builder code at `0x3631CC`:
 

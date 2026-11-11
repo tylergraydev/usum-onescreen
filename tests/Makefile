@@ -14,6 +14,14 @@ TESTS    := $(OUT)/quick_save_test $(OUT)/image_test $(OUT)/hires_test $(OUT)/ba
 
 .DEFAULT_GOAL := all
 
+TESTS += $(OUT)/panel_command_test
+
+$(OUT)/panel_host.hpp: panel_command_test.py panel_host_stubs.hpp ../Sources/Panel.cpp ../Includes/Framebuffer.hpp
+	$(PYTHON) -I panel_command_test.py --generate $@
+
+$(OUT)/panel_command_test: panel_command_test.cpp $(OUT)/panel_host.hpp $(wildcard ../Includes/UI/*.hpp) ../Includes/Settings.hpp
+	$(CXX) $(CXXFLAGS) -Wno-unused-function panel_command_test.cpp -o $@
+
 $(OUT)/hires_test: hires_test.cpp ../Sources/UI/Raster.cpp ../Sources/UI/Text.cpp ../Sources/UI/Font.cpp ../Sources/UI/Layer.cpp $(wildcard ../Includes/UI/*.hpp)
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) hires_test.cpp ../Sources/UI/Raster.cpp ../Sources/UI/Text.cpp ../Sources/UI/Font.cpp ../Sources/UI/Layer.cpp $(SETTINGS_SRCS) -o $@
@@ -183,6 +191,8 @@ $(OUT)/screen_buffer_test: screen_buffer_test.cpp ../Sources/UI/ScreenBuffer.cpp
 	$(CXX) $(CXXFLAGS) -Wno-deprecated-declarations screen_buffer_test.cpp ../Sources/UI/ScreenBuffer.cpp $(UI_SRCS) -o $@
 
 run: $(TESTS)
+	$(PYTHON) -I panel_command_test.py
+	./$(OUT)/panel_command_test
 	./$(OUT)/image_test
 	./$(OUT)/hires_test
 	./$(OUT)/band_column_test
