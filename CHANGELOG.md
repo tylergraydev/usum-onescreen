@@ -6,6 +6,7 @@ All notable changes for players are listed here. Versions follow [Semantic Versi
 
 ### Added
 
+- Compact battle foe panel with live types, caught-before marker and stat stages, plus the player's changed stages, in all three layouts.
 - Opt-in `[display] pillarbox = blur`: darkened, blurred menu-picture side bands in widescreen with the hi-res GPU overlay. Uses a box-filter pyramid instead of sparse taps to suppress horizontal streaks. Keeps one overlay GX command, reusing 21,760 bytes of existing scratch; legacy/CPU fallback uses tint. Default remains tint. Plugin build and emulator verification pending.
 
 - Quick save through the game's X/Y save flow: optional `[controls] save_key` (default none), `save` command and Quick save plugin menu entry; guarded confirmation, native notices, refusal checks and host-tested sequence. Runtime/emulator verification pending.
@@ -23,6 +24,10 @@ All notable changes for players are listed here. Versions follow [Semantic Versi
 
 ### Fixed
 
+- SOS foe info follows the last live target through record reorder and skips fainted history. Target names use the plate width, empty own-ally slots say Empty, and unavailable plates are grey with contained sub-labels. The trainer Run note now fits its pill.
+
+- SOS/Royal target screens open by their verified vtable; named target choices skip empty, fainted, self and ally slots. Known spread moves get a single confirmation.
+- Trainer Run refuses locally, Royal Bag is disabled, and forced switches survive short unknown-screen gaps. Setup-rule detection is statically traced and still needs emulator verification.
 - Battle 3D now uses the configured widescreen aspect through Battle.cro's own perspective builder, with signature checks and removal before CRO unload. Emulator comparison/reload verification pending; battle 2D squeeze/culling unchanged.
 - Bottom-screen panel/full views no longer submit hundreds of GX copies at widescreen. CPU composition is used only when squeeze > 1, preserving both sizes, borders and the touch cursor; stock aspect keeps the original GPU paths and performance, and the native map remains one copy. The user's 21:9 Pokedex repro now reaches Zukan with zero unmapped reads; the final stock-GPU restoration still needs a plugin build and regression rerun. Widescreen CPU panels may cost speed and sharpness.
 
