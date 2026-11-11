@@ -205,3 +205,117 @@ The Release launcher builds on .NET Framework 4.8. `python player/test.py` passe
 ## Single-exe regression coverage
 
 `dotnet build player/UsumOneScreen.csproj -c Release` and `python player/test.py` cover the single-exe changes using synthetic data and local `file:///` downloads only. Tests check archive and licence hash rejection, temporary-file cleanup, source fallback, embedded/adjacent/explicit plugin priority, nested game/update zips, zip-slip flattening into `games\`, reuse by size and parsed headers, and extracted ROM state. GUI setup and zip extraction run on workers so the window stays responsive. Browse, drag/drop and CLI share the extraction path. Download overrides are documented in [player/README.md](../player/README.md). Live GitHub download, interactive drag/drop and emulator execution are separate manual checks.
+
+
+## HD texture packs and texture dumping
+
+Open **Game options > Texture packs...** for the currently selected game. Install a
+player-supplied ZIP, select its name, then **Use selected**. Install does not enable
+it. Only one pack is materialised per game. **Off** disables replacements but keeps
+the last copy; **Remove** deletes the library entry and, if selected, disables and
+removes its materialised copy. Close Azahar before changes; they apply next start.
+Select the other game in setup to manage its packs independently.
+
+The launcher ships only loader/tooling, never textures or game assets. Players
+supply their own packs and must have permission to use/distribute the artwork.
+Dumped textures may contain copyrighted game assets; do not redistribute them
+without the rights holder's permission.
+
+Portable home layout (created on demand):
+
+```text
+texture-packs/<TITLEID>/<opaque pack id>/name.txt
+texture-packs/<TITLEID>/<opaque pack id>/data/   # launcher library
+azahar/user/load/textures/<TITLEID>/            # selected pack copy
+azahar/user/dump/textures/<TITLEID>/            # maker output
+azahar/user/config/qt-config.ini
+azahar/user/config/custom/<TITLEID>.ini
+```
+
+Ultra Sun uses `00040000001B5000`; Ultra Moon uses `00040000001B5100`.
+Switching stages a complete copy before renaming it into place, with rollback on
+copy/config failure. Copies avoid administrator rights and junction hazards, at
+the cost of extra disk space (library + active copy + temporary switch copy).
+The launcher owns the whole active title folder once enabled; keep edits in your
+source pack. It refuses to replace a nonempty unmanaged folder: move it aside
+first. Off retains the last pack and its hash options for makers.
+
+ZIPs may contain wrapper folders ending in a matching title-ID folder. Images
+must all be under that folder; mixed/other title IDs are refused. Without a title
+folder, the dialog asks you to confirm the game; CLI requires `--game TITLEID`.
+Flat ZIPs must place `pack.json`, if present, at their root. Names come from the
+ZIP filename and must be unique per game (case insensitive). Only lowercase
+`.png`, `.dds`, `.ktx`, optional `pack.json`, and `readme`, `readme.txt`, or
+`readme.md` are accepted. Wrapper readmes outside the title folder are ignored.
+Validation rejects traversal, absolute/device paths, links, duplicate paths,
+invalid image signatures, more than 100,000 entries, and compressed or expanded
+size over 4 GiB. It does not fully decode images or validate pack.json semantics;
+use trusted packs compatible with your Azahar version. Supplied pack.json is
+preserved byte for byte. If absent, the launcher generates Azahar's template
+options: `skip_mipmap=false`, `flip_png_files=true`, `use_new_hash=true`.
+Existing library entries without metadata receive it when enabled. The dialog
+and CLI warn that a pack is "made from legacy-hash textures" when its supplied
+metadata has `options.use_new_hash=false` or omits that option. Older packs may
+need legacy hashing; their supplied metadata is never silently converted.
+
+**Preload textures** uses additional RAM. **Async texture loading** streams in the
+background; preloading takes precedence. **Dump textures** is for pack makers and
+slows the game. **Open dump folder** creates/opens the selected game's output
+folder. Disable dumping when finished.
+
+For pack makers: dump while playing, close Azahar, then choose **Make pack from
+dump folder** and name the new library entry. It copies the selected game's
+images (including subfolders) and generates new-hash pack.json, ignoring any
+metadata in the dump. It leaves the dump unchanged and does not activate the
+pack. Select the new entry and **Use selected** to test your edited textures.
+Names, image signatures, links, entry count and expanded size use the same
+safety limits as installation. Only images are copied; other dump files are
+ignored. Azahar 2126.2 may leave the dump without pack.json because its directory
+does not exist yet when PrepareDumping attempts to write the template.
+
+```powershell
+UsumOneScreen.exe texture-pack list
+UsumOneScreen.exe texture-pack from-dump "My edited dump"
+UsumOneScreen.exe texture-pack install "My pack.zip"
+UsumOneScreen.exe texture-pack install "Flat pack.zip" --game 00040000001B5000
+UsumOneScreen.exe texture-pack use "My pack"
+UsumOneScreen.exe texture-pack off
+UsumOneScreen.exe texture-pack remove "My pack"
+UsumOneScreen.exe set preload_textures=off async_custom_loading=on dump_textures=on
+UsumOneScreen.exe set dump_textures=off
+```
+
+All commands accept `--home DIR`. Settings write `[Utility]` with
+`key\default=false` beside each value. The selected title also gets
+`key\use_global=false`; the other title's effective value is preserved before a
+global value changes, so Sun/Moon do not inherit each other's dump/pack choices.
+Azahar loads the per-game file before logging global settings and copies its
+values into qt-config.ini at boot. The launcher reads the per-game value whenever
+`key\use_global=false`; `key\default=true` or an absent overridden value means
+Azahar's default (async on, custom/preload/dump off), even if the global file
+contains a conflicting value.
+No graphics, plugin, ROM, or save settings are changed.
+
+Source references for **Azahar 2126.2**:
+[texture loader/dumper](https://github.com/azahar-emu/azahar/blob/2126.2/src/video_core/custom_textures/custom_tex_manager.cpp),
+[user path construction](https://github.com/azahar-emu/azahar/blob/2126.2/src/common/file_util.cpp),
+[directory constants](https://github.com/azahar-emu/azahar/blob/2126.2/src/common/common_paths.h), and
+[Qt settings](https://github.com/azahar-emu/azahar/blob/2126.2/src/citra_qt/configuration/config.cpp).
+The loader scans nested title folders, accepts PNG/DDS/KTX, and reads pack.json
+hash/mipmap options and filename mappings. Normal names follow
+`tex1_<width>x<height>_<hash>_<format>_mip<level>.png`; dumps use that PNG form.
+Keep dumped names or supply pack.json mappings. DDS requires mipmap skipping off.
+Without pack.json Azahar uses legacy hashes, which differ from new dump hashes;
+the launcher supplies new-hash metadata so these dumps can load correctly.
+Dumping skips sizes that are not powers of two.
+
+**Live verified on 2026-11-09** by the player: Azahar 2126.2, Ultra Sun,
+Vulkan, NVIDIA. Dumping produced 1,054 files by the field in
+`user/dump/textures/00040000001B5000/`, named
+`tex1_<w>x<h>_<hash>_<fmt>_mip0.png`, without pack.json. Loading recoloured
+textures from `user/load/textures/00040000001B5000/` worked with template
+`use_new_hash=true`; without metadata nothing was replaced and the log reported
+"using legacy defaults". Both folder paths and new-hash dump/load compatibility
+are live verified. Per-game precedence and `\default=true` forcing the default
+were also verified live. Ultra Moon, other GPUs/renderers, and arbitrary
+community-pack compatibility remain separate manual checks.

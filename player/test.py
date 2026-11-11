@@ -6,6 +6,7 @@ from pathlib import Path
 from contextlib import contextmanager
 import configparser
 import hashlib
+import json
 import math
 import os
 import zipfile
@@ -189,6 +190,231 @@ def save_manager(run, root):
     assert extdata.read_bytes() == b'not save data'
     cli(['slot', 'delete', 'Champion'])
     assert slot.exists()
+
+
+def texture_packs(run, root):
+    home = root / 'texture-manager'
+    title = f'{SUN:016X}'
+    load = home / f'azahar/user/load/textures/{title}'
+    config = home / 'azahar/user/config/qt-config.ini'
+    custom = home / f'azahar/user/config/custom/{title}.ini'
+    png = bytes.fromhex('89504e470d0a1a0a') + bytes(32)  # signature fixture, never decoded/emulated
+    tex = 'tex1_8x8_0123456789ABCDEF_0_mip0.png'
+
+    def cli(args, code=0, *messages):
+        return run([*args, '--home', home], code, *messages)
+
+    def archive(name, files):
+        path = root / (name + '.zip')
+        with zipfile.ZipFile(path, 'w', compression=zipfile.ZIP_DEFLATED) as z:
+            for name, data in files:
+                z.writestr(name, data)
+        return path
+
+    def check(key, value):
+        for path in (config, custom):
+            ini = configparser.ConfigParser(interpolation=None)
+            ini.read(path)
+            assert ini['Utility'][key] == str(value).lower()
+            assert ini['Utility'][key + r'\default'] == 'false'
+        assert ini['Utility'][key + r'\use_global'] == 'false'
+
+    config.parent.mkdir(parents=True)
+    config.write_text('[Utility]\n' + ''.join(key + '=false\n' + key + r'\default' + '=true\n'
+                      for key in ('custom_textures', 'preload_textures', 'dump_textures')) +
+                      'async_custom_loading=true\nasync_custom_loading' + r'\default' + '=true\n[Unrelated]\nkeep=42\n')
+    cli(['texture-pack', 'list'], 0, 'off')
+    pack_json = b'{"options":{"skip_mipmap":false,"flip_png_files":true,"use_new_hash":true},"textures":{}}'
+    first = archive('first', [(f'wrapper/load/textures/{title}/{tex}', png),
+                              (f'wrapper/load/textures/{title}/readme.txt', b'player supplied'),
+                              (f'wrapper/load/textures/{title}/pack.json', pack_json)])
+    second = archive('second', [(f'{title}/nested/{tex}', png + b'second')])
+    flat = archive('flat', [(tex, png)])
+    cli(['texture-pack', 'install', first], 0, 'Installed: first')
+    cli(['texture-pack', 'install', first], 1, 'already exists')
+    cli(['texture-pack', 'install', second])
+    cli(['texture-pack', 'install', flat], 1, 'No title ID')
+    cli(['texture-pack', 'install', flat, '--game', title])
+    def library_pack(name):
+        return next(p for p in (home / f'texture-packs/{title}').iterdir()
+                    if (p / 'name.txt').exists() and (p / 'name.txt').read_text() == name)
+
+    def new_hash_metadata(path):
+        metadata = json.loads(path.read_text())
+        assert metadata['options'] == dict(skip_mipmap=False, flip_png_files=True, use_new_hash=True)
+        assert metadata['author'] == 'citra' and metadata['version'] == '1.0.0'
+        assert metadata['description'] == 'A graphics pack'
+
+    new_hash_metadata(library_pack('second') / 'data/pack.json')
+    new_hash_metadata(library_pack('flat') / 'data/pack.json')
+    assert 'Warning:' not in cli(['texture-pack', 'use', 'first'])
+    # Preserved JSON is parsed structurally: misleading text must not hide a legacy flag.
+    for name, metadata in [
+        ('legacy', b'{"description":"use_new_hash true", "options":{"use_new_hash":false}}'),
+        ('missing-hash', b'{"options":{},"unrelated":{"use_new_hash":true}}'),
+        ('missing-options', b'{}'),
+    ]:
+        pack = archive(name, [(f'{title}/{tex}', png), (f'{title}/pack.json', metadata)])
+        cli(['texture-pack', 'install', pack], 0, 'made from legacy-hash textures')
+        assert (library_pack(name) / 'data/pack.json').read_bytes() == metadata
+        cli(['texture-pack', 'use', name], 0, 'made from legacy-hash textures')
+        assert (load / 'pack.json').read_bytes() == metadata
+        cli(['texture-pack', 'remove', name])
+    # A library entry installed by the previous launcher gets its metadata on Use.
+    (library_pack('flat') / 'data/pack.json').unlink()
+    cli(['texture-pack', 'use', 'flat'])
+    new_hash_metadata(load / 'pack.json')
+    cli(['texture-pack', 'remove', 'flat'])
+    cli(['texture-pack', 'install', flat, '--game', title])
+
+    dump = home / f'azahar/user/dump/textures/{title}'
+    cli(['texture-pack', 'from-dump', 'maker'], 1, 'No dumped textures')
+    dump.mkdir(parents=True)
+    cli(['texture-pack', 'from-dump', 'maker'], 1, 'No dumped textures')
+    cli(['texture-pack', 'from-dump', '../bad'], 1, 'Slot names')
+    (dump / 'nested').mkdir()
+    (dump / 'nested' / tex).write_bytes(png)
+    (dump / 'pack.json').write_bytes(b'{"options":{"use_new_hash":false}}')
+    (dump / 'ignored.log').write_bytes(b'not a texture')
+    before_dump = {str(p.relative_to(dump)): p.read_bytes() for p in dump.rglob('*') if p.is_file()}
+    before_config = config.read_bytes()
+    cli(['texture-pack', 'from-dump', 'maker'], 0, 'Created pack: maker')
+    assert config.read_bytes() == before_config and not load.exists()  # no automatic activation
+    assert {str(p.relative_to(dump)): p.read_bytes() for p in dump.rglob('*') if p.is_file()} == before_dump
+    made = library_pack('maker') / 'data'
+    assert (made / 'nested' / tex).read_bytes() == png and not (made / 'ignored.log').exists()
+    new_hash_metadata(made / 'pack.json')
+    cli(['texture-pack', 'from-dump', 'MAKER'], 1, 'already exists')
+    cli(['texture-pack', 'use', 'maker'])
+    new_hash_metadata(load / 'pack.json')
+    cli(['texture-pack', 'remove', 'maker'])
+    (dump / 'bad.png').write_bytes(b'bad image data')
+    cli(['texture-pack', 'from-dump', 'bad-maker'], 1, 'image header')
+    load.mkdir(parents=True)
+    (load / 'own.png').write_bytes(png)
+    cli(['texture-pack', 'use', 'first'], 1, 'Unmanaged')
+    assert (load / 'own.png').read_bytes() == png
+    (load / 'own.png').unlink()
+    cli(['texture-pack', 'use', 'FIRST'])
+    assert (load / tex).read_bytes() == png
+    assert (load / 'pack.json').read_bytes() == pack_json
+    check('custom_textures', True)
+    assert '[Unrelated]\nkeep=42' in config.read_text()
+    cli(['texture-pack', 'list'], 0, '* first', 'on')
+    cli(['texture-pack', 'use', 'second'])
+    assert not (load / tex).exists() and (load / 'nested' / tex).read_bytes() == png + b'second'
+    cli(['texture-pack', 'off'])
+    check('custom_textures', False)
+    assert (load / 'nested' / tex).exists()  # Off preserves the last pack, including its hash options.
+    cli(['texture-pack', 'use', 'flat'])
+    assert not (load / 'nested').exists()
+    for key in ('preload_textures', 'async_custom_loading', 'dump_textures'):
+        for value in ('on', 'off'):
+            cli(['set', key + '=' + value])
+            check(key, value == 'on')
+        before = config.read_bytes()
+        cli(['set', key + '=bogus'], 1, 'on or off')
+        assert config.read_bytes() == before
+    moon_config = home / f'azahar/user/config/custom/{MOON:016X}.ini'
+    moon = configparser.ConfigParser(interpolation=None)
+    moon.read(moon_config)
+    assert moon['Utility']['custom_textures'] == 'false'
+    assert moon['Utility']['dump_textures'] == 'false'
+    assert moon['Utility']['async_custom_loading'] == 'true'
+
+    before = (config.read_bytes(), (load / tex).read_bytes())
+    for name, path, data, message in [
+        ('slip', '../escape.png', png, 'Unsafe'),
+        ('backslash', r'..\escape.png', png, 'Unsafe'),
+        ('drive', 'C:/escape.png', png, 'Unsafe'),
+        ('ads', 'foo.png:stream', png, 'Unsafe'),
+        ('device', 'NUL.png', png, 'Unsafe'),
+        ('badfile', f'{title}/evil.exe', b'no', 'only PNG'),
+        ('badimage', f'{title}/bad.png', b'not an image' * 3, 'image header'),
+        ('wronggame', f'{MOON:016X}/{tex}', png, 'title does not match'),
+        ('unknown', '0004000000000000/' + tex, png, 'title does not match'),
+    ]:
+        bad = archive(name, [(path, data)])
+        cli(['texture-pack', 'install', bad, '--game', title], 1, message)
+        assert before == (config.read_bytes(), (load / tex).read_bytes())
+    mixed = archive('mixed', [(f'{title}/{tex}', png), (f'{MOON:016X}/{tex}', png)])
+    cli(['texture-pack', 'install', mixed], 1, 'multiple titles')
+    duplicate = archive('duplicate', [(f'{title}/{tex}', png), (f'{title}/' + tex.upper(), png)])
+    cli(['texture-pack', 'install', duplicate], 1, 'Duplicate')
+    linked = root / 'linked-texture.zip'
+    with zipfile.ZipFile(linked, 'w') as z:
+        entry = zipfile.ZipInfo(f'{title}/{tex}')
+        entry.create_system = 3
+        entry.external_attr = 0o120777 << 16
+        z.writestr(entry, b'outside')
+    cli(['texture-pack', 'install', linked], 1, 'linked')
+    # Declared expanded length exceeds 4 GiB without allocating/decompressing 4 GiB.
+    oversized = archive('oversized', [(f'{title}/large.png', png), (f'{title}/other.png', png)])
+    data = bytearray(oversized.read_bytes())
+    start = 0
+    while True:
+        start = data.find(b'PK\x01\x02', start)
+        if start < 0:
+            break
+        struct.pack_into('<I', data, start + 24, 0xFFFFFFFE)
+        start += 4
+    oversized.write_bytes(data)
+    cli(['texture-pack', 'install', oversized], 1, 'size limit')
+    assert before == (config.read_bytes(), (load / tex).read_bytes())
+    assert not list((home / 'texture-packs').rglob('pending-*'))
+    cli(['texture-pack', 'remove', 'second'])
+    assert (load / tex).exists()
+    cli(['texture-pack', 'remove', 'flat'])
+    check('custom_textures', False)
+    assert not load.exists()
+    load.write_bytes(b'obstruction')
+    before_config = config.read_bytes()
+    cli(['texture-pack', 'use', 'first'], 1)
+    assert load.read_bytes() == b'obstruction' and config.read_bytes() == before_config
+    assert not list(load.parent.glob('*.pending-*'))
+    load.unlink()
+    # Selecting Moon through the same state field Setup owns must isolate its library and load folder.
+    state = home / 'usum-onescreen-app.ini'
+    state.write_text(state.read_text() + f'\ntitle_id={MOON:016X}\n')
+    cli(['texture-pack', 'list'], 0, 'Ultra Moon', 'off')
+    cli(['texture-pack', 'use', 'first'], 1, 'not found')
+    moon_pack = archive('moon', [(f'{MOON:016X}/{tex}', png)])
+    cli(['texture-pack', 'install', moon_pack])
+    cli(['texture-pack', 'use', 'moon'])
+    assert (home / f'azahar/user/load/textures/{MOON:016X}/{tex}').exists()
+    assert not load.exists()
+    script = root / 'texture-effective-test.ps1'
+    script.write_text(r"""param($executable, $target)
+$ErrorActionPreference = 'Stop'
+$assembly = [Reflection.Assembly]::LoadFrom($executable)
+$homeType = $assembly.GetType('UsumOneScreen.Home')
+$manager = $assembly.GetType('UsumOneScreen.TexturePacks')
+$launcherHome = [Activator]::CreateInstance($homeType, @($target))
+$global = $launcherHome.ConfigPath
+$game = [IO.Path]::Combine($launcherHome.User, 'config', 'custom', '00040000001B5000.ini')
+[IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($game)) | Out-Null
+function Check($key, $globalValue, $gameLines, $expected) {
+    [IO.File]::WriteAllText($global, "[Utility]`n$key=$globalValue`n$key\default=false`n")
+    [IO.File]::WriteAllText($game, "[Utility]`n$gameLines`n")
+    $actual = $manager.GetMethod('Get').Invoke($null, @($launcherHome, $key))
+    if ($actual -ne $expected) { throw "Incorrect effective value: $key, $gameLines (got $actual)" }
+}
+foreach ($key in @('custom_textures', 'dump_textures', 'preload_textures', 'async_custom_loading')) {
+    $default = $key -eq 'async_custom_loading'
+    Check $key 'true' "$key\use_global=false`n$key=false`n$key\default=false" $false
+    Check $key 'false' "$key\use_global=false`n$key=true`n$key\default=false" $true
+    Check $key 'true' "$key\use_global=false`n$key=true`n$key\default=true" $default
+    Check $key 'false' "$key\use_global=false`n$key=false`n$key\default=true" $default
+    Check $key 'true' "$key\use_global=false" $default
+    Check $key 'false' "$key\use_global=true`n$key=true`n$key\default=false" $false
+    Check $key 'true' "$key=false`n$key\default=false" $true
+}
+""")
+    result = subprocess.run(['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass',
+                             '-File', str(script), str(EXE), str(root / 'texture-effective')],
+                            capture_output=True, encoding='utf-8', timeout=30)
+    assert result.returncode == 0, result.stdout + result.stderr
+    print('PASS: new-hash metadata generation/preservation and legacy warnings, dump-to-library flow, effective per-game/default reads; texture config/default flags, per-game isolation, install/path/type/link/size validation, staged switches, unmanaged refusal, Off, remove and dump/preload/async toggles.')
 
 
 def update_checks(root, executable):
@@ -864,6 +1090,7 @@ try {
         run(['backup', '--home', options], 0, 'No save yet')
         assert not (options / f'backups/{MOON:016X}').exists()
         save_manager(run, root)
+        texture_packs(run, root)
     print('PASS: named slots, validation, safety backup failure/retention/isolation, ZIP round trips and title/path/link refusal; save discovery/retention/restore/isolation; graphics keep/presets; cheat resources, code preservation and mutual exclusion; controller vendor/fallback mapping; options ini readback and DPI layout; battle/speed writes; validation, cross-game rejection, title state/paths, bundled source priority and immutability, installed-update checks, fallback source; offline pinned download and hash refusal; zip classification, traversal safety, reuse and state; embedded/adjacent/explicit plugin priority; widescreen choices, Auto thresholds, custom UI preservation, comment retention, invalid-value immutability, stretch sync, stale-state preservation, numeric-zero/bad-value handling and per-game cleanup.')
 
 
