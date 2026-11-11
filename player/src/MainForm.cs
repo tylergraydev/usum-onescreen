@@ -74,6 +74,7 @@ namespace UsumOneScreen
 
             EnableDrops(this);
             LoadValues();
+            UpdateCheck.Attach(this, home);
         }
 
         // --- layout ---
