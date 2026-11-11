@@ -31,8 +31,13 @@ by one shadow-state restore:
 |---|---|---|
 | 0 MenuSlot | BattleScreen, XMenu, Party/summary, Bag, Boxes menu, Pokedex, SubScreens (Options/Passport/Video), Keyboard, Map, ThemeScreen, UI demo | Primary pages share ScreenBuffer's exclusive owner; a new owner invalidates the old Layer |
 | 1 RotomSlot | Rotom field prompt or ready badge | Independent of primary menu and Map |
-| 2 BadgeSlot | Boxes details badge | Separate from Boxes menu, even though current UI alternates them |
+| 2 BadgeSlot | Boxes details badge / Battle foe info | Separate from primary menu; Boxes and Battle scenes are mutually exclusive |
 | 3 MoveLearnSlot | MoveLearn Choose/Confirm/Working/Done | Separate from battle menu, drawn last |
+
+Battle foe info uses BadgeSlot only on the Command page; Boxes and Battle are
+mutually exclusive scenes. Its 154x112 logical rectangle is 385x280 at 2.5x,
+with a separate 68,992-byte static fallback buffer. The primary menu keeps its
+existing rectangle and slot. Both layers redraw on content changes only.
 
 Layer tracks its owning object per slot: an inactive screen cannot Hide another
 screen's quad, and an old layer cannot Present staging overwritten by a new owner.

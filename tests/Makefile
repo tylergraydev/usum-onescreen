@@ -186,7 +186,7 @@ $(OUT)/ui_host_test: ui_host_test.cpp $(UI_SRCS) $(UI_HDRS)
 BATTLE_SRCS := $(addprefix ../Sources/Screens/,BattleMenu.cpp BattleMenuDraw.cpp PartyMenu.cpp) ../Sources/ActionQueue.cpp $(THEME_SRCS)
 BATTLE_PREVIEW := ../analysis/private
 
-$(OUT)/battle_menu_test: battle_menu_test.cpp $(BATTLE_SRCS) ../Includes/Screens/BattleMenu.hpp ../Includes/Screens/PartyMenu.hpp ../Includes/Layouts.hpp $(UI_SRCS) $(UI_HDRS)
+$(OUT)/battle_menu_test: battle_menu_test.cpp $(BATTLE_SRCS) ../Includes/Screens/BattleMenu.hpp ../Includes/BattleRules.hpp ../Includes/Screens/PartyMenu.hpp ../Includes/Layouts.hpp $(UI_SRCS) $(UI_HDRS)
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) battle_menu_test.cpp $(BATTLE_SRCS) $(UI_SRCS) -o $@
 
