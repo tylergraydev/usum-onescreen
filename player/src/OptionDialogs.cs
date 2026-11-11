@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
@@ -152,6 +152,88 @@ namespace UsumOneScreen
                 Guard(owner, Refresh); form.ShowDialog(owner);
             }
         }
+        public static void ShowTextures(Form owner, Home home)
+        {
+            using (var form = Dialog("Texture packs - " + home.GameName))
+            {
+                form.Size = new Size(760, 520); form.MinimumSize = new Size(620, 460);
+                var root = Root(form);
+                root.Controls.Add(new Label { AutoSize = true, Dock = DockStyle.Fill,
+                    Text = "Players supply their own packs. Close Azahar before changing options; changes apply next start.\nPreloading uses additional RAM. Dumping textures slows the game." });
+                var list = new ListBox { Dock = DockStyle.Fill, IntegralHeight = false };
+                root.Controls.Add(list);
+                var bottom = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
+                var status = new Label { AutoSize = true };
+                var preload = new CheckBox { Text = "Preload textures (uses RAM)", AutoSize = true };
+                var asyncLoad = new CheckBox { Text = "Async texture loading (preloading takes precedence)", AutoSize = true };
+                var dump = new CheckBox { Text = "Dump textures for pack makers (slows the game)", AutoSize = true };
+                bool refreshing = false;
+                void Warn(string name)
+                {
+                    string warning = TexturePacks.Warning(home, name);
+                    if (warning != null) MessageBox.Show(form, warning, "Texture pack", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+                list.SelectedIndexChanged += (s, e) => { if (!refreshing && list.SelectedItem != null) Guard(form, () => Warn((string)list.SelectedItem)); };
+                void Refresh()
+                {
+                    refreshing = true;
+                    try
+                    {
+                        list.Items.Clear();
+                        foreach (string pack in TexturePacks.List(home)) list.Items.Add(TexturePacks.Name(pack));
+                        status.Text = "Custom textures: " + (TexturePacks.Get(home, "custom_textures") ? "On" : "Off") +
+                            "; selected: " + (TexturePacks.List(home).Where(p => Path.GetFileName(p) == TexturePacks.Active(home)).Select(TexturePacks.Name).FirstOrDefault() ?? "none");
+                        preload.Checked = TexturePacks.Get(home, "preload_textures");
+                        asyncLoad.Checked = TexturePacks.Get(home, "async_custom_loading");
+                        dump.Checked = TexturePacks.Get(home, "dump_textures");
+                    }
+                    finally { refreshing = false; }
+                }
+                void Toggle(CheckBox box, string key)
+                {
+                    box.CheckedChanged += (s, e) =>
+                    {
+                        if (refreshing) return;
+                        Guard(form, () => TexturePacks.Set(home, key, box.Checked));
+                        Guard(form, Refresh);
+                    };
+                }
+                Toggle(preload, "preload_textures"); Toggle(asyncLoad, "async_custom_loading"); Toggle(dump, "dump_textures");
+                bottom.Controls.Add(status); bottom.Controls.Add(preload); bottom.Controls.Add(asyncLoad); bottom.Controls.Add(dump);
+                var buttons = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, WrapContents = true, MaximumSize = new Size(700, 0) };
+                buttons.Controls.Add(Button("Install ZIP", () =>
+                {
+                    using (var picker = new OpenFileDialog { Filter = "Texture pack (*.zip)|*.zip" })
+                    {
+                        if (picker.ShowDialog(form) != DialogResult.OK) return;
+                        // Explicitly ask the game for unlabelled packs; labelled packs are still validated.
+                        if (MessageBox.Show(form, "Install for " + home.GameName + " (" + Dump.Title(home.CurrentTitle) + ")? A different title ID in the ZIP will be refused.",
+                            "Confirm pack game", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+                        string installed = TexturePacks.Install(home, picker.FileName, Dump.Title(home.CurrentTitle)); Refresh(); Warn(installed);
+                    }
+                }));
+                buttons.Controls.Add(Button("Make pack from dump folder", () =>
+                {
+                    string name = AskName(form, "Name pack from dump folder");
+                    if (name != null) { TexturePacks.FromDump(home, name); Refresh(); }
+                }));
+                buttons.Controls.Add(Button("Use selected", () => { if (list.SelectedItem != null) { string name = (string)list.SelectedItem; TexturePacks.Use(home, name); Refresh(); Warn(name); } }));
+                buttons.Controls.Add(Button("Off", () => { TexturePacks.Off(home); Refresh(); }));
+                buttons.Controls.Add(Button("Remove", () =>
+                {
+                    if (list.SelectedItem != null && MessageBox.Show(form, "Remove " + list.SelectedItem + "?", "Remove pack", MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Warning) == DialogResult.Yes) { TexturePacks.Remove(home, (string)list.SelectedItem); Refresh(); }
+                }));
+                buttons.Controls.Add(Button("Open dump folder", () =>
+                {
+                    string folder = TexturePacks.DumpFolder(home); Backups.Safe(home, folder); Directory.CreateDirectory(folder);
+                    Process.Start(new ProcessStartInfo(folder) { UseShellExecute = true });
+                }));
+                buttons.Controls.Add(Button("Close", () => form.Close())); bottom.Controls.Add(buttons); root.Controls.Add(bottom);
+                Guard(owner, Refresh); form.ShowDialog(owner);
+            }
+        }
+
         public static void ShowCheats(Form owner, Home home)
         {
             using (var form = Dialog(home.GameName + " cheats"))
