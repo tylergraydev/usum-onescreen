@@ -417,10 +417,158 @@ foreach ($key in @('custom_textures', 'dump_textures', 'preload_textures', 'asyn
     print('PASS: new-hash metadata generation/preservation and legacy warnings, dump-to-library flow, effective per-game/default reads; texture config/default flags, per-game isolation, install/path/type/link/size validation, staged switches, unmanaged refusal, Off, remove and dump/preload/async toggles.')
 
 
+def update_checks(root, executable):
+    # Compile a tiny managed PE with a synthetic embedded plugin: no release/game files needed.
+    fixture_dir = root / 'update-fixture'
+    fixture_dir.mkdir()
+    (fixture_dir / 'plugin.bin').write_bytes(b'new embedded plugin')
+    (fixture_dir / 'fixture.cs').write_text('public class Fixture { public static void Main() {} }')
+    script = root / 'update-tests.ps1'
+    script.write_text(r'''param($executable, $target)
+$ErrorActionPreference = 'Stop'
+$fixture = Join-Path $target 'update-fixture'
+$compiler = New-Object Microsoft.CSharp.CSharpCodeProvider
+$options = New-Object System.CodeDom.Compiler.CompilerParameters
+$options.GenerateExecutable = $true
+$options.OutputAssembly = Join-Path $fixture 'UsumOneScreen.exe'
+$options.CompilerOptions = "/resource:$(Join-Path $fixture 'plugin.bin'),UsumOneScreen.Plugin"
+$compiled = $compiler.CompileAssemblyFromFile($options, (Join-Path $fixture 'fixture.cs'))
+if ($compiled.Errors.HasErrors) { throw ($compiled.Errors | Out-String) }
+Add-Type -ReferencedAssemblies System.Web.Extensions,System.IO.Compression,System.IO.Compression.FileSystem -TypeDefinition @'
+using System;
+using System.IO;
+using System.IO.Compression;
+using System.Net;
+using System.Reflection;
+using System.Text;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.Security.Cryptography;
+using System.Web.Script.Serialization;
+public static class UpdateRegression {
+    static Type type, homeType, releaseType;
+    static int requests;
+    static string json;
+    static Dictionary<string, byte[]> downloads = new Dictionary<string, byte[]>();
+    static object Call(string method, params object[] args) { return type.GetMethod(method).Invoke(null, args); }
+    static void Assert(bool ok, string message) { if (!ok) throw new Exception(message); }
+    static object Home(string path) { return Activator.CreateInstance(homeType, new object[] { path }); }
+    static void Set(object home, string key, string value) { homeType.GetMethod("SetState").Invoke(home, new object[] { key, value }); }
+    static byte[] Fetch(string url) { requests++; return Encoding.UTF8.GetBytes(json); }
+    static object Check(object home, bool manual, DateTime now, Func<string, byte[]> fetch) {
+        var task = (Task)Call("Check", home, manual, now, fetch);
+        task.GetAwaiter().GetResult();
+        return task.GetType().GetProperty("Result").GetValue(task, null);
+    }
+    static object Release(object result) { return result.GetType().GetField("Release").GetValue(result); }
+    static string Message(object result) { return (string)result.GetType().GetField("Message").GetValue(result); }
+    static object MakeRelease(string name, byte[] bytes, bool checksum) {
+        downloads.Clear(); downloads["https://test/asset"] = bytes;
+        string hash;
+        using (var sha = SHA256.Create()) hash = BitConverter.ToString(sha.ComputeHash(bytes)).Replace("-", "");
+        downloads["https://test/checksum"] = Encoding.UTF8.GetBytes(hash + "  " + name + "\n");
+        var assets = new List<object> { new { name = name, size = bytes.Length, browser_download_url = "https://test/asset" } };
+        if (checksum) assets.Add(new { name = "SHA256SUMS", size = downloads["https://test/checksum"].Length, browser_download_url = "https://test/checksum" });
+        return new JavaScriptSerializer().Deserialize(new JavaScriptSerializer().Serialize(new { tag_name = "v999.0.0", assets = assets }), releaseType);
+    }
+    static void Refused(Action action, string label) {
+        bool failed = false; try { action(); } catch { failed = true; }
+        Assert(failed, "Expected refusal: " + label);
+    }
+    public static void Run(string executable, string root) {
+        var assembly = Assembly.LoadFile(executable);
+        type = assembly.GetType("UsumOneScreen.UpdateCheck"); homeType = assembly.GetType("UsumOneScreen.Home");
+        releaseType = type.GetNestedType("Release");
+        foreach (var pair in new[] { new[] { "v0.1.2", "0.1.1" }, new[] { "v1.0.0", "0.99.99" }, new[] { "v0.10.0+build", "0.9.99" }, new[] { "999999999999999999.0.0", "1.0.0" } })
+            Assert((bool)Call("Newer", pair[0], pair[1]), "Version order");
+        foreach (var candidate in new[] { "v0.1.1", "v0.1.0", "v0.1.2-beta.1", "v00.2.0", "v0.2", "bad" })
+            Assert(!(bool)Call("Newer", candidate, "0.1.1"), "Invalid/older/prerelease tag: " + candidate);
+        var now = new DateTime(2026, 11, 9, 12, 0, 0, DateTimeKind.Utc);
+        Assert((bool)Call("Due", null, now), "First check due");
+        Assert(!(bool)Call("Due", now.AddHours(-23).ToString("o"), now), "24h throttle");
+        Assert((bool)Call("Due", now.AddDays(-1).ToString("o"), now), "24h boundary");
+        Assert(!(bool)Call("Due", now.AddDays(1).ToString("o"), now), "Future clock is throttled");
+        var home = Home(Path.Combine(root, "update-home"));
+        json = "{\"tag_name\":\"v999.0.0\",\"assets\":[]}";
+        Assert(Release(Check(home, false, now, Fetch)) != null && requests == 1, "New release");
+        Assert(Release(Check(home, false, now.AddHours(23), Fetch)) == null && requests == 1, "No repeated request");
+        Set(home, "update_skip_version", "999.0.0+ignored");
+        Assert(Release(Check(home, false, now.AddDays(1), Fetch)) == null && requests == 2, "Skip normalized version");
+        Assert(Release(Check(home, true, now.AddDays(1), Fetch)) != null && requests == 3, "Manual bypasses skip/throttle");
+        foreach (string flag in new[] { "draft", "prerelease" }) {
+            json = "{\"tag_name\":\"v999.0.0\",\"" + flag + "\":true}";
+            Assert(Release(Check(home, true, now, Fetch)) == null, "Ignore " + flag);
+        }
+        foreach (string failure in new[] { "404 Not Found", "403 Forbidden", "network unavailable" }) {
+            int attempts = 0;
+            Func<string, byte[]> fail = url => { attempts++; throw new WebException(failure); };
+            Assert(Message(Check(home, true, now, fail)) == "Couldn't check for updates.", "Quiet " + failure);
+            Check(home, false, now.AddHours(1), fail);
+            Assert(attempts == 1, "Failed checks are throttled");
+        }
+        json = "not json";
+        Assert(Message(Check(home, true, now, Fetch)) == "Couldn't check for updates.", "Malformed API response");
+        byte[] exe = File.ReadAllBytes(Path.Combine(root, "update-fixture", "UsumOneScreen.exe"));
+        string target = Path.Combine(root, "update-target.exe");
+        File.WriteAllText(target, "old launcher");
+        Func<string, byte[]> download = url => downloads[url];
+        object release = MakeRelease("UsumOneScreen-v999.0.0.exe", exe, true);
+        Call("Stage", release, target, download);
+        Assert(File.ReadAllText(target) == "old launcher", "Stage preserves running launcher");
+        File.Delete(target + ".update-new");
+        downloads["https://test/asset"][100] ^= 1;
+        Refused(() => Call("Stage", release, target, download), "checksum mismatch");
+        Assert(!File.Exists(target + ".update-new"), "Failed validation leaves no stage");
+        exe = File.ReadAllBytes(Path.Combine(root, "update-fixture", "UsumOneScreen.exe"));
+        release = MakeRelease("UsumOneScreen-v999.0.0.exe", exe, false);
+        downloads["https://test/asset"] = new byte[1];
+        Refused(() => Call("Stage", release, target, download), "truncated download");
+        release = MakeRelease("UsumOneScreen-v999.0.0.exe", new byte[100], false);
+        Refused(() => Call("Stage", release, target, download), "invalid PE");
+        release = MakeRelease("UsumOneScreen-v999.0.0.exe", File.ReadAllBytes(executable), false);
+        // Source builds may lack a resource; a valid PE without the plugin must be refused.
+        if (assembly.GetManifestResourceStream("UsumOneScreen.Plugin") == null)
+            Refused(() => Call("Stage", release, target, download), "missing embedded plugin");
+        using (var stream = new MemoryStream()) {
+            using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, true))
+            using (var output = zip.CreateEntry("nested/UsumOneScreen.exe").Open()) output.Write(exe, 0, exe.Length);
+            release = MakeRelease("usum-onescreen-v999.0.0-windows.zip", stream.ToArray(), true);
+        }
+        Call("Stage", release, target, download);
+        string adjacent = Path.Combine(root, "usum-onescreen.3gx");
+        File.WriteAllText(adjacent, "old adjacent");
+        string installed = Path.Combine(root, "update-home", "azahar", "user", "sdmc", "luma", "plugins", "00040000001B5000", "usum-onescreen.3gx");
+        Directory.CreateDirectory(Path.GetDirectoryName(installed)); File.WriteAllText(installed, "old installed");
+        using (var locked = new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.Read))
+            Refused(() => Call("Swap", target, home), "locked target rollback");
+        Assert(File.ReadAllText(adjacent) == "old adjacent" && File.ReadAllText(installed) == "old installed", "Plugin rollback");
+        Assert(File.ReadAllText(target) == "old launcher", "Launcher rollback");
+        Call("Swap", target, home);
+        Assert(Convert.ToBase64String(File.ReadAllBytes(target)) == Convert.ToBase64String(exe), "Launcher swapped");
+        Assert(File.ReadAllText(adjacent) == "new embedded plugin" && File.ReadAllText(installed) == "new embedded plugin", "Plugin matches launcher");
+        Assert(!File.Exists(target + ".update-new") && !File.Exists(target + ".update-old"), "Swap cleanup");
+        File.WriteAllBytes(target + ".update-new", new byte[64]);
+        Refused(() => Call("Swap", target, home), "invalid staged PE");
+        Assert(Convert.ToBase64String(File.ReadAllBytes(target)) == Convert.ToBase64String(exe), "Invalid stage preserves live exe");
+        Console.WriteLine("PASS: update versions, daily throttle, skip/manual override, quiet failures, asset size/hash/PE/plugin verification, ZIP, staging, swap and plugin rollback.");
+    }
+}
+'@
+try { [UpdateRegression]::Run($executable, $target) }
+catch { [Console]::Error.WriteLine($_.Exception.ToString()); exit 1 }
+''')
+    result = subprocess.run(['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass',
+                             '-File', str(script), str(executable), str(root)],
+                            capture_output=True, encoding='utf-8', timeout=60)
+    assert result.returncode == 0, result.stdout + result.stderr
+    print(result.stdout.strip())
+
+
 def main():
     if not EXE.exists():
         raise SystemExit('Build player/UsumOneScreen.csproj in Release first.')
     with workspace() as root:
+        update_checks(root, EXE)
         app = root / 'app'
         app.mkdir()
         exe = app / EXE.name
@@ -889,6 +1037,8 @@ try {
     $ini = $assembly.GetType('UsumOneScreen.PluginIni').GetMethod('Load').Invoke($null, @($launcherHome.PluginIniPath))
     $detected = $assembly.GetType('UsumOneScreen.Win32').GetMethod('DetectGlyphs').Invoke($null, @($launcherHome.CurrentControls()))
     if ($ini.Get('glyphs') -ne $detected) { throw 'Auto did not refresh at Play' }
+    # Keep layout verification offline; updater requests are covered by injected fetchers above.
+    $launcherHome.SetState('update_last_check', [DateTime]::UtcNow.ToString('o'))
     $form.Show()
     [Windows.Forms.Application]::DoEvents()
     foreach ($scale in @(1.0, 1.5)) {

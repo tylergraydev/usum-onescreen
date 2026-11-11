@@ -138,6 +138,9 @@ send press down 120
 sleep 4
 expect-log ^pokedex: list alola ([2-9][0-9]|1[01][0-9]|12[0-5])/126 5
 shot list-scrolled
+# The held Down can outlast the sleep; a B pressed together with it is ignored.
+send release down
+sleep 1
 mark
 send press b
 expect-log ^pokedex: top cursor alola 10

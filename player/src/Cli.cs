@@ -36,6 +36,7 @@ namespace UsumOneScreen
   set preload_textures=on|off async_custom_loading=on|off dump_textures=on|off
                          preload uses RAM; dumping slows the game
   status                 show the setup
+  check-update           check for a newer stable launcher (does not install)
   snapshot PNG           draw the window into PNG and exit (for tests)
 
 --home DIR uses DIR instead of the app's folder for Azahar and the settings.";
@@ -60,6 +61,10 @@ namespace UsumOneScreen
                 list.RemoveAt(0);
                 switch (command)
                 {
+                    case "check-update":
+                        Leftover(list);
+                        Console.WriteLine(UpdateCheck.Check(home, true, DateTime.UtcNow).GetAwaiter().GetResult().Message);
+                        return 0;
                     case "check": return Check(home, list);
                     case "setup": return SetupCommand(home, list);
                     case "play": return Play(home, list);
