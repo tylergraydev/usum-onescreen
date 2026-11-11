@@ -14,6 +14,8 @@ TESTS    := $(OUT)/photo_mode_test $(OUT)/quick_save_test $(OUT)/image_test $(OU
 
 .DEFAULT_GOAL := all
 
+TESTS += $(OUT)/ride_pager_test
+RIDE_PAGER_PREVIEW := $(OUT)/ride-pager-preview.ppm
 TESTS += $(OUT)/blur_test $(OUT)/filter_test
 
 $(OUT)/filter_test: filter_test.cpp ../Sources/Settings.cpp ../Sources/SettingsFile.cpp ../Includes/Settings.hpp ../Includes/SettingsFile.hpp
@@ -185,6 +187,10 @@ $(OUT)/rotom_prompt_test: rotom_prompt_test.cpp $(ROTOM_SRCS) ../Includes/Screen
 THEME_SRCS := $(addprefix ../Sources/UI/,GameAssets.cpp Theme.cpp ThemeDemo.cpp) ../Sources/RomfsText.cpp ../Sources/PartyData.cpp
 THEME_PREVIEW := ../analysis/private
 
+$(OUT)/ride_pager_test: ride_pager_test.cpp ../Sources/Screens/RidePager.cpp ../Includes/Screens/RidePager.hpp ../Sources/Screens/NativeScreen.cpp ../Sources/ActionQueue.cpp ../Includes/Layouts.hpp $(THEME_SRCS) $(UI_SRCS) $(UI_HDRS)
+	@mkdir -p $(OUT)
+	$(CXX) $(CXXFLAGS) ride_pager_test.cpp ../Sources/Screens/RidePager.cpp ../Sources/Screens/NativeScreen.cpp ../Sources/ActionQueue.cpp $(THEME_SRCS) $(UI_SRCS) -o $@
+
 $(OUT)/theme_test: theme_test.cpp $(THEME_SRCS) ../Includes/RomfsText.hpp ../Includes/PartyData.hpp $(UI_SRCS) $(UI_HDRS)
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) theme_test.cpp $(THEME_SRCS) $(UI_SRCS) -o $@
@@ -229,6 +235,7 @@ $(OUT)/side_panels_test: side_panels_test.cpp $(SIDE_PANEL_SRCS) ../Includes/Sid
 	$(CXX) $(CXXFLAGS) side_panels_test.cpp $(SIDE_PANEL_SRCS) -o $@
 
 run: $(TESTS)
+	./$(OUT)/ride_pager_test $(RIDE_PAGER_PREVIEW)
 	./$(OUT)/photo_mode_test
 	./$(OUT)/festival_plaza_test $(OUT)
 	./$(OUT)/filter_test

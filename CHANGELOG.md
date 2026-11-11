@@ -6,6 +6,7 @@ All notable changes for players are listed here. Versions follow [Semantic Versi
 
 ### Added
 
+- Native top-screen Ride Pager: follows the game's Y menu, shows usable/current/registered rides, selects with Up/Down and A/Y, and closes with B. Field D-pad shortcuts stay with the game; fixed English labels and no registration controls yet. Emulator verification pending.
 - Photo mode: optional `[controls] photo_key` (default none), `photo on|off|status` commands and a plugin-menu entry; freezes through CTRPF, hides plugin overlays/notices, and suppresses held inputs on resume. Host checks added; runtime/emulator verification pending. Camera nudging awaits documented offsets.
 - Windows launcher: dump-to-pack library helper and generated new-hash pack.json for packs without metadata; preserved legacy metadata with warnings, and effective per-game texture-option reads. Dump/load verified live on Azahar 2126.2 (Ultra Sun, Vulkan/NVIDIA, 2026-11-09).
 

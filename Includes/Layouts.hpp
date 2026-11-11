@@ -22,6 +22,21 @@ namespace OneScreen
 
     static const LayoutButton LayoutButtons[] =
     {
+        { "ride_pager.row_0", 59, 1, 313, 28, 180, 15, LayoutVerified::Tap },
+        { "ride_pager.plus_0", 31, 2, 56, 27, 44, 15, LayoutVerified::Measured },
+        { "ride_pager.row_1", 59, 31, 313, 58, 180, 45, LayoutVerified::Measured },
+        { "ride_pager.plus_1", 31, 32, 56, 57, 44, 45, LayoutVerified::Measured },
+        { "ride_pager.row_2", 59, 61, 313, 88, 180, 75, LayoutVerified::Measured },
+        { "ride_pager.plus_2", 31, 62, 56, 87, 44, 75, LayoutVerified::Measured },
+        { "ride_pager.row_3", 59, 91, 313, 118, 180, 105, LayoutVerified::Tap },
+        { "ride_pager.plus_3", 31, 92, 56, 117, 44, 105, LayoutVerified::Tap },
+        { "ride_pager.row_4", 59, 121, 313, 148, 180, 135, LayoutVerified::Measured },
+        { "ride_pager.plus_4", 31, 122, 56, 147, 44, 135, LayoutVerified::Measured },
+        { "ride_pager.row_5", 59, 151, 313, 178, 180, 165, LayoutVerified::Measured },
+        { "ride_pager.plus_5", 31, 152, 56, 177, 44, 165, LayoutVerified::Measured },
+        { "ride_pager.row_6", 59, 181, 313, 208, 180, 195, LayoutVerified::Tap },
+        { "ride_pager.plus_6", 31, 182, 56, 207, 44, 195, LayoutVerified::Measured },
+        { "ride_pager.back", 0, 205, 28, 239, 14, 224, LayoutVerified::Tap },
         { "pelago.previous", 6, 100, 26, 140, 16, 120, LayoutVerified::Tap },
         { "pelago.next", 294, 100, 314, 140, 303, 120, LayoutVerified::Tap },
         { "pelago.mohn", 288, 210, 319, 238, 300, 222, LayoutVerified::Tap },
