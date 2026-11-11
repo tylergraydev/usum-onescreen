@@ -32,7 +32,7 @@ namespace OneScreen
     bool ParseSidePanelMode(const std::string &value, SidePanelMode &out);
     const char *SidePanelModeName(SidePanelMode mode);
 
-    enum class Pillarbox : uint8_t { Tint, Pattern, Off };
+    enum class Pillarbox : uint8_t { Tint, Pattern, Off, Blur };
     enum class PanelSize : uint8_t { Half, TwoThirds };
     enum class PanelCorner : uint8_t { BottomRight, BottomLeft, TopRight, TopLeft };
     // Native battle menu look ([battle] layout): Classic is the original
@@ -59,6 +59,7 @@ namespace OneScreen
         bool         autoPanel = false;                // native menus first; the panel is a fallback
         Pillarbox    pillarbox = Pillarbox::Tint;
         SidePanelMode sidePanels = SidePanelMode::Off;
+        float        fieldFov = 1.0f;                  // overworld fovy multiplier, 0.8..1.5
         float        aspect = 0.0f;                    // 0: original camera defaults
         BattleLayout battleLayout = BattleLayout::Classic;
         bool         instantText = false;
@@ -91,6 +92,10 @@ namespace OneScreen
     // names, unknown keys and bad values skipped. Anything skipped is added to
     // `warnings` as "line N: ...". Missing keys keep their defaults.
     Settings ParseSettings(const std::string &text, std::vector<std::string> &warnings);
+
+    // Shared by [display] field_fov and the live command.
+    // Finite 0.8..1.5 inclusive; invalid input leaves out unchanged.
+    bool ParseFieldFov(const std::string &value, float &out);
 
     // Shared by [display] aspect and the live command. 0/off, positive finite
     // floats, 16:9 and 21:9; invalid input leaves out unchanged.
