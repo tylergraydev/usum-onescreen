@@ -6,6 +6,7 @@ All notable changes for players are listed here. Versions follow [Semantic Versi
 
 ### Added
 
+- Experimental optional side panels: `[display] side_panels = off|battle|field|both` and live `panels` (default off). Battle builds stock 5:3 with clip-X scaling and solid full-height margins; left has compact party rows, right the known client-1 foe. Existing top HUD squeeze gains a bounded overflow fit. Field remains a party overlay. Uses existing 2.5x atlas slots, smaller 1x caches and no extra GX pass; fresh emulator verification pending. See `docs/SIDE-PANELS.md`.
 - Experimental idle-overworld FOV multiplier: `[display] field_fov` (0.8?1.5, default 1.0), live `fov <scale>|status` and rewrite counter. Excludes busy field states and other scenes; distance unchanged. Host-tested; emulator and frame-transition verification pending.
 - Native Poke Pelago isle bar: L/R switch isles, Start opens Mohn, and B leaves through the guarded Back/Yes/A flow. `action close` shares that exit and closes the returned X menu. Isle touch play stays with the game. Isle detection uses six arrow-glyph pixels verified across all five isles, avoiding scenery-dependent bar disappearance. The exit recognises the captured dimmed-isle goodbye and holds brief Ask-probe misses; Yes/A remain single inputs. Automated exit emulator recheck pending.
 - Compact battle foe panel with live types, caught-before marker and stat stages, plus the player's changed stages, in all three layouts.
