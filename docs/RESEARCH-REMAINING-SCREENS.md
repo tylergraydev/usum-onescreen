@@ -324,6 +324,78 @@ walkable plaza (inferred from `docs/XMENU.md`, not observed: auto was off).
 Not looked at: the castle's front desk and plaza facilities (talking to staff,
 on the top screen like any field talk).
 
+### Native hub bar implementation (backlog #11)
+
+Implemented `Screens/FestivalPlaza.*`: a 392 x 24 strip at top-screen
+(4,216), leaving every pixel above y=216 untouched. L opens Pokemon (labelled
+"Party" to fit), R Bag, Start Profile, B Leave. These send the measured taps
+(187,213), (229,213), (145,213), (16,223). Only these four keys are captured on
+a stable hub; D-pad, circle pad, A and touch remain game controls. There are
+no held-key repeats or queued bar inputs. Party/Bag use the existing native
+screens; Profile, player lists, Battle/Trade/link menus and facilities stay
+with the game. L+R retains the panel fallback and yields until this hub visit
+ends. Unknown views hide the strip and release the panel override; automatic
+view resumes its configured policy (with auto off, use the manual panel).
+No online or wireless action was added. `action close` has no Plaza override;
+B on this bar is the supported native exit.
+
+Detection combines FieldRo with a scene-stack responder owned by
+JoinFestaSubScreen, resolved by CRO name rather than its captured address.
+Bottom pixels must then match three consecutive observations before the
+hub can draw or take keys. A mismatch releases hub keys immediately.
+
+Capture calibration: PNGs read **read-only** with Python/Pillow from
+`analysis/private/research/remaining-screens/` (the local
+worktree has no private captures). `rs-fp1-bottom.png` and
+`rs-fp-walk-bottom.png` have identical values at all chosen hub points:
+(40,113) = (229,55,14), (280,113) = (47,212,229), (103,203) = (255,238,68),
+(145,203) = (238,136,255), (187,203) = (136,221,0). These are button interiors
+and icon colours, not plaza scenery, text or connection-banner wording.
+Every point is required, within 20 per RGB channel.
+
+`rs-fp-quit-bottom.png` supplies the quit guard: (40,113)/(280,113) =
+(51,167,255), (40,124)/(280,124) = (113,187,253), (5,8)/(5,38) = (78,64,32).
+All six points must match within 20; the dark message border distinguishes
+Quit from the Battle/Trade pill at the same height. Negative controls read
+and sampled: `rs-fp-battle`, `rs-fp-trade`, `rs-fp-link`, `rs-fp-list`,
+`rs-fp-prof2` (all `-bottom.png`); all reject both Hub and Quit. Real RGB
+fixtures are in `tests/festival_plaza_samples.hpp`; private PNGs are not copied.
+
+Exit: guarded Back once -> wait up to 240 frames for Quit -> settle 20 frames
+-> guarded tap (160,118) **once** (the observed equivalent of Y) -> wait up to
+1200 frames for FieldRo, state **0**, with the Plaza responder gone. FieldRo
+alone cannot prove exit because it stays active throughout Plaza. The action
+observer runs independently of the bar; Quit needs three matches, allowing
+unknown gaps of up to six bottom observations, then holds for at most six
+missing observations. A recognised hub clears Quit immediately. CRO loss
+resets the observer. No confirmation retries; cancellation or failed guards
+return control through the existing runner. An already-open quit prompt is
+left to the game, never automatically confirmed by the bar.
+
+Host verification: `powershell -NoProfile -ExecutionPolicy Bypass -File
+tests/run_festival_plaza.ps1` compiles directly with MSVC (no make/WSL), runs
+capture-backed detection/tolerance/negative tests, key/tap and refusal tests,
+probe flicker/expiry tests, and the real runner's successful/flickering,
+missing/changed/expired prompt, CRO/scene loss, stuck exit, cancellation,
+still-in-Plaza and FieldRo-without-walking-state cases. Confirms at most one
+Quit input. It also runs the existing Pelago, native-screen and action-queue
+regressions and generated-layout check. `-FocusedOnly` runs only the Plaza
+suite plus layout check. `tests/Makefile` includes the new suite.
+`tests/build/festival-plaza-1x.ppm` and `festival-plaza-2.5x.ppm` preview the
+strip; the actual hi-res Layer lifecycle and untouched upper pixels are
+checked. Direct devkitARM `-fsyntax-only` passed on FestivalPlaza.cpp,
+SubScreens.cpp and Actions.cpp; no linked plugin build was run.
+
+**Live calibration remains required.** Captures establish colours at two
+hub moments, not all animations, text languages, first visits or facility
+dialogues. On USA v1.2 English, enter Plaza with auto view on/off, walk, test
+L/R/Start and return, check the bar is absent in all submenus, test L+R full
+fallback, B exit/re-entry, cancellation and timeout. Confirm the observed
+CRO responder lifetime through Quit, field state 0 on return, exactly one
+Back/Quit touch, prompt flicker tolerance and an unobstructed walkable plaza.
+Castle/facilities, Link Trade, online menus and non-empty lists remain
+unverified; this implementation does not expand that research scope.
+
 ## QR Scanner
 
 - X menu page 2 → QR Scanner (230,48 on `lrtoggle`). Seen in the logs: plugin
