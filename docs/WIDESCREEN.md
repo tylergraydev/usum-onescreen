@@ -1,5 +1,38 @@
 # Experimental widescreen (3D and 2D)
 
+## Panel presentation (2026-11-10)
+
+The bottom-screen corner panel and full view use CPU composition only when
+`WidescreenSqueeze() > 1`, including 16:9 and 21:9: **zero panel GX commands
+per present**. At squeeze <= 1 (including aspect 0), the original GPU paths
+remain: full 8, half 5, two-thirds 3-4 total commands. Their final top-screen
+copy alone is one command; preparation and cursor commands still count.
+
+The previous widescreen paths submitted one GX command per destination
+column in `CopyTopColumns` and `GpuFull`; both squeezed loops are removed.
+CPU picture, border and cursor use the same inverse column mapping, preserve
+corners, and submit no GX. Two-thirds keeps its true size and area filter.
+The native map remains one TextureCopy per call from an already-squeezed
+source. Other presenters have their own command counts.
+
+The user's emulator check at 21:9, `auto on`, `pokedex off`, open-pokedex
+now reaches Zukan with the panel shown and 0 unmapped reads (previously about
+5,800). Stock aspect previously passed the full regression suite. The final
+stock-GPU restoration still needs a rebuilt plugin and regression rerun.
+CPU panel drawing trades speed and potentially internal-resolution sharpness
+for safety only at widescreen; aspect 0 retains its GPU performance path.
+See [PERF.md](PERF.md) for full counts, rationale and direct host commands.
+
+Runtime verification: rebuild, repeat the exact 21:9 repro, then repeatedly
+open/close and touch-close the X menu; soak for several minutes and check
+Azahar for unmapped reads. Repeat half/two-thirds/full and all corners at
+16:9 and aspect 0, including live aspect changes back to stock. Re-run the
+ten panel-path regression failures (actions, memory-tour, native-boxes,
+native-options, native-party, native-passport-video, native-xmenu,
+open-each-app, wild-battle-run, xmenu-touch-close), plus native-map. Check
+border/cursor alignment and compare `perf` results. Host tests assert the
+true stock counts and zero widescreen panel GX; they cannot prove game timing.
+
 Ultra Sun / Ultra Moon USA v1.2 (`0x0820`) have byte-identical perspective
 builder code at `0x3631CC`:
 
@@ -9,11 +42,11 @@ void Perspective(Matrix34or44 *out, u32 pivot,
 ```
 
 The game uses hard-float: `out` / `pivot` arrive in `r0` / `r1`, and the four
-floats in `s0`â€“`s3`. Pivot is screen rotation (0â€“4). The builder computes
+floats in `s0`Ã¢â‚¬â€œ`s3`. Pivot is screen rotation (0Ã¢â‚¬â€œ4). The builder computes
 cot(fovy/2) and divides by aspect at `0x3632C4`. Its only known callers are
 `0x4C1FF0`, `0x4C2094`, and `0x4C20E4` in camera update/blend code.
 
-The plugin installs two CTRPF MITM hooks at startup, alongside the input hooks,
+The plugin installs two graphics MITM hooks plus the CRO unload guard at startup, alongside the input hooks,
 after game detection and hook verification. It logs
 `widescreen: perspective hook at 003631CC -> N` (`0` = success).
 With a nonzero active aspect, incoming aspects within 0.001 of 400/240
@@ -27,6 +60,174 @@ Like `Buttons.cpp`, it uses `Hook::InitializeForMitm` and `Enable`, then calls
 The installed CTRPF header's void overload obtains `GetCallCode()` and invokes
 it through a typed function pointer, preserving float argument types. Runtime
 validation of the MITM path with these VFP arguments is still needed.
+
+## Battle 3D (#27; emulator verification pending)
+
+Battle.cro has a separate perspective builder at header-relative `+0x736D0`.
+`BattleWidescreen.cpp` follows FastText's scene-manager -> scene -> vtable ->
+`CroModuleOf` / `CroModuleName` discovery path, checking the loaded `FIXD`
+header and `Battle` name afresh each frame. It checks `E92D4030 E1A05001`
+at the entry and `EEC01AA9` at `+0x73774` before installing a second MITM
+instance with the **aspect-only `PerspectiveHook` callback**. This shares the existing
+`[display] aspect`, 400/240 +/-0.001 filter, hard-float forwarding and rewrite
+counter. No battle hook is installed at aspect off or stock 5:3. Other aspect
+changes use the live value on subsequent calls. Installation is frame-driven,
+so the first battle initialization projections can precede installation; the
+per-frame battle camera setter rebuilds them afterwards.
+
+### CRO lifetime
+
+Frame polling cannot safely notice an unload after it happens: CTRPF
+`Disable()` unconditionally writes the saved instruction to its target.
+Before allowing a battle hook, startup verifies **all 17 words**, including
+instructions and literals, in the main-image SDK unload IPC wrapper
+`0x17376C..0x1737AC`, then hooks its entry. The wrapper sends command
+`0x000500C2`; its caller at `0x1732C0` puts the CRO header base in r1.
+The checked bytes match the local Sun and Moon v1.2 code.bin files.
+
+The pre-unload callback removes a matching battle hook **before calling the
+original SDK wrapper**, while its target is still mapped. The same mutex
+covers frame discovery/install/remove and the entire unload IPC. Frames use
+TryLock and skip work during unload. Unrelated CRO unloads leave Battle alone.
+The callback forwards all four integer arguments and the Result, allocates
+and logs nothing, and defers its removal counter log to a frame. A failed
+Disable vetoes the unload with an error Result rather than forwarding it with
+a live target. A missing/mismatched unload signature or failed guard hook
+leaves battle widening disabled.
+
+Enable/Disable write the Battle.cro target without touching page permissions.
+Do not add `Process::ProtectMemory` here: on Battle.cro's text (RX, AliasCode)
+it made Azahar's ldr:ro refuse the next LoadCRO at battle start ("CRO original
+buffer is in invalid state", Bag.cro) and the game spun in its fatal handler
+at 0x3FD518. CTRPF's hook writes succeed on that RX page in Azahar as-is
+(unverified on hardware).
+
+Scene changes and aspect off/stock also remove the battle hook while mapped;
+the unload guard covers unloads occurring between frames. A retiring base is
+suppressed until polling sees a different module (including no Battle), so
+stale scene pointers during SDK cleanup cannot reinstall into freed memory.
+Then a fresh signature check/Enable handles another battle at either the same
+or a different base. If an entire out/in transition at the same base is missed
+by polling, widening stays suppressed until a scene transition is observed.
+The hook object is reused only after Disable; no abandoned hooks accumulate.
+This relies on the game's CRO unloads using the checked SDK wrapper; confirm
+the removal log and repeat-battle stability in Azahar.
+
+### Hook capacity
+
+There were seven plugin-owned hooks: Buttons (1), Cursor (1), PcAnywhere (1),
+Widescreen (2), GpuQuad (2). This adds one permanent pre-unload hook and at
+most one battle hook: **nine plugin-owned enabled hooks at maximum** (some
+existing hooks are optional). CTRPF owns additional hooks, including OSD,
+CRO-load and shared-memory mapping; tools/Action Replay can add more.
+
+The installed `Hook.hpp` comment says 91, but the inspected HookManager source
+defines `MAX_HOOKS = 0x1000 / sizeof(HookWrapper)`, with three 32-bit fields:
+**341 slots**. Disassembly of the installed `libctrpf.a` confirms the
+`0x155` limit and 12-byte wrapper indexing in DisableHook. Slots are freed
+by DisableHook and reused by GetFreeAsmWrapper/GetFreeHookWrapper. Capacity
+does not decrease per battle. Enable failures, including TooManyHooks, are
+reported and leave the battle hook inactive.
+
+### Verification and remaining scope
+
+Host coverage: `tests/battle_widescreen_test.cpp`, part of `tests/Makefile`.
+It checks all entry/divide and unload-wrapper signature words, unreadable
+memory, address alignment/overflow, load/unload ordering, stale scenes,
+same/different-base reload, unrelated unload, aspect toggling, and failure
+paths. Fake removal asserts that its target is still mapped.
+
+For the plugin build/full suite and Azahar checks, use 21:9 and compare the
+same wild-battle camera pose against aspect off. Expect more scenery and
+narrower models in the raw 400x240 picture. Check startup
+`CRO pre-unload hook ... -> 0`, per-battle `perspective +736D0 -> 0`, growing
+`aspect` rewrite count, and `battle hook removed before CRO unload` on exit.
+Enter/leave twice in a row, then repeat at stock/off and on Moon. Also test
+aspect changes mid-battle, running, trainer battles and battle effects.
+
+SequencePlayer.cro's separate builder at `+0xE860` is intentionally untouched;
+investigate it if sequences still stretch. **No 2D template squeeze or 30%
+pane-cull behavior changes here.** Full-screen battle layouts and edge-pane
+culling remain follow-ups, as do finite stage/effect edges and possible
+frustum-culling pops exposed by the wider projection. See
+[the research notes](RESEARCH-BATTLE-WIDESCREEN.md).
+
+## Overworld field of view (#28; emulator verification pending)
+
+`[display] field_fov = 1.0` is a vertical-angle multiplier, inclusive range
+0.8?1.5. The default 1.0 preserves the incoming fovy exactly; values above
+one show more scenery, values below one zoom in. Boot and settings reload
+apply it on the next plugin frame. Invalid INI values warn and retain the
+previous valid value (or default 1.0). `fov 1.2` changes session settings;
+`fov status` (or `fov`) logs the requested scale, the currently published
+scale (1 when gated off), and a u32 count of changed fovy calls since boot.
+Invalid commands retain the current scale; commands do not write the INI.
+
+Only the code.bin perspective hook applies FOV. Battle.cro retains the
+aspect-only callback, independently of scene publication, and SequencePlayer's
+separate perspective builder remains untouched. The original incoming aspect
+must match top-screen 400/240 within 0.001, even when aspect rewriting is off.
+We multiply fovy before forwarding all six arguments through the existing
+hard-float path. The aspect override stays independent: the builder computes
+vertical cot(fovy/2), then horizontal cot(fovy/2)/aspect, so both axes use the
+same scaled angle. Nonfinite/nonpositive fovy or a result outside (0, pi)
+radians passes through without scaling. Near/far and camera data are unchanged.
+
+`WidescreenFrame` obtains the supported game's scene-manager address captured
+by `StartWidescreen`, samples `ReadPcWorld` afresh each frame, and publishes
+one lock-free atomic float. Eligibility requires FieldRo, known state 0
+(walking/standing), no script/event, no Festival Plaza, no plugin action or
+pending PC request, and no native map. Unknown states, menus, talking,
+encounter startup, battle, Refresh, TownMap and other scenes fail closed.
+This deliberately excludes scripted field cameras as well as SequencePlayer.
+The hook only reads that scalar and increments a lock-free atomic counter;
+it never resolves a CRO, scans a scene, locks, allocates or logs.
+
+**Distance is out of scope.** The identified camera offsets cover near, far,
+fovy and aspect only. No verified camera-distance field is documented; no
+address is guessed or patched.
+
+Verify in Azahar on Sun and Moon: compare the same idle outdoor/indoor camera
+at `fov 1`, `fov 0.8`, `fov 1.2` and `fov 1.5`, first with `aspect off`, then
+16:9 and 21:9. Query status twice while walking: the FOV counter should grow
+only at a non-stock scale on eligible calls. Check X menu, dialogue, scripts,
+SequencePlayer cutscenes, Refresh, map and battle (including repeated entry
+and exit); their calls must not increase that counter. Repeat with INI boot
+and reload, and ensure `fov 1` restores stock framing without resetting counts.
+
+Host coverage is `tests/field_fov_test.cpp` (parse/range/defaults, scene/event/map
+policy and combined projection math), plus the existing settings and battle
+lifetime tests. From `tests/`, the direct MSVC commands used were:
+
+```bat
+cl /nologo /std:c++17 /EHsc /W4 /WX /I ../Includes field_fov_test.cpp ../Sources/Settings.cpp ../Sources/SettingsFile.cpp /Fe:build/field_fov_test.exe /Fo:build/
+build\field_fov_test.exe
+cl /nologo /std:c++17 /EHsc /W4 /WX /I ../Includes settings_test.cpp ../Sources/Settings.cpp ../Sources/SettingsFile.cpp /Fe:build/settings_test.exe /Fo:build/
+build\settings_test.exe
+cl /nologo /std:c++17 /EHsc /W4 /WX /I ../Includes settings_file_test.cpp ../Sources/Settings.cpp ../Sources/SettingsFile.cpp /Fe:build/settings_file_test.exe /Fo:build/
+build\settings_file_test.exe
+cl /nologo /std:c++17 /EHsc /W4 /WX /I ../Includes battle_widescreen_test.cpp /Fe:build/battle_widescreen_test.exe /Fo:build/battle_widescreen_test.obj
+build\battle_widescreen_test.exe
+```
+
+The compiler environment was initialized with Visual Studio 2022 BuildTools'
+`VC/Auxiliary/Build/vcvars64.bat`. No make or WSL was used. ARM syntax checking
+also passed with this exact PowerShell command from the repo root:
+
+```powershell
+& C:/devkitPro/devkitARM/bin/arm-none-eabi-g++.exe -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft -Os -mword-relocations -fomit-frame-pointer -ffunction-sections -fdata-sections -fno-strict-aliasing -Wall -Werror -D__3DS__ -fno-rtti -fno-exceptions -std=gnu++17 -I Includes -I C:/devkitPro/libctrpf/include -I C:/devkitPro/libctru/include -fsyntax-only Sources/Widescreen.cpp Sources/Settings.cpp Sources/main.cpp
+```
+
+This is not a linked plugin build or emulator validation.
+
+Wider FOV can reveal culling/pop-in, missing geometry and scene-anchored UI
+placement problems. Publication is frame sampled, so a scene/menu/event/map
+transition between samples can retain the last scale until the next plugin
+frame; runtime checks must establish whether that transient is visible.
+Separate battle/SequencePlayer builders remain protected regardless. Strict
+instantaneous gating for every shared code.bin caller would require verified
+camera ownership or additional transition integration; it is not established
+by the known camera offsets.
 
 ## Camera findings
 
@@ -117,7 +318,7 @@ Before either write, both templates' type and all six floats are checked by
 bits: only a stock horizontal pair or the exact pair last successfully written
 to that template is accepted; all other fields must be stock. A mismatch or
 unreadable word logs `widescreen: 2d templates MISMATCH ...; no writes`.
-Success logs `widescreen: 2d templates 0x5C3180 0x5E8468 left/right ±N`.
+Success logs `widescreen: 2d templates 0x5C3180 0x5E8468 left/right Â±N`.
 A failed Patch logs `PATCH FAILED` and may leave a partial update; the aspect
 and native presentation still change. Successful writes are tracked per template.
 
@@ -229,7 +430,7 @@ the picture shows unsqueezed (wider than the rest of the game's 2D);
 Audit of native top output:
 
 - Layer presentation covers X menu, party, bag, boxes and its badge, keyboard,
-  Pokédex, battle menu, move learning, map, Rotom prompts/badge, theme preview,
+  PokÃ©dex, battle menu, move learning, map, Rotom prompts/badge, theme preview,
   and SubScreens (including options and the other native replacement screens).
   Their selection cursors are drawn into the layers and squeeze with them.
 - The UI demo also uses Layer; `uidemo direct` uses the layer while k > 1 so
@@ -264,13 +465,27 @@ aspect = 21:9
 pillarbox = tint
 ```
 
-`pillarbox` accepts `tint` (default), `pattern`, or `off`, case-insensitively.
+`pillarbox` accepts `tint` (default), `pattern`, `blur`, or `off`, case-insensitively.
 It applies at boot and on settings reload, including menus already open.
 Tint is an opaque dark olive, half the native `Theme::WindowFill` colour
 (`#2B2A19`), with a three-destination-column gradient towards the menu.
 It never samples or blends with the game's framebuffer. Pattern adds subtle
 diagonal stripes (eight-column/row repeat, only three RGB levels brighter)
 on the same base. Off leaves the game's scene visible in the side bands.
+
+Blur fills the sides with a stretched, blurred, half-bright copy of the native
+menu's picture. A dense first filter and three 2x2 box reductions build an 8x8
+texture before stretching it: five render passes share one GX command list.
+GX commands remain 1 per hi-res present (zero added); Map still has its existing
+separate copy. The pyramid uses 21,760 bytes of existing diagnostic scratch,
+with zero new buffer allocation or plugin heap use. The same atlas snapshot
+supplies the bands and sharp centre; there is no game framebuffer readback.
+The host high-detail reference, including 5x intermediate targets, limits adjacent
+band changes to five luminance levels (measured 1-2). The prior sparse taps showed
+horizontal streaks in emulator tests; the replacement still needs Party/Bag/Boxes
+review at 21:9/5x. `hires off` and CPU/legacy fallback use tint instead.
+See [GPUQUAD.md](GPUQUAD.md) for exact budgets and checks. Default remains tint;
+enable with `pillarbox = blur` and reload.
 
 Only top-screen layers containing the standard full-screen inset
 `{12, 8, 376, 224}` qualify, and only with squeeze greater than one.
@@ -335,11 +550,12 @@ GPU vertices apply the continuous x=200 squeeze; glyph layout is unchanged.
 Nearest-scaled pixel sprites and bilinear smooth art retain their original size.
 
 Hi-res pillarbox bands sample the twelve WriteBandColumn phases reserved at
-atlas x=1012..1023. Pattern repeats eight phases; Tint stretches phase8; edge
+atlas x=1012..1023 for Tint/Pattern. Pattern repeats eight phases; Tint stretches phase8; edge
 columns use11,10,9 outward from the menu. BandRuns uses destination coordinates
 without squeezing them again, nearest filtering for bands and bilinear for menus.
 Bands and up to four menu quads use one list/state restore: one overlay GX command,
-no hi-res CPU framebuffer writes. Off emits no bands. Original eligibility,
+no hi-res CPU framebuffer writes. Blur uses the filtered 8x8 picture described above instead
+of these phases. Off emits no bands. Original eligibility,
 SourceColumn boundaries and fallback CPU/LayerGpu behavior remain unchanged.
 
 Map's hi-res skip window is alpha0 in the layer texture. The target overlay is
@@ -395,3 +611,17 @@ need closing/reopening after a live change; templates do not rewrite them.
 Pane culling and one-frame debug capture remain to be validated in-game.
 The aspect tolerance identifies top-screen calls by value rather
 than camera identity; any other camera using that same aspect will also match.
+
+## Optional side panels
+
+`[display] side_panels = off|battle|field|both` defaults to off; `panels <mode>`
+changes it live. Battle keeps its perspective hook installed: the dedicated
+callback builds stock 5:3 then scales clip X by 1/k. Full-height opaque side
+panels mask the peripheral scene, leaving a centred stock-proportioned picture.
+Left shows your party, right client 1 record 0. Field remains a party overlay.
+Existing top 2D templates still squeeze by 1/k; a bounded post-recursion fit
+keeps small decorative overflow inside +/-200 for matching 400x240 RootPane
+layouts. No extra 1/k is applied to those panes. `aspect` reports HUD root/fit
+counters. See [Side panels](SIDE-PANELS.md) for exact predicates, exclusions,
+GPU/memory costs and verification. Live aspect changes still require recreating
+old layout environments; panel-mode changes do not.
