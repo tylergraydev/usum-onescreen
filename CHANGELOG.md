@@ -6,6 +6,7 @@ All notable changes for players are listed here. Versions follow [Semantic Versi
 
 ### Added
 
+- Native Poke Pelago isle bar: L/R switch isles, Start opens Mohn, and B leaves through the guarded Back/Yes/A flow. `action close` shares that exit and closes the returned X menu. Isle touch play stays with the game. Isle detection uses six arrow-glyph pixels verified across all five isles, avoiding scenery-dependent bar disappearance. The exit recognises the captured dimmed-isle goodbye and holds brief Ask-probe misses; Yes/A remain single inputs. Automated exit emulator recheck pending.
 - Compact battle foe panel with live types, caught-before marker and stat stages, plus the player's changed stages, in all three layouts.
 - Opt-in `[display] pillarbox = blur`: darkened, blurred menu-picture side bands in widescreen with the hi-res GPU overlay. Uses a box-filter pyramid instead of sparse taps to suppress horizontal streaks. Keeps one overlay GX command, reusing 21,760 bytes of existing scratch; legacy/CPU fallback uses tint. Default remains tint. Plugin build and emulator verification pending.
 

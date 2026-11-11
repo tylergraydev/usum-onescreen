@@ -12,6 +12,7 @@
 #include "Scene.hpp"
 #include "QuickSave.hpp"
 #include "Screens/MoveLearn.hpp"
+#include "Screens/Pelago.hpp"
 
 namespace OneScreen
 {
@@ -84,8 +85,61 @@ namespace OneScreen
         return Near(r, p.r) && Near(g, p.g) && Near(b, p.b);
     }
 
+    // Independently sampled even with native screens disabled: action close
+    // must use the same guards. Ask briefly holds through missing samples;
+    // recognised changes invalidate it immediately.
+    static Mutex s_pelagoLock;
+    static u32 s_pelagoBottom = 0, s_pelagoTop = 0;
+    static bool s_pelagoWatching = false;
+    static PelagoBottomProbe s_pelagoBottomProbe;
+    static u32 s_pelagoTopCandidate = 0, s_pelagoTopHits = 0;
+
+    static void WatchPelago(u32 sceneManager, const std::string &scene)
+    {
+        const bool pelago = PelagoDetected(sceneManager, scene);
+        s_pelagoLock.Lock();
+        if (pelago != s_pelagoWatching)
+        {
+            s_pelagoWatching = pelago;
+            s_pelagoBottom = s_pelagoTop = 0;
+            s_pelagoBottomProbe = PelagoBottomProbe{};
+            s_pelagoTopHits = 0;
+        }
+        s_pelagoLock.Unlock();
+    }
+
+    static void SamplePelago(const Screen &screen)
+    {
+        if (s_pelagoLock.TryLock()) return; // never block the drawing thread
+        if (!s_pelagoWatching)
+        {
+            s_pelagoBottom = s_pelagoTop = 0;
+            s_pelagoBottomProbe = PelagoBottomProbe{};
+            s_pelagoTopHits = 0;
+            s_pelagoLock.Unlock();
+            return;
+        }
+        const FbLayout fb = GetLayout(screen);
+        const auto &points = screen.IsTop ? PelagoMessagePoints() : PelagoSamplePoints();
+        Sample samples[PelagoBottomSampleCount];
+        for (u32 i = 0; i < points.size(); ++i)
+            DecodePixel(fb.origin + points[i].x * fb.stepX + points[i].y * fb.stepY,
+                        fb.format, samples[i].r, samples[i].g, samples[i].b);
+        if (screen.IsTop)
+        {
+            const u32 flags = PelagoMessage(samples) ? WorldPelagoMessage : 0;
+            s_pelagoTopHits = flags == s_pelagoTopCandidate ? (s_pelagoTopHits < 3 ? s_pelagoTopHits + 1 : 3) : 1;
+            s_pelagoTopCandidate = flags;
+            s_pelagoTop = s_pelagoTopHits >= 3 ? flags : 0;
+        }
+        else
+            s_pelagoBottom = s_pelagoBottomProbe.Update(PelagoBottomFlags(samples));
+        s_pelagoLock.Unlock();
+    }
+
     static bool ActionsOnScreen(const Screen &screen)
     {
+        SamplePelago(screen);
         if (screen.IsTop)
             return false;
         const FbLayout fb = GetLayout(screen);
@@ -130,6 +184,10 @@ namespace OneScreen
             if (s_world.scene == SceneBattle)
                 s_world.flags |= MoveLearnWorldFlags(sceneManager);
         }
+        WatchPelago(sceneManager, s_world.scene);
+        s_pelagoLock.Lock();
+        s_world.flags = (s_world.flags & ~WorldPelagoMask) | (s_pelagoWatching ? s_pelagoBottom | s_pelagoTop : 0);
+        s_pelagoLock.Unlock();
         s_world.flags = (s_world.flags & ~(WorldXMenu | WorldXMenuPage2 | WorldPartyList)) | ActionProbeFlags();
         const u32 save = WorldSaveAsk | WorldSaveDone | WorldSaveIdle;
         s_world.flags = (s_world.flags & ~save) | QuickSaveWorldFlags(sceneManager);
@@ -154,6 +212,9 @@ namespace OneScreen
                              : (world.flags & WorldBoxModal) ? ", box modal"
                              : (world.flags & WorldBoxCarrying) ? ", box carrying" : "")
                + ((world.flags & WorldPartyList) ? ", party list" : "")
+               + ((world.flags & WorldPelagoIsle) ? ", pelago isle" : (world.flags & WorldPelagoAsk) ? ", pelago ask"
+                  : (world.flags & WorldPelagoClear) ? ", pelago dimmed goodbye" : "")
+               + ((world.flags & WorldPelagoMessage) ? ", pelago top message" : "")
                + ((world.flags & WorldLearnAsk) ? ", learn ask" : (world.flags & WorldLearnList) ? ", learn list"
                   : (world.flags & WorldLearnConfirm) ? ", learn confirm" : "");
     }
@@ -182,6 +243,7 @@ namespace OneScreen
         s_frames++;
         if (!s_runner.Running())
         {
+            if (s_frames % 15 == 0) WatchPelago(sceneManager, SceneModule(sceneManager));
             if (s_capturing)
                 EndCapture();
             return;
@@ -237,7 +299,9 @@ namespace OneScreen
             return false;
         }
         ReadWorld(sceneManager, true);
-        if (!s_runner.Start(def, s_world, log))
+        const ActionDef &selected = std::string(def.name) == "close" && s_world.scene == PelagoScene
+                                    ? PelagoLeaveAction(true) : def;
+        if (!s_runner.Start(selected, s_world, log))
             return false;
         s_startFrame = s_frames;
         if (!s_capturing)

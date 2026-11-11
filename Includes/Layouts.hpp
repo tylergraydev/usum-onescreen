@@ -22,6 +22,11 @@ namespace OneScreen
 
     static const LayoutButton LayoutButtons[] =
     {
+        { "pelago.previous", 6, 100, 26, 140, 16, 120, LayoutVerified::Tap },
+        { "pelago.next", 294, 100, 314, 140, 303, 120, LayoutVerified::Tap },
+        { "pelago.mohn", 288, 210, 319, 238, 300, 222, LayoutVerified::Tap },
+        { "pelago.back", 0, 214, 33, 239, 16, 223, LayoutVerified::Tap },
+        { "pelago.yes", 16, 78, 303, 104, 160, 92, LayoutVerified::Tap },
         { "field.rotom_face", 113, 0, 207, 89, 160, 35, LayoutVerified::Tap },
         { "field.map", 29, 84, 290, 231, 160, 100, LayoutVerified::Tap },
         { "field.rotom_eye_left", 56, 17, 116, 80, 86, 48, LayoutVerified::Tap },
