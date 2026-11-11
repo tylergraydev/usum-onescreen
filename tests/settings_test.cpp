@@ -374,15 +374,19 @@ static void TestPillarbox(void)
     CHECK(Settings{}.pillarbox == Pillarbox::Tint);
     for (const auto &entry : { std::make_pair("TiNt", Pillarbox::Tint),
                               std::make_pair("PATTERN", Pillarbox::Pattern),
+                              std::make_pair("BlUr", Pillarbox::Blur),
                               std::make_pair("off", Pillarbox::Off) })
     {
         const Settings s = Parse(std::string("[display]\npillarbox = ") + entry.first, warnings);
         CHECK(warnings.empty());
         CHECK(s.pillarbox == entry.second);
         CHECK(DescribeSettings(s).find(std::string("pillarbox ") +
-              (entry.second == Pillarbox::Tint ? "tint" : entry.second == Pillarbox::Pattern ? "pattern" : "off")) != std::string::npos);
+              (entry.second == Pillarbox::Tint ? "tint" : entry.second == Pillarbox::Pattern ? "pattern" :
+               entry.second == Pillarbox::Blur ? "blur" : "off")) != std::string::npos);
     }
     CHECK(Parse("[display]\npillarbox = transparent", warnings).pillarbox == Pillarbox::Tint);
+    CHECK(warnings.size() == 1);
+    CHECK(Parse("[display]\npillarbox = blur\npillarbox = invalid", warnings).pillarbox == Pillarbox::Blur);
     CHECK(warnings.size() == 1);
     CHECK(Parse("[display]\npillarbox = pattern\npillarbox = invalid", warnings).pillarbox == Pillarbox::Pattern);
     CHECK(warnings.size() == 1);

@@ -58,8 +58,8 @@ Log lines: `battle-ui: page command, cursor 0 of 4 (Fight)`, `battle-ui: page mo
 
 ## Not done / not verified
 
-- **Target choice**: single battles never show a target screen (RE5), and no double battle is reachable from the test save. An SOS ally (1 vs 2) would need one; W7-1 hunted for an SOS call on Route 2 without one coming. What is built: the screen's layout from the game's files (`docs/OFFSETS.md`, `battle_target` in the layouts, measured only), and a native target page (`BattlePage::Target`) that takes any unknown game screen appearing within 120 frames of a move being sent for the target choice: the four buttons as the game lays them out (top left ... bottom right; which row is which side is not known), D-pad and A, B back. Its taps are measured, not verified, so the action layer would refuse them: A and B say *Not tried in the game yet: use the bottom screen* and the panel (L+R) is the way through. Host-tested only (`TestTarget`). To finish it: reach a double or SOS battle, check the screen, tap each button once, mark them `tap` in `layouts/usum-v1.2.json`, and read the battlers of the other clients to name the targets.
-- **Trainer battles** were not played: none is reachable from the start points (`title`, `pokecenter`, `grass`, `pc`; Route 2's trainers in this save were not located). `battle-flee` is written for Run's refusal and host-tested against a fake; unverified in the game.
+- **Targets**: SOS/Royal taps and mappings are now backed by the 2026-11-07 research (see below). True trainer doubles remain unverified.
+- **Trainer/Royal rules**: the setup path and Run-refusal classifier were traced statically in this change; live validation is still required. No message-ID polling is used.
 - Not used natively: Rotom Powers and Battle Items were opened but not used (Use is the same tap; whether they ask for a Pokémon was not seen), Status Restore items (same flow as HP/PP), PP items (Ether asks for a move: not handled), the Pokémon page's *Restore* and *Summary*, the Y quick ball.
 - Illusion (RE1): the menu would name Zorua, not its disguise.
 - Z-moves and Mega Evolution: not present in the test save.
@@ -176,3 +176,193 @@ Check in Azahar on Sun and Moon:
   `-isystem` (CTRPF itself emits unused-parameter warnings under `-Wextra`).
   This is not a linked plugin build. Layout generation check, synthetic
   signature tests and `git diff --check` passed. No emulator was run.
+
+## Foe info and multi-foe corrections (#3 / #4)
+
+On Command, a separate 154x112 panel at (8,40) shows a live client 1 foe's
+species, current unique types, `[Caught]` for a previously caught wild species,
+and non-neutral stages. `You:` shows the player's non-neutral stages. All
+seven stages fit, with word wrapping; neutral/invalid bytes are omitted.
+In SOS it follows the target cursor's last live foe by record address, including
+when that record moves within the list. If it faints, the first live record is
+used; HP-zero history is skipped, and with no live foe the panel hides. One foe
+at a time keeps all seven stages readable in the existing panel, without
+covering either HP box. The selected foe's caught bit follows its species too.
+The panel ends at y152, left of every command layout, below the opponent HP
+box and above the player HP box. It hides on Moves, Target and playback.
+It uses BadgeSlot (Boxes cannot be open in battle), with an 68,992-byte static
+fallback buffer; MenuSlot is unchanged. DrawBattleInfo uses 400x240 coordinates
+and the existing 2.5x Layer path. Its displayed-value key invalidates both the
+snapshot handoff and its layer only when contents change. Original command,
+move and description rectangles are unchanged.
+
+Data sources: read-only `H:/SunnyMoon/analysis/private/research/foe-info.md`
+and `trainer-double.md`. Types/stages come from the playback-synchronized
+battler record, not base species data. Caught uses the native Pokedex's checked
+SaveData/Zukan path. The panel intentionally exposes the real species/types
+under Illusion. Roost/Burn Up type removal and changed types in live play
+remain unverified. Client 1 is the Royal opponent on bottom-right, not all foes.
+
+The target page is selected explicitly by Battle CRO vtable `+0x10B848`, even
+when no native move was recently sent. The old unknown-screen/120-frame guess
+is removed, so an intro or another unknown screen cannot become a target page.
+SOS TL=c1/r1 (helper), TR=c1/r0 (original), BL=c0/r0 (self), BR=c0/r1 (ally).
+Royal TL=c3/r0, TR=c2/r0, BL=c0/r0, BR=c1/r0. Only live opponents can be
+selected: empty, fainted, self and ally plates are unavailable.
+
+Target names use the plate width minus 4px padding per side, with the cursor
+above the name instead of reserving the shared row's 22px side insets. Game
+Small text is measured first, with compact 5x7 fallback for long names. This
+uses logical screen widths at both 1x and 2.5x. Self, empty and fainted plates
+have grey fills and dim text; `Self` / `Unavailable` occupy a separate compact
+line inside the border. A fainted occupied slot keeps its name. SOS's bottom
+right slot is explicitly empty even when own client record 1 holds a healthy
+benched Pokemon; single trainer battles apply the same own-ally restriction.
+The cursor starts on the first live foe and rechecks the chosen slot before tapping. A disappearing
+foe cancels the goal. A sends one target confirmation, without automatic retries;
+B uses the verified back tap. True-double second active records follow the SOS
+mapping **by inference**; true multi battles are not supported by this mapping.
+Unknown rules and unrecognized four-client team battles suppress target taps;
+use the configured panel key to choose on the game screen.
+
+Known spread attacks (including Surf) retain a spread confirmation label across
+the command-menu flash; a live-foe tap confirms once. Classification currently
+uses a move-ID list in BattleRules.hpp, **not a read of the game's arrows**;
+unlisted spread moves still use the same safe confirmation tap with the ordinary
+heading. This list and spread behavior beyond Royal Surf need live validation.
+No Mega/Z action is added: the existing move page and its four taps stay intact.
+
+Native trainer Run is refused locally with `Can't run from a trainer` (compact
+text fallback if needed). Raw `battle-flee`/`battle-run` actions also refuse;
+neither path sends Run taps. Royal Bag is disabled
+as `N/A`, skipped by command navigation, and rejected by the raw action. Other
+commands keep their existing order and tap points. Rule decoding uses the static
+setup path documented in OFFSETS, **not** the stale view message work. Unknown
+rules retain the prior action behavior, and never get a wild caught marker.
+The `battle` log now reports raw type/format plus decoded kind for live checking.
+
+Switch goals retain their page through bounded None, Command **and Other** gaps
+until the final Switch tap, including a forced Royal send-out. A forced send-out
+says `Go, X!`. Gaps still expire after 45 frames and goals keep their time/step
+limits. Existing identity-matched party metadata is preserved.
+
+### Wild Run finding and outstanding live test
+
+No live test was run in this worktree. Static inspection shows `battle-flee`
+uses the same 90-frame, up-to-three-tap command picker as Fight/Bag/Pokemon;
+native choices already wait 30 command frames. It ends when WorldBattleCommand
+goes away, which proves the menu closed, **not** that FieldRo was reached.
+The notes saw native Run succeed in SOS. There is no evidence yet that the
+reported wild failure shares the target-screen timing bug; no speculative Run
+timing change is applied. Log command age, each action/tap, rules and scene while
+reproducing it; distinguish a moved cursor, refused escape, and a closed menu
+followed by continued battle playback. Direct `battle-flee` has no extra initial
+30-frame wait (the native menu supplies it); test a direct invocation separately.
+
+### Claude's emulator checklist (Sun and Moon v1.2)
+
+1. Build the plugin and run `make -C tests`. Inspect all three layouts at 1x
+   and 2.5x: panel text wraps, HP boxes stay clear, and unchanged values do not
+   trigger redraw. Wild: Leer twice, Fake Tears, Sand Attack; switch out/in
+   to clear stages. Compare type bytes before/after Soak and a third-type move.
+   Compare known caught/uncaught species, then catch an uncaught species and
+   encounter it again. Check consecutive battles and missing species assets.
+2. Postgame Heahea start: Y -> Charizard Glide at bottom (180,195). Island
+   arrows (303,120)/(16,120), each tap six frames; choose Poni (198,110), then
+   A to fly to Poni Meadow (zone268). From landing: stick (0,-150) 90 frames,
+   (150,0) 60, (0,-150) 120 to find grass. Use Adrenaline Orb (Battle Items,
+   index10 in research save); stall switches/X items until SOS (about six turns).
+3. SOS: Fight -> single-target move; verify Target opens after the four-frame
+   command flash. TL names helper, TR original. Damage each separately; KO the
+   helper, call another, check r1 changes and fainted history is unavailable.
+   Try all navigation directions, A on the only remaining foe, and B back.
+   Never send an empty ally/self tap. Compare raw rules (expected type0/format0).
+4. Wild Run from both native Run and direct `battle-flee`: confirm actual return
+   to FieldRo, collect logs on failure; test a known trapped control. Preserve
+   the failing encounter/log for diagnosis rather than assuming escape succeeded.
+5. Royal: Fly Akala Royal Avenue (172,120), tap twice; enter Dome with stick
+   (0,150)60, then (0,150)90, (150,0)22, (0,150)10 toward the receptionist
+   just left of the PC. A -> Yes -> Normal Rank (160,30) -> Confirm (260,167).
+   Enter three Pokemon, Confirm (240,222), B through text; this asks for no save.
+6. Verify Royal format2 in the log, Bag N/A/skipped, Run gives the trainer note
+   with zero taps. Compare all four target species and native arrows; Surf
+   says Confirm spread move and A confirms once. Faint your active Pokemon,
+   choose replacement once through the transient Other screen, confirm team
+   subset nicknames/items and `Go, X!`. Repeat after an opponent replacement.
+7. Blastoise/Blastoisinite and Pikachu/Pikashunium Z: inspect the native Mega/Z
+   buttons, choose an ordinary move, target/back, descriptions and switches.
+   Native menu must keep working; Mega/Z activation is outside scope.
+8. True trainer singles/doubles need separate encounters. Battle Tree recipe:
+   Poni (169,71), walk north (0,150)150 then120; talk through first-visit gifts,
+   choose Double (160,75), Confirm (260,167), enter four, Confirm (240,222).
+   Tree requires saving; obtain the user's permission before that in-game save.
+   Validate trainer detection, live active slots (not bench records), and target
+   mapping before declaring true doubles supported. Royal format detection is
+   statically inferred and must be checked before release.
+
+### Host checks for this change
+
+All 26 Windows-compatible host executables compiled and passed with Clang
+C++17 `-Wall -Wextra -Werror` and `_CRT_SECURE_NO_WARNINGS`. MSYS make was
+blocked by its sandbox signal pipe, so the Makefile compiler recipes were
+invoked directly. Existing `screen_buffer_test` requires POSIX unistd/allocator
+APIs and was not run with this Windows compiler; the normal full host gate
+remains for Claude. All 15 existing scale-1 battle previews were byte-identical
+to HEAD's previews; the foe panel is tested/rendered separately. New tests cover
+slot mapping/selection/revalidation, explicit target page mapping, the command
+flash, spread confirmation, forced Other gaps, Run/Bag guards in menu and action
+runner, stage formatting, caught bit boundaries and panel pixel/2.5x bounds.
+No linked plugin build, ARM compile or emulator run was performed here.
+
+
+### SOS / target plate follow-up (2026-11-09)
+
+The user verified the previous #3/#4 functionality in Azahar Ultra Sun with
+Classic layout: types, stages including Contrary, trainer Run refusal, Royal
+Bag restriction, correct target taps, spread confirmation and forced send-out.
+This follow-up fixes the five visual/data-selection findings in that report.
+No emulator was run for this follow-up.
+
+Host regression coverage now includes live foe selection with fainted record 0,
+Def +6 on the helper, last-target identity through reorder, fallback after KO,
+no-live-foe suppression, a healthy benched Blastoise producing an empty SOS ally
+slot, and neutral/dim plate pixels for self, empty and fainted slots. Full-name
+last-letter pixels and the empty label are checked at 1x and 2.5x; the target
+page also passes the guarded 2.5x Layer smoke check. Target taps and rects are
+unchanged. Royal info remains client 1 only; true trainer doubles remain inferred.
+
+All 15 existing scale-1 battle previews are byte-identical to the immediately
+preceding worktree build (also compared with the existing HEAD preview set).
+The separate battle-foe-info.ppm synthetic fixture is byte-identical too.
+Changed existing previews: **none**. Two new fixtures, battle-target-sos.ppm
+(full names, grey plates, Empty ally, contained labels) and battle-trainer-run.ppm
+(short refusal fitting the footer), exercise the intentional pixel changes.
+Outputs are in tests/build/after-sos-fixes; before-sos-fixes preserves the
+pre-fix output. These are ignored build artifacts, not baseline replacements.
+
+Exact compiler/run commands used below; no make or WSL. The host command is
+expanded directly from tests/Makefile's battle_menu_test recipe, with the
+Windows CRT define. Working directory for the first commands: tests/.
+
+```powershell
+& 'C:/Program Files/Unity/Hub/Editor/6000.6.6f1/Editor/Data/PlaybackEngines/WebGLSupport/BuildTools/Emscripten/llvm/clang++.exe' -std=c++17 -Wall -Wextra -Werror -I ../Includes battle_menu_test.cpp ../Sources/Screens/BattleMenu.cpp ../Sources/Screens/BattleMenuDraw.cpp ../Sources/Screens/PartyMenu.cpp ../Sources/ActionQueue.cpp ../Sources/UI/GameAssets.cpp ../Sources/UI/Theme.cpp ../Sources/UI/ThemeDemo.cpp ../Sources/RomfsText.cpp ../Sources/PartyData.cpp ../Sources/Settings.cpp ../Sources/SettingsFile.cpp ../Sources/UI/Raster.cpp ../Sources/UI/Text.cpp ../Sources/UI/Font.cpp ../Sources/UI/Layer.cpp ../Sources/UI/Icons.cpp ../Sources/UI/Glyphs.cpp ../Sources/UI/Demo.cpp -D_CRT_SECURE_NO_WARNINGS -o build/battle_menu_test.exe
+# Before patch, and again after patch respectively:
+./build/battle_menu_test.exe H:/SunnyMoon-battle-foe/tests/build/before-sos-fixes
+./build/battle_menu_test.exe H:/SunnyMoon-battle-foe/tests/build/after-sos-fixes
+```
+
+All host assertions passed. A Python byte comparison of all matching PPMs
+reported IDENTICAL for each of the 15 existing fixtures plus the foe-info fixture.
+The two new previews were also converted with Pillow and visually inspected.
+From repo root, the following ARM syntax check passed for all edited screen
+translation units (no linked plugin build):
+
+```powershell
+& C:/devkitPro/devkitARM/bin/arm-none-eabi-g++.exe -std=gnu++17 -Wall -Wextra -Werror -fno-rtti -fno-exceptions -D__3DS__ -I Includes -isystem C:/devkitPro/libctrpf/include -isystem C:/devkitPro/libctru/include -fsyntax-only Sources/Screens/BattleScreen.cpp Sources/Screens/BattleMenu.cpp Sources/Screens/BattleMenuDraw.cpp
+git diff --check
+```
+
+Recheck in Azahar at 1x and 2.5x: select each of two SOS foes, return to Command,
+confirm that foe's types/stages, KO it, call a replacement, and confirm the panel
+follows the remaining live foe. Check Empty/unselectable own ally and grey
+self/fainted plates, full names and contained labels, and trainer Run's note.

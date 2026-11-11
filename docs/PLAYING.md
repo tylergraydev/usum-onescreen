@@ -96,8 +96,11 @@ aspect = 21:9
 pillarbox = tint
 ```
 
-Use `tint` for a solid dark fill with a soft edge, `pattern` for subtle diagonal
-stripes, or `off` to show the game's scene beside menus. Reload settings from
+Use `tint` (default) for a solid dark fill with a soft edge, `pattern` for subtle
+diagonal stripes, `blur` for a blurred, darkened copy of the menu picture, or
+`off` to show the game's scene beside menus. Blur first filters the menu into
+an 8x8 picture so text and borders become smooth colour bands. It needs the hi-res GPU overlay;
+`hires off` and fallback paths show tint instead. Reload settings from
 the plugin menu after editing. Bands appear only above the original 5:3 aspect
 and only for full-screen native menus; smaller menus and the bottom screen
 keep their existing appearance. Match Azahar's stretched top-screen viewport
