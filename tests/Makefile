@@ -10,9 +10,26 @@ OUT      := build
 PYTHON   ?= python3
 CODE_BIN ?=
 
-TESTS    := $(OUT)/festival_plaza_test $(OUT)/pelago_test $(OUT)/quick_save_test $(OUT)/image_test $(OUT)/hires_test $(OUT)/band_column_test $(OUT)/layer_runs_test $(OUT)/pillarbox_test $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/settings_file_test $(OUT)/ui_host_test $(OUT)/party_data_test $(OUT)/action_queue_test $(OUT)/xmenu_test $(OUT)/battle_menu_test $(OUT)/keyboard_test $(OUT)/pokedex_test $(OUT)/native_screens_test $(OUT)/bag_test $(OUT)/map_test $(OUT)/party_menu_test $(OUT)/boxes_test $(OUT)/field_settle_test $(OUT)/pc_anywhere_test $(OUT)/move_learn_test $(OUT)/rotom_prompt_test $(OUT)/theme_test $(OUT)/screen_buffer_test $(OUT)/poke_icons_test
+TESTS    := $(OUT)/festival_plaza_test $(OUT)/pelago_test $(OUT)/quick_save_test $(OUT)/image_test $(OUT)/hires_test $(OUT)/band_column_test $(OUT)/layer_runs_test $(OUT)/pillarbox_test $(OUT)/input_capture_test $(OUT)/settings_test $(OUT)/settings_file_test $(OUT)/ui_host_test $(OUT)/party_data_test $(OUT)/action_queue_test $(OUT)/xmenu_test $(OUT)/battle_menu_test $(OUT)/keyboard_test $(OUT)/pokedex_test $(OUT)/native_screens_test $(OUT)/bag_test $(OUT)/map_test $(OUT)/party_menu_test $(OUT)/boxes_test $(OUT)/field_settle_test $(OUT)/pc_anywhere_test $(OUT)/move_learn_test $(OUT)/rotom_prompt_test $(OUT)/theme_test $(OUT)/screen_buffer_test $(OUT)/poke_icons_test $(OUT)/side_panels_test $(OUT)/battle_widescreen_test $(OUT)/field_fov_test
 
 .DEFAULT_GOAL := all
+
+TESTS += $(OUT)/blur_test $(OUT)/filter_test
+
+$(OUT)/filter_test: filter_test.cpp ../Sources/Settings.cpp ../Sources/SettingsFile.cpp ../Includes/Settings.hpp ../Includes/SettingsFile.hpp
+	@mkdir -p $(OUT)
+	$(CXX) $(CXXFLAGS) filter_test.cpp $(SETTINGS_SRCS) -o $@
+
+$(OUT)/blur_test: blur_test.cpp ../Includes/UI/ColumnMapping.hpp ../Includes/UI/QuadLayout.hpp ../Includes/UI/Raster.hpp ../Includes/Settings.hpp
+	@mkdir -p $(OUT)
+	$(CXX) $(CXXFLAGS) blur_test.cpp -o $@
+TESTS += $(OUT)/panel_command_test
+
+$(OUT)/panel_host.hpp: panel_command_test.py panel_host_stubs.hpp ../Sources/Panel.cpp ../Includes/Framebuffer.hpp
+	$(PYTHON) -I panel_command_test.py --generate $@
+
+$(OUT)/panel_command_test: panel_command_test.cpp $(OUT)/panel_host.hpp $(wildcard ../Includes/UI/*.hpp) ../Includes/Settings.hpp
+	$(CXX) $(CXXFLAGS) -Wno-unused-function panel_command_test.cpp -o $@
 
 $(OUT)/hires_test: hires_test.cpp ../Sources/UI/Raster.cpp ../Sources/UI/Text.cpp ../Sources/UI/Font.cpp ../Sources/UI/Layer.cpp $(wildcard ../Includes/UI/*.hpp)
 	@mkdir -p $(OUT)
@@ -52,6 +69,11 @@ $(OUT)/quick_save_test: quick_save_test.cpp ../Sources/QuickSaveFlow.cpp ../Incl
 $(OUT)/pc_anywhere_test: pc_anywhere_test.cpp ../Includes/PcAnywhereRules.hpp $(SETTINGS_SRCS) $(SETTINGS_HDRS)
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) pc_anywhere_test.cpp $(SETTINGS_SRCS) -o $@
+
+$(OUT)/field_fov_test: field_fov_test.cpp ../Includes/Widescreen.hpp ../Includes/PcAnywhereRules.hpp $(SETTINGS_SRCS) $(SETTINGS_HDRS)
+	@mkdir -p $(OUT)
+	$(CXX) $(CXXFLAGS) field_fov_test.cpp $(SETTINGS_SRCS) -o $@
+# MSVC: cl /nologo /std:c++17 /EHsc /W4 /WX /I ../Includes field_fov_test.cpp ../Sources/Settings.cpp ../Sources/SettingsFile.cpp /Fe:build/field_fov_test.exe /Fo:build/
 
 $(OUT)/settings_test: settings_test.cpp $(SETTINGS_SRCS) $(SETTINGS_HDRS) ../Includes/FastTextPatches.hpp
 	@mkdir -p $(OUT)
@@ -173,7 +195,7 @@ $(OUT)/ui_host_test: ui_host_test.cpp $(UI_SRCS) $(UI_HDRS)
 BATTLE_SRCS := $(addprefix ../Sources/Screens/,BattleMenu.cpp BattleMenuDraw.cpp PartyMenu.cpp) ../Sources/ActionQueue.cpp $(THEME_SRCS)
 BATTLE_PREVIEW := ../analysis/private
 
-$(OUT)/battle_menu_test: battle_menu_test.cpp $(BATTLE_SRCS) ../Includes/Screens/BattleMenu.hpp ../Includes/Screens/PartyMenu.hpp ../Includes/Layouts.hpp $(UI_SRCS) $(UI_HDRS)
+$(OUT)/battle_menu_test: battle_menu_test.cpp $(BATTLE_SRCS) ../Includes/Screens/BattleMenu.hpp ../Includes/BattleRules.hpp ../Includes/Screens/PartyMenu.hpp ../Includes/Layouts.hpp $(UI_SRCS) $(UI_HDRS)
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) battle_menu_test.cpp $(BATTLE_SRCS) $(UI_SRCS) -o $@
 
@@ -190,9 +212,30 @@ $(OUT)/festival_plaza_test: festival_plaza_test.cpp festival_plaza_samples.hpp .
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) festival_plaza_test.cpp ../Sources/Screens/FestivalPlaza.cpp ../Sources/ActionQueue.cpp $(THEME_SRCS) $(UI_SRCS) -o $@
 
+$(OUT)/battle_widescreen_test: battle_widescreen_test.cpp ../Includes/BattleWidescreen.hpp
+	@mkdir -p $(OUT)
+	$(CXX) $(CXXFLAGS) battle_widescreen_test.cpp -o $@
+# MSVC equivalent (Developer Command Prompt, from tests/):
+# cl /nologo /std:c++17 /EHsc /W4 /WX /I ../Includes battle_widescreen_test.cpp /Fe:build/battle_widescreen_test.exe /Fo:build/battle_widescreen_test.obj
+
+SIDE_PANEL_SRCS := ../Sources/SidePanelsView.cpp ../Sources/UI/Raster.cpp ../Sources/UI/Text.cpp ../Sources/UI/Font.cpp $(SETTINGS_SRCS)
+$(OUT)/side_panels_test: side_panels_test.cpp $(SIDE_PANEL_SRCS) ../Includes/SidePanels.hpp ../Includes/BattleWidescreen.hpp $(UI_HDRS) $(SETTINGS_HDRS)
+	@mkdir -p $(OUT)
+	$(CXX) $(CXXFLAGS) side_panels_test.cpp $(SIDE_PANEL_SRCS) -o $@
+
 run: $(TESTS)
 	./$(OUT)/festival_plaza_test $(OUT)
+	./$(OUT)/filter_test
+	$(PYTHON) -I filter_command_test.py
+	@mkdir -p previews
+	./$(OUT)/side_panels_test previews
+	./$(OUT)/field_fov_test
 	./$(OUT)/pelago_test $(OUT)
+	./$(OUT)/blur_test
+	$(PYTHON) -I blur_command_test.py
+	./$(OUT)/battle_widescreen_test
+	$(PYTHON) -I panel_command_test.py
+	./$(OUT)/panel_command_test
 	./$(OUT)/image_test
 	./$(OUT)/hires_test
 	./$(OUT)/band_column_test

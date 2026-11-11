@@ -52,6 +52,9 @@ namespace OneScreen
     const u32 WorldLearnList     = 1u << 17; // the forget screen's move list
     const u32 WorldLearnConfirm  = 1u << 18; // one move's page: "Forget this move" / back
 
+    const u32 WorldTrainerBattle = 1u << 19;
+    const u32 WorldRoyalBattle = 1u << 20;
+
     struct ActionWorld
     {
         std::string scene;      // SceneModule(); empty during transitions
