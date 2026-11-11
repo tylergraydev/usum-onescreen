@@ -176,7 +176,7 @@ namespace OneScreen
         snap.menu = (Screens::GameMenu)state.menu;
         const u32 probes = ActionProbeFlags();
         if (state.menu == BattleMenu::Moves) {
-            snap.zSlots = (u8)((probes & WorldBattleZSlotMask) >> 24);
+            snap.zSlots = (u8)((probes & WorldBattleZSlotMask) >> 12);
             snap.power = (probes & WorldBattleMega) ? BattlePower::Mega
                        : (probes & WorldBattleZ) ? BattlePower::Z : BattlePower::None;
         }
