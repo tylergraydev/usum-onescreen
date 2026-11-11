@@ -1,6 +1,7 @@
 #include "Actions.hpp"
 
 #include <CTRPluginFramework.hpp>
+#include <initializer_list>
 
 #include "ActionQueue.hpp"
 #include "Battle.hpp"
@@ -20,8 +21,26 @@ namespace OneScreen
     using namespace CTRPluginFramework;
 
     static_assert(ActionKeyB == (u32)Key::B, "action key B");
-    static_assert(((WorldBattleMega | WorldBattleZ | WorldBattleZList | WorldBattleZSlotMask)
-                  & (WorldSaveAsk | WorldSaveDone | WorldSaveIdle)) == 0, "battle power/save flags must not overlap");
+    constexpr bool WorldFlagsDisjoint(std::initializer_list<u32> flags)
+    {
+        u32 seen = 0;
+        for (u32 flag : flags)
+        {
+            if (seen & flag) return false;
+            seen |= flag;
+        }
+        return true;
+    }
+
+    static_assert(WorldFlagsDisjoint({
+        WorldXMenu, WorldBattleCommand, WorldXMenuPage2, WorldBattleMoves,
+        WorldBattleMega, WorldBattleZ, WorldBattleZList, WorldBattleZSlotMask,
+        WorldTrainerBattle, WorldPartyList, WorldBoxIdle, WorldBoxModal,
+        WorldBoxCarrying, WorldLearnAsk, WorldLearnList, WorldLearnConfirm,
+        WorldSaveAsk, WorldSaveDone, WorldSaveIdle, WorldPelagoIsle,
+        WorldPelagoAsk, WorldPelagoMessage, WorldPelagoClear, WorldFestivalActive,
+        WorldFestivalHub, WorldFestivalQuit, WorldFestivalField, WorldRoyalBattle
+    }), "World flags must not overlap");
     static_assert(ActionKeyX == (u32)Key::X, "action key X");
 
     // The X menu is an overlay inside FieldRo, so the scene doesn't show it;
@@ -274,7 +293,7 @@ namespace OneScreen
         return (s_xmenuSeen ? WorldXMenu : 0) | (s_page2Seen ? WorldXMenuPage2 : 0)
                | (s_partyListSeen ? WorldPartyList : 0)
                | (power == BattlePower::Mega ? WorldBattleMega : power == BattlePower::Z ? WorldBattleZ : 0)
-               | (slots ? WorldBattleZList | ((u32)slots << 24) : 0);
+               | (slots ? WorldBattleZList | ((u32)slots << 12) : 0);
     }
 
     static std::string DescribeWorld(const ActionWorld &world)

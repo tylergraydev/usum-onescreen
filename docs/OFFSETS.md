@@ -369,7 +369,7 @@ or per-battle Mega/Z-use flags; held items alone do not establish eligibility.
 all 10 Mega and 12 Z animated frames (`Includes/BattleRules.hpp`), RGB tolerance 16,
 three matching callbacks and two-plugin-frame expiry. The first-input guard uses
 the same flags. `WorldBattleMega` is bit 4 (old bit 21 collided with SaveIdle);
-Z is bit 22, Z-list bit 23, row-mask bits 24-27. These are pixel flags, not engine
+Z is bit 5, Z-list bit 6, row-mask bits 12-15. These are pixel flags, not engine
 state. Consumers require the verified Battle Moves menu.
 
 Gold Z rows are now screenshot-mapped: Decidueye's slot 3 (zero-based) and Pikachu's
