@@ -8,6 +8,28 @@
     "none": "tapped, nothing happens (listed so Phase 2 avoids it)"
   },
   "screens": {
+    "ride_pager": {
+      "scene": "FieldRo (FieldMenu Pager object open)",
+      "reach": "Y in the field after receiving the Ride Pager",
+      "buttons": {
+        "row_0": {"rect": [59, 1, 313, 28], "tap": [180, 15], "does": "selects this visible Ride Pager row (mount, dismount or fly map)", "verified": "tap", "evidence": "2026-11-09 postgame research: row tap seen; docs/RIDE-PAGER.md"},
+        "plus_0": {"rect": [31, 2, 56, 27], "tap": [44, 15], "does": "opens D-pad registration dialog; tile selection unverified", "verified": "measured", "evidence": "rp-35-plus on row 3; other rows measured from pitch"},
+        "row_1": {"rect": [59, 31, 313, 58], "tap": [180, 45], "does": "selects this visible Ride Pager row (mount, dismount or fly map)", "verified": "measured", "evidence": "2026-11-09 postgame research: 30 px row pitch; this row was not tapped; docs/RIDE-PAGER.md"},
+        "plus_1": {"rect": [31, 32, 56, 57], "tap": [44, 45], "does": "opens D-pad registration dialog; tile selection unverified", "verified": "measured", "evidence": "rp-35-plus on row 3; other rows measured from pitch"},
+        "row_2": {"rect": [59, 61, 313, 88], "tap": [180, 75], "does": "selects this visible Ride Pager row (mount, dismount or fly map)", "verified": "measured", "evidence": "2026-11-09 postgame research: 30 px row pitch; this row was not tapped; docs/RIDE-PAGER.md"},
+        "plus_2": {"rect": [31, 62, 56, 87], "tap": [44, 75], "does": "opens D-pad registration dialog; tile selection unverified", "verified": "measured", "evidence": "rp-35-plus on row 3; other rows measured from pitch"},
+        "row_3": {"rect": [59, 91, 313, 118], "tap": [180, 105], "does": "selects this visible Ride Pager row (mount, dismount or fly map)", "verified": "tap", "evidence": "2026-11-09 postgame research: row tap seen; docs/RIDE-PAGER.md"},
+        "plus_3": {"rect": [31, 92, 56, 117], "tap": [44, 105], "does": "opens D-pad registration dialog; tile selection unverified", "verified": "tap", "evidence": "rp-35-plus on row 3; other rows measured from pitch"},
+        "row_4": {"rect": [59, 121, 313, 148], "tap": [180, 135], "does": "selects this visible Ride Pager row (mount, dismount or fly map)", "verified": "measured", "evidence": "2026-11-09 postgame research: 30 px row pitch; this row was not tapped; docs/RIDE-PAGER.md"},
+        "plus_4": {"rect": [31, 122, 56, 147], "tap": [44, 135], "does": "opens D-pad registration dialog; tile selection unverified", "verified": "measured", "evidence": "rp-35-plus on row 3; other rows measured from pitch"},
+        "row_5": {"rect": [59, 151, 313, 178], "tap": [180, 165], "does": "selects this visible Ride Pager row (mount, dismount or fly map)", "verified": "measured", "evidence": "2026-11-09 postgame research: 30 px row pitch; this row was not tapped; docs/RIDE-PAGER.md"},
+        "plus_5": {"rect": [31, 152, 56, 177], "tap": [44, 165], "does": "opens D-pad registration dialog; tile selection unverified", "verified": "measured", "evidence": "rp-35-plus on row 3; other rows measured from pitch"},
+        "row_6": {"rect": [59, 181, 313, 208], "tap": [180, 195], "does": "selects this visible Ride Pager row (mount, dismount or fly map)", "verified": "tap", "evidence": "2026-11-09 postgame research: row tap seen; docs/RIDE-PAGER.md"},
+        "plus_6": {"rect": [31, 182, 56, 207], "tap": [44, 195], "does": "opens D-pad registration dialog; tile selection unverified", "verified": "measured", "evidence": "rp-35-plus on row 3; other rows measured from pitch"},
+        "back": {"rect": [0, 205, 28, 239], "tap": [14, 224], "does": "closes the Ride Pager", "verified": "tap", "evidence": "rp-01-pager and Back tap, 2026-11-09; docs/RIDE-PAGER.md"}
+      },
+      "notes": ["Seven visible rows on the postgame save; no scrolling. Names/IDs and reduced lists need another save.", "Availability probe (290,30r+15), registered probe (44,30r+15).", "Native registration is omitted: choosing a D-pad tile was not tested."]
+    },
     "pelago": {
       "scene": "main:0064787C + Resort CRO",
       "buttons": {
