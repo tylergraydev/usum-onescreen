@@ -129,6 +129,41 @@ namespace OneScreen
         }
     }
 
+    bool ParseSidePanelMode(const std::string &value, SidePanelMode &out)
+    {
+        const std::string v = Lower(Trim(value));
+        if (v == "off") out = SidePanelMode::Off;
+        else if (v == "battle") out = SidePanelMode::Battle;
+        else if (v == "field") out = SidePanelMode::Field;
+        else if (v == "both") out = SidePanelMode::Both;
+        else return false;
+        return true;
+    }
+
+    const char *SidePanelModeName(SidePanelMode mode)
+    {
+        switch (mode)
+        {
+        case SidePanelMode::Battle: return "battle";
+        case SidePanelMode::Field: return "field";
+        case SidePanelMode::Both: return "both";
+        default: return "off";
+        }
+    }
+
+    bool ParseFieldFov(const std::string &value, float &out)
+    {
+        const std::string v = Trim(value);
+        char *end = nullptr;
+        errno = 0;
+        const float scale = std::strtof(v.c_str(), &end);
+        if (v.empty() || *end != '\0' || errno == ERANGE
+            || !std::isfinite(scale) || scale < 0.8f || scale > 1.5f)
+            return false;
+        out = scale;
+        return true;
+    }
+
     bool ParseAspect(const std::string &value, float &out)
     {
         const std::string v = Lower(Trim(value));
@@ -281,6 +316,16 @@ namespace OneScreen
             else if (v == "blur") s.pillarbox = Pillarbox::Blur;
             else return "bad pillarbox '" + value + "' (use tint, pattern, off or blur)";
         }
+        else if (k == "field_fov")
+        {
+            if (!ParseFieldFov(value, s.fieldFov))
+                return "bad field_fov '" + value + "' (use a scale from 0.8 to 1.5)";
+        }
+        else if (k == "side_panels")
+        {
+            if (!ParseSidePanelMode(value, s.sidePanels))
+                return "bad side_panels '" + value + "' (use off, battle, field or both)";
+        }
         else if (k == "aspect")
         {
             if (!ParseAspect(value, s.aspect))
@@ -432,6 +477,10 @@ namespace OneScreen
             "; Experimental 3D camera aspect: 0/off (original), 16:9, 21:9 or a positive float.\n"
             "; Only new cameras change; see docs/WIDESCREEN.md.\n"
             "aspect = 0\n"
+            "; Optional party strips in the widescreen side areas.\n"
+            "side_panels = off\n"
+            "; Idle overworld vertical FOV multiplier: 0.8..1.5; 1 is stock.\n"
+            "field_fov = 1.0\n"
             "; Side bands: tint (default), pattern, off or blur (hires; otherwise tint).\n"
             "pillarbox = tint\n"
             "; Top-screen GPU filter: off (default), warm, cool or vignette.\n"
@@ -581,8 +630,10 @@ namespace OneScreen
                           + ", cursor_speed " + std::to_string(s.cursorSpeed) + "\n"
                           + "size " + sizes[(int)s.panelSize] + ", corner " + corners[(int)s.panelCorner]
                           + ", auto " + (s.autoPanel ? "on" : "off") + "\n"
+                          + "side panels " + SidePanelModeName(s.sidePanels) + "\n"
                           + "aspect " + (s.aspect == 0.0f ? std::string("off") : std::to_string(s.aspect))
                           + ", filter " + ScreenFilterName(s.filter)
+                          + ", field_fov " + std::to_string(s.fieldFov)
                           + ", pillarbox " + pillarboxes[(int)s.pillarbox]
                           + ", battle layout " + BattleLayoutName(s.battleLayout) + "\n"
                           + "instant text " + (s.instantText ? "on" : "off")
