@@ -36,7 +36,7 @@ The menu follows the game's bottom-screen menu (RE1 `ReadBattle`, read every 2 f
 
 - A tap the moment the command menu slides in only moves its cursor (UI3), so a choice made earlier is held until the game's menu has been up 30 frames (10 for the move list).
 - After a move or an item the game shows its command menu for about 22 frames before the turn starts. The command bar waits 30 frames before it shows (and logs), so it doesn't flash.
-- While the command bar or move list is up, A, B, the D-pad and the circle pad are captured (`InputCaptureBegin`); Y (the game's quick Poké Ball) and touch still reach the game. The move list also captures L for native descriptions. On the game's own screens nothing is captured.
+- While the command bar or move list is up, A, B, the D-pad and the circle pad are captured (`InputCaptureBegin`); Y (the game's quick Poké Ball) and touch still reach the game. The move list also captures L for native descriptions and R for Mega/Z arming. On the game's own screens nothing is captured.
 - A move with no PP left isn't sent while another move has PP (*X has no PP left*); with none left, any move is sent and the game uses Struggle.
 - A move the game refuses (seen: Scratch under Drowzee's Disable) leaves the move list up; after the action's three taps the menu says *The game refused that move, pick another*. Disabled/Taunted moves aren't known in advance (not in RE1).
 - Learning a fifth move (*Forget an old move?*) has its own screen, `docs/MOVE-LEARN.md`; while it is up the helper below stays away.
@@ -366,3 +366,257 @@ Recheck in Azahar at 1x and 2.5x: select each of two SOS foes, return to Command
 confirm that foe's types/stages, KO it, call a replacement, and confirm the panel
 follows the remaining live foe. Check Empty/unselectable own ally and grey
 self/fainted plates, full names and contained labels, and trainer Run's note.
+
+
+## Mega Evolution and Z-Power (backlog 5, 2026-11-09)
+
+On Moves, **R** arms/disarms the power shown by the game's button; **L** still opens
+move descriptions. The detail strip says `R Mega Evolve OFF/ON` or `R Z-Power
+OFF/ON`, through the existing controller-glyph formatter. Arming is local and
+sends no touch. **A** first checks PP and fresh availability, taps the power once,
+waits for the action to succeed and the move screen to settle, then selects the
+original slot when eligible. Cancel before A with R. In the Z list, B sends one
+back tap to normal moves with Z off; a second B returns to Command. Powers never use the ordinary move action's
+three-tap retry loop. A failed/refused power tap stops the queued move.
+
+Availability is a conservative bottom-framebuffer probe, restricted to the
+verified Moves menu in Battle. RE1 explicitly leaves the Z-button state/list
+unknown. OFFSETS and research `foe-info.md` document held-item data, but no checked
+ring-ownership or per-battle Mega/Z-used flags, nor complete eligibility rules.
+A stone/crystal alone is therefore insufficient. After the 2026-11-10 emulator
+follow-up, each button has its own eight **static lettering/plate** pixels in
+`BattleRules.hpp`; rainbow edges, transparent background and the glowing Z emblem
+are excluded. Pillow
+`Image.getpixel` samples across `shots/mz-mflk1..10-bottom.png` and
+`mz-flk1..12-bottom.png` set the reference colours at the middle of their observed
+ranges. The second retest replaces the three remaining Mega edge/background points
+with solid glyph pixels: all eight Mega samples are exactly white across 14
+captures; the Z samples retain their maximum deviation of five RGB units. Samples match within
+16 units for three consecutive callbacks; mismatches disable immediately and
+samples older than two plugin frames expire. Menu availability and the action's
+first-input guard both use these same probe flags. No temporal grace authorizes a
+vanished button. `WorldBattleMega` moved from bit 21 to free bit 4: bit 21 is
+`WorldSaveIdle` and was overwritten by the quick-save flag update. A static assert
+and host test prevent power/save flag collisions.
+
+Missing/unrecognised evidence means no power tap and `Power button not confirmed`
+on R. Different languages, resolutions or selected/disabled appearances still
+need evidence; no ownership/used-state offsets are invented.
+
+Both measured visual bounding rectangles are **[0,15,126,209]**, inclusive;
+the proposed interior touch is **(55,118)**. These are bounds of an irregular
+panel, not verified rectangular hitboxes. Method: inspect both original-size
+screenshots, trace the clipped left panel's outer light outline, then scan RGB
+pixels at the upper-left edge, right tip and lower-left edge with Pillow. Mega's
+first solid outline pixel is (0,15), Z's (0,16); the right tip has an antialiased
+fringe at x126 around y118-121, and the lower outline ends at y209 before Back.
+The shared box includes the one-pixel upper-edge difference. JSON records these
+as **measured**, never `tap`; the new `BattlePowerTap` step permits only these two
+measured names, with mandatory scene/menu/pixel guards. Ordinary measured taps
+remain refused by the action queue.
+
+**Z list (enabled by the 2026-11-10 evidence):** `mz-decZ-bottom.png` and
+`mz-manZ*-bottom.png` show Spirit Shackle (zero-based slot 3) as Sinister Arrow Raid
+around [63,176,319,219]. `mz-pikaZ-bottom.png` and `mz-pikaZlist2-bottom.png` show
+Thunderbolt (zero-based slot 1) as 10,000,000 Volt Thunderbolt around
+[55,75,319,118]. These remain rows 4 and 2, respectively. User emulator testing
+confirmed that taps at (235,195) and (235,95) fire those Z moves. All four original
+centres remain (235,41), (235,95), (235,145), (235,195).
+
+`ProbeBattleZSlots` samples x220/260/300 at y53/103/153/203, below names and away
+from type/effectiveness plates. A row requires two of three gold pixels:
+r>=180, g>=140, b<135, r-b>80, g-b>60. One white animated sparkle is tolerated.
+The result is a four-bit mask, not a single special-case row; multiple bars work
+independently. Samples use the same two-frame expiry as the power probe, and
+consumers require the verified Battle Moves menu (yellow Bag/Party screens alone
+must not authorize Z input).
+
+After Z-POWER, an already queued move submits only if its original row's bit is
+on. Otherwise it stops with `No Z-Power in this slot`; choose an eligible row.
+A missing mask stays blocked rather than falling back to an ordinary move.
+After the power action finishes, the missing-row warning is suppressed until
+`ZListNoticeFrames` (60 plugin updates, approximately one second); a persistent
+missing mask then shows `Z rows unconfirmed: panel / B`. The usual 24-update
+settle still applies, and a confirmed gold row can submit before the warning grace
+ends. B remains available during the grace. The native page dims unavailable rows, labels eligible
+rows `Z: <base move name>`, and suppresses base power/accuracy details in Z mode.
+Actual Z names/data are not read. New `battle-z-move1..4` actions tap the existing
+row once, rechecking that **specific row** at the first input frame; no retry can
+accidentally select a later ordinary/grey row. This also works after opening Z
+manually. The Z-mode latch survives transient hidden/unknown pages.
+
+`battle-z-back` sends a single `battle_moves.back` tap, then waits for the gold
+list to disappear, without a Command condition or retry. Once the normal Z-POWER
+button returns, the native pending/armed/Z state clears; the next B uses the
+ordinary `battle-moves-back` action. A failed Z Back does not retry into Command.
+The user's log previously showed the ordinary Back waiting for Command and
+retrying even though its first tap had correctly returned to normal moves.
+
+**Rotom Powers:** existing evidence does show the battle Bag's Rotom pocket
+(`re5-b-tab0`, Roto Boost), and the native Bag already exposes that pocket. No new
+dedicated power button is added. Actual activation/consumption was not verified:
+capture Roto Boost/HP/PP use screens, their menu/vtable/target or move prompts,
+turn consumption, effect duration, and cancellation before adding a dedicated
+control. Existing generic Bag behaviour is unchanged.
+
+### Initial verification run for backlog 5 (2026-11-09)
+
+This is the pre-emulator verification record; the corrected run below supersedes
+its single-frame references and unconfirmed-Z limitation.
+
+No make, WSL, Computer Use, commit, push or branch switch. From repo root,
+`$battleClang` below was the installed Windows Clang 22 executable:
+
+```powershell
+$battleClang = 'C:/Program Files/Unity/Hub/Editor/6000.6.6f1/Editor/Data/PlaybackEngines/WebGLSupport/BuildTools/Emscripten/llvm/clang++.exe'
+& $battleClang -std=c++17 -Wall -Wextra -Werror -D_CRT_SECURE_NO_WARNINGS -I Includes tests/battle_menu_test.cpp Sources/Screens/BattleMenu.cpp Sources/Screens/BattleMenuDraw.cpp Sources/Screens/PartyMenu.cpp Sources/ActionQueue.cpp Sources/UI/GameAssets.cpp Sources/UI/Theme.cpp Sources/UI/ThemeDemo.cpp Sources/RomfsText.cpp Sources/PartyData.cpp Sources/Settings.cpp Sources/SettingsFile.cpp Sources/UI/Raster.cpp Sources/UI/Text.cpp Sources/UI/Font.cpp Sources/UI/Layer.cpp Sources/UI/Icons.cpp Sources/UI/Glyphs.cpp Sources/UI/Demo.cpp -o tests/build/battle_menu_test.exe
+./tests/build/battle_menu_test.exe tests/build/previews
+& $battleClang -std=c++17 -Wall -Wextra -Werror -D_CRT_SECURE_NO_WARNINGS -I Includes tests/action_queue_test.cpp Sources/ActionQueue.cpp -o tests/build/action_queue_test.exe
+./tests/build/action_queue_test.exe
+python -I tools/gen_layouts.py
+python -I tools/gen_layouts.py --check
+& C:/devkitPro/devkitARM/bin/arm-none-eabi-g++.exe -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft -Os -mword-relocations -fomit-frame-pointer -ffunction-sections -fdata-sections -fno-strict-aliasing -Wall -D__3DS__ -fno-rtti -fno-exceptions -std=gnu++17 -I Includes -I C:/devkitPro/libctrpf/include -I C:/devkitPro/libctru/include -fsyntax-only Sources/Actions.cpp Sources/Screens/BattleScreen.cpp Sources/Screens/BattleMenu.cpp Sources/Screens/BattleMenuDraw.cpp Sources/ActionQueue.cpp
+git diff --check
+```
+
+The host compile lines expand the tests Makefile's BATTLE_SRCS/THEME_SRCS/UI_SRCS
+and action-queue recipe, with paths relative to the repo root. An initial compile
+from `tests/` without `_CRT_SECURE_NO_WARNINGS` failed on the existing `fopen`
+deprecations under Windows Clang; the Makefile now adds that define on Windows.
+A first baseline compile lacked the tests include path; rerunning with `-I tests`
+passed. No runtime code was changed for either compiler issue.
+
+For a fresh baseline, the same 19 sources and all Includes were copied from
+`git show HEAD:<path>` into `tests/build/baseline-src` (plus the unchanged
+`hires_screen_smoke.hpp` found by `-I tests`). The exact baseline compile/run was:
+
+```powershell
+$battleSources = Get-Content tests/build/sources.txt | ForEach-Object { 'tests/build/baseline-src/' + $_ }
+& $battleClang -std=c++17 -Wall -Wextra -Werror -D_CRT_SECURE_NO_WARNINGS -I tests/build/baseline-src/Includes -I tests @battleSources -o tests/build/battle_menu_baseline.exe
+./tests/build/battle_menu_baseline.exe tests/build/baseline-previews
+```
+
+Both host suites pass. A Python `Path.read_bytes()` comparison reports **all 18
+HEAD preview files identical**, including the requested 15+2 set. Six new Mega/Z
+previews cover Classic, Bar and Rail; they were converted to a montage with Pillow
+and visually inspected. Power previews also assert no writes outside Area().
+Rules/sequence tests cover each probe sample's rejection, all four move slots,
+arming/disarming, unavailable/lost availability, action-time guard refusal,
+failed power action, PP refusal, description key isolation and the unconfirmed
+Z-list block across a menu transition. ARM syntax checks pass; no linked plugin
+build or emulator validation was performed.
+
+
+### Emulator follow-up verification (2026-11-10)
+
+Evidence: `analysis/private/shots/mz-*.png` and
+`analysis/private/instances/postgame/azahar/user/sdmc/usum-onescreen.log`.
+The initial probe crossed animated artwork. The follow-up keeps all 22 extracted
+animated-frame fixtures in the host test, plus eight measured Z-row/normal/used
+screens, pixel-format quantisation and synthetic multiple-bar/sparkle cases.
+Tests also cover eligible/ineligible slots, disappeared-bar action guards, failed
+power actions, and one Z Back followed by a separate ordinary Back (including a
+failed Back with exactly one touch). The prior unconfirmed-page test initially
+expected the old note; it now checks the equivalent missing-row refusal.
+
+Exact direct commands from repo root (same expanded Makefile source lists):
+
+```powershell
+$battleClang = 'C:/Program Files/Unity/Hub/Editor/6000.6.6f1/Editor/Data/PlaybackEngines/WebGLSupport/BuildTools/Emscripten/llvm/clang++.exe'
+& $battleClang -std=c++17 -Wall -Wextra -Werror -D_CRT_SECURE_NO_WARNINGS -I Includes tests/battle_menu_test.cpp Sources/Screens/BattleMenu.cpp Sources/Screens/BattleMenuDraw.cpp Sources/Screens/PartyMenu.cpp Sources/ActionQueue.cpp Sources/UI/GameAssets.cpp Sources/UI/Theme.cpp Sources/UI/ThemeDemo.cpp Sources/RomfsText.cpp Sources/PartyData.cpp Sources/Settings.cpp Sources/SettingsFile.cpp Sources/UI/Raster.cpp Sources/UI/Text.cpp Sources/UI/Font.cpp Sources/UI/Layer.cpp Sources/UI/Icons.cpp Sources/UI/Glyphs.cpp Sources/UI/Demo.cpp -o tests/build/battle_menu_test.exe
+New-Item -ItemType Directory -Force tests/build/mz-followup-previews | Out-Null
+./tests/build/battle_menu_test.exe tests/build/mz-followup-previews
+& $battleClang -std=c++17 -Wall -Wextra -Werror -D_CRT_SECURE_NO_WARNINGS -I Includes tests/action_queue_test.cpp Sources/ActionQueue.cpp -o tests/build/action_queue_test.exe
+./tests/build/action_queue_test.exe
+& $battleClang -std=c++17 -Wall -Wextra -Werror -D_CRT_SECURE_NO_WARNINGS -I Includes tests/quick_save_test.cpp Sources/QuickSaveFlow.cpp Sources/ActionQueue.cpp Sources/Settings.cpp Sources/SettingsFile.cpp -o tests/build/quick_save_test.exe
+./tests/build/quick_save_test.exe
+python -I tools/gen_layouts.py --check
+& C:/devkitPro/devkitARM/bin/arm-none-eabi-g++.exe -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft -Os -mword-relocations -fomit-frame-pointer -ffunction-sections -fdata-sections -fno-strict-aliasing -Wall -D__3DS__ -fno-rtti -fno-exceptions -std=gnu++17 -I Includes -I C:/devkitPro/libctrpf/include -I C:/devkitPro/libctru/include -fsyntax-only Sources/Actions.cpp Sources/Screens/BattleScreen.cpp Sources/Screens/BattleMenu.cpp Sources/Screens/BattleMenuDraw.cpp Sources/ActionQueue.cpp
+git diff --check
+```
+
+All three host suites and ARM syntax checks pass. Python byte comparison against
+`tests/build/baseline-previews` preserves **all 18 original HEAD baselines**.
+Nine new `battle-z-rows-<mask>-<layout>.ppm` previews show the two observed single
+rows and a synthetic two-row mask in Classic/Bar/Rail; drawing stays inside Area().
+The existing six power-arm previews remain. The nine Z-row previews were visually
+inspected in `tests/build/mz-followup-montage.png`. No make, WSL, Computer Use,
+commit, push, branch switch, linked plugin build, or new emulator run was used.
+Recheck the repaired native flows in Azahar, especially selected-Mega appearance,
+multiple-bar crystals (e.g. Firium Z), and single Back to normal moves.
+
+
+### Second emulator retest: Mega background independence
+
+The user reported stable controls, successful Z moves, correct power-spent
+behaviour and no crashes, but Mega worked in only one of three battles. The
+captures were read: `mz2-m2-armed-bottom.png`, `mz2-m3-page-bottom.png`, and
+`mz2-bla-armed-bottom.png` / `mz2-bla-armed-top.png`. The old (98,177) sample
+lay outside the opaque button; it read (56,69,63) and (57,70,63) in the two Tauros
+captures, beyond the old (33,41,68) reference's tolerance. The other two edge
+samples also changed with the background.
+
+All three move onto solid EVOLUTION lettering; the ?16 tolerance and three-frame
+availability/first-input guard remain unchanged:
+
+| Old point | New point | RGB in every requested capture |
+|---|---|---|
+| (90,175) | (5,166) | (255,255,255) |
+| (98,177) | (42,167) | (255,255,255) |
+| (97,165) | (52,166) | (255,255,255) |
+
+Pillow checked all eight Mega points in each of 14 captures: both Tauros shots,
+the Pyroar `mz2-bla-armed-bottom.png`, original research
+`trainer-double/mega-moves-bottom.png`, and all ten `mz-mflk*-bottom.png` frames.
+Every channel was exactly 255 (range 255..255), so the new probe is independent
+of the observed backgrounds. The extracted fixtures were refreshed and all four
+additional captures retained, including both Tauros regressions. Eight additional
+spent/absent-Mega/Z screenshots reject the new white-letter template. Z's probe
+points and thresholds are unchanged.
+
+The missing-Z-row notice now has a 60-update grace after the power action, while
+input stays blocked without a confirmed row. Tests cover silent waiting, the
+warning boundary, Back during the grace, and immediate submission when a gold row
+appears after settling but before the grace ends. Existing failed-tap and missing
+row protections remain in place.
+
+Exact verification commands from repo root (Windows Clang, expanded Makefile
+compile lines; no make/WSL):
+
+```powershell
+$battleClang = 'C:/Program Files/Unity/Hub/Editor/6000.6.6f1/Editor/Data/PlaybackEngines/WebGLSupport/BuildTools/Emscripten/llvm/clang++.exe'
+& $battleClang -std=c++17 -Wall -Wextra -Werror -D_CRT_SECURE_NO_WARNINGS -I Includes tests/battle_menu_test.cpp Sources/Screens/BattleMenu.cpp Sources/Screens/BattleMenuDraw.cpp Sources/Screens/PartyMenu.cpp Sources/ActionQueue.cpp Sources/UI/GameAssets.cpp Sources/UI/Theme.cpp Sources/UI/ThemeDemo.cpp Sources/RomfsText.cpp Sources/PartyData.cpp Sources/Settings.cpp Sources/SettingsFile.cpp Sources/UI/Raster.cpp Sources/UI/Text.cpp Sources/UI/Font.cpp Sources/UI/Layer.cpp Sources/UI/Icons.cpp Sources/UI/Glyphs.cpp Sources/UI/Demo.cpp -o tests/build/battle_menu_test.exe
+New-Item -ItemType Directory -Force tests/build/mz2-followup-previews | Out-Null
+./tests/build/battle_menu_test.exe tests/build/mz2-followup-previews
+& $battleClang -std=c++17 -Wall -Wextra -Werror -D_CRT_SECURE_NO_WARNINGS -I Includes tests/action_queue_test.cpp Sources/ActionQueue.cpp -o tests/build/action_queue_test.exe
+./tests/build/action_queue_test.exe
+python -I tools/gen_layouts.py --check
+& C:/devkitPro/devkitARM/bin/arm-none-eabi-g++.exe -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft -Os -mword-relocations -fomit-frame-pointer -ffunction-sections -fdata-sections -fno-strict-aliasing -Wall -D__3DS__ -fno-rtti -fno-exceptions -std=gnu++17 -I Includes -I C:/devkitPro/libctrpf/include -I C:/devkitPro/libctru/include -fsyntax-only Sources/Actions.cpp Sources/Screens/BattleScreen.cpp Sources/Screens/BattleMenu.cpp Sources/Screens/BattleMenuDraw.cpp Sources/ActionQueue.cpp
+python -c "from pathlib import Path; b=Path('tests/build/mz2-followup-previews'); a=Path('tests/build/baseline-previews'); files=sorted(a.glob('*.ppm')); changed=[p.name for p in files if p.read_bytes()!=(b/p.name).read_bytes()]; print('HEAD comparison:',len(files),'baselines;',len(changed),'changed',changed); assert len(files)==18 and not changed; a=Path('tests/build/mz-followup-previews'); files=sorted(a.glob('*.ppm')); changed=[p.name for p in files if p.read_bytes()!=(b/p.name).read_bytes()]; print('Previous follow-up comparison:',len(files),'previews;',len(changed),'changed',changed); assert not changed"
+git diff --check
+```
+
+Both host tests, layout check and ARM syntax check pass; all **18 original
+baselines** and **33 previous follow-up previews** compare byte-identical.
+PIL numerical check (same points used to extract the regression fixtures):
+
+```python
+from pathlib import Path
+from PIL import Image
+shots = Path('analysis/private/shots')
+points = [(5,148),(19,148),(45,147),(23,166),(74,166),(5,166),(42,167),(52,166)]
+files = sorted(shots.glob('mz-mflk*-bottom.png')) + [
+    shots/'mz2-m2-armed-bottom.png', shots/'mz2-m3-page-bottom.png',
+    shots/'mz2-bla-armed-bottom.png',
+    Path('analysis/private/research/trainer-double/mega-moves-bottom.png')]
+for file in files:
+    image = Image.open(file).convert('RGB')
+    assert all(image.getpixel(point) == (255,255,255) for point in points), file
+# Passed: 14/14 captures, all eight RGB samples exactly (255,255,255).
+```
+
+Only BattleRules, BattleMenu header/logic, battle host tests and this document
+changed in this retest fix; prior uncommitted work remains. No commit, push,
+branch switch, Computer Use or `.codex` writes. Recheck native Mega in both Tauros
+encounters and verify that the Z-list animation no longer flashes the warning;
+no new emulator run or linked plugin build was performed here.

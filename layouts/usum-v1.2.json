@@ -408,8 +408,7 @@
         "bag": {"rect": [0, 130, 73, 211], "tap": [35, 165], "does": "battle bag", "verified": "tap", "evidence": "re5-b-bag, re5-b3-bag"},
         "run": {"rect": [60, 193, 259, 239], "tap": [160, 225], "does": "runs; with a wild Pokemon it escaped to the field without needing A (log Battle -> (none) -> FieldRo)", "verified": "tap", "evidence": "re5-b-prerun -> re5-b-run; second battle re5-b2-run"},
         "quick_ball": {"rect": [0, 0, 28, 28], "tap": [12, 12], "does": "(Y) throws a Poke Ball", "verified": "measured", "why": "would use an item"},
-        "z_move": {"rect": null, "tap": null, "does": "not present: no Z-move button in the move list; the bag has no Z-Crystal pocket in this save", "verified": "measured", "why": "unreachable"},
-        "mega": {"rect": null, "tap": null, "does": "not present in this save", "verified": "measured", "why": "unreachable"}
+        "power_buttons": {"rect": null, "tap": null, "does": "Mega / Z buttons belong to battle_moves; see its measured entries", "verified": "measured", "why": "shown in postgame research, absent in early save"}
       },
       "notes": ["fight/pokemon/bag/run rects are bounding boxes of each shape's colour in re5-b-cmd (the shapes are not rectangles; run's box includes its blue outline); use the tap points", "(88,80) and the arena centre (160,48) did nothing in battle"]
     },
@@ -417,6 +416,8 @@
       "scene": "Battle",
       "reach": "battle_command: fight",
       "buttons": {
+        "mega": {"rect": [0, 15, 126, 209], "tap": [55, 118], "does": "toggles Mega Evolution before choosing a move", "verified": "measured", "why": "manual tap confirmed 2026-11-10; repaired native flow awaits revalidation", "evidence": "trainer-double/mega-moves-bottom.png, 320x240; inclusive outer panel bounds, clipped at x0; interior tap"},
+        "z_power": {"rect": [0, 15, 126, 209], "tap": [55, 118], "does": "opens gold Z-move bars in their original rows (mz-decZ / mz-pikaZ evidence)", "verified": "measured", "why": "manual tap and Z rows confirmed 2026-11-10; repaired native flow awaits revalidation", "evidence": "trainer-double/zpower-moves-bottom.png, 320x240; same panel silhouette and interior tap as Mega"},
         "move1": {"rect": [150, 14, 319, 66], "tap": [235, 41], "does": "uses move 1 at once (no target screen in a single battle)", "verified": "tap", "evidence": "re5-b-fight2 -> re5-b-move1 (turn ran)"},
         "move2": {"rect": [150, 72, 319, 116], "tap": [235, 95], "does": "uses move 2", "verified": "tap", "evidence": "re5-b3-move2: Fire Fang KO'd the wild Spearow, battle ended"},
         "move3": {"rect": [150, 122, 319, 166], "tap": [235, 145], "does": "uses move 3", "verified": "tap", "evidence": "Double Kick PP 30 -> 29 (re5-b3-fight2 -> re5-b3-fight3)"},

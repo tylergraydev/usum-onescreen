@@ -360,3 +360,24 @@ similar prologue but command `000100C2`; it is not our unload target.
 Battle +0x7434C rebuilds the three projections, +0x4211C initializes them,
 and +0x3F410 updates the camera. Only +0x736D0 is hooked inside Battle.
 Lifetime, slot capacity and verification: [WIDESCREEN.md](WIDESCREEN.md#cro-lifetime).
+
+## Battle Mega / Z availability (2026-11-09; corrected 2026-11-10)
+
+No new memory offsets. RE1 and `foe-info.md` provide no verified ring ownership
+or per-battle Mega/Z-use flags; held items alone do not establish eligibility.
+`Sources/Actions.cpp` uses eight static lettering/plate pixels per button from
+all 10 Mega and 12 Z animated frames (`Includes/BattleRules.hpp`), RGB tolerance 16,
+three matching callbacks and two-plugin-frame expiry. The first-input guard uses
+the same flags. `WorldBattleMega` is bit 4 (old bit 21 collided with SaveIdle);
+Z is bit 5, Z-list bit 6, row-mask bits 12-15. These are pixel flags, not engine
+state. Consumers require the verified Battle Moves menu.
+
+Gold Z rows are now screenshot-mapped: Decidueye's slot 3 (zero-based) and Pikachu's
+slot 1 retain their original row centres. Two of three gold samples per row
+(x220/260/300, y53+50*row) authorize only that row; multiple eligible bits are
+supported. A single Back leaves the Z list for normal moves, not Command.
+Both layout bounds stay [0,15,126,209], tap (55,118); the user manually confirmed
+this tap for Mega/Z in Azahar. Layout verification remains conservatively marked
+measured for the native guarded step pending repaired-flow emulator validation.
+See [BATTLE-UI.md](BATTLE-UI.md#emulator-follow-up-verification-2026-11-10) for
+samples, gold thresholds, evidence, commands and remaining live checks.

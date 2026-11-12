@@ -199,6 +199,8 @@ namespace OneScreen
         { "battle_command.bag", 0, 130, 73, 211, 35, 165, LayoutVerified::Tap },
         { "battle_command.run", 60, 193, 259, 239, 160, 225, LayoutVerified::Tap },
         { "battle_command.quick_ball", 0, 0, 28, 28, 12, 12, LayoutVerified::Measured },
+        { "battle_moves.mega", 0, 15, 126, 209, 55, 118, LayoutVerified::Measured },
+        { "battle_moves.z_power", 0, 15, 126, 209, 55, 118, LayoutVerified::Measured },
         { "battle_moves.move1", 150, 14, 319, 66, 235, 41, LayoutVerified::Tap },
         { "battle_moves.move2", 150, 72, 319, 116, 235, 95, LayoutVerified::Tap },
         { "battle_moves.move3", 150, 122, 319, 166, 235, 145, LayoutVerified::Tap },

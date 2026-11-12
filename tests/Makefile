@@ -6,6 +6,9 @@
 # CODE_BIN=<Ultra Sun v1.2 code.bin> to also run the real and shifted-copy checks.
 CXX      ?= g++
 CXXFLAGS := -std=c++17 -Wall -Wextra -Werror -I ../Includes
+ifeq ($(OS),Windows_NT)
+CXXFLAGS += -D_CRT_SECURE_NO_WARNINGS
+endif
 OUT      := build
 PYTHON   ?= python3
 CODE_BIN ?=

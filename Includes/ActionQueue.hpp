@@ -52,8 +52,13 @@ namespace OneScreen
     const u32 WorldLearnList     = 1u << 17; // the forget screen's move list
     const u32 WorldLearnConfirm  = 1u << 18; // one move's page: "Forget this move" / back
 
-    const u32 WorldTrainerBattle = 1u << 19;
-    const u32 WorldRoyalBattle = 1u << 20;
+    const u32 WorldTrainerBattle = 1u << 7;
+    const u32 WorldRoyalBattle = 1u << 30;
+
+    const u32 WorldBattleMega = 1u << 4, WorldBattleZ = 1u << 5;
+    const u32 WorldBattleZList = 1u << 6;
+    const u32 WorldBattleZSlotMask = 0xFu << 12;
+    inline u32 WorldBattleZSlot(unsigned slot) { return slot < 4 ? 1u << (12 + slot) : 0; }
 
     struct ActionWorld
     {
@@ -82,6 +87,7 @@ namespace OneScreen
 
     enum class StepKind : u8
     {
+        BattlePowerTap, // measured power button, guarded by its current pixel probe
         Tap,        // touch `button`'s tap point for `frames`, then lift
         Press,      // hold `keys` for `frames`, then release
         Wait,       // `frames` frames
@@ -120,6 +126,7 @@ namespace OneScreen
     const u32 ActionGapFrames  = 2;
 
     ActionStep StepTap(const char *button, u32 frames = ActionHoldFrames);
+    ActionStep StepBattlePower(bool z);
     ActionStep StepXMenuEntry(int id);
     // Routing shared by the native grid and the field's built-in actions.
     // Slots are page-major; -1 means locked or absent. Defaults to the Sun save.

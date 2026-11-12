@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "ActionQueue.hpp"
+#include "QuickSaveRules.hpp"
 #include "UI/Text.hpp"
 #include "RomfsText.hpp"
 
@@ -1412,10 +1413,345 @@ static void TestDescriptionArchive(const char *path)
     std::printf("description GARC: %u entries decoded, all fit each layout\n", (unsigned)descriptions.size());
 }
 
+// RGB fixtures extracted from Azahar mz-mflk1..10 and mz-flk1..12.
+// Keep measured samples, not values copied from the classifier references.
+static void TestAnimatedPowerEvidence(void)
+{
+    CHECK(((WorldBattleMega | WorldBattleZ | WorldBattleZList | WorldBattleZSlotMask)
+           & (WorldSaveAsk | WorldSaveDone | WorldSaveIdle)) == 0);
+    // Includes both Tauros regressions: old (98,177) was (56,69,63)/(57,70,63).
+    const BattlePowerPixel frames0[14][8] = {
+        {{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255}}, // mz-mflk1-bottom.png
+        {{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255}}, // mz-mflk10-bottom.png
+        {{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255}}, // mz-mflk2-bottom.png
+        {{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255}}, // mz-mflk3-bottom.png
+        {{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255}}, // mz-mflk4-bottom.png
+        {{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255}}, // mz-mflk5-bottom.png
+        {{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255}}, // mz-mflk6-bottom.png
+        {{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255}}, // mz-mflk7-bottom.png
+        {{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255}}, // mz-mflk8-bottom.png
+        {{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255}}, // mz-mflk9-bottom.png
+        {{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255}}, // mz2-m2-armed-bottom.png
+        {{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255}}, // mz2-m3-page-bottom.png
+        {{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255}}, // mz2-bla-armed-bottom.png
+        {{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255},{255,255,255}}, // mega-moves-bottom.png
+    };
+    for (const auto &frame : frames0) {
+        BattlePowerPixel pixels[16] = {};
+        for (unsigned i=0; i<8; ++i) pixels[0+i] = frame[i];
+        CHECK(ProbeBattlePower(pixels) == BattlePower::Mega);
+    }
+    const BattlePowerPixel absentMega[][8] = {
+        {{73,38,12},{73,64,7},{73,50,0},{70,56,0},{70,67,53},{70,56,0},{70,57,0},{73,70,44}}, // mz-megaGone1-bottom.png
+        {{73,38,12},{73,64,7},{73,50,0},{70,56,0},{70,67,53},{70,56,0},{70,57,0},{73,70,44}}, // mz-megaGone2-bottom.png
+        {{73,38,12},{73,64,7},{73,50,0},{70,56,0},{70,67,53},{70,56,0},{70,57,0},{73,70,44}}, // mz-megaGone3-bottom.png
+        {{73,38,12},{73,64,7},{73,50,0},{70,56,0},{70,67,53},{70,56,0},{70,57,0},{73,70,44}}, // mz-megaGone4-bottom.png
+        {{73,38,12},{73,64,7},{73,50,0},{70,56,0},{70,67,53},{70,56,0},{70,57,0},{73,70,44}}, // mz-megaGone5-bottom.png
+        {{177,109,2},{211,167,15},{234,234,165},{201,197,156},{255,249,216},{91,66,9},{53,40,4},{70,51,15}}, // mz-flk1-bottom.png
+        {{73,38,12},{73,64,7},{73,50,0},{70,56,0},{70,67,53},{70,56,0},{70,57,0},{73,70,44}}, // mz-pikaZ-bottom.png
+        {{73,38,12},{73,64,7},{73,50,0},{70,56,0},{70,67,53},{70,56,0},{70,57,0},{73,70,44}}, // mz-decZ-bottom.png
+    };
+    for (const auto &frame : absentMega) {
+        BattlePowerPixel pixels[16] = {};
+        for (unsigned i=0; i<8; ++i) pixels[i]=frame[i];
+        CHECK(ProbeBattlePower(pixels)==BattlePower::None);
+    }
+    const BattlePowerPixel frames1[12][8] = {
+        {{255,255,255},{255,255,216},{255,255,234},{255,255,255},{39,22,0},{50,32,1},{51,34,0},{48,31,0}}, // mz-flk1-bottom.png
+        {{255,255,255},{255,255,218},{255,255,239},{255,255,255},{43,25,2},{50,32,1},{58,40,2},{48,31,0}}, // mz-flk10-bottom.png
+        {{255,255,255},{255,255,216},{255,255,234},{255,255,255},{38,21,0},{47,30,0},{53,35,1},{47,30,0}}, // mz-flk11-bottom.png
+        {{255,255,255},{255,255,221},{255,255,238},{255,255,255},{46,28,3},{52,33,2},{57,40,2},{57,38,4}}, // mz-flk12-bottom.png
+        {{255,255,255},{255,255,216},{255,255,236},{255,255,255},{44,26,2},{53,34,2},{59,40,3},{47,30,0}}, // mz-flk2-bottom.png
+        {{255,255,255},{255,255,216},{255,255,233},{255,255,255},{40,23,0},{52,33,2},{51,34,0},{49,32,0}}, // mz-flk3-bottom.png
+        {{255,255,255},{255,255,216},{255,255,237},{255,255,255},{43,25,2},{52,34,1},{60,41,3},{47,30,0}}, // mz-flk4-bottom.png
+        {{255,255,255},{255,255,216},{255,255,234},{255,255,255},{39,22,0},{50,32,1},{52,35,0},{48,31,0}}, // mz-flk5-bottom.png
+        {{255,255,255},{255,255,217},{255,255,236},{255,255,255},{43,25,2},{56,36,2},{56,38,2},{48,31,0}}, // mz-flk6-bottom.png
+        {{255,255,255},{255,255,216},{255,255,233},{255,255,255},{40,23,0},{52,33,2},{51,34,0},{48,31,0}}, // mz-flk7-bottom.png
+        {{255,255,255},{255,255,219},{255,255,239},{255,255,255},{41,24,1},{53,35,2},{57,39,2},{57,38,2}}, // mz-flk8-bottom.png
+        {{255,255,255},{255,255,216},{255,255,234},{255,255,255},{38,21,0},{47,30,0},{52,35,0},{48,31,0}}, // mz-flk9-bottom.png
+    };
+    for (const auto &frame : frames1) {
+        BattlePowerPixel pixels[16] = {};
+        for (unsigned i=0; i<8; ++i) pixels[8+i] = frame[i];
+        CHECK(ProbeBattlePower(pixels) == BattlePower::Z);
+    }
+    // Pixel-format quantisation stays within tolerance; a missing label does not.
+    for (unsigned kind=0; kind<2; ++kind) {
+        BattlePowerPixel pixels[16] = {};
+        for (unsigned i=0; i<8; ++i) {
+            const auto &p = BattlePowerReference[kind][i];
+            pixels[kind*8+i] = {u8(p.r & 0xF0),u8(p.g & 0xF0),u8(p.b & 0xF0)};
+        }
+        CHECK(ProbeBattlePower(pixels) == (kind == 0 ? BattlePower::Mega : BattlePower::Z));
+    }
+    const BattlePowerPixel rows[][12] = {
+        {{97,112,93},{62,77,57},{62,35,51},{99,112,92},{110,104,102},{62,36,51},{91,112,86},{62,40,22},{62,58,20},{255,231,46},{255,200,29},{255,185,27}}, // mz-decZ-bottom.png
+        {{97,112,93},{62,77,57},{62,35,51},{99,112,92},{110,104,102},{62,36,51},{91,112,86},{62,40,22},{62,58,20},{255,255,53},{255,238,41},{255,237,47}}, // mz-manZ-bottom.png
+        {{97,112,93},{62,77,57},{62,35,51},{99,112,92},{110,104,102},{62,36,51},{91,112,86},{62,40,22},{62,58,20},{255,248,47},{255,231,36},{255,231,42}}, // mz-manZ2-bottom.png
+        {{109,113,93},{115,116,98},{78,37,51},{255,196,25},{255,176,13},{255,173,17},{88,103,97},{68,41,51},{58,46,35},{106,112,94},{58,76,62},{60,26,31}}, // mz-pikaZ-bottom.png
+        {{109,113,93},{115,116,98},{78,37,51},{255,253,51},{255,235,39},{255,235,44},{88,103,97},{68,41,51},{58,46,35},{106,112,94},{58,76,62},{60,26,31}}, // mz-pikaZlist2-bottom.png
+        {{240,243,238},{93,122,69},{44,96,2},{240,243,238},{255,255,255},{44,96,2},{240,243,238},{44,96,2},{44,96,2},{242,241,244},{255,255,255},{80,50,115}}, // mz-dec-moves-bottom.png
+        {{244,244,238},{255,255,255},{108,102,0},{244,244,238},{129,125,68},{108,102,0},{240,241,241},{83,95,103},{28,48,63},{244,244,238},{129,125,68},{108,102,0}}, // mz-pikaMoves-bottom.png
+        {{238,243,244},{70,116,127},{4,85,104},{238,243,244},{4,85,104},{4,85,104},{238,243,244},{4,85,104},{4,85,104},{238,243,244},{4,85,104},{4,85,104}}, // mz-megaGone1-bottom.png
+    };
+    const u8 expected[] = {8,8,8,2,2,0,0,0};
+    for (unsigned i=0; i<sizeof(expected); ++i) CHECK(ProbeBattleZSlots(rows[i]) == expected[i]);
+    CHECK(ProbeBattleZSlots(nullptr) == 0);
+    BattlePowerPixel multi[12] = {};
+    for (unsigned row : {0u,2u,3u}) for (unsigned col=0; col<3; ++col)
+        multi[row*3+col] = {255,210,30};
+    multi[1] = {255,255,255}; // one sparkle must not hide an eligible row
+    CHECK(ProbeBattleZSlots(multi) == 13);
+    multi[2] = {90,90,90}; // only one gold sample left: row 0 no longer confirmed
+    CHECK(ProbeBattleZSlots(multi) == 12);
+}
+
+static void TestZRowsAndBack(void)
+{
+    for (u8 mask : {u8(2),u8(8),u8(5),u8(15)}) {
+        for (u8 slot=0; slot<4; ++slot) {
+            BattleMenu menu; auto snap = MovesSnap(); snap.zSlots = mask; snap.gameCursor = slot;
+            Idle(menu,snap,40);
+            const auto out = menu.Update(snap,BattleKeys::A);
+            if (mask & (1u<<slot)) CHECK(out.action && std::string(out.action) == "battle-z-move" + std::to_string(slot+1));
+            else CHECK(!out.action && !out.tap && menu.Note().find("No Z-Power") != std::string::npos);
+            const auto *def = FindAction("battle-z-move" + std::to_string(slot+1));
+            CHECK(def && CheckAction(*def).empty());
+            ActionWorld world{SceneBattle,WorldBattleMoves | WorldBattleZList | WorldBattleZSlot(slot)};
+            std::vector<std::string> log; ActionRunner runner;
+            CHECK(runner.Start(*def,world,log));
+            world.flags = WorldBattleMoves; // bar disappears before input
+            CHECK(!runner.Update(world,log).touching && !runner.Running());
+        }
+    }
+    {
+        // Touch can open Z while its native toggle is only locally armed.
+        BattleMenu manual; auto state = MovesSnap(); state.power = BattlePower::Z;
+        Idle(manual,state,40); manual.Update(state,BattleKeys::R);
+        state.power=BattlePower::None; state.zSlots=1;
+        const auto out=manual.Update(state,BattleKeys::A);
+        CHECK(out.action && std::string(out.action)=="battle-z-move1" && !out.tap);
+    }
+    // Queueing an ineligible base move must stop after opening Z, never use it normally.
+    BattleMenu menu; auto snap = MovesSnap(); snap.power = BattlePower::Z;
+    Idle(menu,snap,40); menu.Update(snap,BattleKeys::R); menu.Update(snap,BattleKeys::A);
+    snap.power = BattlePower::None; snap.zSlots = 8; snap.powerStepSucceeded = true;
+    CHECK(Idle(menu,snap,40) == nullptr);
+    CHECK(menu.Note().find("No Z-Power") != std::string::npos);
+    const auto zBack = menu.Update(snap,BattleKeys::B);
+    CHECK(zBack.action && std::string(zBack.action) == "battle-z-back");
+    snap.actionRunning = true; Idle(menu,snap,10);
+    snap.zSlots=0; snap.power=BattlePower::Z; snap.actionRunning=false;
+    Idle(menu,snap,30);
+    CHECK(!menu.Pending() && !menu.ZMode() && menu.PowerSelected() == BattlePower::None);
+    const auto back = menu.Update(snap,BattleKeys::B);
+    CHECK(back.action && std::string(back.action) == "battle-moves-back");
+
+    const auto *def=FindAction("battle-z-back");
+    CHECK(def && CheckAction(*def).empty());
+    ActionWorld world{SceneBattle,WorldBattleMoves | WorldBattleZList | WorldBattleZSlot(1)};
+    std::vector<std::string> log; ActionRunner runner;
+    CHECK(runner.Start(*def,world,log));
+    unsigned touches=0;
+    for (unsigned frame=0; frame<80; ++frame) {
+        if (frame==10) world.flags=WorldBattleMoves | WorldBattleZ;
+        const auto out=runner.Update(world,log);
+        if (out.touching) { ++touches; CHECK(out.x==15 && out.y==224); }
+    }
+    CHECK(touches==ActionHoldFrames && !runner.Running() && runner.Succeeded());
+    // A failed Back never retries into Command either.
+    CHECK(runner.Start(*def,world,log)); touches=0;
+    world.flags=WorldBattleMoves | WorldBattleZList | WorldBattleZSlot(1);
+    for (unsigned frame=0; frame<200; ++frame) if (runner.Update(world,log).touching) ++touches;
+    CHECK(touches==ActionHoldFrames && !runner.Running() && !runner.Succeeded());
+
+    if (s_previewDir) for (BattleLayout layout : {BattleLayout::Classic,BattleLayout::Bar,BattleLayout::Rail}) {
+        for (u8 mask : {u8(2),u8(8),u8(5)}) {
+            BattleMenu preview; preview.SetLayout(layout); auto state=MovesSnap(); state.zSlots=mask;
+            state.gameCursor=(mask & 1) ? 0 : (mask & 2) ? 1 : 3;
+            Idle(preview,state,40);
+            std::vector<u8> pixels(400*240*3,90);
+            UI::Surface surface{pixels.data(),3,400*3,UI::PixelFormat::BGR8,400,240};
+            UI::Canvas canvas(surface); preview.Draw(canvas,state);
+            const auto area=preview.Area();
+            for (int y=0;y<240;++y) for (int x=0;x<400;++x)
+                if (x<area.x || x>=area.Right() || y<area.y || y>=area.Bottom()) {
+                    const auto at=(y*400+x)*3;
+                    CHECK(pixels[at]==90 && pixels[at+1]==90 && pixels[at+2]==90);
+                }
+            WritePreview(pixels,std::string(s_previewDir)+"/battle-z-rows-"+std::to_string(mask)+"-"+std::to_string((unsigned)layout)+".ppm");
+        }
+    }
+}
+
+static void TestZListNoticeGrace(void)
+{
+    // Missing rows never authorize input, even while their warning is suppressed.
+    BattleMenu menu; auto snap=MovesSnap(); snap.power=BattlePower::Z;
+    Idle(menu,snap,40); menu.Update(snap,BattleKeys::R);
+    CHECK(menu.Update(snap,BattleKeys::A).tap != nullptr);
+    snap.actionRunning=true;
+    Idle(menu,snap,20);
+    snap.actionRunning=false; snap.powerStepSucceeded=true; snap.power=BattlePower::None;
+    for (u32 frame=1; frame<BattleMenu::ZListNoticeFrames; ++frame) {
+        const auto out=menu.Update(snap,0);
+        CHECK(!out.action && !out.tap && menu.Note().empty());
+    }
+    const auto stalled=menu.Update(snap,0);
+    CHECK(!stalled.action && !stalled.tap && menu.Note().find("unconfirmed")!=std::string::npos);
+    CHECK(menu.Update(snap,BattleKeys::B).action != nullptr); // Back still works
+
+    BattleMenu cancel; snap=MovesSnap(); snap.power=BattlePower::Z;
+    Idle(cancel,snap,40); cancel.Update(snap,BattleKeys::R); cancel.Update(snap,BattleKeys::A);
+    snap.power=BattlePower::None; snap.powerStepSucceeded=true;
+    Idle(cancel,snap,5);
+    const auto back=cancel.Update(snap,BattleKeys::B);
+    CHECK(back.action && std::string(back.action)=="battle-z-back" && cancel.Note().empty());
+
+    // Gold evidence resolves immediately after settling; the grace is not an input delay.
+    BattleMenu ready; snap=MovesSnap(); snap.power=BattlePower::Z;
+    Idle(ready,snap,40); ready.Update(snap,BattleKeys::R); ready.Update(snap,BattleKeys::A);
+    snap.power=BattlePower::None; snap.powerStepSucceeded=true;
+    for (u32 frame=1; frame<=BattleMenu::ListSettleFrames+3; ++frame) {
+        const auto out=ready.Update(snap,0);
+        CHECK(!out.action && !out.tap && ready.Note().empty());
+    }
+    snap.zSlots=1;
+    const auto chosen=ready.Update(snap,0);
+    CHECK(chosen.action && std::string(chosen.action)=="battle-z-move1" && ready.Note().empty());
+}
+
+static void TestBattlePower(void)
+{
+    CHECK(ProbeBattlePower(nullptr) == BattlePower::None);
+    BattlePowerPixel pixels[16] = {};
+    CHECK(ProbeBattlePower(pixels) == BattlePower::None);
+    for (unsigned kind = 0; kind < 2; ++kind) {
+        std::memset(pixels, 0, sizeof(pixels));
+        const BattlePower power = kind == 0 ? BattlePower::Mega : BattlePower::Z;
+        for (unsigned i = 0; i < 8; ++i) pixels[kind * 8 + i] = BattlePowerReference[kind][i];
+        CHECK(ProbeBattlePower(pixels) == power);
+        for (unsigned i = 0; i < 8; ++i) {
+            const auto saved = pixels[kind * 8 + i]; pixels[kind * 8 + i] = {0,0,0};
+            CHECK(ProbeBattlePower(pixels) == BattlePower::None);
+            pixels[kind * 8 + i] = saved;
+        }
+        const char *button = kind == 0 ? "battle_moves.mega" : "battle_moves.z_power";
+        const auto *rect = FindLayoutButton(button);
+        CHECK(rect && rect->x0 == 0 && rect->y0 == 15 && rect->x1 == 126 && rect->y1 == 209);
+        CHECK(rect && rect->tapX == 55 && rect->tapY == 118 && rect->verified == LayoutVerified::Measured);
+        ActionDef def{"power-test", "", InScene(SceneBattle), {StepBattlePower(kind == 1)}};
+        CHECK(CheckAction(def).empty());
+        ActionWorld world{SceneBattle, WorldBattleMoves | (kind == 0 ? WorldBattleMega : WorldBattleZ)};
+        std::vector<std::string> log;
+        ActionRunner runner;
+        CHECK(runner.Start(def, world, log));
+        const auto tap = runner.Update(world, log);
+        CHECK(tap.touching && tap.x == 55 && tap.y == 118);
+        runner.Cancel(log);
+        // Visibility disappears between scheduling and the first input frame.
+        CHECK(runner.Start(def, world, log));
+        world.flags = WorldBattleMoves;
+        CHECK(!runner.Update(world, log).touching);
+        CHECK(!runner.Running());
+        def.steps = {StepTap(button)};
+        CHECK(!CheckAction(def).empty()); // measured does not become globally tappable
+        def.steps = {StepBattlePower(kind == 1)};
+        def.steps[0].button = "battle_command.quick_ball";
+        CHECK(!CheckAction(def).empty());
+
+        for (u8 slot = 0; slot < 4; ++slot) {
+            BattleMenu menu;
+            auto snap = MovesSnap(); snap.power = power; snap.gameCursor = slot;
+            Idle(menu, snap, 40);
+            const auto key = menu.DrawKey(snap);
+            CHECK(menu.Update(snap, BattleKeys::R).tap == nullptr);
+            CHECK(menu.PowerSelected() == power && menu.DrawKey(snap) != key);
+            auto out = menu.Update(snap, BattleKeys::A);
+            CHECK(out.tap && std::string(out.tap) == button && !out.action);
+            snap.actionRunning = true;
+            for (int i = 0; i < 20; ++i) CHECK(!menu.Update(snap, 0).action);
+            snap.actionRunning = false; snap.powerStepSucceeded = true;
+            if (kind == 1) {
+                for (u32 i = 0; i < BattleMenu::ZListNoticeFrames; ++i) CHECK(!menu.Update(snap, 0).action);
+                CHECK(menu.Note().find("unconfirmed") != std::string::npos);
+                // Confirm the same row with a gold bar.
+                snap.zSlots = 1u << slot;
+            }
+            const char *action = Idle(menu, snap, 40);
+            CHECK(action && std::string(action) == (kind == 0 ? "battle-move" : "battle-z-move") + std::to_string(slot + 1));
+        }
+        // A selected power disappearing must not silently submit an ordinary move.
+        BattleMenu missing; auto snap = MovesSnap(); snap.power = power;
+        Idle(missing, snap, 40); missing.Update(snap, BattleKeys::R);
+        snap.power = BattlePower::None;
+        auto out = missing.Update(snap, BattleKeys::A);
+        CHECK(!out.tap && !out.action && missing.Note().find("unavailable") != std::string::npos);
+        // A failed power action cannot advance to a move.
+        BattleMenu failed; snap.power = power; Idle(failed, snap, 40);
+        failed.Update(snap, BattleKeys::R); failed.Update(snap, BattleKeys::A);
+        CHECK(Idle(failed, snap, 50) == nullptr);
+        CHECK(failed.Note().find("failed") != std::string::npos);
+        // Local toggle off does not tap anything.
+        BattleMenu cancel; Idle(cancel, snap, 40);
+        cancel.Update(snap, BattleKeys::R);
+        CHECK(!cancel.Update(snap, BattleKeys::R).tap && cancel.PowerSelected() == BattlePower::None);
+        // Battle/page boundaries clear selected powers.
+        cancel.Update(snap, BattleKeys::R); snap.menu = GameMenu::Command;
+        cancel.Update(snap, 0); CHECK(cancel.PowerSelected() == BattlePower::None);
+        if (s_previewDir) {
+            for (BattleLayout layout : {BattleLayout::Classic, BattleLayout::Bar, BattleLayout::Rail}) {
+                BattleMenu menu; menu.SetLayout(layout);
+                snap = MovesSnap(); snap.power = power;
+                Idle(menu, snap, 40); menu.Update(snap, BattleKeys::R);
+                std::vector<u8> bgr(400 * 240 * 3, 90);
+                UI::Surface surface{bgr.data(), 3, 400 * 3, UI::PixelFormat::BGR8, 400, 240};
+                UI::Canvas canvas(surface); menu.Draw(canvas, snap);
+                const auto area = menu.Area();
+                for (int y = 0; y < 240; ++y) for (int x = 0; x < 400; ++x)
+                    if (x < area.x || x >= area.Right() || y < area.y || y >= area.Bottom()) {
+                        const auto at = (y * 400 + x) * 3;
+                        CHECK(bgr[at] == 90 && bgr[at+1] == 90 && bgr[at+2] == 90);
+                    }
+                WritePreview(bgr, std::string(s_previewDir) + "/battle-power-" + (kind == 0 ? "mega-" : "z-")
+                    + std::to_string((unsigned)layout) + ".ppm");
+            }
+        }
+    }
+    {
+        BattleMenu menu; auto snap = MovesSnap(); snap.power = BattlePower::Z;
+        Idle(menu, snap, 40); menu.Update(snap, BattleKeys::R); menu.Update(snap, BattleKeys::A);
+        snap.menu = GameMenu::Other; menu.Update(snap, 0);
+        snap.menu = GameMenu::Moves; snap.power = BattlePower::None; Idle(menu, snap, 40);
+        auto out = menu.Update(snap, BattleKeys::A);
+        CHECK(!out.action && !out.tap && menu.Note().find("unconfirmed") != std::string::npos);
+        out = menu.Update(snap, BattleKeys::B);
+        CHECK(out.action && std::string(out.action) == "battle-z-back");
+    }
+    {
+        BattleMenu menu; auto snap = MovesSnap(); snap.power = BattlePower::Mega;
+        Idle(menu, snap, 40); menu.Update(snap, BattleKeys::L);
+        CHECK(!menu.Update(snap, BattleKeys::R).tap && menu.PowerSelected() == BattlePower::None);
+        menu.Update(snap, BattleKeys::B); menu.Update(snap, BattleKeys::R);
+        snap.moves[0].pp = 0;
+        const auto out = menu.Update(snap, BattleKeys::A);
+        CHECK(!out.tap && !out.action && menu.Note().find("PP") != std::string::npos);
+    }
+    BattleMenu unavailable; auto snap = MovesSnap(); Idle(unavailable, snap, 40);
+    const auto out = unavailable.Update(snap, BattleKeys::R);
+    CHECK(!out.tap && !out.action && unavailable.PowerSelected() == BattlePower::None);
+    CHECK(unavailable.Note().find("not confirmed") != std::string::npos);
+    CHECK((out.keys & BattleKeys::R) != 0);
+}
+
 int main(int argc, char **argv)
 {
     if (argc > 1)
         s_previewDir = argv[1];
+    TestZListNoticeGrace();
+    TestAnimatedPowerEvidence();
+    TestZRowsAndBack();
+    TestBattlePower();
     TestPages();
     TestCommand();
     TestMoves();
