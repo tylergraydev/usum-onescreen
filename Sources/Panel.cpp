@@ -1,4 +1,5 @@
 #include "Panel.hpp"
+#include "PhotoMode.hpp"
 
 #include <cstdlib>
 
@@ -14,12 +15,15 @@
 #include "UI/LayerGpu.hpp"
 #include "UI/GpuQuad.hpp"
 #include "Widescreen.hpp"
+#include <algorithm>
 #include <cmath>
 
 namespace OneScreen
 {
     using namespace CTRPluginFramework;
 
+    // Widescreen (squeeze > 1) uses CPU composition to avoid per-column GX
+    // submissions. At stock aspect, retain the original GPU chains below.
     // How the bottom screen gets onto the top one without costing emulator
     // speed (docs/PERF.md). In Azahar, framebuffers live on the host GPU, and
     // the CPU touching one is what costs:
@@ -273,27 +277,14 @@ namespace OneScreen
         s_textureCopy(in, out, run * runs, run / 16, 0, run / 16, (outStride - run) / 16, FlagTextureCopy);
     }
 
-    // Final top-screen copy only: source columns and cursor sprites remain in
-    // unsqueezed coordinates. One aligned vertical run per destination column
-    // handles arbitrary aspects without reading either framebuffer on the CPU.
+    // Stock-aspect final copy: one command. Widescreen uses CpuCopy instead;
+    // never restore a per-column GX squeeze here (docs/PERF.md).
     static void CopyTopColumns(u32 in, u32 inStride, u32 run, u32 columns,
                                const FbLayout &fb, const Placement &p)
     {
-        const float squeeze = WidescreenSqueeze();
-        if (!(squeeze > 1.0f))
-        {
-            s_textureCopy(in, BoxLineStart(fb, p, p.left), run * columns,
-                          run / 16, (inStride - run) / 16,
-                          run / 16, ((u32)fb.stepX - run) / 16, FlagTextureCopy);
-            return;
-        }
-        for (u32 dx = 0; dx < TopWidth; dx++)
-        {
-            const s32 sx = UI::SourceColumn(dx, squeeze) - (s32)p.left;
-            if (sx < 0 || sx >= (s32)columns)
-                continue;
-            CopyRuns(in + sx * inStride, BoxLineStart(fb, p, dx), run, 1, fb.stepX);
-        }
+        s_textureCopy(in, BoxLineStart(fb, p, p.left), run * columns,
+                      run / 16, (inStride - run) / 16,
+                      run / 16, ((u32)fb.stepX - run) / 16, FlagTextureCopy);
     }
 
     // Allocates the scratch block once. False (the panel then reads and
@@ -435,17 +426,7 @@ namespace OneScreen
         const bool touching = CursorGet(cx, cy);
         Transfer(s_bottomFb, full, ScreenHeight, BottomWidth, Flags(Rgb8, Rgba8));
         GpuCursor(full, ScreenHeight, BottomWidth, cx, LineIndex(fb, cy, ScreenHeight), touching);
-        const float squeeze = WidescreenSqueeze();
-        if (!(squeeze > 1.0f))
-            Transfer(full, BoxLineStart(fb, p, p.left), ScreenHeight, BottomWidth, Flags(Rgba8, Rgb8));
-        else
-            for (u32 dx = 0; dx < TopWidth; dx++)
-            {
-                const s32 sx = UI::SourceColumn(dx, squeeze) - (s32)p.left;
-                if (sx >= 0 && sx < (s32)BottomWidth)
-                    Transfer(full + sx * ScreenHeight * 4, BoxLineStart(fb, p, dx),
-                             ScreenHeight, 1, Flags(Rgba8, Rgb8));
-            }
+        Transfer(full, BoxLineStart(fb, p, p.left), ScreenHeight, BottomWidth, Flags(Rgba8, Rgb8));
     }
 
     static void GpuHalf(const Screen &screen, const Placement &p)
@@ -592,32 +573,85 @@ namespace OneScreen
         CopyTopColumns(twoGpu, TwoLen * 3, TwoLen * 3, TwoLines, fb, p);
     }
 
-    // Fallback without the GPU path: reads the framebuffer pixel by pixel
-    // every frame and draws with the CPU (what the panel did before), at 1/2
-    // for both panel sizes. Costs about 40% of Azahar's speed.
+    // Area filter: half-size averages 2x2; 2/3 uses 2:1 / 1:2 weights.
+    // Shared with the readback diagnostic so it checks the filtered picture.
+    static void SamplePanelPixel(const Source &src, const Placement &p, u32 x, u32 y,
+                                 u8 &r, u8 &g, u8 &b)
+    {
+        u32 rgb[3] = {};
+        // Work in units of 1/num source pixels. The overlap with each source
+        // pixel is an integer weight; total is den^2.
+        const u32 left = x * p.den, top = y * p.den;
+        for (u32 sx = left / p.num; sx * p.num < left + p.den; sx++)
+            for (u32 sy = top / p.num; sy * p.num < top + p.den; sy++)
+            {
+                const u32 wx = std::min((sx + 1) * p.num, left + p.den) - std::max(sx * p.num, left);
+                const u32 wy = std::min((sy + 1) * p.num, top + p.den) - std::max(sy * p.num, top);
+                u8 ir, ig, ib;
+                src.Pixel(sx, sy, ir, ig, ib);
+                rgb[0] += ir * wx * wy; rgb[1] += ig * wx * wy; rgb[2] += ib * wx * wy;
+            }
+        for (u32 &c : rgb)
+            c = (c + p.den * p.den / 2) / (p.den * p.den);
+        r = (u8)rgb[0]; g = (u8)rgb[1]; b = (u8)rgb[2];
+    }
+
+    // CPU composition retains the box, border and cursor at all sizes without
+    // submitting GX commands. Inverse column mapping also squeezes the border.
     static void CpuCopy(const Screen &screen, const Placement &p)
     {
         const FbLayout fb = GetLayout(screen);
         const Source src = FramebufferSource(fb);
-        const u32 den = p.den == 1 ? 1 : 2;
-        const u32 h = ScreenHeight / den, w = BottomWidth / den;
+        const u32 h = ScreenHeight * p.num / p.den, w = BottomWidth * p.num / p.den;
         const float squeeze = WidescreenSqueeze();
-        for (u32 y = 0; y < h; y++)
+        for (u32 dx = 0; dx < TopWidth; dx++)
         {
-            for (u32 dx = 0; dx < TopWidth; dx++)
+            const s32 boxX = UI::SourceColumn(dx, squeeze) - (s32)p.left;
+            if (boxX < 0 || boxX >= (s32)p.width)
+                continue;
+            const s32 x = boxX - (s32)p.border;
+            for (u32 boxY = 0; boxY < p.height; boxY++)
             {
-                const s32 x = UI::SourceColumn(dx, squeeze) - (s32)(p.left + p.border);
-                if (x < 0 || x >= (s32)w)
-                    continue;
-                u8 r, g, b;
-                src.Pixel(x * den, y * den, r, g, b);
-                u8 *out = fb.origin + (s32)(p.top + p.border + y) * fb.stepY + (s32)dx * fb.stepX;
+                const s32 y = (s32)boxY - (s32)p.border;
+                u8 r = BorderGray, g = BorderGray, b = BorderGray;
+                if (x >= 0 && x < (s32)w && y >= 0 && y < (s32)h)
+                    SamplePanelPixel(src, p, x, y, r, g, b);
+                u8 *out = fb.origin + (s32)(p.top + boxY) * fb.stepY + (s32)dx * fb.stepX;
                 EncodePixel(out, fb.format, r, g, b);
             }
         }
         u32 cx, cy;
         const bool touching = CursorGet(cx, cy);
-        CpuCursor(screen, p.left + p.border + cx / den, p.top + p.border + cy / den, touching);
+        CpuCursor(screen, p.left + p.border + cx * p.num / p.den,
+                  p.top + p.border + cy * p.num / p.den, touching);
+    }
+
+    // Periodic placement diagnostic: sample inside the picture, away from the
+    // cursor, and compare to the corresponding source (allowing filter error).
+    static void CheckCpuReadback(const Screen &screen, const Placement &p)
+    {
+        const FbLayout fb = GetLayout(screen);
+        const u32 den = p.den, num = p.num;
+        const u32 w = BottomWidth * num / den, h = ScreenHeight * num / den;
+        const float squeeze = WidescreenSqueeze();
+        const s32 sourceX = p.left + p.border + w / 4;
+        const s32 destinationX = squeeze > 1.0f
+            ? (s32)std::floor(200.0f + (sourceX - 200) / squeeze + 0.5f) : sourceX;
+        const s32 sampledX = UI::SourceColumn(destinationX, squeeze) - (s32)(p.left + p.border);
+        if (sampledX < 0 || sampledX >= (s32)w)
+            return; // Extremely narrow output may have no sample inside this picture.
+        const u32 qx = sampledX, qy = h / 4;
+        u8 r, g, b;
+        DecodePixel(fb.origin + (s32)(p.top + p.border + qy) * fb.stepY + destinationX * fb.stepX,
+                    fb.format, r, g, b);
+
+        u8 er, eg, eb;
+        SamplePanelPixel(FramebufferSource(fb), p, qx, qy, er, eg, eb);
+        const s32 tolerance = 24;
+        s_readbackChecks++;
+        if (std::abs((s32)r - (s32)er) <= tolerance && std::abs((s32)g - (s32)eg) <= tolerance
+            && std::abs((s32)b - (s32)eb) <= tolerance)
+            s_readbackOk++;
     }
 
     // Every ReadbackInterval drawn frames, reads the top-screen pixel a
@@ -628,6 +662,11 @@ namespace OneScreen
     // watching.
     static void CheckReadback(const Screen &screen, const Placement &p, bool gpu)
     {
+        if (!gpu)
+        {
+            CheckCpuReadback(screen, p);
+            return;
+        }
         const FbLayout fb = GetLayout(screen);
         const u32 den = gpu ? p.den : (p.den == 1 ? 1 : 2), num = gpu ? p.num : 1;
         const u32 w = BottomWidth * num / den, h = ScreenHeight * num / den;
@@ -691,9 +730,10 @@ namespace OneScreen
         const u64 start = s_perf ? svcGetSystemTick() : 0;
         const FbLayout fb = GetLayout(screen);
         const bool twoThirds = s_mode == PanelMode::Panel && GetSettings().panelSize == PanelSize::TwoThirds;
-        const bool gpu = GpuReady(screen);
+        const bool wide = WidescreenSqueeze() > 1.0f;
+        const bool gpu = !wide && GpuReady(screen);
         const Placement p = s_mode == PanelMode::Full ? FullPlacement()
-                          : twoThirds && gpu ? TwoThirdsPlacement(fb) : HalfPlacement(fb);
+                          : twoThirds && (gpu || wide) ? TwoThirdsPlacement(fb) : HalfPlacement(fb);
         if (!gpu)
             CpuCopy(screen, p);
         else if (s_mode == PanelMode::Full)
@@ -719,10 +759,18 @@ namespace OneScreen
         return !gpu || (s_mode == PanelMode::Panel && !twoThirds) || readback;
     }
 
+    // The native map copy needs no scratch allocation or format conversion.
+    static bool RectGpuReady(const Screen &top)
+    {
+        return s_textureCopy != nullptr && (top.Format & 7) == Rgb8
+            && (s_bottomFormat & 7) == (int)Rgb8
+            && top.Stride == ScreenHeight * 3 && s_bottomStride == ScreenHeight * 3;
+    }
+
     bool PanelCopyBottomRect(const Screen &top, u32 x, u32 y, u32 w, u32 h, u32 dx, u32 dy)
     {
         if (!top.IsTop || s_bottomFb == 0 || w == 0 || x + w > BottomWidth || dx + w > TopWidth
-            || y + h > ScreenHeight || dy + h > ScreenHeight || !GpuReady(top))
+            || y + h > ScreenHeight || dy + h > ScreenHeight || !RectGpuReady(top))
             return false;
         const FbLayout fb = GetLayout(top);
         const u32 run = h * 3;
@@ -748,6 +796,7 @@ namespace OneScreen
 
     static bool PanelCallback(const Screen &screen)
     {
+        if (PhotoModeActive()) return false;
         bool drew = DrawPanel(screen);
         // Drawn after the panel so test menus sit on top, and before the
         // screenshot hook so shots include them.
@@ -794,7 +843,8 @@ namespace OneScreen
         return Utils::Format("panel: mode %s, top frames %lu (format %d), bottom frames %lu (format %d), "
                              "drawn %lu, readback ok %lu/%lu, %s",
                              names[(int)s_mode], s_topFrames, s_topFormat, s_bottomFrames, s_bottomFormat,
-                             s_drawnFrames, s_readbackOk, s_readbackChecks, s_gpuStatus.c_str());
+                             s_drawnFrames, s_readbackOk, s_readbackChecks,
+                             WidescreenSqueeze() > 1.0f ? "panel: widescreen CPU (0 GX)" : s_gpuStatus.c_str());
     }
 
     // Starts a new timing window. Not synchronized with the OSD callback, so a
