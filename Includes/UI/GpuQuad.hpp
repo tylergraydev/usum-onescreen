@@ -11,6 +11,9 @@ namespace UI
 {
     // Overlay backend evolved from the verified spike (docs/GPUQUAD.md).
     // Four textured layers and pillarbox strips share one PICA list/restore.
+    // Blur builds a 64->32->16->8 box-filter pyramid, then draws two dark bands.
+    // Five render passes share that list/restore: zero added GX commands or
+    // allocations; 21,760 bytes of the existing FB diagnostic scratch are reused.
     //
     // Both modes run one PICA command list (our state, the draw, then the
     // game's state restored). `mode fb`, from the OSD callback:
@@ -33,6 +36,8 @@ namespace UI
     bool HiResReady(void);
     bool UpdateGpuQuad(u32 slot, const Surface &source, const Rect &region, const Rect &destination, bool dirty);
     void HideGpuQuad(u32 slot);
+    // Copy-free target filter; works with hires off, requires shadow/restore.
+    std::string FilterCommand(const std::string &args);
     std::string HiResCommand(const std::string &args);
 
     // Installs the ProcessCommandList hook. displayTransfer is the game's gx

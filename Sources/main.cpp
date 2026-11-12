@@ -16,8 +16,10 @@
 #include "Cursor.hpp"
 #include "InputCapture.hpp"
 #include "Panel.hpp"
+#include "PhotoMode.hpp"
 #include "Party.hpp"
 #include "PcAnywhere.hpp"
+#include "QuickSave.hpp"
 #include "UI/LayerGpu.hpp"
 #include "UI/GpuQuad.hpp"
 #include "Scene.hpp"
@@ -40,6 +42,8 @@
 #include "UI/Device.hpp"
 #include "Where.hpp"
 #include "Widescreen.hpp"
+#include "BattleWidescreen.hpp"
+#include "SidePanels.hpp"
 #include "FastText.hpp"
 
 namespace CTRPluginFramework
@@ -58,6 +62,7 @@ namespace CTRPluginFramework
     // Runs when the game is closing.
     void OnProcessExit(void)
     {
+        OneScreen::PhotoModeRequest(false);
     }
 
     // usum-onescreen.log at the SD card root is rewritten each boot, so a test
@@ -111,6 +116,7 @@ namespace CTRPluginFramework
         for (const std::string &w : warnings)
             WriteLog(Utils::Format("settings: %s %s", SettingsPath + 1, w.c_str()), false);
         OneScreen::SetSettings(settings);
+        OneScreen::ButtonsSetPhotoCombo(settings.photoKey);
         OneScreen::AutoPanelSetEnabled(settings.autoPanel);
         WriteLog("settings: " + OneScreen::DescribeSettings(settings), false);
         WriteLog(OneScreen::SetWidescreenAspect(settings.aspect), false);
@@ -235,6 +241,8 @@ namespace CTRPluginFramework
     //   poke ADDR VALUE | pokef ADDR FLOAT   (write data memory; hex ADDR/VALUE, decimal FLOAT)
     //   vtscan NAME   (global -> object -> vtable scan to /usum-vt-NAME.bin)
     //   scene   (log the current scene's module name)
+    //   panels [off|battle|field|both] (optional party strips)
+    //   fov SCALE|status    (idle overworld fovy multiplier, 0.8..1.5)
     //   aspect [VALUE|off]   (inspect / set perspective aspect; docs/WIDESCREEN.md)
     //   cullnames            (log culled pane names for the next frame, max 32)
     //   battle   (log the battle state, docs/RE1-battle.md; also logged on change)
@@ -371,6 +379,17 @@ namespace CTRPluginFramework
 
     static void RunCommand(const std::string &line)
     {
+        if (line == "photo on" || line == "photo off" || line == "photo status")
+        {
+            if (line != "photo status") OneScreen::PhotoModeRequest(line == "photo on");
+            WriteLog(OneScreen::PhotoModeStatus(), false);
+            return;
+        }
+        if (OneScreen::PhotoModeActive())
+        {
+            WriteLog("cmd: refused while photo mode is active: " + line, false);
+            return;
+        }
         unsigned a = 0, b = 0;
         char word[16] = {};
         int fields = 0;
@@ -413,6 +432,27 @@ namespace CTRPluginFramework
                 OneScreen::SetSettings(settings);
                 WriteLog(std::string("glyphs: ") + OneScreen::GlyphFamilyName(settings.glyphs), false);
             }
+        }
+        else if (line == "panels")
+            WriteLog(std::string("panels: ") + OneScreen::SidePanelModeName(OneScreen::GetSettings().sidePanels), false);
+        else if (line.compare(0, 7, "panels ") == 0 || line.compare(0, 7, "panels\t") == 0)
+        {
+            auto settings = OneScreen::GetSettings();
+            if (OneScreen::ParseSidePanelMode(line.substr(7), settings.sidePanels))
+            {
+                OneScreen::SetSettings(settings);
+                WriteLog(std::string("panels: ") + OneScreen::SidePanelModeName(settings.sidePanels), false);
+            }
+            else WriteLog("panels: invalid mode (use off, battle, field or both)", false);
+        }
+        else if (line == "fov" || line == "fov status")
+            WriteLog(OneScreen::DescribeFieldFov(), false);
+        else if (line.compare(0, 4, "fov ") == 0 || line.compare(0, 4, "fov\t") == 0)
+        {
+            float scale;
+            WriteLog(OneScreen::ParseFieldFov(line.substr(4), scale)
+                ? OneScreen::SetFieldFov(scale)
+                : "fov: invalid scale (use 0.8..1.5; 1 = stock)", false);
         }
         else if (line == "aspect")
             WriteLog(OneScreen::DescribeWidescreenAspect(), false);
@@ -601,6 +641,8 @@ namespace CTRPluginFramework
                 return;
             }
         }
+        else if (line == "filter" || line.compare(0, 7, "filter ") == 0 || line.compare(0, 7, "filter\t") == 0)
+            WriteLog(OneScreen::UI::FilterCommand(line == "filter" ? "" : line.substr(7)), false);
         else if (line.compare(0, 6, "hires ") == 0)
             WriteLog(OneScreen::UI::HiResCommand(line.substr(6)), false);
         else if (line.compare(0, 8, "gpuquad ") == 0)
@@ -610,6 +652,12 @@ namespace CTRPluginFramework
             if (line != "layergpu status")
                 OneScreen::UI::SetLayerGpu(line == "layergpu on");
             WriteLog(OneScreen::UI::LayerGpuStatus(), false);
+        }
+        else if (line == "save")
+        {
+            std::vector<std::string> log;
+            OneScreen::QuickSaveRequest(s_game->offsets.sceneManager, log);
+            for (const std::string &l : log) WriteLog(l, false);
         }
         else if (line == "pc" || line.compare(0, 3, "pc ") == 0)
         {
@@ -796,8 +844,11 @@ namespace CTRPluginFramework
         if (!OnPluginStack())
             return;
 
+        if (OneScreen::PhotoModeUpdate(s_game->offsets.sceneManager, PollCommands))
+            return; // Do not replay the exit chord into other plugin controls.
+
         const u32 panelKey = OneScreen::GetSettings().panelKey;
-        if (panelKey != 0 && Controller::IsKeysPressed(panelKey))
+        if (!OneScreen::QuickSaveRunning() && panelKey != 0 && Controller::IsKeysPressed(panelKey))
         {
             OneScreen::CyclePanelMode();
             OneScreen::AutoPanelManualOverride();
@@ -811,6 +862,10 @@ namespace CTRPluginFramework
         if (!speedLog.empty())
             WriteLog(speedLog, false);
 
+        const std::string battleWideLog = OneScreen::BattleWidescreenFrame(s_game->offsets.sceneManager);
+        if (!battleWideLog.empty())
+            WriteLog(battleWideLog, false);
+
         const std::string cullLog = OneScreen::WidescreenFrame();
         if (!cullLog.empty())
             WriteLog(cullLog, false);
@@ -819,6 +874,10 @@ namespace CTRPluginFramework
         OneScreen::ActionsUpdate(s_game->offsets.sceneManager, actionLog);
         for (const std::string &line : actionLog)
             WriteLog(line, false);
+
+        std::vector<std::string> saveLog;
+        OneScreen::QuickSaveUpdate(s_game->offsets.sceneManager, saveLog);
+        for (const std::string &line : saveLog) WriteLog(line, false);
 
         if (++frames == 300)
         {
@@ -916,6 +975,7 @@ namespace CTRPluginFramework
         for (const std::string &line : themeLog)
             WriteLog(line, false);
 
+        OneScreen::SidePanelsUpdate(s_game->offsets.sceneManager);
         OneScreen::ShotPoll();
         PollCommands();
     }
@@ -946,6 +1006,13 @@ namespace CTRPluginFramework
 
     static bool OnMenuOpening(void)
     {
+        if (!OneScreen::PhotoModeCanOpenMenu()) return false;
+        const u32 photoKey = OneScreen::GetSettings().photoKey;
+        if (photoKey != 0 && (Controller::GetKeysDown() & photoKey) == photoKey)
+        {
+            OneScreen::PhotoModeRequest(true);
+            return false; // photo_key may include CTRPF's default Select hotkey
+        }
         RefreshMenuNames();
         return true;
     }
@@ -997,6 +1064,13 @@ namespace CTRPluginFramework
         }
     }
 
+    static void QuickSave(MenuEntry *)
+    {
+        std::vector<std::string> log;
+        OneScreen::QuickSaveRequest(s_game->offsets.sceneManager, log);
+        for (const std::string &line : log) WriteLog(line, false);
+    }
+
     static void ShowSettings(MenuEntry *entry)
     {
         const std::string text = OneScreen::DescribeSettings(OneScreen::GetSettings())
@@ -1013,6 +1087,12 @@ namespace CTRPluginFramework
                                  + "\nProblems, if any, are in usum-onescreen.log.";
         MessageBox box("Settings reloaded", text);
         box();
+    }
+
+    static void RequestPhoto(MenuEntry *)
+    {
+        OneScreen::PhotoModeRequest(true);
+        WriteLog("photo: requested (menu; close menu to enter)", false);
     }
 
     static void InitMenu(PluginMenu &menu)
@@ -1040,6 +1120,12 @@ namespace CTRPluginFramework
                               "Open the PC boxes here, as at a Pokemon Center PC. Works in the overworld "
                               "when nothing else is going on; they open when this menu closes. "
                               "pc_key in usum-onescreen.ini sets a button combo for it.");
+        menu += new MenuEntry("Photo mode (close menu to enter)", nullptr, RequestPhoto,
+            "Freeze the game and hide plugin overlays after closing this menu. "
+            "Exit with photo_key, or B when no combo is configured. photo on|off|status also works.");
+        menu += new MenuEntry("Quick save", nullptr, QuickSave,
+                              "Save your adventure through the game's save flow after closing this menu. "
+                              "Only available in the idle overworld. save_key sets an optional combo.");
         menu += new MenuEntry("View settings", nullptr, ShowSettings,
                               "Show the settings in use, read from /usum-onescreen.ini at boot.");
         menu += new MenuEntry("Reload settings file", nullptr, ReloadSettings,
@@ -1093,6 +1179,7 @@ namespace CTRPluginFramework
         OneScreen::StartPartyScreen();
         OneScreen::StartBoxes();
         OneScreen::StartThemeScreen();
+        OneScreen::StartSidePanels();
         OneScreen::StartPanel(OneScreen::PanelMode::Off, s_game->offsets.gxDisplayTransfer.address,
                               s_game->offsets.gxTextureCopy.address);
         OneScreen::StartActions();

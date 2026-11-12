@@ -14,6 +14,7 @@
 // at a time, looking at the game again after each.
 
 #include <string>
+#include "BattleRules.hpp"
 
 #include "UI/Raster.hpp"
 #include "Settings.hpp"
@@ -29,7 +30,7 @@ namespace Screens
 
     // What the game's bottom screen shows in battle (BattleMenu in
     // Battle.hpp, same order; mirrored so this builds on the PC).
-    enum class GameMenu : u8 { None, Command, Moves, Pokemon, Bag, Other, PokemonPage, Question };
+    enum class GameMenu : u8 { None, Command, Moves, Pokemon, Bag, Other, PokemonPage, Question, Target };
 
     // One move as the menu shows it. type and effect come from the game's
     // move list (0xFF if unknown; the plugin fills type from the game's move
@@ -44,6 +45,7 @@ namespace Screens
         u8 effect = 0xFF;
         u8 pp = 0, maxPp = 0;
         u8 power = 0, accuracy = 0; // raw move-table values; accuracy 101 = never misses
+        bool spread = false;
         u8 category = 0xFF;        // 0 status, 1 physical, 2 special; 0xFF unknown
         std::string typeName;   // the game's name for the type, if known (else TypeName)
     };
@@ -71,11 +73,45 @@ namespace Screens
         std::string name;
     };
 
+    struct BattlerInfo
+    {
+        std::string name;
+        u8 types[3] = { 18, 18, 18 };
+        u8 stages[7] = { 6, 6, 6, 6, 6, 6, 6 };
+        bool caught = false;
+    };
+    struct TargetSlot
+    {
+        std::string name;
+        bool live = false, foe = false, self = false;
+    };
+    template<class Mon>
+    TargetSlot MakeTargetSlot(BattleKind kind, u8 format, u8 plate, const Mon &mon, const std::string &name)
+    {
+        const bool occupied = TargetOccupied(kind, format, plate)
+            && mon.address && mon.species >= 1 && mon.species <= 807;
+        return {occupied ? name : std::string(), occupied && LiveBattleRecord(mon),
+                TargetRecord(kind, plate).client != 0, plate == 2};
+    }
+    bool TargetSelectable(const TargetSlot &slot);
+    u8 FirstTarget(const TargetSlot slots[4]); // 0xFF when none
+    u8 NextTarget(const TargetSlot slots[4], u8 cursor, int delta);
+    std::string StatStagesText(const u8 stages[7]);
+    std::string BattlerTypesText(const u8 types[3]);
+    UI::Rect BattleInfoArea(BattleLayout layout);
+
     // The battle as the menu needs it, once per frame.
     struct BattleSnapshot
     {
         bool inBattle = false;
+        BattleKind kind = BattleKind::Unknown;
+        BattlerInfo foeInfo, playerInfo;
+        TargetSlot targets[4];
+        bool spread = false;
         GameMenu menu = GameMenu::None;
+        BattlePower power = BattlePower::None; // fresh, stable button probe; Moves only
+        bool powerStepSucceeded = false; // action completion, never infer success from a timeout
+        u8 zSlots = 0; // confirmed gold Z bars, one bit per original move row
         u8 gameCursor = 0;          // the game's highlighted entry
         u8 listCount = 0;           // entries in the game's list
         std::string activeName;     // the player's battler
@@ -109,6 +145,9 @@ namespace Screens
         std::string panelKey = "L+R";
     };
 
+    std::string BattleInfoKey(const BattleSnapshot &snap);
+    void DrawBattleInfo(UI::Canvas &canvas, const BattleSnapshot &snap, BattleLayout layout);
+
     enum class BattlePage : u8
     {
         Hidden,     // nothing to choose (animations, messages) or not in battle
@@ -118,7 +157,7 @@ namespace Screens
         Party,      // the Pokémon list (switch)
         Bag,        // the Bag: pockets, items, "Which Pokémon...?"
         Question,   // "Use next Pokémon?": Use next Pokémon / Run
-        Target,     // a game screen right after a move: the target choice (double / SOS battles)
+        Target,     // verified target vtable: explicit choice/confirmation (SOS / Royal)
     };
 
     // Command bar entries, in the order the menu lists them.
@@ -147,23 +186,17 @@ namespace Screens
     }
 
     // Keys the menu keeps from the game while it is up (the circle pad too).
-    // Y (quick ball) and touch pass. Moves also capture L (description);
+    // Y (quick ball) and touch pass. Moves capture L (description) and R (power);
     // the Bag captures L/R (pockets).
     const u32 BattleMenuKeys = BattleKeys::A | BattleKeys::B | BattleKeys::DRight | BattleKeys::DLeft
                                | BattleKeys::DUp | BattleKeys::DDown;
     const u32 BattleBagKeys = BattleMenuKeys | BattleKeys::L | BattleKeys::R;
 
-    // The target screen (Battle_TRG_LOW_000, never seen in a battle: no
-    // double battle or SOS call was reached): four buttons in two rows,
-    // and back. Seen only in the game's layout file, so its taps are
-    // "measured" and the action layer won't send them until someone
-    // verifies them (docs/LAYOUTS.md).
+    // SOS/Royal target screen and taps verified in trainer-double.md.
+    static const u32 TargetVtable = 0x10B848;
     static const u8 TargetCount = 4;
-    const char *TargetButton(u8 slot);          // battle_target.top_left ... bottom_right
-    const char *TargetLabel(u8 slot);           // "Top left" ...
-    // A game screen that comes up this soon after a move was sent is taken
-    // for the target choice (single battles go straight to the turn).
-    static const u32 TargetWindowFrames = 120;
+    const char *TargetButton(u8 slot);
+    const char *TargetLabel(u8 slot);
 
     // Item IDs that only restore HP (Potion ... Sitrus Berry): the menu
     // won't use one on a Pokémon at full HP or fainted ("It won't have any
@@ -187,6 +220,7 @@ namespace Screens
         // same this long before the next step is chosen; a goal fails after
         // GoalFrames or GoalSteps.
         static const u32 StepSettleFrames = 12;
+        static const u32 ZListNoticeFrames = 60; // after power action: allow the Z list to animate in
         static const u32 ListSettleFrames = 24;   // a list that just slid in
         static const u32 GoalFrames = 900;
         static const u32 GoalSteps = 16;
@@ -202,6 +236,10 @@ namespace Screens
 
         BattlePage Page(void) const { return m_page; }
         u8 Cursor(void) const { return m_cursor; }
+        bool Spread(void) const { return m_spread; }
+        BattlePower PowerSelected(void) const { return m_power; }
+        bool PowerSent(void) const { return m_powerSent; }
+        bool ZMode(void) const { return m_zMode; }
         bool DescriptionOpen(void) const { return m_description; }
         bool Pending(void) const { return m_pending; }
         u32 Stable(void) const { return m_stable; }   // frames on this page
@@ -281,6 +319,12 @@ namespace Screens
         bool m_fromGame = false;    // this page came from the game's Bag / Pokémon list
         u8 m_cursor = 0;
         u32 m_stable = 0;           // frames the game's menu has been up
+        bool m_spread = false;
+        BattlePower m_power = BattlePower::None;
+        bool m_zMode = false; // survives transient unknown/hidden pages
+        bool m_zBackPending = false;
+        bool m_powerSent = false;
+        u32 m_powerWait = 0;
         bool m_description = false; // L toggles; reset on leaving moves
         bool m_pending = false;     // a choice was sent, the game hasn't moved yet
         u32 m_pendingFrames = 0;
@@ -290,8 +334,6 @@ namespace Screens
         // The game's command menu has been up in this battle: the intro's
         // objects come before it, the battle's questions after.
         bool m_seenCommand = false;
-        // A move was sent this many frames ago (0xFFFF: not lately).
-        u32 m_moveAge = 0xFFFF;
         // Party page.
         bool m_sentPokemon = false; // the Pokémon command was sent (not a faint)
         bool m_forced = false;

@@ -9,6 +9,52 @@ namespace OneScreen
 {
 namespace Screens
 {
+    bool TargetSelectable(const TargetSlot &slot)
+    {
+        return slot.live && slot.foe && !slot.self;
+    }
+    u8 FirstTarget(const TargetSlot slots[4])
+    {
+        for (u8 i = 0; i < 4; i++) if (TargetSelectable(slots[i])) return i;
+        return 0xFF;
+    }
+    u8 NextTarget(const TargetSlot slots[4], u8 cursor, int delta)
+    {
+        if (cursor >= 4) return FirstTarget(slots);
+        for (int i = 0; i < 4; i++) {
+            cursor = StepCursor(cursor, 4, delta);
+            if (TargetSelectable(slots[cursor])) return cursor;
+        }
+        return 0xFF;
+    }
+    std::string StatStagesText(const u8 stages[7])
+    {
+        static const char *const names[] = { "Atk", "Def", "SpA", "SpD", "Spe", "Acc", "Eva" };
+        std::string text;
+        for (u8 i = 0; i < 7; i++) {
+            if (stages[i] > 12 || stages[i] == 6) continue;
+            if (!text.empty()) text += " ";
+            const int stage = (int)stages[i] - 6;
+            text += names[i];
+            text += stage > 0 ? "+" : "";
+            text += std::to_string(stage);
+        }
+        return text;
+    }
+    std::string BattlerTypesText(const u8 types[3])
+    {
+        std::string text;
+        for (u8 i = 0; i < 3; i++) {
+            if (types[i] >= 18) continue;
+            bool duplicate = false;
+            for (u8 j = 0; j < i; j++) duplicate = duplicate || types[i] == types[j];
+            if (duplicate) continue;
+            if (!text.empty()) text += " / ";
+            text += TypeName(types[i]);
+        }
+        return text;
+    }
+
     const char *TypeName(u8 type)
     {
         static const char *const names[] = {
@@ -176,7 +222,8 @@ namespace Screens
         case GameMenu::Bag:         return BattlePage::Bag;
         case GameMenu::Question:
             return snap.question == QuestionNextPokemon ? BattlePage::Question : BattlePage::Game;
-        case GameMenu::Other:       return BattlePage::Game;
+        case GameMenu::Target:      return BattlePage::Target;
+        case GameMenu::Other:       return snap.otherVtable == TargetVtable ? BattlePage::Target : BattlePage::Game;
         default:                    return BattlePage::Hidden;
         }
     }
@@ -192,6 +239,10 @@ namespace Screens
         if (page != BattlePage::Hidden)
             m_sentPokemon = false;
         m_description = false;
+        m_power = BattlePower::None;
+        m_powerSent = false;
+        m_powerWait = 0;
+        m_zBackPending = false;
         m_page = page;
         m_menu = snap.menu;
         m_afterCatch = snap.afterCatch;
@@ -218,6 +269,7 @@ namespace Screens
                     break;
                 }
         }
+        if (page == BattlePage::Target) m_cursor = FirstTarget(snap.targets);
         m_bagCursor = 0;
         m_bagTop = 0;
         m_wantPocket = -1;
@@ -415,8 +467,13 @@ namespace Screens
             break;
         case Goal::Target:
         case Goal::TargetBack:
-            if (snap.menu != GameMenu::Other)
+            if (PageFor(snap) != BattlePage::Target)
                 EndGoal("");
+            else if (m_goal == Goal::Target && m_used)
+                EndGoal("The game didn't answer, try again");
+            else if (m_goal == Goal::Target && (m_goalArg < 0 || m_goalArg >= 4
+                     || !TargetSelectable(snap.targets[m_goalArg])))
+                EndGoal("Target changed, choose again");
             else
             {
                 Tap(out, m_goal == Goal::Target ? TargetButton((u8)m_goalArg) : "battle_target.back", 2);
@@ -460,7 +517,7 @@ namespace Screens
             {
                 m_popup = false;
                 if (m_popupCursor == 0)
-                    StartGoal(Goal::Switch, m_cursor, "Come back! Go, " + MonName(snap, m_cursor) + "!");
+                    StartGoal(Goal::Switch, m_cursor, (m_forced ? "Go, " : "Come back! Go, ") + MonName(snap, m_cursor) + "!");
             }
             return;
         }
@@ -593,43 +650,35 @@ namespace Screens
             StartGoal(Goal::Answer, m_cursor, "");
     }
 
-    void BattleMenu::UpdateTarget(const BattleSnapshot &, u32 pressed)
+    void BattleMenu::UpdateTarget(const BattleSnapshot &snap, u32 pressed)
     {
-        // Two rows of two, as the game lays them out.
-        if (pressed & (BattleKeys::Left | BattleKeys::Right))
-            m_cursor ^= 1;
-        else if (pressed & (BattleKeys::Up | BattleKeys::Down))
-            m_cursor ^= 2;
-        else if (pressed & BattleKeys::A)
+        if (m_cursor >= 4 || !TargetSelectable(snap.targets[m_cursor])) m_cursor = FirstTarget(snap.targets);
+        if (pressed & (BattleKeys::Left | BattleKeys::Up))
+            m_cursor = NextTarget(snap.targets, m_cursor, -1);
+        else if (pressed & (BattleKeys::Right | BattleKeys::Down))
+            m_cursor = NextTarget(snap.targets, m_cursor, 1);
+        else if ((pressed & BattleKeys::A) && m_cursor < 4 && TargetSelectable(snap.targets[m_cursor]))
             StartGoal(Goal::Target, m_cursor, "");
         else if (pressed & BattleKeys::B)
             StartGoal(Goal::TargetBack, 0, "");
-        if (pressed & (BattleKeys::Left | BattleKeys::Right | BattleKeys::Up | BattleKeys::Down))
-            m_note.clear();
     }
 
     BattleMenuOutput BattleMenu::Update(const BattleSnapshot &snap, u32 pressed)
     {
         BattleMenuOutput out;
         BattlePage page = PageFor(snap);
-        if (m_moveAge < 0xFFFF)
-            m_moveAge++;
-        if (page == BattlePage::Command || !snap.inBattle)
-            m_moveAge = 0xFFFF;
+        if (!snap.inBattle) { m_spread = false; m_zMode = false; }
         if (page == BattlePage::Command)
             m_seenCommand = true;
         else if (!snap.inBattle)
             m_seenCommand = false;
-        else if (page == BattlePage::Game && snap.menu == GameMenu::Other && m_moveAge < TargetWindowFrames)
-            page = BattlePage::Target;
-        if (m_page == BattlePage::Target && page == BattlePage::Game && snap.menu == GameMenu::Other)
-            page = BattlePage::Target;  // stays the target screen while it is up
         // Between the Pokémon list and a Pokémon's page the game shows no
         // screen, then its command menu, for a few frames: until a goal's
         // last tap is sent, the page stays through that.
         const bool steps = m_page == BattlePage::Party || m_page == BattlePage::Bag || m_page == BattlePage::Question
                            || m_page == BattlePage::Target;
-        if ((page == BattlePage::Hidden || page == BattlePage::Command) && steps && Busy() && !m_used && snap.inBattle
+        if ((page == BattlePage::Hidden || page == BattlePage::Command
+             || (page == BattlePage::Game && snap.menu == GameMenu::Other)) && steps && Busy() && !m_used && snap.inBattle
             && m_gapFrames < GapFrames)
         {
             m_gapFrames++;
@@ -642,6 +691,7 @@ namespace Screens
         m_menu = snap.menu;
         if (m_stable < 0xFFFF)
             m_stable++;
+        if (m_page == BattlePage::Command && m_stable >= CommandSettleFrames) m_zMode = false;
         const u32 sig = GameSignature(snap);
         if (sig != m_gameSig)
         {
@@ -679,8 +729,17 @@ namespace Screens
             return out;
         }
         out.capture = true;
-        out.keys = BattleMenuKeys | (m_page == BattlePage::Moves ? BattleKeys::L : 0);
+        out.keys = BattleMenuKeys | (m_page == BattlePage::Moves ? BattleKeys::L | BattleKeys::R : 0);
 
+        if (m_page == BattlePage::Moves && m_zMode && !snap.actionRunning && !snap.zSlots
+            && snap.power == BattlePower::Z && (m_zBackPending || m_queued == nullptr)) {
+            m_zMode = false;
+            m_zBackPending = false;
+            m_power = BattlePower::None;
+            m_powerSent = false;
+            m_pending = false;
+            m_note.clear();
+        }
         if (m_pending && ++m_pendingFrames > PendingFrames)
         {
             // The action gave up (it logs why); let the player choose again.
@@ -695,6 +754,56 @@ namespace Screens
         if (snap.actionRunning || m_pending)
             return out;
 
+        if (m_page == BattlePage::Moves && snap.zSlots) {
+            m_zMode = true;
+            if (!m_powerSent) m_power = BattlePower::None; // also accept a manually opened Z list
+        }
+        if (m_page == BattlePage::Moves && !m_description && (pressed & BattleKeys::B) && m_zMode) {
+            m_queued = nullptr;
+            m_power = BattlePower::None;
+            m_powerSent = false;
+            m_zBackPending = true;
+            m_pending = true;
+            m_pendingFrames = 0;
+            m_note.clear();
+            out.action = "battle-z-back";
+            return out;
+        }
+        if (m_page == BattlePage::Moves && m_powerSent && m_queued != nullptr)
+        {
+            if (++m_powerWait < ListSettleFrames) return out;
+            if (!snap.powerStepSucceeded) {
+                m_queued = nullptr;
+                m_power = BattlePower::None;
+                m_powerSent = false;
+                m_zMode = snap.zSlots != 0;
+                m_note = "Power tap failed; choose again";
+                return out;
+            }
+            if (m_power == BattlePower::Z) {
+                if (!snap.zSlots) {
+                    if (m_powerWait >= ZListNoticeFrames)
+                        m_note = "Z rows unconfirmed: panel / B";
+                    return out;
+                }
+                if (!(snap.zSlots & (1u << m_cursor))) {
+                    m_queued = nullptr;
+                    m_note = "No Z-Power in this slot";
+                    return out;
+                }
+            }
+            m_note.clear();
+        }
+        if (m_page == BattlePage::Moves && m_queued == nullptr && !m_description && (pressed & BattleKeys::R))
+        {
+            if (m_zMode) m_note = "B returns to normal moves";
+            else if (snap.power == BattlePower::None) m_note = "Power button not confirmed";
+            else {
+                m_power = m_power == snap.power ? BattlePower::None : snap.power;
+                m_note.clear();
+            }
+            return out;
+        }
         if (m_page == BattlePage::Moves && m_queued == nullptr && (pressed & BattleKeys::L))
         {
             m_description = !m_description;
@@ -717,12 +826,26 @@ namespace Screens
                 const u8 count = (u8)BattleCommand::Count;
                 if (pressed & BattleKeys::Up
                     || (m_layout == BattleLayout::Bar && (pressed & BattleKeys::Left)))
+                {
                     m_cursor = StepCursor(m_cursor, count, -1);
+                    if (!BattleHasBag(snap.kind) && m_cursor == (u8)BattleCommand::Bag)
+                        m_cursor = StepCursor(m_cursor, count, -1);
+                }
                 else if (pressed & BattleKeys::Down
                          || (m_layout == BattleLayout::Bar && (pressed & BattleKeys::Right)))
+                {
                     m_cursor = StepCursor(m_cursor, count, 1);
+                    if (!BattleHasBag(snap.kind) && m_cursor == (u8)BattleCommand::Bag)
+                        m_cursor = StepCursor(m_cursor, count, 1);
+                }
                 else if (pressed & BattleKeys::A)
-                    m_queued = CommandActions[m_cursor];
+                {
+                    if (m_cursor == (u8)BattleCommand::Run && !BattleCanRun(snap.kind))
+                        m_note = "Can't run from a trainer";
+                    else if (m_cursor == (u8)BattleCommand::Bag && !BattleHasBag(snap.kind))
+                        m_note = "No Bag in a Battle Royal";
+                    else m_queued = CommandActions[m_cursor];
+                }
             }
             else
             {
@@ -748,10 +871,14 @@ namespace Screens
                     for (u8 i = 0; i < snap.moveCount; i++)
                         anyPp = anyPp || snap.moves[i].pp > 0;
                     const MoveRow &row = snap.moves[m_cursor];
-                    if (row.pp == 0 && anyPp)
+                    if (m_zMode && !(snap.zSlots & (1u << m_cursor)))
+                        m_note = snap.zSlots ? "No Z-Power in this slot" : "Z rows unconfirmed: panel / B";
+                    else if (row.pp == 0 && anyPp)
                         m_note = (row.name.empty() ? std::string("That move") : row.name) + " has no PP left";
-                    else
+                    else {
+                        m_spread = row.spread;
                         m_queued = MoveActions[m_cursor];
+                    }
                 }
             }
         }
@@ -759,11 +886,38 @@ namespace Screens
         const u32 settle = m_page == BattlePage::Command ? CommandSettleFrames : MovesSettleFrames;
         if (m_queued != nullptr && m_stable >= settle)
         {
+            if (m_page == BattlePage::Moves && m_queued != MoveBack && m_power != BattlePower::None && !m_powerSent)
+            {
+                if (snap.power != m_power) {
+                    m_queued = nullptr;
+                    m_power = BattlePower::None;
+                    m_note = "Power unavailable: no button";
+                    return out;
+                }
+                out.tap = m_power == BattlePower::Mega ? "battle_moves.mega" : "battle_moves.z_power";
+                m_powerSent = true;
+                if (m_power == BattlePower::Z) m_zMode = true;
+                m_powerWait = 0;
+                return out;
+            }
+            if (m_page == BattlePage::Moves && m_zMode && m_queued != MoveBack) {
+                if (!(snap.zSlots & (1u << m_cursor))) {
+                    m_queued = nullptr;
+                    m_note = "No Z-Power in this slot";
+                    return out;
+                }
+                static const char *const zActions[] = {"battle-z-move1", "battle-z-move2", "battle-z-move3", "battle-z-move4"};
+                m_queued = zActions[m_cursor];
+            }
             out.action = m_queued;
             if (m_queued == CommandActions[(int)BattleCommand::Pokemon])
                 m_sentPokemon = true;
-            if (m_page == BattlePage::Moves && m_queued != MoveBack)
-                m_moveAge = 0;
+            if (m_page == BattlePage::Command && m_cursor == (u8)BattleCommand::Run && !BattleCanRun(snap.kind)) {
+                out.action = nullptr;
+                m_note = "Can't run from a trainer";
+                m_queued = nullptr;
+                return out;
+            }
             m_queued = nullptr;
             m_pending = true;
             m_pendingFrames = 0;
@@ -837,7 +991,7 @@ namespace Screens
         else if (m_page == BattlePage::Game)
         {
             static const char *const menus[] = { "none", "command", "moves", "pokemon", "bag", "other",
-                                                 "pokemon page", "question" };
+                                                 "pokemon page", "question", "target" };
             out += snap.afterCatch ? std::string(", after catch") : std::string(", game ") + menus[(int)snap.menu];
             if (Prompt())
                 out += Format(", prompt, vt %08X", snap.otherVtable) + (snap.menu == GameMenu::Question

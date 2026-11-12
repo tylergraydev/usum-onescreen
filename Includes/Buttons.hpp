@@ -58,6 +58,12 @@ namespace OneScreen
     // time all of `keys` become held together, and hides those keys from the
     // game from then until each is released. 0 turns it off. The count only
     // grows; compare it with the last value seen.
+    void ButtonsSetPhotoCombo(u32 keys);
+    u32 ButtonsPhotoComboHits(void);
+    // Reads counted by the photo combo path; verifies capture before freezing.
+    u32 ButtonsPhotoComboReads(void);
+    void ButtonsSetSaveCombo(u32 keys);
+    u32 ButtonsSaveComboHits(void);
     void ButtonsSetCombo(u32 keys);
     u32 ButtonsComboHits(void);
 

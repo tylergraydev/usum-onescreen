@@ -3,6 +3,7 @@
 #include <CTRPluginFramework.hpp>
 
 #include "Actions.hpp"
+#include "QuickSave.hpp"
 #include "Buttons.hpp"
 #include "PcAnywhereRules.hpp"
 #include "Scene.hpp"
@@ -215,19 +216,12 @@ namespace OneScreen
         }
     }
 
-    void PcAnywhereRequest(u32 sceneManager, const char *source, std::vector<std::string> &log)
+    PcWorld ReadPcWorld(u32 sceneManager)
     {
-        if (!s_ready)
-        {
-            s_refused++;
-            log.push_back(std::string("pc: refused (not available: ") + s_startReport + ")");
-            return;
-        }
-
         PcWorld w;
         w.pending = s_state != StateIdle;
         w.scene = SceneModule(sceneManager);
-        w.actionRunning = ActionRunning();
+        w.actionRunning = ActionRunning() || QuickSaveRunning();
         u32 fieldVtable = 0, fieldObject = 0, sceneObject = 0;
         if (w.scene == "FieldRo")
         {
@@ -242,6 +236,23 @@ namespace OneScreen
             if (fieldObject == 0 && w.fieldState == 0)
                 w.fieldState = -1;
         }
+
+        return w;
+    }
+
+    void PcAnywhereRequest(u32 sceneManager, const char *source, std::vector<std::string> &log)
+    {
+        if (!s_ready)
+        {
+            s_refused++;
+            log.push_back(std::string("pc: refused (not available: ") + s_startReport + ")");
+            return;
+        }
+
+        PcWorld w = ReadPcWorld(sceneManager);
+        u32 fieldVtable = 0;
+        const u32 fieldObject = FieldStateObject(sceneManager, fieldVtable);
+        const u32 sceneObject = Word(Word(sceneManager));
 
         const std::string why = PcRefusal(w);
         if (!why.empty())
