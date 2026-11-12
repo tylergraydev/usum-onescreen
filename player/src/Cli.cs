@@ -31,7 +31,13 @@ namespace UsumOneScreen
   cheats [on NAME|off NAME]  list / change cheats
   set graphics=keep|native|high|ultra  set rendering resolution
   set visual_quality=keep|off|sharpen|aa|sharpen-aa  OpenGL post-processing
+  texture-pack list|install ZIP [--game TITLEID]|use NAME|off|remove NAME
+  texture-pack from-dump NAME  make a library pack from this game's dumped images
+                         packs for selected game (close Azahar first)
+  set preload_textures=on|off async_custom_loading=on|off dump_textures=on|off
+                         preload uses RAM; dumping slows the game
   status                 show the setup
+  check-update           check for a newer stable launcher (does not install)
   snapshot PNG           draw the window into PNG and exit (for tests)
 
 --home DIR uses DIR instead of the app's folder for Azahar and the settings.";
@@ -56,6 +62,10 @@ namespace UsumOneScreen
                 list.RemoveAt(0);
                 switch (command)
                 {
+                    case "check-update":
+                        Leftover(list);
+                        Console.WriteLine(UpdateCheck.Check(home, true, DateTime.UtcNow).GetAwaiter().GetResult().Message);
+                        return 0;
                     case "check": return Check(home, list);
                     case "setup": return SetupCommand(home, list);
                     case "play": return Play(home, list);
@@ -81,6 +91,7 @@ namespace UsumOneScreen
                         if (list.Count != 1) throw new SetupException("import needs PATH [--name NAME]");
                         Console.WriteLine("Slot imported: " + SaveArchive.Import(home, list[0], name)); return 0;
                     case "cheats": return CheatCommand(home, list);
+                    case "texture-pack": return TextureCommand(home, list);
                     case "status": return Status(home);
                     case "snapshot": return Snapshot(home, list);
                     default:
@@ -93,6 +104,38 @@ namespace UsumOneScreen
                 Console.Error.WriteLine("error: " + e.Message);
                 return 1;
             }
+        }
+
+        static int TextureCommand(Home home, List<string> args)
+        {
+            void Warn(string name)
+            {
+                string warning = TexturePacks.Warning(home, name);
+                if (warning != null) Console.WriteLine("Warning: " + warning);
+            }
+            string game = Take(args, "--game");
+            if (args.Count == 1 && args[0] == "list")
+            {
+                Console.WriteLine(home.GameName + " (" + Dump.Title(home.CurrentTitle) + ") " + (TexturePacks.Get(home, "custom_textures") ? "on" : "off"));
+                foreach (string pack in TexturePacks.List(home))
+                {
+                    Console.WriteLine((System.IO.Path.GetFileName(pack) == TexturePacks.Active(home) ? "* " : "  ") + TexturePacks.Name(pack));
+                    Warn(TexturePacks.Name(pack));
+                }
+                return 0;
+            }
+            if (args.Count == 2 && args[0] == "install")
+            {
+                string installed = TexturePacks.Install(home, args[1], game);
+                Console.WriteLine("Installed: " + installed); Warn(installed);
+            }
+            else if (game != null) throw new SetupException("--game is only for texture-pack install.");
+            else if (args.Count == 2 && args[0] == "from-dump") Console.WriteLine("Created pack: " + TexturePacks.FromDump(home, args[1]));
+            else if (args.Count == 2 && args[0] == "use") { TexturePacks.Use(home, args[1]); Warn(args[1]); }
+            else if (args.Count == 2 && args[0] == "remove") TexturePacks.Remove(home, args[1]);
+            else if (args.Count == 1 && args[0] == "off") TexturePacks.Off(home);
+            else throw new SetupException("texture-pack needs list, install ZIP [--game TITLEID], from-dump NAME, use NAME, off or remove NAME");
+            return 0;
         }
 
         static int SlotCommand(Home home, List<string> args)
@@ -255,6 +298,7 @@ namespace UsumOneScreen
             var ini = PluginIni.Load(home.PluginIniPath);
             bool pluginChanged = false;
             string aspectChoice = null, graphicsChoice = null, glyphChoice = null, visualChoice = null;
+            var textureOptions = new Dictionary<string, bool>();
             ControlPreset? controls = null;
             foreach (var a in args)
             {
@@ -268,6 +312,8 @@ namespace UsumOneScreen
                         throw new SetupException("run setup first");
                     controls = ParsePreset(value);
                 }
+                else if (key == "dump_textures" || key == "preload_textures" || key == "async_custom_loading")
+                    textureOptions[key] = TexturePacks.ParseBool(value);
                 else if (key == "graphics")
                 {
                     if (!GameOptions.Graphics.Contains(value.ToLowerInvariant())) throw new SetupException("bad graphics");
@@ -295,6 +341,12 @@ namespace UsumOneScreen
                 }
                 else
                     throw new SetupException($"unknown setting '{key}'");
+            }
+            foreach (var option in textureOptions)
+            {
+                TexturePacks.Set(home, option.Key, option.Value);
+                if (option.Value && option.Key == "preload_textures") Console.WriteLine("Preloading textures uses additional RAM.");
+                if (option.Value && option.Key == "dump_textures") Console.WriteLine("Dumping textures slows the game. Folder: " + TexturePacks.DumpFolder(home));
             }
             if (pluginChanged)
                 ini.Save(home.PluginIniPath);

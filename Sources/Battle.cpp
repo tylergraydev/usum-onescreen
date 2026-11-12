@@ -18,6 +18,7 @@ namespace OneScreen
     // docs/RE1-battle.md.
     static const u32 VtView        = 0x10A528;  // view object at scene +0x94
     static const u32 VtMenuCommand = 0x10B598;  // Fight / Pokémon / Bag / Run
+    static const u32 VtMenuTarget  = 0x10B848;  // SOS/Royal, research live verified
     static const u32 VtMenuMoves   = 0x10B724;  // move list
     static const u32 VtBusy        = 0x10B43C;  // under the menus: animations, messages
 
@@ -112,6 +113,8 @@ namespace OneScreen
         mon.maxHp = Read16(address + MonMaxHp);
         mon.hp = Read16(address + MonHp);
         mon.ability = Read16(address + MonAbility);
+        for (u32 i = 0; i < 3; i++) mon.types[i] = Read8(address + 0x1E4 + i);
+        for (u32 i = 0; i < 7; i++) mon.stages[i] = Read8(address + 0x1EA + i);
         mon.level = Read8(address + MonLevel);
         mon.partyIndex = Read8(address + MonPartyIndex);
         for (u32 i = 0; i < 4; i++)
@@ -141,14 +144,31 @@ namespace OneScreen
         if (pokecon == 0)
             return state;
 
-        for (u32 client = 0; client < 2; client++)
+        // Static path: Battle+0x3E0FC view ctor, +0x93D98 type getter,
+        // +0xF440 format copy, +0x92C84 Run refusal classifier.
+        // No message-ID heuristic: that work remains stale during Run refusal.
+        const u32 context = Read32(view + 4);
+        const u32 setup = context && Process::CheckAddress(context + 0x0C, MEMPERM_READ)
+                          ? Read32(context + 0x0C) : 0;
+        if (setup && Process::CheckAddress(setup, MEMPERM_READ)
+            && Process::CheckAddress(setup + 1, MEMPERM_READ))
+        {
+            if (Process::Read8(setup, state.battleType) && Process::Read8(setup + 1, state.battleFormat))
+                state.kind = DecodeBattleKind(state.battleType, state.battleFormat);
+        }
+
+        for (u32 client = 0; client < 4; client++)
         {
             const u32 party = pokecon + PokeConParty + client * PartyStride;
-            state.partyCount[client] = Read8(party + 0x18);
-            ReadMon(Read32(party), client == 0 ? state.player : state.opponent);
+            const u8 count = Read8(party + 0x18);
+            if (count > 6) continue;
+            state.partyCount[client] = count;
+            for (u32 slot = 0; slot < count; slot++)
+                ReadMon(Read32(party + slot * 4), state.clients[client][slot]);
         }
-        for (u32 slot = 0; slot < 6 && slot < state.partyCount[0]; slot++)
-            ReadMon(Read32(pokecon + PokeConParty + slot * 4), state.party[slot]);
+        state.player = state.clients[0][0];
+        state.opponent = state.clients[1][0];
+        for (u32 slot = 0; slot < 6; slot++) state.party[slot] = state.clients[0][slot];
         state.valid = state.player.address != 0 && state.opponent.address != 0;
 
         for (u32 i = 0; i < ManagerSlots; i++)
@@ -174,6 +194,8 @@ namespace OneScreen
             state.cursor = Read8(top + CommandCursor);
             state.listCount = 4;
         }
+        else if (vtModuleName == "Battle" && state.menuVtable == VtMenuTarget)
+            state.menu = BattleMenu::Target;
         else if (vtModuleName == "Battle" && state.menuVtable == VtMenuMoves)
         {
             state.menu = BattleMenu::Moves;
@@ -308,9 +330,11 @@ namespace OneScreen
             return Utils::Format("battle: Battle module at %08lX, objects not found", state.module);
 
         static const char *const menus[] = {"none", "command", "moves", "pokemon", "bag", "other", "pokemon page",
-                                            "question"};
+                                            "question", "target"};
         std::string out = Utils::Format("battle: menu %s (%08lX vt %08lX)", menus[(int)state.menu],
                                         state.menuObject, state.menuVtable);
+        out += Utils::Format(" rules type %u format %u kind %u", state.battleType, state.battleFormat,
+                             (unsigned)state.kind);
         if (state.menu != BattleMenu::None && state.menu != BattleMenu::Other)
             out += Utils::Format(" cursor %u of %u", state.cursor, state.listCount);
         if (state.menu == BattleMenu::Bag)

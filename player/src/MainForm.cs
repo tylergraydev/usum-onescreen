@@ -76,6 +76,7 @@ namespace UsumOneScreen
 
             EnableDrops(this);
             LoadValues();
+            UpdateCheck.Attach(this, home);
         }
 
         // --- layout ---
@@ -215,7 +216,9 @@ namespace UsumOneScreen
             var cheats = new Button { Text = "Cheats\u2026", AutoSize = true };
             backups.Click += (s, e) => { if (!busy) OptionDialogs.ShowBackups(this, home); };
             cheats.Click += (s, e) => { if (!busy) OptionDialogs.ShowCheats(this, home); };
-            buttons.Controls.Add(backups); buttons.Controls.Add(cheats);
+            var textures = new Button { Text = "Texture packs...", AutoSize = true };
+            textures.Click += (s, e) => { if (!busy) OptionDialogs.ShowTextures(this, home); };
+            buttons.Controls.Add(backups); buttons.Controls.Add(cheats); buttons.Controls.Add(textures);
             g.Controls.Add(buttons, 0, 5); g.SetColumnSpan(buttons, 4);
             return Group("Game options", g);
         }
