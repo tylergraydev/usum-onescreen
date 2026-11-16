@@ -44,7 +44,7 @@ jobs:
       - name: Build
         run: make
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: usum-onescreen
           path: usum-onescreen.3gx
@@ -75,7 +75,7 @@ jobs:
           code=$?
           echo "$out"
           [ "$code" = 1 ] && echo "$out" | grep -q "^refused: README.md: not a 3DS ROM"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: usum-onescreen-app
           path: player/bin/Release/net48/UsumOneScreen.exe
