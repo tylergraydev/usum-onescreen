@@ -1,5 +1,9 @@
 # USUM One Screen
 
+[![Build](https://github.com/tylergraydev/usum-onescreen/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/tylergraydev/usum-onescreen/actions/workflows/build.yml)
+[![Licence: GPL-3.0-only](https://img.shields.io/badge/licence-GPL--3.0--only-blue)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/tylergraydev/usum-onescreen?include_prereleases)](https://github.com/tylergraydev/usum-onescreen/releases)
+
 Play Pokémon Ultra Sun and Ultra Moon on **one screen** in the [Azahar](https://github.com/azahar-emu/azahar) 3DS emulator.
 
 USUM One Screen is a 3GX plugin (built with [CTRPluginFramework](https://gitlab.com/thepixellizeross/ctrpluginframework)) that draws the game's bottom-screen menus on the top screen. You can hide the bottom screen and play with buttons only. Anything without a top-screen version yet can still be reached: **L+R** shows the bottom screen on the top screen, with a cursor to tap it.
@@ -22,9 +26,10 @@ On any other game or version the plugin shows an `unsupported game` notice and d
 
 Native top-screen menus (the game's own screen keeps running on the hidden bottom screen, and the plugin presses its buttons for you):
 
-- **Battle**: Fight / Bag / Pokémon / Run, the move list with type, PP, effectiveness and the selected move's category, power and accuracy; switching, items and catching. Three layouts: `classic`, `bar` and `rail`.
+- **Battle**: Fight / Bag / Pokémon / Run, the move list with type, PP, effectiveness and the selected move's category, power and accuracy; switching, items and catching. **R** arms Mega Evolution or Z-Power, **L** shows the move's description. A compact foe panel shows types, caught-before and stat changes. Three layouts: `classic`, `bar` and `rail`.
 - **Move learning** and TM teaching.
-- **X menu**, **Party** and summary, **Bag**, **Pokédex**, **PC boxes** (with each Pokémon's box icon), **Options**, **Trainer Passport**, **Battle Video**.
+- **X menu**, **Party** and summary, **Bag**, **Pokédex**, **PC boxes** (with each Pokémon's box icon), **Options**, **Trainer Passport**, **Battle Video**, **Ride Pager**.
+- **Poké Pelago** and **Festival Plaza**: a slim top-screen bar to switch isles, open menus and leave; the isles' and plaza's own touch play stays on the bottom screen.
 - **Nickname keyboard**.
 - **Map** on **ZR**, live while you walk.
 - **Rotom's prompts**: chats and the Roto Loto.
@@ -33,9 +38,14 @@ Native top-screen menus (the game's own screen keeps running on the hidden botto
 Extras:
 
 - **Bottom-screen fallback**: **L+R** cycles off / corner panel / full view; **C-stick** moves a touch cursor and **ZL** taps.
+- **Controller prompts**: button icons in the 3DS, Xbox, PlayStation or Nintendo style.
 - **Instant text and faster battles** (off by default).
-- **Experimental widescreen** (16:9 / 21:9), with side bands beside full-screen menus.
+- **Quick save** and **photo mode** keys (off by default): [docs/QUICK-SAVE.md](docs/QUICK-SAVE.md), [docs/PHOTO-MODE.md](docs/PHOTO-MODE.md).
+- **Experimental widescreen** (16:9 / 21:9), with tinted, patterned or blurred side bands, optional party side panels ([docs/SIDE-PANELS.md](docs/SIDE-PANELS.md)) and a wider overworld field of view.
+- **Screen filters**: warm, cool or vignette (off by default).
 - **Settings file** `usum-onescreen.ini`, written with comments on first run.
+
+Many of the newest features are marked in [CHANGELOG.md](CHANGELOG.md) as still waiting for a full check in the emulator.
 
 Controls and details for every screen: [docs/PLAYING.md](docs/PLAYING.md). What changed per version: [CHANGELOG.md](CHANGELOG.md).
 
@@ -48,7 +58,14 @@ The easiest way to play on Windows is the launcher in [`player/`](player/README.
 3. Drag your own **decrypted** Ultra Sun or Ultra Moon (USA) ROM and its matching **decrypted** v1.2 update onto the window (or a zip containing them).
 4. Press **Play**.
 
-The plugin is built into the exe. The launcher checks the game, update and version, sets up its own portable Azahar copy, and remembers your choices. Its window also has controller presets, plugin settings, graphics and battle-speed options, save backups and cheats. Encrypted dumps are refused, because Azahar 2126.2 cannot install them.
+The plugin is built into the exe. The launcher checks the game, update and version, sets up its own portable Azahar copy, and remembers your choices. Its window also has:
+
+- controller presets, plugin settings, graphics, battle-layout and battle-speed options;
+- automatic save backups, named save slots and ZIP import/export of saves;
+- community HD texture packs (you supply them) and cheats;
+- a daily check for new launcher releases.
+
+Encrypted dumps are refused, because Azahar 2126.2 cannot install them.
 
 For offline setup, `usum-onescreen-<version>-windows.zip` includes Azahar 2126.2, its licence and source notice. Details, tests and open issues: [docs/PLAYER-APP.md](docs/PLAYER-APP.md).
 
@@ -73,7 +90,10 @@ The defaults (the comments in the real file explain each one):
 ```ini
 [display]
 aspect = 0              ; widescreen: 0/off, 16:9, 21:9 or a number (docs/WIDESCREEN.md)
-pillarbox = tint        ; side bands beside full-screen menus: tint, pattern or off
+side_panels = off       ; party strips in the widescreen side areas: off, battle, field or both
+field_fov = 1.0         ; idle overworld field of view, 0.8 to 1.5
+pillarbox = tint        ; side bands beside full-screen menus: tint, pattern, off or blur
+filter = off            ; top-screen filter: off, warm, cool or vignette
 
 [battle]
 layout = classic        ; native battle menu: classic, bar or rail
@@ -84,10 +104,13 @@ battle_messages = normal ; normal, fast or instant
 battle_bars = normal     ; normal, fast or instant
 
 [controls]
+glyphs = 3ds            ; prompt icons: 3ds, xbox, playstation or nintendo
 panel_key = L+R         ; cycles the bottom-screen view: off / panel / full
 touch_key = ZL          ; touches at the cursor while held
 map_key = ZR            ; opens and closes the map
 pc_key = none           ; opens the PC boxes in the field, e.g. R+X (docs/PC-ANYWHERE.md)
+save_key = none         ; quick save through the game's menu, e.g. R+Y
+photo_key = none        ; freezes the frame and hides plugin UI, e.g. R+Select
 cursor_move = cstick    ; cstick, dpad or circlepad
 cursor_speed = 6        ; 1 to 20
 
@@ -164,7 +187,7 @@ Scripted tests in isolated Azahar instances, a command channel into the running 
 - Tested only in Azahar 2126.2 on Windows. Real 3DS hardware and other Azahar versions have not been tried.
 - USA v1.2 only. Ultra Moon has had less testing than Ultra Sun, and a brand-new Ultra Moon game stalls in the opening bedroom scene in Azahar.
 - With a rebuilt `0x0800` Ultra Sun update, a brand-new game stalls at the language screen (existing saves play). The genuine `0x0820` update works.
-- No native screen yet for the Ride Pager, Poké Pelago, Festival Plaza, Quick Link, Pokémon Refresh or QR Scanner: use **L+R**. SOS / double battles need **L+R** for targeting.
+- No native screen yet for Quick Link, Pokémon Refresh or the QR Scanner, or for the touch play inside Poké Pelago and Festival Plaza: use **L+R**. SOS / double battles need **L+R** for targeting.
 - Widescreen is experimental: [docs/WIDESCREEN.md](docs/WIDESCREEN.md).
 - Real game-controller input has not been tested.
 
@@ -174,8 +197,8 @@ The full list of known gaps is in [CHANGELOG.md](CHANGELOG.md) and [docs/PLAYING
 
 | For | Read |
 |---|---|
-| Players | [PLAYING.md](docs/PLAYING.md), [PLAYER-APP.md](docs/PLAYER-APP.md), [WIDESCREEN.md](docs/WIDESCREEN.md), [FAST-TEXT.md](docs/FAST-TEXT.md), [PC-ANYWHERE.md](docs/PC-ANYWHERE.md) |
-| Native screens | [BATTLE-UI.md](docs/BATTLE-UI.md), [XMENU.md](docs/XMENU.md), [PARTY-UI.md](docs/PARTY-UI.md), [BAG.md](docs/BAG.md), [POKEDEX.md](docs/POKEDEX.md), [BOXES.md](docs/BOXES.md), [MAP.md](docs/MAP.md), [KEYBOARD.md](docs/KEYBOARD.md), [MOVE-LEARN.md](docs/MOVE-LEARN.md), [ROTOM-FIELD.md](docs/ROTOM-FIELD.md) |
+| Players | [PLAYING.md](docs/PLAYING.md), [PLAYER-APP.md](docs/PLAYER-APP.md), [WIDESCREEN.md](docs/WIDESCREEN.md), [SIDE-PANELS.md](docs/SIDE-PANELS.md), [FAST-TEXT.md](docs/FAST-TEXT.md), [PC-ANYWHERE.md](docs/PC-ANYWHERE.md), [QUICK-SAVE.md](docs/QUICK-SAVE.md), [PHOTO-MODE.md](docs/PHOTO-MODE.md) |
+| Native screens | [BATTLE-UI.md](docs/BATTLE-UI.md), [XMENU.md](docs/XMENU.md), [PARTY-UI.md](docs/PARTY-UI.md), [BAG.md](docs/BAG.md), [POKEDEX.md](docs/POKEDEX.md), [BOXES.md](docs/BOXES.md), [MAP.md](docs/MAP.md), [KEYBOARD.md](docs/KEYBOARD.md), [MOVE-LEARN.md](docs/MOVE-LEARN.md), [ROTOM-FIELD.md](docs/ROTOM-FIELD.md), [RIDE-PAGER.md](docs/RIDE-PAGER.md), [NATIVE-SCREENS.md](docs/NATIVE-SCREENS.md) |
 | Developers | [DEVELOPMENT.md](docs/DEVELOPMENT.md), [OFFSETS.md](docs/OFFSETS.md), [PORTING.md](docs/PORTING.md), [UI.md](docs/UI.md), [GAME-ASSETS.md](docs/GAME-ASSETS.md), [PERF.md](docs/PERF.md), [RELEASING.md](docs/RELEASING.md) |
 
 ## Contributing

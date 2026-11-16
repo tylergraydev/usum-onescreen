@@ -19,3 +19,7 @@ tests/build/
 
 # Python bytecode
 __pycache__/
+
+# Local agent sessions and notes (may name local files)
+.claude/
+.codex/

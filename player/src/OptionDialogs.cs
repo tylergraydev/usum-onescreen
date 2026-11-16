@@ -240,7 +240,7 @@ namespace UsumOneScreen
             {
                 var entries = Cheats.Load(home);
                 var root = Root(form);
-                root.Controls.Add(new Label { Text = "Cheats change your game. Back up first (Backupsâ€¦). Changes apply the next time the game starts.", AutoSize = true, MaximumSize = new Size(560, 0) });
+                root.Controls.Add(new Label { Text = "Cheats change your game. Back up first (Backups…). Changes apply the next time the game starts.", AutoSize = true, MaximumSize = new Size(560, 0) });
                 var list = new CheckedListBox { Dock = DockStyle.Fill, CheckOnClick = true, IntegralHeight = false };
                 foreach (var entry in entries) list.Items.Add(entry, entry.Enabled);
                 bool updating = false;
