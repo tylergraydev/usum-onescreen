@@ -169,7 +169,7 @@ drawn with `UI::Theme`:
 - **Background**: the game's yellow sun, `#E2C924` at the edge to `#FFFFC4`
   in the middle in rings, with faint rays; a dark gold `#A08B36` frame.
 - **Entries**: pills in the colour of the game's pill for that entry (page 1
-  and Save measured on the game's bottom screen: Pokémon `#00A860`, Pokédex
+  and Save measured on the game's bottom screen: PokÃ©mon `#00A860`, PokÃ©dex
   `#E82C40`, Bag `#F47C14`, Quick Link `#1048E0`, Festival Plaza `#10A4AA`,
   Trainer Passport `#1868E8`, Save `#11B6FF`; page 2 and Map picked to
   match): a white rim, a dark line, a lighter upper half. Labels are white
@@ -179,15 +179,15 @@ drawn with `UI::Theme`:
   game (no frame or colour change).
 - **Save**: the blue bar with the Y button at its left end.
 - **Prompts**: button chips (A Open, B Close, Y Save, L R Page); "Open (L+R)"
-  for entries that only show on the bottom screen (Pokémon Refresh). While an
+  for entries that only show on the bottom screen (PokÃ©mon Refresh). While an
   entry opens, or on a disabled entry, a message window instead.
 - **Fallback**: before the game's font and icons are loaded (`UI/Assets.hpp`:
   normally at the first field; the menu asks for them when it shows), the
   system font, labels that don't fit in capitals in their own case, and a
   drawn cursor and button badges. The menu redraws once they arrive.
 
-Not like the game (yet): the game's pills carry an icon each (Poké Ball,
-Pokédex, Bag, ...) with the label under the pill in dark text, and a leaf
+Not like the game (yet): the game's pills carry an icon each (PokÃ© Ball,
+PokÃ©dex, Bag, ...) with the label under the pill in dark text, and a leaf
 pattern; those textures are not loaded by the asset service, and the
 native menu has both pages and Map side by side, so labels sit inside the
 pills. The game's page dots and "NEW" badges are not shown.

@@ -14,11 +14,11 @@
    git push origin v0.1.0
    ```
 
-4. Watch the Release workflow in the Actions tab. When it finishes, open Releases, edit the draft "USUM One Screen v0.1.0": paste the changelog section into the notes (for v0.1, the "Release notes text" in `docs/RELEASE-NOTES-v0.1.md`), tick "Set as a pre-release" for betas, and publish.
+4. Watch the Release workflow in the Actions tab. It fails if `CHANGELOG.md` has no `## [X.Y.Z]` section for the tag. When it finishes, open Releases and check the draft "USUM One Screen vX.Y.Z": its notes are that changelog section plus a short download guide, and `v0.*` tags (or tags with a `-`) are already marked as pre-releases. Edit if needed, then publish.
 
-If the build fails, fix it on `main`, then move the tag (`git tag -d v0.1.0`, `git push origin :refs/tags/v0.1.0`, tag again and push). Re-running the workflow for a tag whose draft already exists replaces all attached assets instead of creating a second release.
+If the build fails, fix it on `main`, then move the tag (`git tag -d v0.1.0`, `git push origin :refs/tags/v0.1.0`, tag again and push). Re-running the workflow for a tag whose draft already exists replaces all attached assets and the notes instead of creating a second release; a published release keeps its notes.
 
-Before the first public release, see `docs/LICENSING.md`. Known loose ends in this process (the version in `Sources/main.cpp` is not checked by the workflow, the toolchain is unpinned, the release body is generic) are listed in `docs/RELEASE-NOTES-v0.1.md`.
+Before the first public release, see `docs/LICENSING.md`. Known loose ends in this process (the version in `Sources/main.cpp` is not checked by the workflow, the toolchain is unpinned) are listed in `docs/RELEASE-NOTES-v0.1.md`.
 
 ## Windows player job
 

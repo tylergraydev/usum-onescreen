@@ -1,0 +1,16 @@
+name: Feature request
+description: A screen, setting or launcher feature you'd like.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: want
+    attributes:
+      label: What would you like?
+      description: Which screen or situation, and what should happen.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: What it would make easier.

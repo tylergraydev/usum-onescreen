@@ -1,6 +1,6 @@
 # Licensing findings
 
-Checked 2026-11-02 for the P1-7 release work. This is a summary of the licence texts, not legal advice. The repo has no `LICENSE` file yet; choosing one, and making the repo public, is Tyler's call.
+Checked 2026-11-02 for the P1-7 release work. This is a summary of the licence texts, not legal advice. The repo is licensed GPL-3.0-only (`LICENSE`, chosen by Tyler 2026-11-07).
 
 ## What this repo uses
 

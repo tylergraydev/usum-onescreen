@@ -42,7 +42,7 @@ void Perspective(Matrix34or44 *out, u32 pivot,
 ```
 
 The game uses hard-float: `out` / `pivot` arrive in `r0` / `r1`, and the four
-floats in `s0`Ã¢â‚¬â€œ`s3`. Pivot is screen rotation (0Ã¢â‚¬â€œ4). The builder computes
+floats in `s0`–`s3`. Pivot is screen rotation (0–4). The builder computes
 cot(fovy/2) and divides by aspect at `0x3632C4`. Its only known callers are
 `0x4C1FF0`, `0x4C2094`, and `0x4C20E4` in camera update/blend code.
 
@@ -318,7 +318,7 @@ Before either write, both templates' type and all six floats are checked by
 bits: only a stock horizontal pair or the exact pair last successfully written
 to that template is accepted; all other fields must be stock. A mismatch or
 unreadable word logs `widescreen: 2d templates MISMATCH ...; no writes`.
-Success logs `widescreen: 2d templates 0x5C3180 0x5E8468 left/right Â±N`.
+Success logs `widescreen: 2d templates 0x5C3180 0x5E8468 left/right ±N`.
 A failed Patch logs `PATCH FAILED` and may leave a partial update; the aspect
 and native presentation still change. Successful writes are tracked per template.
 
@@ -430,7 +430,7 @@ the picture shows unsqueezed (wider than the rest of the game's 2D);
 Audit of native top output:
 
 - Layer presentation covers X menu, party, bag, boxes and its badge, keyboard,
-  PokÃ©dex, battle menu, move learning, map, Rotom prompts/badge, theme preview,
+  Pokédex, battle menu, move learning, map, Rotom prompts/badge, theme preview,
   and SubScreens (including options and the other native replacement screens).
   Their selection cursors are drawn into the layers and squeeze with them.
 - The UI demo also uses Layer; `uidemo direct` uses the layer while k > 1 so
