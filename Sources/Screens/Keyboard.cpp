@@ -232,13 +232,17 @@ namespace OneScreen
             return false;
         if (!s_shown)
         {
+            s_layer.Hide();
             UI::ScreenBuffer::GiveBack(Owner);
             return false;
         }
         bool fresh = false;
         u8 *pixels = UI::ScreenBuffer::Borrow(Owner, fresh);
         if (pixels == nullptr)
+        {
+            s_layer.Hide();
             return false;
+        }
 
         UiInitFont();
         const UI::Surface fb = SurfaceFromScreen(screen);
@@ -248,7 +252,7 @@ namespace OneScreen
         bool redraw = s_viewVersion != s_drawnVersion || gameFont != s_drawnGameFont;
         if (fresh || !s_layer.Matches(fb))
         {
-            if (!s_layer.Setup(fb, KeyboardArea, KeyboardRadius, pixels, UI::ScreenBuffer::Bytes))
+            if (!s_layer.SetupHiRes(fb, KeyboardArea, KeyboardRadius, UI::MenuSlot, pixels, UI::ScreenBuffer::Bytes))
                 return false;
             redraw = true;
         }
@@ -263,8 +267,7 @@ namespace OneScreen
             s_drawnGameFont = gameFont;
             s_viewLock.Unlock();
         }
-        s_layer.Present(fb);
-        return true;
+        return s_layer.Present(fb);
     }
 
     void StartKeyboard(void)

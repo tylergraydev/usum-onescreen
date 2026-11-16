@@ -662,10 +662,17 @@ namespace OneScreen
 
         // Line 1: name and gender (as the game: the gender sign at the
         // right end).
-        const int nameRoom = inner.w - 16 - (mon.shiny ? 14 : 0);
+        const int haW = mon.hiddenAbility ? Theme::MeasureText("HA", Theme::TextSize::Small) + 6 : 0;
+        const int nameRoom = inner.w - 16 - (mon.shiny ? 14 : 0) - (haW ? haW + 4 : 0);
         const int nameW = Theme::DrawText(canvas, mon.name, UI::Rect{ inner.x, inner.y, nameRoom, line }, text);
         if (mon.shiny)
             Theme::DrawShiny(canvas, inner.x + nameW + 2, inner.y + (line - 10) / 2);
+        if (haW)
+        {
+            const UI::Rect pill = { inner.Right() - 20 - haW, inner.y + 3, haW, line - 6 };
+            canvas.FillRoundRect(pill, 3, Theme::AccentText);
+            Theme::DrawText(canvas, "HA", pill, Style(Theme::TextSize::Small, Theme::WindowLine, UI::Align::Center));
+        }
         if (mon.gender < 2)
             Theme::DrawGender(canvas, inner.Right() - 12, inner.y + (line - 12) / 2, mon.gender == 1);
 
@@ -840,7 +847,7 @@ namespace OneScreen
         {
             const bool two = view.ask.title.find('\n') != std::string::npos;
             const UI::Rect q = { qx, PartyArea.y + Pad, qw, two ? 48 : 30 };
-            DrawQuestion(canvas, q, view.ask.title);
+            DrawQuestion(canvas, q, Theme::FormatPanelHint(view.ask.title));
             if (view.ask.moves)
             {
                 const int w = 300, x = PartyArea.Right() - Pad - w, h = 28;
@@ -867,7 +874,7 @@ namespace OneScreen
         if (!view.busy.empty())
             DrawFooterMessage(canvas, view.busy);
         else if (!view.note.empty() && view.page == PartyPage::List)
-            DrawFooterMessage(canvas, view.note);
+            DrawFooterMessage(canvas, Theme::FormatPanelHint(view.note));
         else
             switch (view.page)
             {
@@ -879,7 +886,7 @@ namespace OneScreen
             case PartyPage::Swap:
                 DrawFooterMessage(canvas, "Move " + (view.swapFrom >= 0 && view.swapFrom < (int)view.mons.size()
                                                      ? view.mons[view.swapFrom].name : std::string())
-                                          + " where?   A here, B cancel");
+                                          + Theme::FormatPromptText(" where?   A here, B cancel"));
                 break;
             case PartyPage::Items:
                 DrawPrompts(canvas, { { Theme::Button::A, view.giving ? "Give" : "Use" }, { Theme::Button::L, "" }, { Theme::Button::R, "Pocket" },

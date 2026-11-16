@@ -8,6 +8,7 @@
 #include "Framebuffer.hpp"
 #include "Panel.hpp"
 #include "Scene.hpp"
+#include "QuickSave.hpp"
 #include "Screens/PartyScreen.hpp"
 #include "Screens/Pokedex.hpp"
 #include "Screens/Bag.hpp"
@@ -123,13 +124,17 @@ namespace OneScreen
         }
         if (!s_shown)
         {
+            s_layer.Hide();
             UI::ScreenBuffer::GiveBack(Owner);
             return false;
         }
         bool fresh = false;
         u8 *const pixels = UI::ScreenBuffer::Borrow(Owner, fresh);
         if (pixels == nullptr)
+        {
+            s_layer.Hide();
             return false;   // another screen holds it: next frame
+        }
 
         UiInitFont();
         const UI::Surface fb = SurfaceFromScreen(screen);
@@ -141,7 +146,7 @@ namespace OneScreen
         // fresh: another screen drew in the buffer since we last held it.
         if (fresh || !s_layer.Matches(fb))
         {
-            if (!s_layer.Setup(fb, XMenuArea, XMenuRadius, pixels, UI::ScreenBuffer::Bytes))
+            if (!s_layer.SetupHiRes(fb, XMenuArea, XMenuRadius, UI::MenuSlot, pixels, UI::ScreenBuffer::Bytes))
                 return false;
             redraw = true;
         }
@@ -158,8 +163,7 @@ namespace OneScreen
             s_drawnVersion = version;
             s_drawnGameFont = gameFont;
         }
-        s_layer.Present(fb);
-        return true;
+        return s_layer.Present(fb);
     }
 
     static void RefreshEnabled(void)
@@ -390,6 +394,19 @@ namespace OneScreen
     void XMenuUpdate(u32 sceneManager, const std::string &scene, int fieldState, std::vector<std::string> &log)
     {
         s_frames++;
+        if (QuickSaveRunning())
+        {
+            // Do not retain a stale menu probe into the frame save finishes.
+            // The action owns capture, so this screen must not end it.
+            s_shown = false;
+            s_scanWanted = false;
+            s_probeMissing = GoneFrames;
+            s_pendingUntil = 0;
+            s_prevFieldState = fieldState;
+            s_prevScene = scene;
+            Publish();
+            return;
+        }
         const bool inField = scene == SceneField;
         if ((ActionProbeFlags() & WorldXMenu) != 0)
             s_probeMissing = 0;

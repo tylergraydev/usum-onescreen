@@ -1,9 +1,140 @@
 # Panel performance
 
-What the bottom-screen panel costs Azahar, measured 2026-11-02 with
-`tools/perf.py`. **Now (P1-6):** the panel is copied by GPU transfers and costs
-Azahar 0-4% of its speed (1/2 and full), 8% for 2/3; it was ~40% (H5, below).
-The sections after "P1-6" are H5's original measurements of the old CPU copy.
+## Widescreen panel safety fallback (2026-11-10)
+
+Panel/full views use CPU composition only when `WidescreenSqueeze() > 1`.
+At squeeze <= 1 (including aspect 0), the original GPU preparation, cursor,
+filtering, two-thirds refresh cadence and flush behavior are retained. Only
+the old squeezed final-copy loops in `CopyTopColumns` and `GpuFull` are
+removed. Unsupported formats or scratch allocation failure still select the
+CPU fallback. `PanelCopyBottomRect` continues to copy the game's already-
+squeezed native map with one TextureCopy, independent of panel scratch.
+
+The reported Ultra Sun X-menu crash at 21:9 (`auto on`, `pokedex off`)
+corresponds to those two per-column GX submission loops. The CPU cursor
+squeeze loop was safe. The user's emulator check of the widescreen CPU fix
+now reaches scene Zukan with the panel shown and **0 unmapped reads**, versus
+approximately 5,800 before. The stock-aspect build previously passed the full
+regression suite without faults. The exact corruption/interrupt mechanism
+behind the command-count failures remains unproven.
+
+| Panel path | Stock total GX/present (unchanged) | Old widescreen total | New widescreen total |
+|---|---:|---:|---:|
+| Full | 8 | 7 + N | 0 |
+| Half | 5 | 4 + N | 0 |
+| Two-thirds | 3-4 | 2-3 + N | 0 |
+| Native map rectangle (per call, any aspect) | 1 | 1 | 1 |
+
+N is the number of covered destination columns. Full view previously issued
+307 commands at 16:9 and 235 at 21:9; half issued 162 and 124. Two-thirds
+adds one command on refresh frames. The stock final framebuffer copy is one
+command, but its preparation and cursor work bring the **total** to the
+counts above; the restored stock chains do not claim a two-command budget.
+These counts cover Panel.cpp, not the separate LayerGpu/GpuQuad presenters.
+
+Widescreen CPU composition uses the inverse column mapping for picture,
+border and cursor. Half-size averages 2x2 pixels; two-thirds retains its 3:2
+area filter and 229x176 box. All CPU panel draws request a CTRPF flush;
+stock GPU paths retain their original flush returns. Widescreen readback
+compares against the CPU filter; stock GPU readback remains unchanged.
+
+This is a conservative widescreen fallback. Arbitrary 16:9/21:9 squeezes
+cannot use DisplayTransfer's fixed 2x scaling; new quad texture/upload/state
+integration is deferred. CPU reads and small writes cause Azahar framebuffer
+downloads and may reduce sharpness at higher internal resolutions. Expect a
+potentially substantial slowdown **while a widescreen panel is visible**.
+Aspect 0 retains its GPU performance path. The historical ~40% CPU-copy loss
+below is context, not a measurement of this implementation. Re-measure
+panel/full at 0, 16:9 and 21:9 with `perf` / `tools/perf.py`.
+
+Host verification (no game data, WSL or make required):
+
+```powershell
+python -I tests/panel_command_test.py --generate tests/build/panel_host.hpp
+# From a Visual Studio x64 Native Tools prompt:
+cl /nologo /std:c++17 /EHsc /W4 /WX /wd4244 /wd4505 /I Includes tests/panel_command_test.cpp /Fe:tests/build/panel_command_test.exe /Fo:tests/build/panel_command_test.obj
+tests/build/panel_command_test.exe
+```
+
+The host build compiles the actual Panel.cpp and Framebuffer.hpp bodies with
+device includes replaced by stubs and transfer mocks. Host addresses use
+pointer-sized `u32`; MSVC warning 4244 is suppressed for that host widening,
+and 4505 for unused stub functions. The 2,400 cases count **all** GX calls:
+8/5/4 then 3 on stock BGR8 paths, and 0 at 16:9/21:9. They also exercise CPU
+fallback formats, framebuffer guards, flush returns, cursor/filter pixels
+and returning from widescreen to stock. A source call-graph guard rejects
+GX submissions inside loops, including via Transfer/CopyRuns; its regression
+checks explicitly reject both original squeezed-loop shapes. Tests are
+wired into `tests/Makefile` too.
+
+The user's emulator result validates the widescreen CPU approach; the final
+stock-GPU restoration still needs a plugin build and regression rerun. Host
+transfer mocks cannot prove native GX execution, game timing or sharpness.
+
+## GPU-copy performance measurements (2026-11-02)
+
+The GPU panel measurements below remain relevant at stock aspect: 0-4% of
+Azahar speed for half/full and ~8% for two-thirds. They do not describe the
+new widescreen CPU path. Sections after P1-6 contain H5's original CPU-copy
+measurements, retained as historical evidence.
+
+## Map at widescreen: one GX command (2026-11-08)
+
+On `main` (`b559b40`) the native map crashed the game at 16:9 and 21:9 within
+~15-30 s (plugin stops answering; Azahar logs unmapped reads at PC `0x402690`,
+`0x3596C4`, `0x33FA3C`, `0x3531BC`, then undefined instructions and a jump to
+0); `aspect off` ran fine. `PanelCopyBottomRect` squeezed the picture with one
+TextureCopy per destination column. Tests (instance `mapfix`, Ultra Sun, 5x,
+frame limit 250%, Pokémon Center, map open; throwaway builds):
+
+| copy | GX commands per frame | result |
+|---|--:|---|
+| `main`, 16:9, one per column | 244 | crashed in ~15 s |
+| `main`, 21:9, one per column | 186 | crashed within 30 s (instance `lrtoggle`, 2026-11-07) |
+| 21:9, consecutive columns merged into runs | 75 | crashed in < 15 s |
+| 21:9, the same rectangle copied 75 times | 75 | crashed in < 30 s |
+| 21:9, runs merged, 100 µs sleep between commands | 75 | crashed in < 30 s |
+| 21:9, one copy (centre columns, unsqueezed) | 1 | ran 2 min |
+| **this fix**, 21:9 / 16:9 | **1** | ran 3.7 / 3.5 min; `native-map` scenario passes at both |
+
+So the number of commands is what matters, not what they copy, and giving the
+game's threads time between them doesn't help. The game's GX push
+(`0x279A2C`) is the standard GSP shared-memory command queue (15 entries; a
+push into an empty queue triggers `TriggerCmdReqQueue`), so each command is
+one GSP request and one PPF interrupt for the game's handlers; why many of them
+break the game was not found. Merging runs can't get far enough: Azahar keeps
+a TextureCopy on the GPU only when its gaps match the surfaces' stride, so a
+nearest-neighbour squeeze needs one command per run (75 at 21:9, 17 at 16:9),
+and DisplayTransfer only scales by exactly 2.
+
+The fix makes the game draw the bottom map squeezed (`docs/WIDESCREEN.md`)
+and copies it with one TextureCopy at every aspect; the picture stays at the
+internal resolution.
+
+Speed (`tools/perf.py --modes map:closed,map:off,map:16:9,map:21:9`, 2 rounds
+× 4 windows of 8 s, 2 Azahar processes; "before" from the `main` build, 5
+windows each):
+
+| build | map | GX per frame | speed (mean ± sd) |
+|---|---|--:|---|
+| `main` | closed | 0 | 1.77 ± 0.02 |
+| `main` | open, aspect off | 1 | 1.73 ± 0.04 |
+| fix | closed | 0 | 1.80 ± 0.01 |
+| fix | open, aspect off | 1 | 1.77 ± 0.01 |
+| fix | open, 16:9 | 1 | 1.74 ± 0.02 |
+| fix | open, 21:9 | 1 | 1.73 ± 0.01 |
+
+The map costs ~2-4% either way.
+
+After merging PR #75 (`LayerGpu`, map frame presented by the GPU, picture copy
+after it), same method: closed 1.86 ± 0.00, open off 1.80 ± 0.02, 16:9
+1.79 ± 0.01, 21:9 1.78 ± 0.01. `layergpu status` with the map open: most GX
+commands per present 11 (plus the map's one copy), queue depth 0, fallbacks 0;
+ran 3.2 min at 21:9 and 16:9, and 1 min at 21:9 with `layergpu off`. A window
+capture of Azahar at 21:9 shows the map picture at the internal resolution
+with `layergpu on` and at 1x with `layergpu off`. The panel's own half/two-thirds/full paths
+still sent one command per column at widescreen in that build and were not
+tested there; the CPU fallback above now removes those paths.
 
 ## P1-6: GPU copy
 
@@ -19,7 +150,7 @@ From Azahar's source (master, `video_core/rasterizer_cache/rasterizer_cache.h`,
   region we want to remove it"). So drawing even a cursor or a 1-px border on
   the game's frame costs a download per frame.
 
-### What the panel does now
+### What the stock-aspect GPU panel does
 
 `Sources/Panel.cpp` queues transfers with the game's own gx library
 (DisplayTransfer `0x27A5BC`, TextureCopy `0x279E28`, see `docs/OFFSETS.md`);
@@ -86,6 +217,72 @@ How it got there (each a separate run, so compare within a row group only):
 Not measured: 1x internal resolution, other scenes, real hardware (the
 transfers are hardware features, but the flags used, e.g. scaling linear input,
 were only checked against Azahar).
+
+## Native overlays and internal resolution
+
+Azahar drops the entire frame to 1x (400x240) when the CPU writes into the
+game's framebuffer, or when a CTRPF OSD callback returns true ("I drew").
+The battle-menu prototype at `fff0411` was verified at the internal resolution
+with GPU-only presentation and a false callback result. Avoiding downloads
+alone is not enough: callbacks must also report CPU drawing accurately.
+
+`Sources/UI/LayerGpu.cpp` transfers the game's columns into GPU-written
+RGBA8 background scratch. The CPU writes layer pixels only into a separate
+stage that the GPU never writes. A GPU twin is seeded from the background
+then overwritten from the stage, keeping its internal scale for TextureCopy.
+The layer's rectangle is copied into the background, converted to BGR8 and
+copied back as whole 240-pixel columns. RGBA8 gives 2-pixel aligned starts
+and 4-pixel lengths rather than BGR8's coarse 8/16-pixel steps.
+
+**Keep the GX command count per present small.** Every column of the layer
+copies the whole rectangle (square corners: the layer's black shows outside
+its rounded shape), so a present is 4 DisplayTransfers, one TextureCopy for
+the layer (two around a skip window), one per pillarbox side and the copy
+back: 6-8 commands. Rounded corners need one copy per distinct column run,
+~15 commands for the 376x224 menus. With those, the game's Party screen
+(scene `main:00647FCC`) crashed within ~10 s every time (bad reads at PC
+`0x402690` / `0x3596C4`, then a jump to garbage). A bisect of the GPU steps
+put it on the TextureCopies; one copy for the whole rectangle ran for
+minutes. The X menu, same rectangle and count, never crashed. The cause was
+not found (not memory: 37 MB of the application region stayed free; not the
+GX queue, see below; not writes past the scratch: 1 MB guards changed
+nothing).
+
+Pillarbox tint/pattern band columns are written into the same CPU stage as
+the layer (whole 240-row columns, by the same pure helper as the CPU
+fallback), and the destination range expands to the full screen. Their runs
+are identical, so each side's band goes in one TextureCopy with the layer's
+runs. A first version copied each band column separately (~114 copies a
+frame at 21:9): the game crashed in the X menu within seconds (PC 0, from
+game code at `0x41DB8C`). The cause was not found: the game's GX queue
+(`*(*(0x69EA68 + 0x1C) + 0x58)`, count at `+1`, refuses commands at 15)
+was empty before every push. `LayerGpu` still checks it before each push
+(waits at 12, gives up after ~2 ms) and reports the most commands in one
+present and the deepest queue seen in `layergpu status`. Measured at 21:9:
+X menu, Party, Bag and Pokédex 8 commands, battle menu 6.
+
+Speed (21:9, 5x, frame limit 250%, X menu open, `layergpu on`/`off`
+alternated, 3 windows of 8 s each): 1.51 / 1.51. No measurable cost.
+
+**The map at 16:9/21:9 crashed on main too** (`b559b40`, `layergpu` not
+involved; fine with `aspect off`): `PanelCopyBottomRect` copied its picture with
+one TextureCopy per destination column, a few hundred a frame. Fixed by PR #76:
+one copy of a picture the game draws squeezed ("Map at widescreen", above).
+
+Skip rectangles split each run around excluded rows before rounding each
+piece inward. Map's picture transfer runs after the layer present so the
+whole-column copy-back cannot overwrite it with the saved background.
+Non-BGR8 layouts, unavailable linear memory and `layergpu off` retain the
+CPU fallback. Layer callbacks return `Present`'s CPU-write result, combining
+results without short-circuiting. Direct demo shading/drawing, panel CPU
+fallbacks/cursor, readback checks and requested screenshots retain true
+reporting and their existing framebuffer costs. Actions only probes and
+returns false; inactive/empty callbacks also return false.
+
+Host regression tests cover band bytes in all five formats and both vertical
+directions, plus split-run alignment and skip preservation. The new band,
+skip and callback paths need a devkitARM build and Azahar verification;
+no new emulator speed measurements are claimed. See docs/WIDESCREEN.md.
 
 ## H5: the old CPU copy
 

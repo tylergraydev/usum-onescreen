@@ -5,6 +5,7 @@
 // game's Bag. Build and run: make -C tests. With a path argument, also
 // writes a preview of the Bag there as a PPM image.
 
+#include "hires_screen_smoke.hpp"
 #include "Screens/BagList.hpp"
 
 #include <cstdio>
@@ -1040,6 +1041,7 @@ static void TestDraw(const char *preview)
             view.partyCursor = mode == BagMode::Pick ? 3 : -1;
             view.pickQuestion = mode == BagMode::Pick ? BagPickQuestion(17) : "";
             DrawBag(canvas, view);
+            CHECK(HiResScreenSmoke::Run(BagArea, BagRadius, [&](UI::Canvas &hi) { DrawBag(hi, view); }));
             for (int y = 0; y < UI::ScreenH; y += 7)
                 for (int x = 0; x < UI::ScreenW; x += 7)
                 {

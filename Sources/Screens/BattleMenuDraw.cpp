@@ -29,7 +29,7 @@ namespace Screens
     // and the Bag cover the scene, as the game's own do on the bottom screen.
     static constexpr Rect CommandArea  = { 222, 48, 174, 188 };
     static constexpr Rect MovesArea    = { 186, 36, 210, 202 };
-    static constexpr Rect BarCommandArea = { 170, 182, 226, 54 };
+    static constexpr Rect BarCommandArea = { 170, 166, 226, 70 };
     static constexpr Rect BarMovesArea   = { 170, 74, 226, 164 };
     static constexpr Rect RailCommandArea = { 202, 52, 194, 186 };
     static constexpr Rect RailMovesArea  = { 170, 38, 226, 200 };
@@ -39,6 +39,13 @@ namespace Screens
     // and so do the battle's other questions: their helper goes at the top.
     static constexpr Rect CatchArea    = { 166, 8, 230, 78 };
     static constexpr Rect BagArea      = { 12, 8, 376, 224 };
+
+    Rect BattleDescriptionArea(BattleLayout layout)
+    {
+        const Rect area = layout == BattleLayout::Bar ? BarMovesArea
+                          : layout == BattleLayout::Rail ? RailMovesArea : MovesArea;
+        return Inset(area, 8, 25, 8, 25);
+    }
 
     static std::string Format(const char *fmt, unsigned a, unsigned b = 0)
     {
@@ -64,6 +71,9 @@ namespace Screens
         return x;
     }
 
+    static void CompactText(Canvas &canvas, const std::string &text, const Rect &box,
+                            Color color, Align align = Align::Left);
+
     // A one-line footer: the note (or what is being done) in a window, else
     // nothing.
     static bool Notice(Canvas &canvas, const Rect &r, const std::string &text)
@@ -71,7 +81,11 @@ namespace Screens
         if (text.empty())
             return false;
         Theme::DrawWindow(canvas, r);
-        Theme::DrawText(canvas, text, Inset(r, Theme::WindowPad, 0, Theme::WindowPad, 0), White(Theme::TextSize::Small));
+        const Rect body = Inset(r, Theme::WindowPad, 0, Theme::WindowPad, 0);
+        if (Theme::MeasureText(text, Theme::TextSize::Small) > body.w)
+            CompactText(canvas, text, body, Theme::WindowText);
+        else
+            Theme::DrawText(canvas, text, body, White(Theme::TextSize::Small));
         return true;
     }
 
@@ -93,21 +107,39 @@ namespace Screens
         for (u8 i = 0; i < (u8)BattleCommand::Count; i++)
         {
             const Rect pill = { area.x + 8, head.Bottom() + 6 + i * 32, area.w - 16, Theme::OptionHeight + 2 };
-            std::string label = CommandLabel((BattleCommand)i);
+            std::string label = i == (u8)BattleCommand::Bag && !BattleHasBag(snap.kind)
+                                ? "N/A" : CommandLabel((BattleCommand)i);
             if (i == menu.Cursor() && menu.Pending())
                 label += "...";
             Theme::DrawRow(canvas, pill, Theme::RowKind::Option, label, i == menu.Cursor());
         }
         const Rect foot = { area.x + 4, area.Bottom() - Theme::PromptHeight - 6, area.w - 8, Theme::PromptHeight + 2 };
         if (!Notice(canvas, foot, menu.Note()))
-            Prompts(canvas, area.x + 8, foot.y + 1, { { Theme::Button::A, "Choose" } });
+        {
+            if (snap.activeShiny || snap.activeHiddenAbility || snap.foeShiny || snap.foeHiddenAbility)
+            {
+                UI::TextStyle hint;
+                hint.font = Font::Small;
+                hint.color = Theme::WindowText;
+                UI::DrawText(canvas, "A Choose", Rect{ foot.x + 4, foot.y + 1, area.w - 106, foot.h }, hint);
+            }
+            else
+                Prompts(canvas, area.x + 8, foot.y + 1, { { Theme::Button::A, "Choose" } });
+        }
     }
 
     // --- Move list ---
 
-    static void CompactText(Canvas &canvas, const std::string &text, const Rect &box,
-                            Color color, Align align = Align::Left);
     static void DrawMoveDetails(Canvas &canvas, const BattleMenu &menu, const BattleSnapshot &snap, const Rect &area);
+
+    static std::string PowerHint(const BattleMenu &menu, const BattleSnapshot &snap)
+    {
+        if (menu.ZMode()) return "Z-Power: gold rows only";
+        const BattlePower power = menu.PowerSelected() != BattlePower::None ? menu.PowerSelected() : snap.power;
+        if (power == BattlePower::None) return "";
+        return Theme::FormatPromptText(std::string("R ") + (power == BattlePower::Mega ? "Mega Evolve" : "Z-Power")
+            + (menu.PowerSent() ? " sent" : menu.PowerSelected() != BattlePower::None ? " ON" : " OFF"));
+    }
 
     static void DrawMoves(Canvas &canvas, const BattleMenu &menu, const BattleSnapshot &snap)
     {
@@ -135,6 +167,7 @@ namespace Screens
                             row.effect == 2 ? Theme::OptionGlint : Theme::WindowText, Align::Right);
             }
             std::string label = row.name.empty() ? Format("Move %u", row.move) : row.name;
+            if (menu.ZMode()) label = (snap.zSlots & (1u << i)) ? "Z: " + label : "Unavailable";
             if (on && menu.Pending())
                 label += "...";
             CompactText(canvas, label, Rect{ b.x + 22, b.y + 1, b.w - 32 - effectW, 15 }, Theme::WindowText);
@@ -147,11 +180,19 @@ namespace Screens
                         Rect{ b.x + 78, b.y + 17, b.w - 84, 16 }, Theme::PpTextColor(row.pp, row.maxPp));
             if (on)
                 Theme::DrawCursor(canvas, b.x + 12, b.y + 26);
+            if (menu.ZMode() && !(snap.zSlots & (1u << i)))
+                canvas.FillRoundRect(b, 5, Rgb(50,50,50,155));
         }
         DrawMoveDetails(canvas, menu, snap, area);
         const Rect foot = { area.x + 4, area.Bottom() - 24, area.w - 8, Theme::PromptHeight + 2 };
         if (!Notice(canvas, foot, menu.Note()))
-            Prompts(canvas, foot.x, foot.y + 1, { { Theme::Button::A, "Use" }, { Theme::Button::B, "Back" } });
+        {
+            // A third chip doesn't fit Classic's 210 px: L Info goes as text in what is left.
+            const s32 x = Prompts(canvas, foot.x, foot.y + 1, { { Theme::Button::A, "Use" }, { Theme::Button::B, "Back" } });
+            if (x < foot.Right())
+                CompactText(canvas, Theme::FormatPromptText("L Info"), Rect{ x, foot.y + 3, foot.Right() - x, 14 },
+                            Theme::WindowText);
+        }
     }
 
     // --- Pokémon list ---
@@ -202,6 +243,14 @@ namespace Screens
         const MoveRow empty;
         const MoveRow &row = menu.Cursor() < snap.moveCount && menu.Cursor() < 4 ? snap.moves[menu.Cursor()] : empty;
         const Rect strip = { area.x + 6, area.Bottom() - 54, area.w - 12, 30 };
+        const std::string power = PowerHint(menu, snap);
+        if (!power.empty()) {
+            CompactText(canvas, power, Rect{strip.x, strip.y, strip.w, 15}, Theme::WindowText);
+            CompactText(canvas, menu.ZMode() ? "B Normal moves; base names" :
+                        std::string(BattleCategoryName(row.category)) + "  " + MoveDetailsText(row),
+                        Rect{strip.x, strip.y + 15, strip.w, 15}, Theme::WindowText);
+            return;
+        }
         if (row.category < 3)
             Theme::DrawCategoryIcon(canvas, strip.x, strip.y + 5, row.category);
         const Rect text = { strip.x + 46, strip.y, strip.w - 46, 15 };
@@ -257,7 +306,8 @@ namespace Screens
                 if (on)
                     Theme::DrawCursor(canvas, pill.x + 18, pill.y + pill.h / 2);
             }
-            std::string label = CommandLabel((BattleCommand)i);
+            std::string label = i == (u8)BattleCommand::Bag && !BattleHasBag(snap.kind)
+                                ? "N/A" : CommandLabel((BattleCommand)i);
             if (on && menu.Pending())
                 label += "...";
             CompactText(canvas, label, Rect{ pill.x + (bar ? 3 : 31), pill.y + (bar ? 7 : 4),
@@ -265,7 +315,11 @@ namespace Screens
             x += widths[i] + 3;
         }
         if (!bar)
-            CompactText(canvas, "A Choose", Rect{ area.x + 12, area.Bottom() - 20, area.w - 24, 16 }, Theme::WindowText);
+        {
+            const bool markers = snap.activeShiny || snap.activeHiddenAbility || snap.foeShiny || snap.foeHiddenAbility;
+            CompactText(canvas, Theme::FormatPromptText("A Choose"), Rect{ area.x + 12, area.Bottom() - 20,
+                        markers ? area.w - 110 : area.w - 24, 16 }, Theme::WindowText);
+        }
     }
 
     static void EffectMarker(Canvas &canvas, const Rect &r, u8 effect)
@@ -311,6 +365,7 @@ namespace Screens
             }
             const s32 inset = bar ? 5 : 24;
             std::string label = row.name.empty() ? Format("Move %u", row.move) : row.name;
+            if (menu.ZMode()) label = (snap.zSlots & (1u << i)) ? "Z: " + label : "Unavailable";
             if (on && menu.Pending())
                 label += "...";
             CompactText(canvas, label, Rect{ b.x + inset, b.y + 1, b.w - inset - 6, 15 }, Theme::WindowText);
@@ -326,11 +381,13 @@ namespace Screens
             else
                 CompactText(canvas, EffectLabel(row.effect), Rect{ b.x + inset, b.y + 27, b.w - inset - 12, 8 },
                             row.effect == 2 ? Theme::OptionGlint : Theme::WindowText);
+            if (menu.ZMode() && !(snap.zSlots & (1u << i)))
+                canvas.FillRoundRect(b, 5, Rgb(50,50,50,155));
         }
         DrawMoveDetails(canvas, menu, snap, area);
         const Rect foot = { area.x + 5, area.Bottom() - 19, area.w - 10, 13 };
         if (menu.Note().empty())
-            CompactText(canvas, "A Use   B Back", foot, Theme::WindowText);
+            CompactText(canvas, Theme::FormatPromptText("A Use  B Back  L Info"), foot, Theme::WindowText);
         else
             CompactText(canvas, menu.Note(), foot, Theme::WindowText);
     }
@@ -346,6 +403,8 @@ namespace Screens
             PartyMonView mon;
             mon.valid = true;
             mon.egg = m.egg;
+            mon.shiny = m.shiny;
+            mon.hiddenAbility = m.hiddenAbility;
             mon.name = m.name;
             mon.species = m.species;
             mon.level = m.level;
@@ -361,9 +420,9 @@ namespace Screens
         if (!menu.Note().empty())
             view.note = menu.Note();
         else if (menu.Forced())
-            view.note = "Choose a Pok\xC3\xA9mon to send out   A Choose";
+            view.note = Theme::FormatPromptText("Choose a Pok\xC3\xA9mon to send out   A Choose");
         else
-            view.note = "A Switch   B Back";
+            view.note = Theme::FormatPromptText("A Switch   B Back");
         DrawParty(canvas, view);
 
         if (menu.PopupOpen() && menu.Cursor() < snap.partyCount)
@@ -505,19 +564,72 @@ namespace Screens
         const Rect area = MovesArea;
         Theme::DrawWindow(canvas, area);
         const Rect head = { area.x, area.y + 2, area.w, 26 };
-        Theme::DrawText(canvas, "Choose a target", Inset(head, Theme::WindowPad, 2, Theme::WindowPad, 2), White());
-        Theme::DrawText(canvas, "As on the bottom screen (" + snap.panelKey + ")",
+        Theme::DrawText(canvas, menu.Spread() || snap.spread ? "Confirm spread move" : "Choose a target", Inset(head, Theme::WindowPad, 2, Theme::WindowPad, 2), White());
+        Theme::DrawText(canvas, "As on the bottom screen (" + Theme::FormatPromptText(snap.panelKey) + ")",
                         Rect{ area.x + Theme::WindowPad, head.Bottom(), area.w - 2 * Theme::WindowPad, 16 },
                         White(Theme::TextSize::Small));
         const s32 cellW = (area.w - 24) / 2;
         for (u8 i = 0; i < TargetCount; i++)
         {
             const Rect cell = { area.x + 8 + (i % 2) * (cellW + 8), head.Bottom() + 22 + (i / 2) * 56, cellW, 48 };
-            Theme::DrawRow(canvas, cell, Theme::RowKind::Option, TargetLabel(i), i == menu.Cursor());
+            const TargetSlot &slot = snap.targets[i];
+            const bool selectable = TargetSelectable(slot);
+            const std::string label = slot.name.empty() ? (slot.live ? TargetLabel(i) : "Empty") : slot.name;
+            if (selectable)
+                Theme::DrawRowBackground(canvas, cell, Theme::RowKind::Option);
+            else {
+                canvas.FillRoundRect(cell, Theme::RowRadius, Rgb(48, 48, 48));
+                canvas.FillRoundRect(Inset(cell, 2), Theme::RowRadius - 2, Rgb(112, 112, 112));
+            }
+            // Row's standard 28px text insets reserve a cursor in every plate.
+            // Here the cursor sits above the name, leaving the real width usable.
+            CompactText(canvas, label, Rect{cell.x + 4, cell.y + 12, cell.w - 8, Theme::UsingGameFont() ? 16 : 12},
+                        selectable ? Theme::OptionText : Rgb(192, 192, 192), Align::Center);
+            if (selectable && i == menu.Cursor())
+                Theme::DrawCursor(canvas, cell.x + 14, cell.y + 8);
+            if (!selectable)
+                CompactText(canvas, slot.self ? "Self" : "Unavailable",
+                            Rect{cell.x + 4, cell.y + 30, cell.w - 8, 8}, Rgb(192, 192, 192), Align::Center);
         }
         const Rect foot = { area.x + 4, area.Bottom() - Theme::PromptHeight - 6, area.w - 8, Theme::PromptHeight + 2 };
         if (!Notice(canvas, foot, Footer(menu)))
             Prompts(canvas, foot.x, foot.y + 1, { { Theme::Button::A, "Choose" }, { Theme::Button::B, "Back" } });
+    }
+
+    Rect BattleInfoArea(BattleLayout layout)
+    {
+        (void)layout;
+        return Rect{8, 40, 154, 112};
+    }
+    std::string BattleInfoKey(const BattleSnapshot &snap)
+    {
+        return snap.foeInfo.name + "|" + BattlerTypesText(snap.foeInfo.types) + "|"
+            + StatStagesText(snap.foeInfo.stages) + "|" + StatStagesText(snap.playerInfo.stages)
+            + (snap.foeInfo.caught ? "|caught" : "");
+    }
+    void DrawBattleInfo(Canvas &canvas, const BattleSnapshot &snap, BattleLayout layout)
+    {
+        const Rect area = BattleInfoArea(layout);
+        Theme::DrawWindow(canvas, area);
+        CompactText(canvas, "Foe: " + snap.foeInfo.name, Rect{area.x + 6, area.y + 4, area.w - 12, 12}, Theme::WindowText);
+        UI::TextStyle style;
+        style.font = Font::Small;
+        style.color = Theme::WindowText;
+        s32 y = area.y + 18;
+        const std::string lines[] = {
+            BattlerTypesText(snap.foeInfo.types) + (snap.foeInfo.caught ? " [Caught]" : ""),
+            StatStagesText(snap.foeInfo.stages),
+            StatStagesText(snap.playerInfo.stages).empty() ? "" : "You: " + StatStagesText(snap.playerInfo.stages)
+        };
+        for (const std::string &text : lines) {
+            if (text.empty()) continue;
+            for (const std::string &line : WrapText(text, area.w - 12, style)) {
+                if (y + 10 > area.Bottom() - 4) return;
+                UI::DrawText(canvas, line, Rect{area.x + 6, y, area.w - 12, 10}, style);
+                y += 10;
+            }
+            y += 3;
+        }
     }
 
     // --- Helpers for the game's own screens ---
@@ -539,23 +651,23 @@ namespace Screens
             Theme::DrawText(canvas, "Caught!", title, White());
             // A new species gets its Pokédex page first; then the nickname
             // question, where A opens a keyboard on the bottom screen.
-            Theme::DrawText(canvas, "B: next, no nickname", line, accent);
-            Theme::DrawText(canvas, "Nickname? A: yes (keyboard below)", hint1, small);
-            Theme::DrawText(canvas, snap.panelKey + ": show the bottom screen", hint2, small);
+            Theme::DrawText(canvas, Theme::FormatPromptText("B: next, no nickname"), line, accent);
+            Theme::DrawText(canvas, Theme::FormatPromptText("Nickname? A: yes (keyboard below)"), hint1, small);
+            Theme::DrawText(canvas, Theme::FormatPromptText(snap.panelKey) + ": show the bottom screen", hint2, small);
         }
         else if (menu.Prompt())
         {
             Theme::DrawText(canvas, "The game asks", title, White());
             Theme::DrawText(canvas, "The choices are below", line, accent);
-            Theme::DrawText(canvas, "Up/Down + A: choose   B: back", hint1, small);
-            Theme::DrawText(canvas, snap.panelKey + ": show the bottom screen", hint2, small);
+            Theme::DrawText(canvas, Theme::FormatPromptText("Up/Down + A: choose   B: back"), hint1, small);
+            Theme::DrawText(canvas, Theme::FormatPromptText(snap.panelKey) + ": show the bottom screen", hint2, small);
         }
         else
         {
             Theme::DrawText(canvas, "Game screen", title, White());
             Theme::DrawText(canvas, "Buttons go to the game", line, accent);
-            Theme::DrawText(canvas, "D-pad: move   A: choose   B: back", hint1, small);
-            Theme::DrawText(canvas, snap.panelKey + ": show the bottom screen", hint2, small);
+            Theme::DrawText(canvas, Theme::FormatPromptText("D-pad: move   A: choose   B: back"), hint1, small);
+            Theme::DrawText(canvas, Theme::FormatPromptText(snap.panelKey) + ": show the bottom screen", hint2, small);
         }
     }
 
@@ -581,13 +693,53 @@ namespace Screens
         return m_page == BattlePage::Party ? PartyRadius : m_page == BattlePage::Bag ? 12 : Theme::WindowRadius;
     }
 
+    static void DrawBattlerMarkers(Canvas &canvas, const BattleMenu &menu, const BattleSnapshot &snap)
+    {
+        if (!menu.Note().empty()) return; // never draw over a refusal/status note
+        const Rect area = menu.Area();
+        const s32 y = menu.Layout() == BattleLayout::Bar ? 187 : area.Bottom() - 17;
+        s32 x = area.Right() - 94;
+        for (u8 side = 0; side < 2; side++, x += 44)
+        {
+            const bool shiny = side == 0 ? snap.activeShiny : snap.foeShiny;
+            const bool ha = side == 0 ? snap.activeHiddenAbility : snap.foeHiddenAbility;
+            if (!shiny && !ha) continue;
+            CompactText(canvas, side == 0 ? "P" : "F", Rect{ x, y, 8, 10 }, Theme::WindowText);
+            if (shiny) Theme::DrawShiny(canvas, x + 9, y);
+            if (ha)
+            {
+                const Rect pill = { x + 22, y, 20, 10 };
+                canvas.FillRoundRect(pill, 3, Theme::AccentText);
+                CompactText(canvas, "HA", pill, Theme::WindowLine, Align::Center);
+            }
+        }
+    }
+
     void BattleMenu::Draw(Canvas &canvas, const BattleSnapshot &snap) const
     {
+        if (m_page == BattlePage::Moves && m_description)
+        {
+            Theme::DrawWindow(canvas, Area());
+            const MoveRow empty;
+            const MoveRow &row = m_cursor < snap.moveCount && m_cursor < 4 ? snap.moves[m_cursor] : empty;
+            const Rect body = BattleDescriptionArea(m_layout);
+            CompactText(canvas, row.name, Rect{ body.x, Area().y + 5, body.w, 16 }, Theme::WindowText);
+            UI::TextStyle text;
+            text.font = Font::Small;
+            text.color = Theme::WindowText;
+            const auto lines = WrapText(row.description.empty() ? "Description unavailable" : row.description, body.w, text);
+            const s32 pitch = LineHeight(text) + 2;
+            for (size_t i = 0; i < lines.size() && (s32)(i + 1) * pitch <= body.h; i++)
+                UI::DrawText(canvas, lines[i], Rect{ body.x, body.y + (s32)i * pitch, body.w, pitch }, text);
+            CompactText(canvas, Theme::FormatPromptText("L/B Close  Up/Down Move"), Rect{ body.x, Area().Bottom() - 20, body.w, 14 }, Theme::WindowText);
+            return;
+        }
         switch (m_page)
         {
         case BattlePage::Command:
             if (m_layout == BattleLayout::Classic) DrawCommand(canvas, *this, snap);
             else DrawNewCommand(canvas, *this, snap);
+            DrawBattlerMarkers(canvas, *this, snap);
             break;
         case BattlePage::Moves:
             if (m_layout == BattleLayout::Classic) DrawMoves(canvas, *this, snap);
@@ -606,17 +758,21 @@ namespace Screens
     {
         std::string key = Format("%u %u", (unsigned)m_page, m_cursor) + (m_pending ? "p" : "") + "|" + m_note + "|"
                           + m_busyText;
-        key += Format("|layout %u", (unsigned)m_layout);
+        key += Format("|layout %u", (unsigned)m_layout) + (m_description ? "|description" : "");
+        key += Format("|markers %u %u", snap.activeShiny, snap.activeHiddenAbility)
+               + Format(" %u %u", snap.foeShiny, snap.foeHiddenAbility);
         switch (m_page)
         {
         case BattlePage::Command:
-            key += "|" + snap.activeName;
+            key += "|" + snap.activeName + BattleInfoKey(snap) + Format("|kind %u", (unsigned)snap.kind);
             break;
         case BattlePage::Moves:
+            key += Format("|power %u %u", (unsigned)snap.power, (unsigned)m_power)
+                   + Format(" %u %u", m_powerSent, snap.zSlots) + Format(" %u", m_zMode);
             for (u8 i = 0; i < snap.moveCount; i++)
             {
                 const MoveRow &row = snap.moves[i];
-                key += "|" + row.name + row.typeName + Format(" %u %u", row.move, row.type)
+                key += "|" + row.name + row.typeName + row.description + Format(" %u %u", row.move, row.type)
                        + Format(" %u %u", row.effect, row.pp) + Format(" %u", row.maxPp)
                        + Format(" %u %u", row.power, row.accuracy) + Format(" %u", row.category);
             }
@@ -629,11 +785,17 @@ namespace Screens
             for (u8 i = 0; i < snap.partyCount; i++)
             {
                 const BattlePartyMon &m = snap.party[i];
-                key += "|" + m.name + m.item + Format(" %u %u", m.level, m.hp) + Format(" %u %u", m.maxHp, m.status);
+                key += "|" + m.name + m.item + Format(" %u %u", m.level, m.hp) + Format(" %u %u", m.maxHp, m.status)
+                       + Format(" %u %u", m.shiny, m.hiddenAbility);
             }
             if (m_page == BattlePage::Bag)
                 for (u8 i = 0; i < snap.bagItemCount; i++)
                     key += "|" + snap.bagItems[i].name + Format(" %u %u", snap.bagItems[i].id, snap.bagItems[i].count);
+            break;
+        case BattlePage::Target:
+            key += m_spread || snap.spread ? "|spread" : "|single";
+            for (const TargetSlot &slot : snap.targets)
+                key += "|" + slot.name + Format(" %u %u", slot.live, TargetSelectable(slot)) + Format(" %u", slot.self);
             break;
         case BattlePage::Game:
             key += (m_afterCatch ? "c" : "") + Format("|%u %u", (unsigned)snap.menu, Prompt() ? 1u : 0u) + snap.panelKey;

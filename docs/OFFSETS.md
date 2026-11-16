@@ -71,6 +71,7 @@ GSP (display):
 - `0x66FC40`: GSP manager object. `0x69EA68`: its parent (`+0x1C` -> manager).
 - `0x279A2C`: GX command queue push (shared `+0x800`).
 - GX commands: `0x279C48` MemoryFill, `0x27A5BC` DisplayTransfer, `0x279E28` TextureCopy, `0x279D5C` FlushCacheRegions + ProcessCommandList.
+- `0x279D5C` (entered at `0x279D58`, a `mov r0,r0`): gx ProcessCommandList `(list, size in bytes, flush, flags)`. With `flush` it first pushes GX command 5 (FlushCacheRegions) for the list; then GX command 1 with `flags` in word 3. Only caller: `0x5614F4` in nngx's request runner `0x561440` (18 callers), which walks 0x1C-byte requests (type 0 DMA `0x54A5FC`, 1 command list, 2 MemoryFill `0x54A650`, 3 DisplayTransfer `0x54A630`, 4 TextureCopy `0x54A670`). Same prologue on Ultra Moon. Hooked by the `gpuquad` spike (docs/GPUQUAD.md): in the field the game submits ~20 lists, ~67k words and ~1340 CMDBUF jumps per top frame.
 - IPC wrappers: `0x27A7F4` AcquireRight, `0x27A860` FlushDataCache, `0x27AA80` RegisterInterruptRelayQueue.
 
 HID (input):
@@ -176,6 +177,7 @@ Full write-up: [RE4-map.md](RE4-map.md). Read by the `where` command (`Sources/W
 - Zone: `*(*(gm+0x2C)+0x88)+0x1C` (u32; 0 in battle). Zone data: `field+0x54` loader (vtable `0x64BDD0`) → `+0x14` table of 0x54-byte entries (`+0x18` size): `+0x1C` place-name line in message file 72, `+0x44/+0x48` fixed map point (interiors only).
 - Rotom map view (vtable `0x64786C`): FieldMenu frame (FieldMenu+`0x183A0`) on the scene stack → `+0xD0`; `+0x170` map index, `+0x174/+0x178` centre (world x/z), scales `0x2CF230`/`0x2CF234` (0.0270139, 0.0270536 map px per unit).
 - Verified walking the Route 2 Pokémon Center (zone 79), Route 2 (7) and Hau'oli City (13) against screenshots and the Rotom map.
+- Rotom map layout (squeezed for widescreen, `Sources/Screens/Map.cpp`): map view `+0x20` → `+4` → `+0x10` (nw::lyt layout) → `+0x10` root pane `RootPane` → first child (child list node `+0x14`, node = pane `+4`) `All`, parent of the 16 tiles `Map_00`..`Map_33` (168 × 84), `IconRange`, `PlayerIcon_00`, `EventIcon_00` (goal flag) and `EncountIcon_02`. Both panes vtable `0x646B28` (identical on Ultra Moon). nw::lyt::Pane fields used: translate `+0x1C`, scale x/y `+0x34/+0x38`, size `+0x3C/+0x40`, flags `+0x44` (`0x10` = matrix dirty, as the game's own `0x2CF0D8` sets after moving the flag pane), global matrix `+0x48` (m03 `+0x54`), name `+0x80`. The game rewrites `All`'s scale to 1 every frame. Pane index table lookups in the game's layout wrapper: `0x4B7FB8` (cache at `+0x104`, else name table `+0xF4` and `FindPaneByName` from the root).
 
 ## Pokédex (runtime, 2026-11-02)
 
@@ -241,3 +243,141 @@ Full write-up: [ROTOM-FIELD.md](ROTOM-FIELD.md). Used by `Sources/Screens/RotomP
 - Rotom's data (main image, vtable `0x648698`; `0x33F81310`, SaveData `+0xF6F9E8` here): `+0x5A` bit 0 = a chat is ready, bits 1-7 count to 10 (`0x2ED50C`, called from `0x3A67E0`); `+0x5B` bits 0-6 affection (≤ 60, `0x2ED66C`); `+0x08` eight request slots (u32 line, u32 extra; empty `0x7FFFFFFF`, `-1`; `0x2ED650`, `0x2ED628`) for chats the field starts. Both counters read 0 after Continue and rose about once per 30-60 s; ready came ~5 min after boot and after a chat.
 - Message file 89 of `a/0/3/<lang>` (`a/0/3/2` English, 1488 lines): Rotom's lines. `[VAR 0100]` the player's name, `[VAR 0189]` what Rotom calls the player (the name on this save), `[VAR BE00]`/`[VAR BE01]` line/page breaks.
 - Touch on Rotom (FieldMenu `0x7F7C74`, applet vtable slot 21): the face (`field.rotom_face`) opens the Pokédex; the left eye (86,48) starts a chat or the Roto Loto while `+0x5A` bit 0 is set, else does nothing visible. During the Roto Loto any touch goes on (`0x7F72C0`).
+
+## Battle descriptions / Pokemon identity and markers (#2 / #13)
+
+| Location | Meaning | Verification |
+|---|---|---|
+| RomFS `a/0/3/<lang>`, dat 117, line = move ID | Move description (names dat 118); English 730 lines | **Verified offline** by decoding local update GARC; runtime display pending |
+| `0x671A10` u8 | Current language 0..9 for asset loader | Existing RE2 path, unchanged |
+| Battle scene +0x94 -> view +0xD0 -> container +4 + client*0x1C | Six record pointers; count +0x18; record[0] active | Existing live RE1/research path; observed container 0x30000400 is NOT hardcoded |
+| Battler record +0x00 u32 | Candidate battle-owned PokemonParam pointer | **Static inference, runtime unverified**: Battle+0x7DEF4 loads it, +0x7DEFC passes it to imported accessor +0x1810; +0x7DF00..+0x7DF14 passes it to +0x7DF18 (battle HP/ability refresh) |
+| PokemonParam vtable `0x649374`, +4 core pointer, +8 calc pointer | Reuse `ReadPokemonParam` / `DecodePk7` | Existing field-party layout verified in RE3; battle use **unverified**, guarded by vtable/readability/checksum/species |
+| Unshuffled PK7 core +0x0C u16, +0x0E u16, +0x18 u32 | TID, SID, PID; shiny XOR <16 | Existing Party/Boxes decoder; synthetic tests across encrypted/decrypted forms and all shuffles |
+| Unshuffled PK7 core +0x15 low 3 bits | Ability slot 4 = HA (1/2 = ordinary slots) | Existing Party/Boxes decoder, host-tested; battler ability ID +0x16 is insufficient |
+| GameManager `*(0x6A59C4)` +0x24 -> GameData +0x0C -> PokeParty | Field-party metadata fallback, six Param pointers, count +0x18 | Existing RE3; now matched by PID+species when known or unique species otherwise; **never battle-team index** |
+
+No new absolute game addresses. The PokemonParam candidate is followed on
+both sides, but the foe never falls back to the player's field party.
+Unreadable/ambiguous data suppresses markers; P/F mean client 0/client 1
+record 0, not all active battlers. Runtime validation and test recipes:
+[BATTLE-UI.md](BATTLE-UI.md#review--emulator-checks).
+
+## Battle foe info and rules (#3/#4, 2026-11-09)
+
+Evidence: private research `foe-info.md` and `trainer-double.md` (2026-11-07),
+plus read-only disassembly of `research/battle_rel1.bin` and decoding the user's
+English base text GARC. No emulator validation occurred in this worktree.
+
+| Address/path | Meaning | Evidence status |
+|---|---|---|
+| scene `+0x94` -> view `+0xD0` -> container (observed `0x30000400`) | clients 0..3; client at `+4+c*0x1C`, six pointers and u8 count `+0x18` | research live verified SOS/Royal |
+| record `+0x1E4/5/6` u8 | current three types; 18 absent, duplicate mono-type bytes collapsed | research live initial types, static ChangeType `Battle+0x8DE48`; changed types not live tested |
+| record `+0x1EA..0x1F0` u8 | Atk/Def/SpA/SpD/Spe/Acc/Eva, stage=byte-6; reject >12 | research live Def/SpD/Acc, static getter `Battle+0x92A00` for all seven |
+| `*0x6A59C4` -> `+0x24` -> `+4` | SaveData (vtable `0x64F4A0`) | existing Pokedex and research live |
+| save `+0x23DC` | ZukanData, vtable `0x64F550`, magic `+4 = 0x2F120F17` | research live |
+| zukan `+0x8C+((species-1)>>3)` | caught bit `1<<((species-1)&7)`, species 1..807 | research live; same native Pokedex function `0x4C7A7C` |
+| Battle CRO `+0x10B848` | target screen vtable | research live SOS/Royal |
+| view `+4` -> context `+0x0C` -> setup | battle setup used by rule getters | statically traced here; NOT live verified |
+| setup u8 `+0` | battle type: 0 wild, 1 trainer; Run classifier also refuses types>=4 | static Run-refusal path; NOT live verified |
+| setup u8 `+1` -> context u8 `+0xA68` | battle format; format2 treated as Royal | copy verified statically; Royal meaning inferred, NOT live verified |
+
+New static trace (offsets relative to CRO, binary relocated at 0x100000):
+view constructor `+0x3E0FC` copies parameter word0 into view+4 and word2 into
+view+D0. `+0x93D98` reads context+C then setup byte0. `+0xF440/+0xF444`
+copies setup byte1 into context+A68. `+0x92C84` returns 1 for context format2,
+otherwise returns setup type0/1/2 unchanged, converts3 to2, defaults to1.
+Caller `+0x3578..+0x358C` sends result1 to `+0x3768`, which requests message
+`0x56` through `+0x938C4`. English message file17 line86 is the trainer Run
+refusal. This uses the classifier inputs, never the stale view+230 message ID.
+Result2/link/surrender behavior is outside this task; unrecognized types retain
+existing action behavior except the statically refused >=4 cases. Wild trial
+flags (`setup+0x324` masks0x4000/0x8000 at `+0x3598..+0x35C8`) separately
+produce trial refusal 0x118; this change does not implement trial-specific Run.
+
+Royal format2 is supported by the classifier's special refusal and four-client
+position arithmetic (`+0x5EEBC` format2 branch). Its exact semantic identity is
+still inferred, so verify raw log values in Royal and true doubles. Never infer
+trainer status from party size, OT, or message0x4E. `battle` prints raw rules.
+SOS TL=c1/r1, TR=c1/r0, BL=c0/r0, BR=c0/r1; Royal TL=c3/r0, TR=c2/r0,
+BL=c0/r0, BR=c1/r0 are research-live mappings. True doubles reuse the SOS
+mapping by inference; true multi-client team battles remain unsupported.
+Target rectangles including the dangerous empty ally tap are tap-verified in
+JSON/generated header, but the native selection rules prohibit empty/self/ally.
+
+## Quick save observer (static analysis, emulator verification pending)
+
+`Sources/QuickSave.cpp` reads FieldMenu's `ReportDraw`; it never calls the
+save functions directly. These offsets were derived from local Ultra Sun and
+Ultra Moon v1.2 `FieldMenu.cro` files under `analysis/private/umoon-v1.2/`.
+Relevant code words agree between the two files. Runtime reads fail closed;
+no confirmation is authorized by field state 4 or elapsed time alone.
+
+- `FieldMenuFrame` vtable FieldMenu+`0x1814C`, `+0x78` ? `ReportDraw`;
+  `ReportDraw` vtable FieldMenu+`0x180B4`. Search the first eight scene-stack
+  responders for ReportDraw directly (as for RotomDraw), or its owning frame.
+  **Stack membership/path remains an in-game verification requirement.**
+- `ReportDraw` u8 `+0xE8`: answer, initially `0xFF`, callback at `+0x11CC`
+  writes 0 for Yes or 1 for No. u8 `+0xE9`: state. Main at `+0x1C5C`.
+  State 3 waits for the answer (`+0x1DC4`); 4 waits for the saving message;
+  5 polls `GameData::SaveMain`; 6/7 display success and wait to close;
+  8/9 display failure. State 10 finishes (`+0xF0 = 1`).
+- `+0x1EEC` calls the import thunk for `GameData::SaveStart`; `+0x1F24`
+  calls the `SaveMain` thunk. The branch at `+0x1F28` waits on result 1;
+  `+0x1F44` distinguishes 0 (success, message 13, state 6) from an error
+  (message 14, state 8). Success message closes itself after state 7's wait.
+- Runtime signature checks: `+0x1CB0 = E5D400E9`, `+0x1F28 = E3500001`,
+  `+0x1F44 = E3550000`, `+0x222C = E5803000`, and the relocated main
+  vtable slot at `+0x180E8 = module + 0x1C5C`.
+- Existing PC guards supply scene, field state, Festival Plaza module and
+  running/queued event checks through `ReadPcWorld`. Saving restrictions
+  specific to the game are delegated to its X/Y handlers: without ReportDraw
+  state 3 and unanswered choice, no A is injected. No unverified "can save"
+  address is added and restrictions are never bypassed.
+
+The observer latches success only after observing this request's unanswered
+confirmation and writing state 5. It then waits for the game's X menu, closes
+that identified menu with B, and waits for idle field/no events. Unknown states,
+missing objects, cancellation and timeouts cannot produce `save: saved`.
+
+## Battle widescreen implementation (#27)
+
+USA Sun/Moon v1.2; statically checked against both local games, emulator
+verification pending. Offsets are from the loaded CRO header, never a fixed
+runtime Battle base.
+
+| Location | Checked words / purpose |
+| --- | --- |
+| Battle +0x736D0, +0x736D4 | `E92D4030 E1A05001`: second perspective MITM entry, shared callback with main-image 0x3631CC |
+| Battle +0x73774 | `EEC01AA9`: aspect divide signature, checked before hooking |
+| code.bin 0x17376C..0x1737AC | Entire 17-word SDK unload wrapper checked; prologue `E92D4070`, IPC command literal `000500C2` at 0x1737A8, handle address literal `0069EB28` at 0x1737AC |
+| code.bin 0x1732C0 / 0x1732C8 | `mov r1,r4` / call unload wrapper: r1 holds the CRO base; pre-unload hook forwards r0-r3 and Result |
+| SequencePlayer +0xE860 | Separate perspective copy; intentionally unpatched |
+
+The unload signature includes all instructions/literals (`UnloadWords` in
+`Includes/BattleWidescreen.hpp`). The adjacent wrapper at 0x1737B0 has a
+similar prologue but command `000100C2`; it is not our unload target.
+Battle +0x7434C rebuilds the three projections, +0x4211C initializes them,
+and +0x3F410 updates the camera. Only +0x736D0 is hooked inside Battle.
+Lifetime, slot capacity and verification: [WIDESCREEN.md](WIDESCREEN.md#cro-lifetime).
+
+## Battle Mega / Z availability (2026-11-09; corrected 2026-11-10)
+
+No new memory offsets. RE1 and `foe-info.md` provide no verified ring ownership
+or per-battle Mega/Z-use flags; held items alone do not establish eligibility.
+`Sources/Actions.cpp` uses eight static lettering/plate pixels per button from
+all 10 Mega and 12 Z animated frames (`Includes/BattleRules.hpp`), RGB tolerance 16,
+three matching callbacks and two-plugin-frame expiry. The first-input guard uses
+the same flags. `WorldBattleMega` is bit 4 (old bit 21 collided with SaveIdle);
+Z is bit 5, Z-list bit 6, row-mask bits 12-15. These are pixel flags, not engine
+state. Consumers require the verified Battle Moves menu.
+
+Gold Z rows are now screenshot-mapped: Decidueye's slot 3 (zero-based) and Pikachu's
+slot 1 retain their original row centres. Two of three gold samples per row
+(x220/260/300, y53+50*row) authorize only that row; multiple eligible bits are
+supported. A single Back leaves the Z list for normal moves, not Command.
+Both layout bounds stay [0,15,126,209], tap (55,118); the user manually confirmed
+this tap for Mega/Z in Azahar. Layout verification remains conservatively marked
+measured for the native guarded step pending repaired-flow emulator validation.
+See [BATTLE-UI.md](BATTLE-UI.md#emulator-follow-up-verification-2026-11-10) for
+samples, gold thresholds, evidence, commands and remaining live checks.

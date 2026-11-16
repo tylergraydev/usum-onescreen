@@ -1,4 +1,5 @@
 #include "UI/Theme.hpp"
+#include "UI/Icons.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -60,19 +61,8 @@ namespace Theme
     static void DrawTinted(Canvas &canvas, const Image &image, s32 x, s32 y, const Rect &src, Color tint, bool rotate)
     {
         const s32 w = rotate ? src.h : src.w, h = rotate ? src.w : src.h;
-        for (s32 dy = 0; dy < h; dy++)
-            for (s32 dx = 0; dx < w; dx++)
-            {
-                const s32 sx = rotate ? src.x + src.w - 1 - dy : src.x + dx;
-                const s32 sy = rotate ? src.y + dx : src.y + dy;
-                if (sx < 0 || sy < 0 || sx >= image.w || sy >= image.h)
-                    continue;
-                const u8 *p = &image.rgba[((size_t)sy * image.w + sx) * 4];
-                if (p[3] == 0)
-                    continue;
-                canvas.BlendPixel(x + dx, y + dy, Rgb((u8)(p[0] * tint.r / 255), (u8)(p[1] * tint.g / 255), (u8)(p[2] * tint.b / 255)),
-                                  (u8)(p[3] * tint.a / 255));
-            }
+        const ImageView view{ image.rgba.data(), image.w, image.h, image.w * 4 };
+        canvas.DrawImage(view, src, Rect{ x, y, w, h }, ImageFilter::Bilinear, tint, rotate);
     }
 
     static const Image *GameIconImage(GameIcon icon)
@@ -160,11 +150,16 @@ namespace Theme
     {
         for (size_t i = 0; i < text.size();)
         {
-            const Glyph *g = cache.Get(NextCodePoint(text.data(), text.size(), i));
+            const u32 cp = NextCodePoint(text.data(), text.size(), i);
+            const Glyph *g = cache.Get(cp);
             if (g == nullptr)
                 break;
             if (g->w > 0)
-                canvas.DrawMask(x + g->left, y, g->mask, g->w, g->h, g->w, 1, color);
+            {
+                if (canvas.Scale() == 1.f)
+                    canvas.DrawMask(x + g->left, y, g->mask, g->w, g->h, g->w, 1, color);
+                else cache.Draw(canvas, cp, x, y, color);
+            }
             x += g->advance;
         }
     }
@@ -286,7 +281,7 @@ namespace Theme
 
     static const char *ButtonLetter(Button b)
     {
-        static const char *letters[] = { "A", "B", "X", "Y", "L", "R", "START", "SELECT" };
+        static const char *letters[] = { "A", "B", "X", "Y", "L", "R", "START", "SELECT", "ZL", "ZR" };
         return letters[(int)b];
     }
 
@@ -322,7 +317,9 @@ namespace Theme
         canvas.FillRoundRect(Rect{ x, y, w, PromptHeight }, PromptHeight / 2, PromptFill);
         const s32 bx = x + 4, by = y + (PromptHeight - 16) / 2;
         const Image *icon = ButtonIcon(button);
-        if (icon != nullptr)
+        if (GetSettings().glyphs != GlyphFamily::ThreeDS)
+            DrawControllerBadge(canvas, Rect{ bx, by, BadgeWidth(button), 16 }, button, GetSettings().glyphs, ButtonName(button, GetSettings().glyphs));
+        else if (icon != nullptr)
             DrawImage(canvas, *icon, bx, by);
         else
         {
@@ -339,7 +336,7 @@ namespace Theme
         {
             TextStyle s;
             s.color = PromptText;
-            DrawText(canvas, label, Rect{ bx + BadgeWidth(button) + 4, y, w - BadgeWidth(button) - 8, PromptHeight }, s);
+            DrawText(canvas, FormatPromptText(label), Rect{ bx + BadgeWidth(button) + 4, y, w - BadgeWidth(button) - 8, PromptHeight }, s);
         }
         return w;
     }

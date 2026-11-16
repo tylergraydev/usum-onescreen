@@ -4,10 +4,12 @@
 #include <cstdlib>
 #include <cerrno>
 #include <cmath>
+#include <atomic>
 
 namespace OneScreen
 {
     static Settings s_current;
+    static std::atomic<ScreenFilter> s_filter{ScreenFilter::Off};
 
     struct KeyName
     {
@@ -50,6 +52,116 @@ namespace OneScreen
             if (c != '-' && c != '_' && c != ' ' && c != '\t')
                 out += c;
         return out;
+    }
+
+    bool ParseScreenFilter(const std::string &value, ScreenFilter &out)
+    {
+        const std::string v = Lower(Trim(value));
+        if (v == "off") out = ScreenFilter::Off;
+        else if (v == "warm") out = ScreenFilter::Warm;
+        else if (v == "cool") out = ScreenFilter::Cool;
+        else if (v == "vignette") out = ScreenFilter::Vignette;
+        else return false;
+        return true;
+    }
+
+    const char *ScreenFilterName(ScreenFilter filter)
+    {
+        switch (filter)
+        {
+        case ScreenFilter::Warm: return "warm";
+        case ScreenFilter::Cool: return "cool";
+        case ScreenFilter::Vignette: return "vignette";
+        default: return "off";
+        }
+    }
+
+    ScreenFilter GetScreenFilter(void) { return s_filter.load(); }
+
+    uint32_t ScreenFilterQuadCount(ScreenFilter filter)
+    {
+        switch (filter)
+        {
+        case ScreenFilter::Warm: case ScreenFilter::Cool: return 1;
+        case ScreenFilter::Vignette: return 20;
+        default: return 0;
+        }
+    }
+
+    FilterQuad ScreenFilterQuad(ScreenFilter filter, uint32_t index)
+    {
+        if (index >= ScreenFilterQuadCount(filter)) return {0, 0, 0, 0, 0};
+        // Source-over at 24/255: gentle amber or blue wash, not saturation grading.
+        if (filter == ScreenFilter::Warm) return {0, 0, 400, 240, 0x1860B4FF};
+        if (filter == ScreenFilter::Cool) return {0, 0, 400, 240, 0x18FFD080};
+        // Five disjoint rectangular rings, with an untouched centre. Shared
+        // edges have no overlap, so the corners are not darkened twice.
+        const int ring = (int)(index / 4), x = ring * 10, y = ring * 6;
+        const uint32_t colour = (uint32_t)(25 - ring * 5) << 24;
+        switch (index % 4)
+        {
+        case 0: return {x, y, 400 - 2*x, 6, colour};
+        case 1: return {x, 234 - y, 400 - 2*x, 6, colour};
+        case 2: return {x, y + 6, 10, 228 - 2*y, colour};
+        default: return {390 - x, y + 6, 10, 228 - 2*y, colour};
+        }
+    }
+
+    bool ParseGlyphFamily(const std::string &value, GlyphFamily &out)
+    {
+        const std::string v = Lower(Trim(value));
+        if (v == "3ds" || v == "auto") out = GlyphFamily::ThreeDS;
+        else if (v == "xbox") out = GlyphFamily::Xbox;
+        else if (v == "playstation") out = GlyphFamily::PlayStation;
+        else if (v == "nintendo") out = GlyphFamily::Nintendo;
+        else return false;
+        return true;
+    }
+
+    const char *GlyphFamilyName(GlyphFamily family)
+    {
+        switch (family)
+        {
+        case GlyphFamily::Xbox: return "xbox";
+        case GlyphFamily::PlayStation: return "playstation";
+        case GlyphFamily::Nintendo: return "nintendo";
+        default: return "3ds";
+        }
+    }
+
+    bool ParseSidePanelMode(const std::string &value, SidePanelMode &out)
+    {
+        const std::string v = Lower(Trim(value));
+        if (v == "off") out = SidePanelMode::Off;
+        else if (v == "battle") out = SidePanelMode::Battle;
+        else if (v == "field") out = SidePanelMode::Field;
+        else if (v == "both") out = SidePanelMode::Both;
+        else return false;
+        return true;
+    }
+
+    const char *SidePanelModeName(SidePanelMode mode)
+    {
+        switch (mode)
+        {
+        case SidePanelMode::Battle: return "battle";
+        case SidePanelMode::Field: return "field";
+        case SidePanelMode::Both: return "both";
+        default: return "off";
+        }
+    }
+
+    bool ParseFieldFov(const std::string &value, float &out)
+    {
+        const std::string v = Trim(value);
+        char *end = nullptr;
+        errno = 0;
+        const float scale = std::strtof(v.c_str(), &end);
+        if (v.empty() || *end != '\0' || errno == ERANGE
+            || !std::isfinite(scale) || scale < 0.8f || scale > 1.5f)
+            return false;
+        out = scale;
+        return true;
     }
 
     bool ParseAspect(const std::string &value, float &out)
@@ -172,7 +284,15 @@ namespace OneScreen
         const std::string k = Lower(key);
         const std::string v = Squash(value);
 
-        if (k == "instant_text")
+        if (k == "glyphs")
+        {
+            if (!ParseGlyphFamily(value, s.glyphs))
+            {
+                s.glyphs = GlyphFamily::ThreeDS;
+                return "bad glyphs '" + value + "' (use 3ds, xbox, playstation or nintendo; using 3ds)";
+            }
+        }
+        else if (k == "instant_text")
         {
             if (v != "on" && v != "off")
                 return "bad instant_text '" + value + "' (use on or off)";
@@ -183,26 +303,42 @@ namespace OneScreen
             if (!ParseBattleSpeed(value, k == "battle_messages" ? s.battleMessages : s.battleBars))
                 return "bad " + key + " '" + value + "' (use normal, fast or instant)";
         }
+        else if (k == "filter")
+        {
+            if (!ParseScreenFilter(value, s.filter))
+                return "bad filter '" + value + "' (use off, warm, cool or vignette)";
+        }
         else if (k == "pillarbox")
         {
             if (v == "tint") s.pillarbox = Pillarbox::Tint;
             else if (v == "pattern") s.pillarbox = Pillarbox::Pattern;
             else if (v == "off") s.pillarbox = Pillarbox::Off;
-            else return "bad pillarbox '" + value + "' (use tint, pattern or off)";
+            else if (v == "blur") s.pillarbox = Pillarbox::Blur;
+            else return "bad pillarbox '" + value + "' (use tint, pattern, off or blur)";
+        }
+        else if (k == "field_fov")
+        {
+            if (!ParseFieldFov(value, s.fieldFov))
+                return "bad field_fov '" + value + "' (use a scale from 0.8 to 1.5)";
+        }
+        else if (k == "side_panels")
+        {
+            if (!ParseSidePanelMode(value, s.sidePanels))
+                return "bad side_panels '" + value + "' (use off, battle, field or both)";
         }
         else if (k == "aspect")
         {
             if (!ParseAspect(value, s.aspect))
                 return "bad aspect '" + value + "' (use 0, off, a positive float, 16:9 or 21:9)";
         }
-        else if (k == "panel_key" || k == "touch_key" || k == "map_key" || k == "pc_key")
+        else if (k == "panel_key" || k == "touch_key" || k == "map_key" || k == "pc_key" || k == "save_key" || k == "photo_key")
         {
             uint32_t keys = 0;
             if (!ParseKeys(value, keys))
                 return "bad key '" + value + "' (use A B X Y L R ZL ZR Start Select Up Down Left Right, "
                        "joined with +, or none)";
             (k == "panel_key" ? s.panelKey : k == "touch_key" ? s.touchKey
-                : k == "map_key" ? s.mapKey : s.pcKey) = keys;
+                : k == "map_key" ? s.mapKey : k == "pc_key" ? s.pcKey : k == "photo_key" ? s.photoKey : s.saveKey) = keys;
         }
         else if (k == "cursor_move")
         {
@@ -303,7 +439,7 @@ namespace OneScreen
             }
             const std::string key = Trim(line.substr(0, eq));
             const std::string value = Trim(line.substr(eq + 1));
-            if (key.empty() || value.empty())
+            if (key.empty() || (value.empty() && Lower(key) != "glyphs"))
             {
                 warnings.push_back(where + "empty key or value");
                 continue;
@@ -341,8 +477,14 @@ namespace OneScreen
             "; Experimental 3D camera aspect: 0/off (original), 16:9, 21:9 or a positive float.\n"
             "; Only new cameras change; see docs/WIDESCREEN.md.\n"
             "aspect = 0\n"
-            "; Side bands for full-screen native menus in widescreen: tint, pattern or off.\n"
+            "; Optional party strips in the widescreen side areas.\n"
+            "side_panels = off\n"
+            "; Idle overworld vertical FOV multiplier: 0.8..1.5; 1 is stock.\n"
+            "field_fov = 1.0\n"
+            "; Side bands: tint (default), pattern, off or blur (hires; otherwise tint).\n"
             "pillarbox = tint\n"
+            "; Top-screen GPU filter: off (default), warm, cool or vignette.\n"
+            "filter = off\n"
             "\n"
             "[battle]\n"
             "; Native battle menu look: classic, bar or rail. The plugin menu's\n"
@@ -357,6 +499,8 @@ namespace OneScreen
             "battle_bars = normal\n"
             "\n"
             "[controls]\n"
+            "; Prompt icons: 3ds, xbox, playstation or nintendo. auto means 3ds here.\n"
+            "glyphs = 3ds\n"
             "; Cycles the bottom screen view: off, panel, full. Keys: A B X Y L R ZL ZR\n"
             "; Start Select Up Down Left Right (D-pad), joined with + for a combo, or none.\n"
             "panel_key = L+R\n"
@@ -367,6 +511,10 @@ namespace OneScreen
             "; Opens the PC boxes from the overworld, as if at a Pokemon Center PC\n"
             "; (docs/PC-ANYWHERE.md). none = off. Example: R+X (hold R, then press X).\n"
             "pc_key = none\n"
+            "; Quick save through the game menu. none = off; e.g. R+Y.\n"
+            "save_key = none\n"
+            "; Freeze the frame and hide plugin UI. none = off; e.g. R+Select.\n"
+            "photo_key = none\n"
             "; What moves the cursor: cstick, dpad or circlepad. dpad and circlepad still\n"
             "; reach the game as well.\n"
             "cursor_move = cstick\n"
@@ -470,7 +618,7 @@ namespace OneScreen
 
     std::string DescribeSettings(const Settings &s)
     {
-        static const char *pillarboxes[] = { "tint", "pattern", "off" };
+        static const char *pillarboxes[] = { "tint", "pattern", "off", "blur" };
         static const char *sources[] = { "cstick", "dpad", "circlepad" };
         static const char *sizes[] = { "1/2", "2/3" };
         static const char *corners[] = { "bottom-right", "bottom-left", "top-right", "top-left" };
@@ -478,11 +626,17 @@ namespace OneScreen
         std::string out = "panel_key " + KeysToString(s.panelKey) + ", touch_key " + KeysToString(s.touchKey)
                           + ", map_key " + KeysToString(s.mapKey)
                           + ", pc_key " + KeysToString(s.pcKey)
+                          + ", save_key " + KeysToString(s.saveKey)
+                          + ", photo_key " + KeysToString(s.photoKey)
+                          + ", glyphs " + GlyphFamilyName(s.glyphs)
                           + ", cursor_move " + sources[(int)s.cursorSource]
                           + ", cursor_speed " + std::to_string(s.cursorSpeed) + "\n"
                           + "size " + sizes[(int)s.panelSize] + ", corner " + corners[(int)s.panelCorner]
                           + ", auto " + (s.autoPanel ? "on" : "off") + "\n"
+                          + "side panels " + SidePanelModeName(s.sidePanels) + "\n"
                           + "aspect " + (s.aspect == 0.0f ? std::string("off") : std::to_string(s.aspect))
+                          + ", filter " + ScreenFilterName(s.filter)
+                          + ", field_fov " + std::to_string(s.fieldFov)
                           + ", pillarbox " + pillarboxes[(int)s.pillarbox]
                           + ", battle layout " + BattleLayoutName(s.battleLayout) + "\n"
                           + "instant text " + (s.instantText ? "on" : "off")
@@ -502,5 +656,6 @@ namespace OneScreen
     void SetSettings(const Settings &settings)
     {
         s_current = settings;
+        s_filter.store(settings.filter);
     }
 }

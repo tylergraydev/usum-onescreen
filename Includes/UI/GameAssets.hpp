@@ -137,6 +137,7 @@ namespace UI
         s32 Ascent(void) const;
         s32 Advance(u32 codePoint);
         const Glyph *Get(u32 codePoint);
+        void Draw(Canvas &canvas, u32 codePoint, s32 x, s32 y, Color color);
 
         u32 hits = 0, misses = 0;
 
@@ -186,6 +187,7 @@ namespace UI
         std::vector<Image> balls;              // by ball item ID 1-16 (0 empty)
         std::vector<std::string> typeNames;    // the game's names, by type ID
         std::vector<MoveInfo> moves;           // by move ID
+        std::vector<std::string> moveDescriptions; // message file 117, by move ID
         std::vector<std::string> moveNames;    // by move ID
         std::string status;                    // one line per part, for the log
 

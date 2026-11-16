@@ -129,10 +129,12 @@ namespace OneScreen
             return false;
         if (mode == UiDemoMode::Off)
         {
+            s_demoLayer.Hide();
             UI::ScreenBuffer::GiveBack(DemoOwner);
             return false;
         }
 
+        bool drew = false;
         const u64 start = svcGetSystemTick();
         UiInitFont();
         const UI::Surface fb = SurfaceFromScreen(screen);
@@ -141,8 +143,10 @@ namespace OneScreen
 
         if (mode == UiDemoMode::Direct && !(fb.squeeze > 1.0f))
         {
+            s_demoLayer.Hide();
             UI::Canvas canvas(fb);
             UI::DrawDemoShade(canvas);
+            drew = true;
             UI::DrawDemoMenu(canvas, selected);
             s_uiRedraws++;
         }
@@ -154,14 +158,18 @@ namespace OneScreen
             {
                 UI::Canvas canvas(fb);
                 UI::DrawDemoShade(canvas);
+                drew = true;
             }
             bool fresh = false;
             u8 *pixels = UI::ScreenBuffer::Borrow(DemoOwner, fresh);
             if (pixels == nullptr)
-                return false;
+            {
+                s_demoLayer.Hide();
+                return drew;
+            }
             if (fresh || !s_demoLayer.Matches(fb))
             {
-                s_demoLayer.Setup(fb, UI::DemoPanel, UI::DemoRadius, pixels, UI::ScreenBuffer::Bytes);
+                s_demoLayer.SetupHiRes(fb, UI::DemoPanel, UI::DemoRadius, UI::MenuSlot, pixels, UI::ScreenBuffer::Bytes);
                 s_demoDrawn = -1;
             }
 
@@ -175,7 +183,7 @@ namespace OneScreen
                 s_uiRedrawSum += svcGetSystemTick() - redraw;
             }
             const u64 present = svcGetSystemTick();
-            s_demoLayer.Present(fb);
+            drew |= s_demoLayer.Present(fb);
             s_uiPresents++;
             s_uiPresentSum += svcGetSystemTick() - present;
         }
@@ -185,7 +193,7 @@ namespace OneScreen
         s_uiSum += ticks;
         if (ticks > s_uiMax)
             s_uiMax = ticks;
-        return true;
+        return drew;
     }
 
     std::string UiPerfReport(void)

@@ -12,6 +12,9 @@
 #include "PartyData.hpp"
 #include "Screens/BattleVideo.hpp"
 #include "Screens/Options.hpp"
+#include "Screens/RidePager.hpp"
+#include "Screens/Pelago.hpp"
+#include "Screens/FestivalPlaza.hpp"
 #include "Screens/TrainerPassport.hpp"
 #include "UI/Assets.hpp"
 #include "UI/Device.hpp"
@@ -30,7 +33,10 @@ namespace OneScreen
     static OptionsScreen  s_options;
     static PassportScreen s_passport;
     static VideoScreen    s_video;
-    static NativeScreen *const s_screens[] = { &s_options, &s_passport, &s_video };
+    static RidePagerScreen s_pager;
+    static PelagoScreen   s_pelago;
+    static FestivalPlazaScreen s_festival;
+    static NativeScreen *const s_screens[] = { &s_options, &s_passport, &s_video, &s_pager, &s_pelago, &s_festival };
     static const int ScreenCount = sizeof(s_screens) / sizeof(s_screens[0]);
 
     // --- Shared with the OSD callback (game thread), under s_lock ---
@@ -244,13 +250,17 @@ namespace OneScreen
         const int index = s_drawing;
         if (index < 0)
         {
+            s_layer.Hide();
             UI::ScreenBuffer::GiveBack(Owner);
             return false;
         }
         bool fresh = false;
         u8 *pixels = UI::ScreenBuffer::Borrow(Owner, fresh);
         if (pixels == nullptr)
+        {
+            s_layer.Hide();
             return false;
+        }
 
         UiInitFont();
         const UI::Surface fb = SurfaceFromScreen(screen);
@@ -258,7 +268,7 @@ namespace OneScreen
         bool redraw = fresh || index != s_layerScreen;
         if (fresh || !s_layer.Matches(fb) || index != s_layerScreen)
         {
-            if (!s_layer.Setup(fb, ns->Area(), ScreenStyle::Radius, pixels, UI::ScreenBuffer::Bytes))
+            if (!s_layer.SetupHiRes(fb, ns->Area(), ScreenStyle::Radius, UI::MenuSlot, pixels, UI::ScreenBuffer::Bytes))
                 return false;
             s_layerScreen = index;
             redraw = true;
@@ -282,8 +292,7 @@ namespace OneScreen
         }
         else if (redraw)
             return false;
-        s_layer.Present(fb);
-        return true;
+        return s_layer.Present(fb);
     }
 
     void StartSubScreens(void)
@@ -311,6 +320,16 @@ namespace OneScreen
     {
         const u32 held = FoldPad(CaptureRealHeld());
         const u32 pressed = FoldPad(CaptureRealPressed());
+        if (s_active >= 0 && (s_screens[s_active] == &s_pelago || s_screens[s_active] == &s_festival))
+        {
+            // No direction repeat or key queue on the touch playgrounds.
+            // Uncaptured movement must not swallow a simultaneous Leave.
+            if ((held & (ScreenKey::L | ScreenKey::R)) == (ScreenKey::L | ScreenKey::R)) return 0;
+            const u32 pelagoKeys[] = { ScreenKey::B, ScreenKey::L, ScreenKey::R, ScreenKey::Start };
+            for (u32 k : pelagoKeys)
+                if (pressed & k) return k;
+            return 0;
+        }
         const u32 dirs[] = { ScreenKey::Up, ScreenKey::Down, ScreenKey::Left, ScreenKey::Right };
         for (u32 d : dirs)
             if (pressed & d)
@@ -319,7 +338,7 @@ namespace OneScreen
                 s_repeatAt = s_frames + RepeatDelay;
                 return d;
             }
-        const u32 others[] = { ScreenKey::A, ScreenKey::L, ScreenKey::R, ScreenKey::Start };
+        const u32 others[] = { ScreenKey::B, ScreenKey::A, ScreenKey::L, ScreenKey::R, ScreenKey::Start, 1u << 11 };
         for (u32 k : others)
             if (pressed & k)
                 return k;
@@ -384,10 +403,13 @@ namespace OneScreen
     void SubScreensUpdate(u32 sceneManager, const std::string &scene, std::vector<std::string> &log)
     {
         s_frames++;
+        const RidePagerState pager = ReadRidePager(sceneManager, scene);
         int active = -1;
         if (s_enabled)
             for (int i = 0; i < ScreenCount; i++)
-                if (scene == s_screens[i]->Scene())
+                if ((i == 3 ? RidePagerValid(pager) : scene == s_screens[i]->Scene())
+                    && (s_screens[i] != &s_pelago || PelagoDetected(sceneManager, scene))
+                    && (s_screens[i] != &s_festival || FestivalPlazaDetected(sceneManager, scene)))
                     active = i;
 
         if (active != s_active)
@@ -422,6 +444,8 @@ namespace OneScreen
         NativeScreen *ns = s_screens[s_active];
 
         s_lock.Lock();
+        if (s_active == 3)
+            s_pager.SetState(pager);
         if (s_active == 1)
         {
             if (!s_passport.HasData() && s_frames % 10 == 0)
@@ -450,7 +474,9 @@ namespace OneScreen
             s_yield = true;
             log.push_back(std::string(ns->Name()) + ": panel turned on by hand, native screen hidden until the scene ends");
         }
-        if (!s_yield)
+        if (ns == &s_festival && !ns->Ready() && !s_running)
+            ReleasePanel(); // hub submenus use the existing full-mode policy
+        else if (!s_yield)
         {
             if (GetPanelMode() != PanelMode::Off)
             {
@@ -484,7 +510,7 @@ namespace OneScreen
         // keys are still read) waits for it, the last one only.
         if (ActionRunning())
         {
-            if (shown && s_running)
+            if (shown && s_running && ns != &s_pelago && ns != &s_festival)
             {
                 const u32 key = NextKey();
                 if (key != 0)

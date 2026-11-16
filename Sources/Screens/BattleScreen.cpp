@@ -2,6 +2,7 @@
 
 
 #include <3ds.h>
+#include <array>
 
 #include "ActionQueue.hpp"
 #include "Actions.hpp"
@@ -30,6 +31,7 @@ namespace OneScreen
     static bool s_layoutLog = false;
     static Screens::BattleMenu s_menu;
     static Screens::BattleSnapshot s_snap;
+    static bool s_powerStepRunning = false, s_powerStepSucceeded = false;
     static u32 s_frames = 0;
     static u32 s_captured = 0;      // keys this screen asked InputCapture to hold
     static std::string s_status;    // last logged Status()
@@ -41,7 +43,7 @@ namespace OneScreen
         u16 id;
         std::string name;
     };
-    static std::vector<CachedName> s_moveNames, s_speciesNames, s_itemNames;
+    static std::vector<CachedName> s_moveNames, s_moveDescriptions, s_speciesNames, s_itemNames;
 
     // What the OSD callback draws, handed over under s_drawLock: the plugin
     // thread copies the menu and snapshot when what they show changes; the
@@ -54,6 +56,12 @@ namespace OneScreen
     static bool s_dirty = false;
     static UI::Layer s_layer;
     static UI::Rect s_layerArea = {};
+    static UI::Layer s_infoLayer;
+    static std::array<u8, 154 * 112 * 4> s_infoPixels;
+    static std::string s_infoKey;
+    static u16 s_caughtSpecies = 0;
+    static bool s_caught = false;
+    static u32 s_infoFoe = 0; // last target identity; survives record reordering
     // A single step of the Pokémon list, Bag or question (one tap or press,
     // then a short wait); kept here while the action layer runs it.
     static ActionDef s_step = { nullptr, nullptr, {}, {} };
@@ -80,6 +88,11 @@ namespace OneScreen
         return MoveName(state, move);
     }
 
+    static std::string LookupDescription(u16 move, const BattleState &)
+    {
+        return UI::AssetMoveDescription(move);
+    }
+
     static std::string LookupSpecies(u16 species, const BattleState &)
     {
         return SpeciesName(species);
@@ -90,36 +103,58 @@ namespace OneScreen
         return ItemName(item);
     }
 
-    // Nicknames, held items and status come from the party (RE3), by the
-    // battler record's party index; read when the party or Bag page opens
-    // and about once a second while it shows (decoding six Pokémon).
+    // Metadata follows the record pointer, not a battle-team/field-party index.
+    // Decode battle-owned PokemonParam first; field-party fallback only accepts
+    // an unambiguous identity match. Refresh at most once a second, immediately
+    // on a record reorder/menu transition, and clear across battle boundaries.
     struct PartyExtra
     {
+        u32 record = 0;
         bool valid = false;
         std::string nickname, item;
         u32 status = 0;
-        bool egg = false;
+        bool egg = false, shiny = false, hiddenAbility = false;
     };
-    static PartyExtra s_extra[6];
+    static PartyExtra s_extra[6], s_foeExtra;
 
-    static void ReadPartyExtra(u32 sceneManager)
+    static PartyExtra ReadExtra(const BattleMon &battle, const Pk7 field[6])
+    {
+        PartyExtra extra;
+        extra.record = battle.address;
+        Pk7 mon = ReadPokemonParam(battle.pokemonParam);
+        if (mon.form == Pk7Form::Invalid || mon.species != battle.species)
+        {
+            const int slot = MatchPartyIdentity(field, 6, battle.species, false, 0);
+            if (slot < 0) return extra;
+            mon = field[slot];
+        }
+        // If battle data supplies a PID, a field lookup must use that PID too.
+        // Prefer the battle copy's item/status: these may change during a turn.
+        const int slot = MatchPartyIdentity(field, 6, battle.species, true, mon.personality);
+        const Pk7 &named = slot >= 0 ? field[slot] : mon;
+        char nick[64];
+        Utf16ToUtf8(named.nickname, 13, nick, sizeof(nick));
+        extra.valid = true;
+        extra.nickname = nick;
+        extra.item = mon.heldItem ? ItemName(mon.heldItem) : std::string();
+        extra.status = mon.calcValid ? mon.status : 0;
+        extra.egg = mon.isEgg;
+        extra.shiny = mon.shiny;
+        extra.hiddenAbility = mon.hiddenAbility;
+        return extra;
+    }
+
+    static void ReadPartyExtra(u32 sceneManager, const BattleState &state)
     {
         const PartyState party = ReadParty(sceneManager);
+        Pk7 field[6];
+        if (party.valid)
+            for (u32 i = 0; i < party.count && i < 6; i++) field[i] = party.slots[i].mon;
         for (u32 i = 0; i < 6; i++)
-        {
-            PartyExtra &extra = s_extra[i];
-            extra = PartyExtra();
-            if (!party.valid || i >= party.count || party.slots[i].mon.form == Pk7Form::Invalid)
-                continue;
-            const Pk7 &mon = party.slots[i].mon;
-            char nick[64];
-            Utf16ToUtf8(mon.nickname, 13, nick, sizeof(nick));
-            extra.valid = true;
-            extra.nickname = nick;
-            extra.item = mon.heldItem ? ItemName(mon.heldItem) : std::string();
-            extra.status = mon.status;
-            extra.egg = mon.isEgg;
-        }
+            s_extra[i] = i < state.partyCount[0] ? ReadExtra(state.party[i], field) : PartyExtra();
+        // Never match a foe against the player's field party.
+        const Pk7 empty[6] = {};
+        s_foeExtra = ReadExtra(state.opponent, empty);
     }
 
     static void ReadSnapshot(u32 sceneManager)
@@ -129,11 +164,73 @@ namespace OneScreen
         snap.inBattle = state.valid;
         if (!state.valid)
         {
+            s_caughtSpecies = 0;
+            s_caught = false;
+            s_infoFoe = 0;
+            for (PartyExtra &extra : s_extra) extra = PartyExtra();
+            s_foeExtra = PartyExtra();
             s_snap = snap;
             return;
         }
+        snap.kind = state.kind;
         snap.menu = (Screens::GameMenu)state.menu;
-        snap.otherVtable = state.menu == BattleMenu::Other || state.menu == BattleMenu::Question ? state.menuVtable : 0;
+        const u32 probes = ActionProbeFlags();
+        if (state.menu == BattleMenu::Moves) {
+            snap.zSlots = (u8)((probes & WorldBattleZSlotMask) >> 12);
+            snap.power = (probes & WorldBattleMega) ? BattlePower::Mega
+                       : (probes & WorldBattleZ) ? BattlePower::Z : BattlePower::None;
+        }
+        const auto info = [&](const BattleMon &mon) {
+            Screens::BattlerInfo out;
+            out.name = Cached(s_speciesNames, mon.species, LookupSpecies, state);
+            for (u8 i = 0; i < 3; i++) out.types[i] = mon.types[i];
+            for (u8 i = 0; i < 7; i++) out.stages[i] = mon.stages[i];
+            return out;
+        };
+        snap.playerInfo = info(state.player);
+        // Target cursor is meaningful only on the target page. Keep its identity
+        // for the next Command panel, then fall back if that foe has fainted.
+        if (s_menu.Page() == Screens::BattlePage::Target) {
+            const BattleTargetRef ref = TargetRecord(state.kind, s_menu.Cursor());
+            const BattleMon &target = state.clients[ref.client][ref.record];
+            if (ref.client == 1 && LiveBattleRecord(target)) s_infoFoe = target.address;
+        }
+        const u8 foeRecord = LiveFoeRecord(state.clients[1], s_infoFoe);
+        const BattleMon foe = foeRecord < 6 ? state.clients[1][foeRecord] : BattleMon();
+        s_infoFoe = foe.address;
+        if (foe.address) snap.foeInfo = info(foe);
+        // Read a caught bit once per active species; reset across battle boundaries.
+        // Retry failed paths rather than caching a failed read as uncaught.
+        if (state.kind == BattleKind::Wild) {
+            const u16 species = foe.species;
+            if (s_caughtSpecies != species && species >= 1 && species <= 807) {
+                const auto read32 = [](u32 at) { u32 v = 0; Process::Read32(at, v); return v; };
+                const u32 manager = read32(0x6A59C4);
+                const u32 game = manager ? read32(manager + 0x24) : 0;
+                const u32 save = game ? read32(game + 4) : 0;
+                if (save && read32(save) == 0x64F4A0 && read32(save + 0x23DC) == 0x64F550
+                    && read32(save + 0x23E0) == 0x2F120F17) {
+                    u8 byte = 0;
+                    if (Process::Read8(save + 0x23DC + 0x8C + CaughtByte(species), byte)) {
+                        s_caught = CaughtBit(species, byte);
+                        s_caughtSpecies = species;
+                    }
+                }
+            }
+            snap.foeInfo.caught = s_caughtSpecies == species && s_caught;
+        }
+        // SOS verified; true-double second active slot still inferred.
+        // Restrict choices to opponents; self/ally-target moves use the game.
+        for (u8 i = 0; i < 4; i++) {
+            const BattleTargetRef ref = TargetRecord(state.kind, i);
+            const BattleMon &target = state.clients[ref.client][ref.record];
+            snap.targets[i] = Screens::MakeTargetSlot(state.kind, state.battleFormat, i, target,
+                Cached(s_speciesNames, target.species, LookupSpecies, state));
+            if (state.kind == BattleKind::Unknown || (state.kind != BattleKind::Royal
+                && (state.partyCount[2] != 0 || state.partyCount[3] != 0))) snap.targets[i].live = false;
+        }
+        snap.otherVtable = state.menu == BattleMenu::Other || state.menu == BattleMenu::Question
+                           || state.menu == BattleMenu::Target ? state.menuVtable : 0;
         snap.question = state.question;
         snap.gameCursor = state.cursor;
         snap.listCount = state.listCount;
@@ -145,7 +242,9 @@ namespace OneScreen
         for (u8 i = 0; i < snap.moveCount; i++)
         {
             Screens::MoveRow &row = snap.moves[i];
+            row.spread = IsSpreadMove(row.move);
             row.name = Cached(s_moveNames, row.move, LookupMove, state);
+            row.description = Cached(s_moveDescriptions, row.move, LookupDescription, state);
             // Details always come from the loaded move table; list type and
             // effectiveness still take precedence over the table's type.
             const UI::MoveInfo info = UI::AssetMove(row.move);
@@ -166,8 +265,11 @@ namespace OneScreen
                            || state.menu == BattleMenu::Bag;
         static bool listsBefore = false;
         static u32 extraFrames = 0;
-        if (lists && (!listsBefore || ++extraFrames % 30 == 0))
-            ReadPartyExtra(sceneManager);
+        bool reordered = s_foeExtra.record != state.opponent.address;
+        for (u8 i = 0; i < state.partyCount[0] && i < 6; i++)
+            reordered = reordered || s_extra[i].record != state.party[i].address;
+        if (reordered || (lists && !listsBefore) || ++extraFrames % 30 == 0)
+            ReadPartyExtra(sceneManager, state);
         listsBefore = lists;
         snap.partyCount = state.partyCount[0] < 6 ? state.partyCount[0] : 6;
         for (u8 i = 0; i < snap.partyCount; i++)
@@ -179,16 +281,26 @@ namespace OneScreen
             out.level = mon.level;
             out.hp = mon.hp;
             out.maxHp = mon.maxHp;
-            if (mon.partyIndex < 6 && s_extra[mon.partyIndex].valid)
+            if (s_extra[i].record == mon.address && s_extra[i].valid)
             {
-                const PartyExtra &extra = s_extra[mon.partyIndex];
+                const PartyExtra &extra = s_extra[i];
                 if (!extra.nickname.empty())
                     out.name = extra.nickname;
                 out.item = extra.item;
                 out.status = extra.status;
                 out.egg = extra.egg;
+                out.shiny = extra.shiny;
+                out.hiddenAbility = extra.hiddenAbility;
             }
         }
+
+        if (snap.partyCount > 0)
+        {
+            snap.activeShiny = snap.party[0].shiny;
+            snap.activeHiddenAbility = snap.party[0].hiddenAbility;
+        }
+        snap.foeShiny = s_foeExtra.shiny;
+        snap.foeHiddenAbility = s_foeExtra.hiddenAbility;
 
         if (state.menu == BattleMenu::Bag)
         {
@@ -243,10 +355,20 @@ namespace OneScreen
             ReadSnapshot(sceneManager);
         else if (!inBattle)
         {
+            s_caughtSpecies = 0;
+            s_caught = false;
+            s_infoFoe = 0;
+            for (PartyExtra &extra : s_extra) extra = PartyExtra();
+            s_foeExtra = PartyExtra();
             s_snap = Screens::BattleSnapshot();
             s_snap.afterCatch = s_enabled && afterCatch && scene == SceneDex;
         }
         s_snap.actionRunning = ActionRunning();
+        if (s_powerStepRunning && !s_snap.actionRunning) {
+            s_powerStepSucceeded = ActionSucceeded();
+            s_powerStepRunning = false;
+        }
+        s_snap.powerStepSucceeded = s_powerStepSucceeded;
         s_snap.panelKey = KeysToString(GetSettings().panelKey);
 
         // A Pokémon wants a fifth move: the move-learning screen takes it,
@@ -288,13 +410,18 @@ namespace OneScreen
             s_step.needs = InScene(SceneBattle);
             s_step.steps.clear();
             if (out.tap != nullptr)
-                s_step.steps.push_back(StepTap(out.tap));
+                s_step.steps.push_back(std::string(out.tap) == "battle_moves.mega" ? StepBattlePower(false)
+                    : std::string(out.tap) == "battle_moves.z_power" ? StepBattlePower(true) : StepTap(out.tap));
             else
                 s_step.steps.push_back(StepPress(out.press));
             s_step.steps.push_back(StepWait(10));
             log.push_back(std::string("battle-ui: step ") + (out.tap != nullptr ? out.tap : "press B"));
-            if (!ActionStart(s_step, sceneManager, log))
-                log.push_back("battle-ui: step refused");
+            const bool power = out.tap && (std::string(out.tap) == "battle_moves.mega"
+                                          || std::string(out.tap) == "battle_moves.z_power");
+            if (power) s_powerStepSucceeded = false;
+            const bool started = ActionStart(s_step, sceneManager, log);
+            if (power) s_powerStepRunning = started;
+            if (!started) log.push_back("battle-ui: step refused");
         }
 
         // An action captures everything while it runs and then restores the
@@ -325,13 +452,20 @@ namespace OneScreen
             return learnDrew;
         if (!s_visible)
         {
+            s_layer.Hide();
+            s_infoLayer.Hide();
             UI::ScreenBuffer::GiveBack(Owner);
             return learnDrew;
         }
+        bool infoDrew = false;
         bool fresh = false;
         u8 *pixels = UI::ScreenBuffer::Borrow(Owner, fresh);
         if (pixels == nullptr)
+        {
+            s_layer.Hide();
+            s_infoLayer.Hide();
             return learnDrew;
+        }
         if (fresh)
             s_layerArea = UI::Rect{};   // set up again before anything is presented
         UiInitFont();
@@ -347,7 +481,7 @@ namespace OneScreen
                 if (!s_layer.Matches(fb) || area.x != s_layerArea.x || area.y != s_layerArea.y
                     || area.w != s_layerArea.w || area.h != s_layerArea.h)
                 {
-                    s_layer.Setup(fb, area, s_drawMenu.Radius(), pixels, UI::ScreenBuffer::Bytes);
+                    s_layer.SetupHiRes(fb, area, s_drawMenu.Radius(), UI::MenuSlot, pixels, UI::ScreenBuffer::Bytes);
                     s_layerArea = area;
                     s_dirty = true;
                 }
@@ -358,11 +492,29 @@ namespace OneScreen
                     s_dirty = false;
                 }
             }
+            const bool infoVisible = s_drawMenu.Page() == Screens::BattlePage::Command && !s_drawSnap.foeInfo.name.empty();
+            if (infoVisible) {
+                const UI::Rect area = Screens::BattleInfoArea(s_drawMenu.Layout());
+                const std::string key = Screens::BattleInfoKey(s_drawSnap);
+                if (!s_infoLayer.Matches(fb)) {
+                    s_infoLayer.SetupHiRes(fb, area, 8, UI::BadgeSlot, s_infoPixels.data(), s_infoPixels.size());
+                    s_infoKey.clear();
+                }
+                if (key != s_infoKey) {
+                    UI::Canvas infoCanvas = s_infoLayer.Begin();
+                    Screens::DrawBattleInfo(infoCanvas, s_drawSnap, s_drawMenu.Layout());
+                    s_infoKey = key;
+                }
+                infoDrew = s_infoLayer.Present(fb);
+            } else {
+                s_infoLayer.Hide();
+                s_infoKey.clear();
+            }
             s_drawLock.Unlock();
         }
-        if (s_layerArea.w > 0 && s_visible)
-            s_layer.Present(fb);
-        return true;
+        // True only if the CPU wrote to the frame (see UI::Layer::Present).
+        const bool battleDrew = s_layerArea.w > 0 && s_visible && s_layer.Present(fb);
+        return learnDrew | battleDrew | infoDrew;
     }
 
     void BattleScreenSetEnabled(bool enabled)

@@ -44,19 +44,23 @@ namespace OneScreen
             return false;
         if (!s_shown)
         {
+            s_layer.Hide();
             UI::ScreenBuffer::GiveBack(Owner);
             return false;
         }
         bool fresh = false;
         u8 *pixels = UI::ScreenBuffer::Borrow(Owner, fresh);
         if (pixels == nullptr)
+        {
+            s_layer.Hide();
             return false;
+        }
         UiInitFont();
         const UI::Surface fb = SurfaceFromScreen(screen);
         bool redraw = s_version != s_drawnVersion;
         if (fresh || !s_layer.Matches(fb))
         {
-            if (!s_layer.Setup(fb, UI::ThemeDemoArea, 0, pixels, UI::ScreenBuffer::Bytes))
+            if (!s_layer.SetupHiRes(fb, UI::ThemeDemoArea, 0, UI::MenuSlot, pixels, UI::ScreenBuffer::Bytes))
 
                 return false;
             redraw = true;
@@ -68,8 +72,7 @@ namespace OneScreen
             UI::DrawThemeDemo(canvas, s_datas[s_dataSlot], s_page, s_selected);
             s_drawnVersion = version;
         }
-        s_layer.Present(fb);
-        return true;
+        return s_layer.Present(fb);
     }
 
     void StartThemeScreen(void)

@@ -18,7 +18,10 @@ namespace OneScreen
 
     // Registers the OSD callback that copies the bottom screen onto the top.
     // `displayTransfer` and `textureCopy` are the game's gx library calls
-    // (Offsets::gxDisplayTransfer / gxTextureCopy) used for the copy.
+    // (Offsets::gxDisplayTransfer / gxTextureCopy) forwarded to LayerGpu.
+    // Panel/full composition keeps the original GPU paths at squeeze <= 1;
+    // widescreen uses the CPU (zero panel GX). textureCopy also serves the
+    // one-command native rectangle copy below.
     void StartPanel(PanelMode initial, u32 displayTransfer, u32 textureCopy);
 
     // Copies the rect (x, y, w, h) of the bottom screen's last frame to
@@ -31,6 +34,9 @@ namespace OneScreen
     // the end of the line (with 240-px lines: y + h and dy + h multiples of
     // 8). False, with nothing copied, if that doesn't hold or the GPU path
     // isn't available.
+    // With squeeze k > 1, the caller must make the game draw the bottom
+    // picture squeezed by k about the bottom column that lands on top x=200.
+    // Copies 1:1 with exactly one TextureCopy.
     bool PanelCopyBottomRect(const CTRPluginFramework::Screen &top, u32 x, u32 y, u32 w, u32 h, u32 dx, u32 dy);
 
     PanelMode GetPanelMode(void);

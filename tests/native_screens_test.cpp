@@ -7,6 +7,7 @@
 // (docs/NATIVE-SCREENS.md): each test paints the sample points the screen
 // asks for.
 
+#include "hires_screen_smoke.hpp"
 #include "Screens/BattleVideo.hpp"
 #include "Screens/Options.hpp"
 #include "Screens/TrainerPassport.hpp"
@@ -412,6 +413,7 @@ static void Draw(NativeScreen &screen, const char *dir, const char *file)
     canvas.FillRect(UI::Rect{ 0, 0, UI::ScreenW, UI::ScreenH }, UI::Rgb(10, 200, 10));
     canvas.SetClip(screen.Area());
     screen.Draw(canvas);
+    CHECK(HiResScreenSmoke::Run(screen.Area(), ScreenStyle::Radius, [&](UI::Canvas &hi) { screen.Draw(hi); }));
     canvas.ResetClip();
 
     // Inside the area: drawn; outside: untouched (the Layer copies only it).

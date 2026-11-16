@@ -4,6 +4,7 @@
 // no game data is needed (or in git). Writes the demo screen with and without
 // (synthetic) game assets as PPM previews under the given directory.
 
+#include "hires_screen_smoke.hpp"
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -11,6 +12,7 @@
 #include <vector>
 
 #include "UI/GameAssets.hpp"
+#include "UI/Layout.hpp"
 #include "UI/Theme.hpp"
 #include "UI/ThemeDemo.hpp"
 
@@ -453,6 +455,37 @@ static void TestFont(void)
     full.Get('B');
     CHECK(full.hits == 1);
 
+    // Scaled game-font drawing uses the original cell, while both sizes keep
+    // their existing bearings/advances. Scale 1 still uses exactly its cache mask.
+    for (GameTextCache *cache : { &full, &half })
+        for (float scale : { 1.f, 2.5f })
+        {
+            const s32 w = (s32)(64 * scale), h = (s32)(24 * scale);
+            std::vector<u8> actual((size_t)w * h * 4, 0), expected = actual;
+            Surface sa{ actual.data(), 4, w * 4, PixelFormat::RGBA8, w, h };
+            sa.transparent = scale != 1.f;
+            Surface se = sa; se.origin = expected.data();
+            Canvas a(sa, 0, 0, scale), e(se, 0, 0, scale);
+            const s32 step = cache->Advance('A');
+            const Glyph metrics = *cache->Get('A');
+            for (int i = 0; i < 2; i++)
+            {
+                const s32 x = 4 + i * step;
+                cache->Draw(a, 'A', x, 3, Rgb(255, 255, 255));
+                if (scale == 1.f)
+                    e.DrawMask(x + metrics.left, 3, metrics.mask, metrics.w, metrics.h, metrics.w, 1, Rgb(255, 255, 255));
+                else
+                {
+                    u8 native[6 * 8];
+                    CHECK(font.DecodeCell(font.IndexOf('A'), native));
+                    const float size = cache == &full ? 1.f : .5f;
+                    e.DrawMaskSized((float)(x + metrics.left), 3.f, native, (s32)GlyphW(1), 8, 6,
+                                    GlyphW(1) * size, 8 * size, Rgb(255, 255, 255));
+                }
+            }
+            CHECK(actual == expected && step == cache->Advance('A'));
+        }
+
     // A font with more rows than the plugin keeps: only the first MaxRows
     // rows are read; characters beyond them fall back to the replacement.
     FontSpec tall;
@@ -526,9 +559,9 @@ static void WritePpm(const Canvas &canvas, const std::string &path)
         s_failures++;
         return;
     }
-    std::fprintf(f, "P6\n%d %d\n255\n", ScreenW, ScreenH);
-    for (int y = 0; y < ScreenH; y++)
-        for (int x = 0; x < ScreenW; x++)
+    std::fprintf(f, "P6\n%d %d\n255\n", canvas.GetSurface().width, canvas.GetSurface().height);
+    for (int y = 0; y < canvas.GetSurface().height; y++)
+        for (int x = 0; x < canvas.GetSurface().width; x++)
         {
             const Color c = At(canvas, x, y);
             const u8 rgb[3] = { c.r, c.g, c.b };
@@ -584,6 +617,7 @@ static void TestDraw(const char *previewDir)
             const Color bg = Rgb(10, 200, 10);
             canvas.FillRect(Rect{ 0, 0, ScreenW, ScreenH }, bg);
             DrawThemeDemo(canvas, data, page, 1);
+            CHECK(HiResScreenSmoke::Run(ThemeDemoArea, 0, [&](Canvas &hi) { DrawThemeDemo(hi, data, page, 1); }));
             // Only the demo area is touched, and all of it.
             CHECK(At(canvas, ThemeDemoArea.x - 1, 100).g == 200);
             CHECK(At(canvas, ThemeDemoArea.Right(), 100).g == 200);
@@ -615,8 +649,169 @@ static void TestDraw(const char *previewDir)
     PublishGameAssets(nullptr);
 }
 
+// Byte oracle from the pre-glyph renderer; intentionally independent of the new path.
+namespace OneScreen { namespace UI { namespace Theme {
+    static const char *LegacyButtonLetter(Button b)
+    {
+        static const char *letters[] = { "A", "B", "X", "Y", "L", "R", "START", "SELECT" };
+        return letters[(int)b];
+    }
+
+    // Same as Theme.cpp's file-local GameIconImage.
+    static const Image *GameIconImage(GameIcon icon)
+    {
+        const GameAssets *assets = GetGameAssets();
+        return assets != nullptr ? assets->Icon(icon) : nullptr;
+    }
+
+    static const Image *LegacyButtonIcon(Button b)
+    {
+        switch (b)
+        {
+        case Button::A: return GameIconImage(GameIcon::ButtonA);
+        case Button::B: return GameIconImage(GameIcon::ButtonB);
+        case Button::X: return GameIconImage(GameIcon::ButtonX);
+        case Button::Y: return GameIconImage(GameIcon::ButtonY);
+        default:        return nullptr;
+        }
+    }
+
+    // Width of the button's own badge (16 px circle for A/B/X/Y, a pill
+    // with the name for the others).
+    static s32 LegacyBadgeWidth(Button b)
+    {
+        if ((int)b <= (int)Button::Y)
+            return 16;
+        return UI::MeasureText(LegacyButtonLetter(b), UI::TextStyle{ Font::Small, 1 }) + 8;
+    }
+
+    s32 LegacyPromptWidth(Button button, const std::string &label)
+    {
+        return 4 + LegacyBadgeWidth(button) + (label.empty() ? 0 : 4 + MeasureText(label, TextSize::Body)) + 6;
+    }
+
+    s32 LegacyDrawButtonPrompt(Canvas &canvas, s32 x, s32 y, Button button, const std::string &label)
+    {
+        const s32 w = LegacyPromptWidth(button, label);
+        canvas.FillRoundRect(Rect{ x, y, w, PromptHeight }, PromptHeight / 2, PromptFill);
+        const s32 bx = x + 4, by = y + (PromptHeight - 16) / 2;
+        const Image *icon = LegacyButtonIcon(button);
+        if (icon != nullptr)
+            DrawImage(canvas, *icon, bx, by);
+        else
+        {
+            const Rect badge{ bx, by, LegacyBadgeWidth(button), 16 };
+            canvas.FillRoundRect(badge, 8, Rgb(0xFF, 0xFF, 0xFF));
+            canvas.FillRoundRect(Inset(badge, 1), 7, Rgb(0x10, 0x10, 0x10));
+            UI::TextStyle s;
+            s.font = Font::Small;
+            s.color = Rgb(0xFF, 0xFF, 0xFF);
+            s.align = Align::Center;
+            UI::DrawText(canvas, LegacyButtonLetter(button), badge, s);
+        }
+        if (!label.empty())
+        {
+            TextStyle s;
+            s.color = PromptText;
+            DrawText(canvas, label, Rect{ bx + LegacyBadgeWidth(button) + 4, y, w - LegacyBadgeWidth(button) - 8, PromptHeight }, s);
+        }
+        return w;
+    }
+
+} } }
+
+static void TestGlyphPrompts(const char *previewDir)
+{
+    using namespace OneScreen;
+    const char *expected[][10] = {
+        { "A", "B", "X", "Y", "L", "R", "START", "SELECT", "ZL", "ZR" },
+        { "B", "A", "Y", "X", "LB", "RB", "Menu", "View", "LT", "RT" },
+        { "Circle", "Cross", "Triangle", "Square", "L1", "R1", "Options", "Share", "L2", "R2" },
+        { "A", "B", "X", "Y", "L", "R", "+", "-", "ZL", "ZR" },
+    };
+    std::vector<u8> legacy(ScreenW * ScreenH * 4, 0), actual(legacy.size(), 0);
+    Surface oldSurface{ legacy.data(), 4, ScreenW * 4, PixelFormat::RGBA8, ScreenW, ScreenH };
+    Surface surface{ actual.data(), 4, ScreenW * 4, PixelFormat::RGBA8, ScreenW, ScreenH };
+    Canvas oldCanvas(oldSurface), canvas(surface);
+    GameAssets assets;
+    for (Image &icon : assets.icons)
+    {
+        icon.w = icon.h = 16;
+        icon.rgba.assign(16 * 16 * 4, 200);
+    }
+    for (bool loaded : { false, true })
+    {
+        PublishGameAssets(loaded ? &assets : nullptr);
+        SetSettings(Settings{});
+        std::fill(legacy.begin(), legacy.end(), 0);
+        std::fill(actual.begin(), actual.end(), 0);
+        for (unsigned b = 0; b < 8; ++b)
+        {
+            const auto button = (Theme::Button)b;
+            Theme::LegacyDrawButtonPrompt(oldCanvas, 10, 5 + b * 27, button, "Choose");
+            Theme::DrawButtonPrompt(canvas, 10, 5 + b * 27, button, "Choose");
+        }
+        CHECK(actual == legacy);
+        std::vector<std::vector<u8>> familyPixels;
+        for (unsigned f = 0; f < 4; ++f)
+        {
+            Settings settings;
+            settings.glyphs = (GlyphFamily)f;
+            SetSettings(settings);
+            CHECK(Theme::FormatPromptText("A/B X/Y L+R ZL/ZR START SELECT") ==
+                std::string(expected[f][0]) + "/" + expected[f][1] + " " + expected[f][2] + "/" +
+                expected[f][3] + " " + expected[f][4] + "+" + expected[f][5] + " " + expected[f][8] +
+                "/" + expected[f][9] + " " + expected[f][6] + " " + expected[f][7]);
+            CHECK(Theme::FormatPromptText("Back Berry XL") == "Back Berry XL");
+            CHECK(Theme::FormatPromptText("Start+Select") == (f == 0 ? std::string("Start+Select") :
+                std::string(expected[f][6]) + "+" + expected[f][7]));
+            CHECK(Theme::FormatPanelHint("A holds X (L+R shows it)") ==
+                std::string("A holds X (") + expected[f][4] + "+" + expected[f][5] + " shows it)");
+            auto draw = [&](Canvas &target) {
+                for (unsigned b = 0; b < 10; ++b)
+                {
+                    const auto button = (Theme::Button)b;
+                    CHECK(std::strcmp(Theme::ButtonName(button, (GlyphFamily)f), expected[f][b]) == 0);
+                    if (b < 8) CHECK(Theme::PromptWidth(button, "Use") == Theme::LegacyPromptWidth(button, "Use"));
+                    const s32 x = 8 + (b / 5) * 190, y = 8 + (b % 5) * 28;
+                    CHECK(Theme::DrawButtonPrompt(target, x, y, button, "Use") == Theme::PromptWidth(button, "Use"));
+                }
+            };
+            std::fill(actual.begin(), actual.end(), 0);
+            draw(canvas);
+            for (const auto &previous : familyPixels) CHECK(actual != previous);
+            familyPixels.push_back(actual);
+            CHECK(std::any_of(actual.begin(), actual.end(), [](u8 v) { return v != 0; }));
+            CHECK(HiResScreenSmoke::Run(Rect{ 0, 0, ScreenW, ScreenH }, 0, draw));
+            if (previewDir != nullptr && !loaded)
+            {
+                const std::string stem = std::string(previewDir) + "/glyphs-" + GlyphFamilyName(settings.glyphs);
+                WritePpm(canvas, stem + "-1x.ppm");
+                Surface hiSurface{ HiResScreenSmoke::staging.data() + 64, 4, HiResScreenSmoke::stride,
+                    PixelFormat::RGBA8, HiResScreenSmoke::width, HiResScreenSmoke::height };
+                Canvas hiPixels(hiSurface);
+                WritePpm(hiPixels, stem + "-2.5x.ppm");
+            }
+        }
+    }
+    PublishGameAssets(nullptr);
+    SetSettings(Settings{});
+    Layer layer;
+    std::vector<u8> backing(actual.size());
+    CHECK(layer.Setup(surface, Rect{ 0, 0, ScreenW, ScreenH }, 0, backing.data(), backing.size()));
+    CHECK(layer.Matches(surface));
+    Settings changed;
+    changed.glyphs = GlyphFamily::Xbox;
+    SetSettings(changed);
+    CHECK(!layer.Matches(surface));
+    CHECK(layer.Setup(surface, Rect{ 0, 0, ScreenW, ScreenH }, 0, backing.data(), backing.size()));
+    CHECK(layer.Matches(surface));
+    SetSettings(Settings{});
+}
+
 int main(int argc, char **argv)
 {
+    TestGlyphPrompts(argc > 1 ? argv[1] : nullptr);
     TestLz11();
     TestSarc();
     TestFlim();

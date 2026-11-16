@@ -82,6 +82,7 @@ namespace OneScreen
     {
         switch (kind)
         {
+        case StepKind::BattlePowerTap:
         case StepKind::Tap:     return Format("tap %s", button);
         case StepKind::Press:   return Format("press %08lX", (unsigned long)keys);
         case StepKind::Wait:    return Format("wait %lu", (unsigned long)frames);
@@ -91,6 +92,13 @@ namespace OneScreen
         case StepKind::BackOut: return "back-out";
         }
         return "?";
+    }
+
+    ActionStep StepBattlePower(bool z)
+    {
+        ActionStep step = StepTap(z ? "battle_moves.z_power" : "battle_moves.mega");
+        step.kind = StepKind::BattlePowerTap;
+        return step.Guard(InScene(SceneBattle).With(WorldBattleMoves | (z ? WorldBattleZ : WorldBattleMega)));
     }
 
     ActionStep StepTap(const char *button, u32 frames)
@@ -256,6 +264,17 @@ namespace OneScreen
         list.push_back(pick("battle-move2", "battle: use move 2", "battle_moves.move2", true));
         list.push_back(pick("battle-move3", "battle: use move 3", "battle_moves.move3", true));
         list.push_back(pick("battle-move4", "battle: use move 4", "battle_moves.move4", true));
+        static const char *const zNames[] = {"battle-z-move1", "battle-z-move2", "battle-z-move3", "battle-z-move4"};
+        static const char *const zButtons[] = {"battle_moves.move1", "battle_moves.move2", "battle_moves.move3", "battle_moves.move4"};
+        for (unsigned slot = 0; slot < 4; ++slot)
+            list.push_back({zNames[slot], "battle: use confirmed Z row once", moves.With(WorldBattleZSlot(slot)), {
+                StepTap(zButtons[slot]).Guard(moves.With(WorldBattleZSlot(slot))),
+                StepWaitFor(AnyScene().Without(WorldBattleMoves), 90),
+            }});
+        list.push_back({"battle-z-back", "battle: Z list back to normal moves once", moves, {
+            StepTap("battle_moves.back").Guard(moves),
+            StepWaitFor(AnyScene().Without(WorldBattleZList), 90),
+        }});
         list.push_back({ "battle-moves-back", "battle: move list back to the commands", moves, {
             StepTap("battle_moves.back"),
             StepWaitFor(command, 90).Retry(0, 2),
@@ -318,12 +337,20 @@ namespace OneScreen
                 if (button == nullptr || button->verified != LayoutVerified::Tap)
                     return Format("step %lu: x-menu slot was never verified by a tap", (unsigned long)i + 1);
             }
-            if (step.kind == StepKind::Tap)
+            if (step.kind == StepKind::Tap || step.kind == StepKind::BattlePowerTap)
             {
                 const LayoutButton *button = step.button ? FindLayoutButton(step.button) : nullptr;
                 if (button == nullptr)
                     return Format("step %lu: unknown button %s", (unsigned long)i + 1, step.button ? step.button : "(null)");
-                if (button->verified != LayoutVerified::Tap)
+                if (step.kind == StepKind::BattlePowerTap) {
+                    const bool z = std::string(step.button) == "battle_moves.z_power";
+                    const bool mega = std::string(step.button) == "battle_moves.mega";
+                    const u32 required = WorldBattleMoves | (z ? WorldBattleZ : WorldBattleMega);
+                    if ((!z && !mega) || button->verified != LayoutVerified::Measured || !step.hasGuard
+                        || step.guard.scene == nullptr || std::string(step.guard.scene) != SceneBattle
+                        || step.guard.sceneNot || (step.guard.set & required) != required)
+                        return "invalid battle power guard";
+                } else if (button->verified != LayoutVerified::Tap)
                     return Format("step %lu: %s was never verified by a tap", (unsigned long)i + 1, step.button);
             }
             if (step.retryFrom >= 0 && (u32)step.retryFrom > i)
@@ -337,6 +364,17 @@ namespace OneScreen
         if (m_def != nullptr)
         {
             log.push_back(Format("action: %s refused: %s is running", def.name, m_def->name));
+            return false;
+        }
+        if ((world.flags & WorldTrainerBattle) != 0
+            && (std::strcmp(def.name, "battle-flee") == 0 || std::strcmp(def.name, "battle-run") == 0))
+        {
+            log.push_back("action: No running from a Trainer battle!");
+            return false;
+        }
+        if ((world.flags & WorldRoyalBattle) != 0 && std::strcmp(def.name, "battle-bag") == 0)
+        {
+            log.push_back("action: No Bag in a Battle Royal");
             return false;
         }
         if (s_menuPrepare != nullptr)
@@ -358,6 +396,7 @@ namespace OneScreen
                                  SceneName(world.scene).c_str()));
             return false;
         }
+        m_succeeded = false;
         m_def = &def;
         m_step = 0;
         m_frame = 0;
@@ -384,6 +423,7 @@ namespace OneScreen
 
     void ActionRunner::Finish(bool ok, const std::string &why, const ActionWorld &world, std::vector<std::string> &log)
     {
+        m_succeeded = ok;
         if (ok)
             m_lastResult = Format("%s ok in %lu frames, scene %s", m_def->name, (unsigned long)m_total,
                                   SceneName(world.scene).c_str());
@@ -434,8 +474,14 @@ namespace OneScreen
 
         const ActionStep &step = m_def->steps[m_step];
         const u32 frame = m_frame++;
+        if (frame == 0 && step.hasGuard && !step.guard.Matches(world))
+        {
+            Finish(false, "input guard changed", world, log);
+            return out;
+        }
         switch (step.kind)
         {
+        case StepKind::BattlePowerTap:
         case StepKind::Tap:
         {
             const LayoutButton *button = FindLayoutButton(step.button);

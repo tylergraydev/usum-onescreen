@@ -114,16 +114,10 @@ namespace UI
 
     void DrawPokeIcon(Canvas &canvas, const PokeIcon &icon, s32 x, s32 y, u8 alpha)
     {
-        for (s32 py = 0; py < PokeIconH; py++)
-            for (s32 px = 0; px < PokeIconW; px++)
-            {
-                const u16 v = icon.px[py * PokeIconW + px];
-                if ((v & 1) == 0)
-                    continue;
-                const u8 r = (u8)((v >> 11 & 31) * 255 / 31), g = (u8)((v >> 6 & 31) * 255 / 31),
-                         b = (u8)((v >> 1 & 31) * 255 / 31);
-                canvas.BlendPixel(x + px, y + py, Rgb(r, g, b), alpha);
-            }
+        const ImageView view{ reinterpret_cast<const u8 *>(icon.px), PokeIconW, PokeIconH,
+                              PokeIconW * 2, ImageFormat::RGB5A1 };
+        canvas.DrawImage(view, Rect{ 0, 0, PokeIconW, PokeIconH }, Rect{ x, y, PokeIconW, PokeIconH },
+                         ImageFilter::Nearest, Rgb(255, 255, 255, alpha));
     }
 
     // --- The archive ---
