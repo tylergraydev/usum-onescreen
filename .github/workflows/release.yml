@@ -34,7 +34,7 @@ jobs:
       # with retries, and falls back to the copies cached here by an earlier run.
       - name: Restore cached libctrpf and 3gxtool
         id: pkg-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: .ci-pkgs
           key: tpo-pkgs-v1-
@@ -45,7 +45,7 @@ jobs:
 
       - name: Save libctrpf and 3gxtool for later runs
         if: steps.pkg-cache.outputs.cache-matched-key != format('tpo-pkgs-v1-{0}', hashFiles('.ci-pkgs/*'))
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: .ci-pkgs
           key: tpo-pkgs-v1-${{ hashFiles('.ci-pkgs/*') }}
