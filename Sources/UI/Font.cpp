@@ -1,4 +1,5 @@
 #include "UI/Font.hpp"
+#include "UI/SharpFont.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -8,6 +9,31 @@ namespace OneScreen
 {
 namespace UI
 {
+    #include "SharpFont.inc"
+
+    static const SharpEntry *FindSharpGlyph(u32 codePoint)
+    {
+        const SharpEntry *end = s_sharpEntries + sizeof(s_sharpEntries) / sizeof(s_sharpEntries[0]);
+        const SharpEntry *entry = std::lower_bound(s_sharpEntries, end, codePoint,
+            [](const SharpEntry &a, u32 cp) { return a.cp < cp; });
+        return entry != end && entry->cp == codePoint ? entry : nullptr;
+    }
+
+    bool DecodeSharpGlyph(u32 codePoint, u8 *out, size_t capacity, s32 &w, s32 &h)
+    {
+        w = h = 0;
+        const SharpEntry *entry = FindSharpGlyph(codePoint);
+        if (entry == nullptr || out == nullptr)
+            return false;
+        const size_t pixels = (size_t)entry->w * entry->h;
+        if (pixels > capacity) return false;
+        for (size_t i = 0; i < pixels; i++)
+            out[i] = ((s_sharpData[entry->offset + i / 2] >> ((i & 1) * 4)) & 15) * 17;
+        w = entry->w;
+        h = entry->h;
+        return true;
+    }
+
     // Position of pixel i (0..63) inside an 8x8 Morton-ordered tile.
     static inline void MortonXY(u32 i, s32 &x, s32 &y)
     {
@@ -81,6 +107,8 @@ namespace UI
         m_font = font;
         for (Slot &slot : m_slots)
             slot.used = false;
+        for (SharpSlot &slot : m_sharp)
+            slot.used = false;
         m_maskW = font != nullptr ? (s32)std::ceil(font->cellW * m_scale) : 0;
         m_maskH = font != nullptr ? (s32)std::ceil(font->cellH * m_scale) : 0;
         m_masks.assign((size_t)(Slots * m_maskW * m_maskH), 0);
@@ -121,6 +149,18 @@ namespace UI
             return &slot.glyph;
         }
         misses++;
+
+        // A normal mask can reclaim bytes occupied by a decoded sharp mask.
+        // Invalidate precisely the slices that this slot is about to overwrite.
+        const size_t cellBytes = (size_t)m_maskW * m_maskH;
+        if (m_masks.size() >= SharpSlots * SharpMaskBytes)
+        {
+            const size_t base = m_masks.size() - SharpSlots * SharpMaskBytes;
+            const size_t begin = index * cellBytes, end = begin + cellBytes;
+            for (size_t i = 0; i < SharpSlots; i++)
+                if (begin < base + (i + 1) * SharpMaskBytes && end > base + i * SharpMaskBytes)
+                    m_sharp[i].used = false;
+        }
 
         const FontSource &f = *m_font;
         const int glyph = f.indexOf(codePoint);
@@ -180,6 +220,23 @@ namespace UI
             canvas.DrawMask(x + g->left * scale, y, g->mask, g->w, g->h, g->w, scale, color);
             return;
         }
+        // Reuse the existing allocation, preserving its size/capacity. Small
+        // unusual CFNT cells whose cache cannot hold four slices use fallback.
+        const bool canCache = canvas.Scale() > 1.f && m_masks.size() >= SharpSlots * SharpMaskBytes
+                              && FindSharpGlyph(codePoint) != nullptr;
+        SharpSlot &sharpSlot = m_sharp[codePoint % SharpSlots];
+        u8 *sharp = canCache ? m_masks.data() + m_masks.size() - SharpSlots * SharpMaskBytes
+                              + (codePoint % SharpSlots) * SharpMaskBytes : nullptr;
+        const auto drawSharp = [&]() {
+            canvas.DrawMaskSized((float)(x + g->left * scale), y + sharpSlot.top * m_scale * scale,
+                sharp, sharpSlot.w, sharpSlot.h, sharpSlot.w, sharpSlot.inkW * m_scale * scale,
+                sharpSlot.inkH * m_scale * scale, color);
+        };
+        if (canCache && sharpSlot.used && sharpSlot.codePoint == codePoint)
+        {
+            drawSharp();
+            return;
+        }
         u8 cell[64 * 64];
         if ((u32)m_font->cellW * m_font->cellH > sizeof(cell)
             || !DecodeGlyphCell(*m_font, m_font->indexOf(codePoint), cell)) return;
@@ -197,6 +254,37 @@ namespace UI
                 }
         if (ink0 < 0) return;
         const s32 inkW = ink1 - ink0 + 1;
+        // Keep the runtime font's exact ink rectangle, baseline, bearing and
+        // advance. Only the coverage source changes; measurement/Get and the
+        // scale-1 branch above remain untouched. The decoded source is cached
+        // in the existing allocation; no extra heap, scratch or GPU texture.
+        if (canCache)
+        {
+            s32 w, h;
+            // Decoding may overwrite normal masks in this slice, even if its
+            // previous sharp owner was already invalidated by a normal miss.
+            const size_t begin = (size_t)(sharp - m_masks.data());
+            const size_t cellBytes = (size_t)m_maskW * m_maskH;
+            const size_t first = begin / cellBytes;
+            const size_t stop = std::min<size_t>(Slots, (begin + SharpMaskBytes + cellBytes - 1) / cellBytes);
+            for (size_t i = first; i < stop; i++) m_slots[i].used = false;
+            sharpSlot.used = false;
+            if (DecodeSharpGlyph(codePoint, sharp, SharpMaskBytes, w, h))
+            {
+                s32 top = m_font->cellH, bottom = -1;
+                for (s32 sy = 0; sy < m_font->cellH; sy++)
+                    for (s32 sx = ink0; sx <= ink1; sx++)
+                        if (cell[sy * m_font->cellW + sx] != 0)
+                        {
+                            top = std::min(top, sy);
+                            bottom = std::max(bottom, sy);
+                        }
+                sharpSlot = SharpSlot{ codePoint, (u8)w, (u8)h, (u8)top,
+                                       (u8)inkW, (u8)(bottom - top + 1), true };
+                drawSharp();
+                return;
+            }
+        }
         canvas.DrawMaskSized((float)(x + g->left * scale), (float)y, cell + ink0,
             inkW, m_font->cellH, m_font->cellW, inkW * m_scale * scale,
             m_font->cellH * m_scale * scale, color);

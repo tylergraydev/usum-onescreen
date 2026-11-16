@@ -44,6 +44,7 @@ All notable changes for players are listed here. Versions follow [Semantic Versi
 
 ### Fixed
 
+- High-resolution native System/Large menu text uses 64 px Roboto outline coverage for an English character subset, preserving system-font layout. Packed font data and cache metadata add less than 58 KiB; decoded glyphs reuse the existing cache allocation. Unsupported characters retain the runtime font; `hires off` output is unchanged.
 - SOS foe info follows the last live target through record reorder and skips fainted history. Target names use the plate width, empty own-ally slots say Empty, and unavailable plates are grey with contained sub-labels. The trainer Run note now fits its pill.
 
 - SOS/Royal target screens open by their verified vtable; named target choices skip empty, fainted, self and ally slots. Known spread moves get a single confirmation.
