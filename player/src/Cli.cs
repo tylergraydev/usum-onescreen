@@ -30,6 +30,7 @@ namespace UsumOneScreen
                          import matching save ZIP into a new slot
   cheats [on NAME|off NAME]  list / change cheats
   set graphics=keep|native|high|ultra  set rendering resolution
+  set visual_quality=keep|off|sharpen|aa|sharpen-aa  OpenGL post-processing
   texture-pack list|install ZIP [--game TITLEID]|use NAME|off|remove NAME
   texture-pack from-dump NAME  make a library pack from this game's dumped images
                          packs for selected game (close Azahar first)
@@ -296,7 +297,7 @@ namespace UsumOneScreen
         {
             var ini = PluginIni.Load(home.PluginIniPath);
             bool pluginChanged = false;
-            string aspectChoice = null, graphicsChoice = null, glyphChoice = null;
+            string aspectChoice = null, graphicsChoice = null, glyphChoice = null, visualChoice = null;
             var textureOptions = new Dictionary<string, bool>();
             ControlPreset? controls = null;
             foreach (var a in args)
@@ -317,6 +318,11 @@ namespace UsumOneScreen
                 {
                     if (!GameOptions.Graphics.Contains(value.ToLowerInvariant())) throw new SetupException("bad graphics");
                     graphicsChoice = value.ToLowerInvariant();
+                }
+                else if (key == "visual_quality")
+                {
+                    visualChoice = value.ToLowerInvariant();
+                    VisualQuality.Validate(home, visualChoice);
                 }
                 else if (key == "glyphs" && value.Equals("auto", StringComparison.OrdinalIgnoreCase)) glyphChoice = "auto";
                 else if (PluginIni.Keys.Contains(key))
@@ -345,6 +351,7 @@ namespace UsumOneScreen
             if (pluginChanged)
                 ini.Save(home.PluginIniPath);
             if (glyphChoice != null) home.SetState("glyphs", glyphChoice);
+            if (visualChoice != null) VisualQuality.Set(home, visualChoice);
             if (graphicsChoice != null) GameOptions.SetGraphics(home, graphicsChoice);
             if (aspectChoice != null)
                 home.SetState("aspect", aspectChoice);

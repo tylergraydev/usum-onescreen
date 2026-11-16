@@ -152,13 +152,63 @@ to start the game once. Synthetic regression tests cover these operations;
 interactive Saves dialog and real save imports still need player validation.
 
 A Game options group holds Widescreen, Battle menu, Text and battle speed,
-Graphics and Button icons; Saves and Cheats buttons sit below them. The layout
+Graphics, Visual quality and Button icons; Saves and Cheats buttons sit below them. The layout
 uses autosizing and scrolling for smaller windows and high DPI. Options read back
 from the INIs on opening. Mixed speed settings remain Custom until changed.
 Graphics defaults to Keep (no resolution writes); Native/High/Ultra set
 `[Renderer] resolution_factor` to 1/3/5 with its `\default=false` flag, clearing
 per-game resolution overrides. The key/section were checked against upstream
 Azahar 2126.2 `config.cpp` and `settings.h`. 21:9 benefits from High/Ultra.
+
+Visual quality offers Keep Azahar's setting (initial default), Off, Sharpen,
+Anti-aliasing (FXAA-style), and Sharpen + AA. CLI:
+`set visual_quality=keep|off|sharpen|aa|sharpen-aa`. The choice persists as
+`visual_quality` in `usum-onescreen-app.ini` and is reapplied during Setup/Play.
+Keep preserves custom shaders. Other choices write `[Layout] pp_shader_name`
+with `pp_shader_name\default=false` and remove per-game shader overrides
+(including `\use_global`) so they inherit the launcher selection.
+Off writes exactly `None (builtin)`; installed shader files may remain unused.
+
+Verified against Azahar **2126.2**:
+
+- [config.cpp](https://github.com/azahar-emu/azahar/blob/2126.2/src/citra_qt/configuration/config.cpp)
+  reads the shader from `Layout`; per-game `\use_global=false` selects local settings.
+- [settings.h](https://github.com/azahar-emu/azahar/blob/2126.2/src/common/settings.h)
+  identifies OpenGL as API 1, Vulkan as API 2; the Windows OpenGL-enabled build
+  defaults to OpenGL when the API is absent or `\default=true`.
+- [OpenGL renderer](https://github.com/azahar-emu/azahar/blob/2126.2/src/video_core/renderer_opengl/renderer_opengl.cpp)
+  uses `None (builtin)` for ordinary presentation, `Dubois (builtin)` for anaglyph,
+  and the fixed Horizontal interlaced shader. Sharpen and FXAA are not built-ins.
+- [Vulkan renderer](https://github.com/azahar-emu/azahar/blob/2126.2/src/video_core/renderer_vulkan/renderer_vulkan.cpp)
+  compiles fixed presentation shaders and does not load `pp_shader_name`.
+
+Verified on [upstream master loader](https://github.com/azahar-emu/azahar/blob/master/src/video_core/renderer_opengl/post_processing_opengl.cpp):
+ordinary user shaders are `user/shaders/<name>.glsl`, directly in `shaders/`,
+and the config value is the case-sensitive filename stem, without an extension,
+path, or `(builtin)` suffix. Anaglyph shaders use `shaders/anaglyph/`.
+The loader supplies Dolphin-style GLSL helpers and the renderer supplies the version.
+Verified on Azahar 2126.2 (2026-11-09, OpenGL, NVIDIA driver): with
+`pp_shader_name=usum-sharpen-aa` and the file in `user/shaders/`, the game booted to the
+field with no shader errors in `azahar_log.txt`; a deliberately broken
+`user/shaders/usum-broken.glsl` logged "Error compiling fragment shader", so the
+2126.2 loader does read that folder.
+The existing `shaders/vulkan/` directory does not establish Vulkan post-processing support.
+
+`player/shaders/post-process.glsl` is original GPL-3.0-only code, embedded in the
+EXE and installed as `usum-sharpen.glsl`, `usum-aa.glsl`, or
+`usum-sharpen-aa.glsl` when selected. AA is a small original FXAA-style
+contrast/edge filter, not NVIDIA's reference FXAA implementation. Combined mode
+attenuates sharpening where AA acts. It may soften text; GPU cost and appearance
+remain **UNVERIFIED in-game**, as does compilation on non-NVIDIA drivers.
+
+The UI disables Visual quality with a reason when the effective API is not
+OpenGL, including the selected title's API override. It also disables it for
+stereoscopic 3D, which uses other presentation paths. Change those options
+explicitly in Azahar and reopen the launcher. The launcher never switches API
+or stereo mode. A saved effect is suspended if those settings later change;
+its selection remains saved for a return to OpenGL/2D. CLI `off` still works on
+Vulkan. The UI reads the current INI shader when reopened; unknown shaders show
+Keep. Changes apply on the next start.
 
 Controller Auto uses Raw Input's HID vendor IDs, restricted to Generic Desktop
 joystick/gamepad/multi-axis usages: Microsoft 045E, Sony 054C, Nintendo 057E.

@@ -23,6 +23,8 @@ namespace UsumOneScreen
                           speed = Combo(new[] { "Normal", "Fast", "Instant" }, false),
                           glyphs = Combo(new[] { "Auto", "Xbox", "PlayStation", "Nintendo", "3DS" }, false);
         bool customSpeed;
+        readonly ComboBox visualQuality = Combo(VisualQuality.Labels, false);
+        readonly Label visualQualityHint = Caption("");
         string customAspect;
         readonly NumericUpDown cursorSpeed = new NumericUpDown { Minimum = 1, Maximum = 20, Width = 60 };
         readonly CheckBox fullscreen = new CheckBox { Text = "Fullscreen (F11 or Esc leaves it)", AutoSize = true };
@@ -194,6 +196,8 @@ namespace UsumOneScreen
         {
             var g = Grid(4);
             graphics.Width = 185;
+            visualQuality.Width = 185;
+            visualQuality.DropDownWidth = 230;
             glyphs.Width = 185;
             void Row(int row, string a, Control ca, string b, Control cb)
             {
@@ -202,9 +206,11 @@ namespace UsumOneScreen
             }
             Row(0, "Widescreen", widescreen, "Graphics", graphics);
             Row(1, "Battle menu", battle, "Text and battle speed", speed);
-            g.Controls.Add(Caption("Button icons"), 0, 2); g.Controls.Add(glyphs, 1, 2);
+            Row(2, "Button icons", glyphs, "Visual quality", visualQuality);
+            visualQualityHint.MaximumSize = new Size(650, 0);
+            g.Controls.Add(visualQualityHint, 0, 3); g.SetColumnSpan(visualQualityHint, 4);
             var hint = Caption("21:9 widescreen looks best on High or Ultra.");
-            g.Controls.Add(hint, 0, 3); g.SetColumnSpan(hint, 4);
+            g.Controls.Add(hint, 0, 4); g.SetColumnSpan(hint, 4);
             var buttons = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill };
             var backups = new Button { Text = "Saves\u2026", AutoSize = true };
             var cheats = new Button { Text = "Cheats\u2026", AutoSize = true };
@@ -213,7 +219,7 @@ namespace UsumOneScreen
             var textures = new Button { Text = "Texture packs...", AutoSize = true };
             textures.Click += (s, e) => { if (!busy) OptionDialogs.ShowTextures(this, home); };
             buttons.Controls.Add(backups); buttons.Controls.Add(cheats); buttons.Controls.Add(textures);
-            g.Controls.Add(buttons, 0, 4); g.SetColumnSpan(buttons, 4);
+            g.Controls.Add(buttons, 0, 5); g.SetColumnSpan(buttons, 4);
             return Group("Game options", g);
         }
 
@@ -251,6 +257,7 @@ namespace UsumOneScreen
             widescreen.SelectedIndex = aspectIndex;
 
             graphics.SelectedIndex = Array.IndexOf(GameOptions.Graphics, GameOptions.CurrentGraphics(home));
+            visualQuality.SelectedIndex = Array.IndexOf(VisualQuality.Values, VisualQuality.Current(home));
             Select(battle, ini.Get("layout"));
             string messages = ini.Get("battle_messages"), bars = ini.Get("battle_bars");
             string text = ini.Get("instant_text");
@@ -430,6 +437,18 @@ namespace UsumOneScreen
             if (changed)
                 ini.Save(home.PluginIniPath);
             home.SetState("glyphs", glyphChoice);
+            if (visualQuality.Enabled)
+            {
+                string choice = VisualQuality.Values[Math.Max(0, visualQuality.SelectedIndex)];
+                // Re-check after external Azahar edits before saving the selection.
+                if (choice != "keep" && choice != "off" && VisualQuality.UnavailableReason(home) is string reason)
+                {
+                    Log(reason);
+                    UpdateVisualQuality();
+                    return false;
+                }
+                VisualQuality.Set(home, choice);
+            }
             GameOptions.SetGraphics(home, GameOptions.Graphics[Math.Max(0, graphics.SelectedIndex)]);
             home.SetState("aspect", aspect);
             if (home.HasAzahar)
@@ -455,6 +474,14 @@ namespace UsumOneScreen
             setupButton.Enabled = !busy && !running;
             playButton.Enabled = !busy && !running;
             playButton.Text = running ? "Playing" : "Play";
+            UpdateVisualQuality();
+        }
+
+        void UpdateVisualQuality()
+        {
+            string reason = VisualQuality.UnavailableReason(home);
+            visualQuality.Enabled = !busy && !home.IsRunning() && reason == null;
+            visualQualityHint.Text = reason ?? "Visual quality: OpenGL only; applies next start. AA may soften text.";
         }
 
         Setup.Options CurrentOptions() => new Setup.Options
