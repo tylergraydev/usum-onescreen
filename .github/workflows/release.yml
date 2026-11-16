@@ -53,7 +53,7 @@ jobs:
       - name: Build
         run: make
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: usum-onescreen
           path: usum-onescreen.3gx
@@ -114,7 +114,7 @@ jobs:
           Copy-Item player/dist/UsumOneScreen.exe "UsumOneScreen-$env:TAG.exe"
           Compress-Archive -Path player/dist/* -DestinationPath "usum-onescreen-$env:TAG-windows.zip"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: usum-onescreen-windows
           path: |
