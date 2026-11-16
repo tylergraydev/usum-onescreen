@@ -303,6 +303,12 @@ namespace OneScreen
             if (!ParseBattleSpeed(value, k == "battle_messages" ? s.battleMessages : s.battleBars))
                 return "bad " + key + " '" + value + "' (use normal, fast or instant)";
         }
+        else if (k == "ui_motion")
+        {
+            if (v != "on" && v != "off")
+                return "bad ui_motion '" + value + "' (use on or off)";
+            s.uiMotion = v == "on";
+        }
         else if (k == "filter")
         {
             if (!ParseScreenFilter(value, s.filter))
@@ -483,6 +489,8 @@ namespace OneScreen
             "field_fov = 1.0\n"
             "; Side bands: tint (default), pattern, off or blur (hires; otherwise tint).\n"
             "pillarbox = tint\n"
+            "; Native X menu, Party and Bag cursor / HP motion: on or off.\n"
+            "ui_motion = on\n"
             "; Top-screen GPU filter: off (default), warm, cool or vignette.\n"
             "filter = off\n"
             "\n"
@@ -638,6 +646,7 @@ namespace OneScreen
                           + ", filter " + ScreenFilterName(s.filter)
                           + ", field_fov " + std::to_string(s.fieldFov)
                           + ", pillarbox " + pillarboxes[(int)s.pillarbox]
+                          + ", ui_motion " + (s.uiMotion ? "on" : "off")
                           + ", battle layout " + BattleLayoutName(s.battleLayout) + "\n"
                           + "instant text " + (s.instantText ? "on" : "off")
                           + ", battle messages " + BattleSpeedName(s.battleMessages)

@@ -5,6 +5,7 @@
 #include "UI/GameAssets.hpp"
 #include "UI/Layout.hpp"
 #include "UI/Theme.hpp"
+#include "UI/Motion.hpp"
 
 namespace OneScreen
 {
@@ -636,15 +637,16 @@ namespace OneScreen
 
     // A plate as on the game's Party screen: a green list-row plate, name
     // and gender, Lv., the HP bar with its numbers, the held item.
-    static void DrawCard(UI::Canvas &canvas, const PartyMonView &mon, const UI::Rect &r, bool selected, bool source)
+    static void DrawCard(UI::Canvas &canvas, const PartyMonView &mon, const UI::Rect &r, bool selected, bool source, unsigned slot,
+                         const UI::Rect &cursor, bool deferHighlight)
     {
         Theme::DrawRowBackground(canvas, r, Theme::RowKind::List);
         if (source)
             canvas.StrokeRoundRect(UI::Inset(r, -2), Theme::RowRadius + 2, SwapColor, 3);
-        if (selected)
+        if (selected && !deferHighlight)
         {
-            Theme::DrawHighlightFrame(canvas, UI::Inset(r, -1), Theme::RowRadius + 1);
-            Theme::DrawHighlightFrame(canvas, UI::Inset(r, -3), Theme::RowRadius + 3);
+            Theme::DrawHighlightFrame(canvas, UI::Inset(cursor, -1), Theme::RowRadius + 1);
+            Theme::DrawHighlightFrame(canvas, UI::Inset(cursor, -3), Theme::RowRadius + 3);
         }
 
         const Theme::TextStyle text = Style(Theme::TextSize::Body, Theme::ListText);
@@ -687,8 +689,13 @@ namespace OneScreen
             DrawStatus(canvas, mon.status, x2 + w, y2 + 1, smallLine - 2);
             x2 += w + 4;
         }
+        unsigned identity = 2166136261u;
+        for (unsigned char c : mon.name) identity = (identity ^ c) * 16777619u;
+        for (unsigned char c : mon.species) identity = (identity ^ c) * 16777619u;
+        identity = (identity ^ mon.gender) * 16777619u;
+        const int hpValue = UI::Motion::Gauge(UI::Motion::Screen::Party, slot, mon.hp, mon.maxHp, identity);
         Theme::DrawHpBar(canvas, UI::Rect{ x2, y2 + (smallLine - Theme::GaugeHeight - 3) / 2, inner.Right() - x2,
-                                           Theme::GaugeHeight + 3 }, mon.hp, mon.maxHp);
+                                           Theme::GaugeHeight + 3 }, hpValue, mon.maxHp);
 
         // Line 3: held item, HP numbers.
         const int y3 = y2 + smallLine;
@@ -789,9 +796,21 @@ namespace OneScreen
         Backdrop(canvas, PartyArea);
 
         const bool popup = view.page == PartyPage::Menu || view.page == PartyPage::Items || view.page == PartyPage::Ask;
+        const bool selection = view.cursor >= 0 && view.cursor < (int)view.mons.size() && view.cursor < 6
+                               && view.busy.empty() && view.page != PartyPage::Ask;
+        const UI::Rect target = selection ? PartyCardRect(view.cursor) : UI::Rect{};
+        const UI::Rect cursor = selection ? UI::Motion::Cursor(UI::Motion::Screen::Party, target) : target;
+        const bool deferHighlight = selection && (cursor.x != target.x || cursor.y != target.y);
         for (int i = 0; i < (int)view.mons.size() && i < 6; i++)
             DrawCard(canvas, view.mons[i], PartyCardRect(i), i == view.cursor && view.busy.empty() && view.page != PartyPage::Ask,
-                     view.page == PartyPage::Swap && i == view.swapFrom);
+                     view.page == PartyPage::Swap && i == view.swapFrom, (unsigned)i, cursor, deferHighlight);
+        // While moving, draw the same two frames after the static cards so
+        // later cards cannot paint over the travelling highlight.
+        if (deferHighlight)
+        {
+            Theme::DrawHighlightFrame(canvas, UI::Inset(cursor, -1), Theme::RowRadius + 1);
+            Theme::DrawHighlightFrame(canvas, UI::Inset(cursor, -3), Theme::RowRadius + 3);
+        }
         if (view.mons.empty())
             Theme::DrawText(canvas, "Reading the party...", PartyCardRect(0),
                             Style(Theme::TextSize::Body, Theme::ListText, UI::Align::Center));

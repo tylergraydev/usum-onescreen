@@ -68,6 +68,7 @@ namespace OneScreen
         bool         autoPanel = false;                // native menus first; the panel is a fallback
         ScreenFilter filter = ScreenFilter::Off;
         Pillarbox    pillarbox = Pillarbox::Tint;
+        bool         uiMotion = true;                 // frame-based native menu cursor / HP easing
         SidePanelMode sidePanels = SidePanelMode::Off;
         float        fieldFov = 1.0f;                  // overworld fovy multiplier, 0.8..1.5
         float        aspect = 0.0f;                    // 0: original camera defaults

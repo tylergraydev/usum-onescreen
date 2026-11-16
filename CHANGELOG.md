@@ -6,6 +6,7 @@ All notable changes for players are listed here. Versions follow [Semantic Versi
 
 ### Added
 
+- Smooth native X-menu, Party and Bag selection motion (8 frames), and Party/Bag HP bars (24 frames). Optional `[display] ui_motion = off` restores instant rendering; default on. No opening slide/fade; runtime performance verification pending.
 - Native battle power controls: R arms a screenshot-confirmed Mega Evolution or Z-Power button before a move; L keeps descriptions. Power taps are guarded and host-tested. Static button-text probes tolerate the observed animations; Z submission permits only confirmed gold rows, and B returns once to normal moves. Repaired native flows still need emulator validation.
 
 - Native top-screen Ride Pager: follows the game's Y menu, shows usable/current/registered rides, selects with Up/Down and A/Y, and closes with B. Field D-pad shortcuts stay with the game; fixed English labels and no registration controls yet. Emulator verification pending.
