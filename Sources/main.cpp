@@ -52,13 +52,14 @@ namespace CTRPluginFramework
 
     static bool ScenesEnabled(void)
     {
-        return s_game && (s_game->features & OneScreen::FeatureScenes) && s_game->offsets.sceneManager != 0;
+        return s_game && (s_game->features & OneScreen::FeatureScenes) && s_game->scene.global != 0;
     }
 
     // Engine readers also need a known scene manager; never pass an unknown global.
     static bool UsumEnabled(void)
     {
-        return s_game && (s_game->features & OneScreen::FeatureUsumEngine) && ScenesEnabled();
+        return s_game && (s_game->features & OneScreen::FeatureUsumEngine) && ScenesEnabled()
+            && s_game->offsets.sceneManager != 0;
     }
 
     static const char *LogPath = "/usum-onescreen.log";
@@ -499,7 +500,7 @@ namespace CTRPluginFramework
                 : "widescreen: invalid aspect (use 0, off, a positive float, 16:9 or 21:9)", false);
         }
         else if (line == "scene")
-            WriteLog("scene: " + OneScreen::SceneModule(s_game->offsets.sceneManager), false);
+            WriteLog("scene: " + OneScreen::CurrentScene(), false);
         else if (line.compare(0, 7, "uidemo ") == 0)
         {
             static const char *modes[] = { "off", "on", "shade", "direct" };
@@ -924,7 +925,7 @@ namespace CTRPluginFramework
         // Scene changes are checked four times a second.
         if (ScenesEnabled() && frames % 15 == 0)
         {
-            const std::string now = OneScreen::SceneModule(s_game->offsets.sceneManager);
+            const std::string now = OneScreen::CurrentScene();
             if (now != scene)
             {
                 scene = now;

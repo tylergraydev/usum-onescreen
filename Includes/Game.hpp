@@ -55,6 +55,15 @@ namespace OneScreen
         u32 imageEnd; // page-rounded end of bss; CRO modules load above it
     };
 
+    // Read global, then dereference each pointer + offset to reach the scene.
+    // Any failed read or null pointer means no current scene.
+    struct ScenePath
+    {
+        u32 global;
+        u32 count;
+        u32 offsets[4];
+    };
+
     enum GameFeature : u32
     {
         // Scene names, polling and automatic panel selection.
@@ -71,6 +80,7 @@ namespace OneScreen
         bool        confirmed;  // titleId/version checked against a real dump
         Offsets     offsets;
         ImageLayout layout;
+        ScenePath   scene;
         u32         features;
     };
 

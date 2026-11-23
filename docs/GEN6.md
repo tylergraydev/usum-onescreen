@@ -54,11 +54,41 @@ So every SDK-level address the panel and touch cursor need exists in Omega Ruby 
 
 ## Scene detection
 
-Omega Ruby loads CRO modules: `code.bin` names 94 `rom:/Dll*.cro` files (`DllField`, `DllBattle`, `DllBag`, `DllBox`, `DllContest`, …) plus `rom:/.crr/static.crr`. The plugin names scenes by the CRO that owns the current scene's vtable, so that approach may carry over, with `Dll…` names in place of USUM's. The Gen 6 scene/proc manager global still has to be found (Ghidra), and Party/Bag may live in CROs here (`DllBag.cro` exists) rather than in the main image.
+Omega Ruby loads CRO modules: `code.bin` names 94 `rom:/Dll*.cro` files (`DllField`, `DllBattle`, `DllBag`, `DllBox`, `DllContest`, …) plus `rom:/.crr/static.crr`. The plugin names scenes by the CRO that owns the current scene's vtable, and that carries over, with `Dll…` names in place of USUM's.
+
+**Current scene (Omega Ruby v0):** `*(*(*(*(0x62F7C4) + 0x14) + 0x10) + 0x0C)` → its vtable → the CRO that owns it.
+
+| Step | What | How it was found |
+|---|---|---|
+| `0x62F7C4` | Global → `gamesystem::GameManager` (`0x6C` bytes) | Its constructor `0x106ECC` asserts the global is null, then stores `this` there (singleton). Allocated and constructed at `0x1061EC`–`0x106204`. |
+| GameManager `+0x14` | `gamesystem::GameProcManager*` (`0x1C` bytes, vtable `0x5D4570`) | Created inline at `0x106B38`–`0x106B6C` (in `0x106B10`, called right after the constructor) and stored to `+0x14`. Class name from the RTTI before the vtable (`N10gamesystem15GameProcManagerE`, base `N3gfl4proc7ManagerE`). |
+| ProcManager `+0x10` | Current entry: u8 state `+0`, scene object `+0x0C` | The manager's per-frame main (`0x3AB3A0`, vtable slot 0) reads `+0x10`, switches on its state byte and calls the vtable of `+0x0C`. |
+| ProcManager `+0x0C` | Next scene (set by `0x3AB384`, flag u8 `+8`) | Every scene launcher (87 callers, e.g. `0x367D44` for `DllField`) loads its CRO (`0x36F28C`), allocates and constructs the scene, stores the manager at scene `+0x1C` and the CRO at scene `+0x10`, then tail-calls `0x3AB384(manager, scene)`. |
+
+Checked at runtime (2026-11-23, `peek` from a script, nothing saved): language screen → `DllLangSelect`, title screen → `DllTitle`, name keyboard → `DllStrInput`, overworld (truck) → `DllField` (scene vtable `+0x1072C4` in a module at `0x6F3000`), Trainer Card opened from the PokéNav → `DllTrainerCase`. While the Trainer Card is open its CRO sits at `0x6F3000`, where `DllField` was, so the field module is unloaded during apps. The GameManager was at `0x08C650B4` and the ProcManager at `0x08C6A180` in both runs. The scene object address stayed `0x08C65224` across scenes (the allocator reuses the slot), so the plugin must compare vtables, not object addresses.
+
+**Wired:** `GameInfo::scene` (`ScenePath`) describes the pointer chain, and `CurrentScene()` uses it for scene commands, logging and automatic panel selection. Omega Ruby now has `FeatureScenes`, without the USUM engine; `Offsets.sceneManager` stays zero. Its default scene modes are `DllTitle = off`, `DllField = off` (overworld; PokeNav Plus on the bottom screen), and `DllStrInput = full` (name keyboard needs touch). Party/Bag may live in CROs here (`DllBag.cro` exists) rather than in the main image.
+
+Boot test (2026-11-23, new game, `auto on`, nothing saved). Scene log and the mode the auto panel chose:
+
+| `scene:` | Mode | What's on screen |
+|---|---|---|
+| `DllLangSelect` | panel (default) | Language select |
+| `DllFieldDemo` | (no switch logged) | Opening demo |
+| `DllTitle` | off | Title screen |
+| `DllSangoIntro` | panel (default) | Birch's intro; the bottom screen is black here |
+| `DllStrInput` | full | Name keyboard; the taps type on it |
+| `(none)` → `DllField` | off | Overworld (truck) |
+| `DllTrainerCase` | panel (default) | Trainer Card from the PokéNav |
+| `DllField` | off | Back in the overworld after B |
+
+The USUM X-menu handling did not run (the `auto:` status line has no X-menu or field-state text on this game). On Ultra Sun with the same build, `native-map` passes, and `xmenu-touch-close` passes (2 of 4 runs; the 2 failures were a random Rotom chat on the bottom screen catching the tap meant for the map). The previous build passed 3 of 3. The `scene:` sequence in the plugin log (TitleMenu, FieldRo, TownMap, FieldRo, Party `main:00647FCC`, FieldRo) is identical on both builds.
+
+**Gap: the X menu.** X in the overworld opens the menu on the **bottom screen** (Bag, the trainer's name, Save, Options), but the scene stays `DllField`, so the auto panel keeps the panel off and the menu can't be seen on the top screen until the player presses L+R. USUM solved the same case (`FieldRo.xmenu`) with a field-state word read from the field scene. Omega Ruby needs its own signal: a field state in `DllField`'s scene object, or a "menu open" flag found by diffing the scene object with the menu open and closed.
 
 ## Next steps
 
 1. Pick the target builds (latest update per game) and get dumps of X, Y and Alpha Sapphire plus updates.
 2. Port additional game-specific constants only as their features gain Gen 6 support. Image layout and feature flags are already per-game; Omega Ruby enables only the core features.
 3. Play-check Omega Ruby in the overworld and a battle with the panel, and with a real pad (L+R, ZL).
-4. Find the Gen 6 scene manager for the auto panel.
+4. Find an Omega Ruby "X menu open" signal so the auto panel shows the menu (see "Gap: the X menu"). Consider `DllSangoIntro = off` (its bottom screen is black). Add defaults for more `Dll…` scenes as they are met (battle, Bag, boxes).

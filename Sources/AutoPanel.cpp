@@ -3,6 +3,7 @@
 #include <CTRPluginFramework.hpp>
 
 #include "FieldSettle.hpp"
+#include "Game.hpp"
 #include "Panel.hpp"
 #include "Scene.hpp"
 #include "Settings.hpp"
@@ -12,7 +13,7 @@ namespace OneScreen
 {
     using namespace CTRPluginFramework;
 
-    // Scene IDs from SceneModule() (see docs/OFFSETS.md). The mode for each
+    // Scene IDs from CurrentScene() (see docs/OFFSETS.md). The mode for each
     // scene comes from the [scenes] settings. SceneField and SceneBattle come
     // from ActionQueue.hpp (via QuickSave.hpp) and drive the X menu flag.
     static const char *SceneTitle = "TitleMenu";
@@ -32,9 +33,16 @@ namespace OneScreen
     static std::string s_scene;
     static u32 s_prevHeld = 0;
 
+    static bool HasUsumEngine(void)
+    {
+        const GameInfo *game = CurrentGame();
+        return game && (game->features & FeatureUsumEngine);
+    }
+
     bool AutoPanelUpdate(const std::string &scene, u32 gameHeld, int fieldState)
     {
-        if (QuickSaveRunning())
+        const bool usum = HasUsumEngine();
+        if (usum && QuickSaveRunning())
         {
             const bool changed = GetPanelMode() != PanelMode::Off;
             SetPanelMode(PanelMode::Off);
@@ -46,12 +54,12 @@ namespace OneScreen
         if (!scene.empty() && scene != s_scene)
         {
             // A catch goes Battle -> Pokédex (nickname question).
-            s_afterBattle = scene == "Zukan" && s_scene == SceneBattle;
+            s_afterBattle = usum && scene == "Zukan" && s_scene == SceneBattle;
             s_scene = scene;
             s_override = false;
-            if (scene == SceneTitle)
+            if (usum && scene == SceneTitle)
                 s_menuOpen = false;
-            if (scene == SceneField)
+            if (usum && scene == SceneField)
                 s_settle.Enter();
         }
 
@@ -63,7 +71,7 @@ namespace OneScreen
         // seen. Selecting an entry switches scene and coming back returns to
         // the open menu, so the key-tracked flag survives other scenes.
         bool waiting = false;
-        if (s_scene == SceneField)
+        if (usum && s_scene == SceneField)
         {
             if (fieldState >= 0)
             {
@@ -86,8 +94,8 @@ namespace OneScreen
         if (!s_enabled || s_override || s_scene.empty() || waiting)
             return false;
 
-        const PanelMode want = s_nativeBattle && (s_scene == SceneBattle || s_afterBattle)
-                               ? PanelMode::Off : (PanelMode)ModeForScene(GetSettings(), s_scene, s_menuOpen);
+        const PanelMode want = usum && s_nativeBattle && (s_scene == SceneBattle || s_afterBattle)
+                               ? PanelMode::Off : (PanelMode)ModeForScene(GetSettings(), s_scene, usum && s_menuOpen);
         if (want == GetPanelMode())
             return false;
         SetPanelMode(want);
@@ -101,7 +109,7 @@ namespace OneScreen
 
     void AutoPanelSetNativeBattle(bool on)
     {
-        s_nativeBattle = on;
+        s_nativeBattle = HasUsumEngine() && on;
     }
 
     void AutoPanelSetEnabled(bool enabled)
@@ -117,6 +125,10 @@ namespace OneScreen
 
     std::string AutoPanelStatus(void)
     {
+        if (!HasUsumEngine())
+            return Utils::Format("auto: %s, scene %s%s",
+                                 s_enabled ? "on" : "off", s_scene.empty() ? "(none)" : s_scene.c_str(),
+                                 s_override ? ", manual override" : "");
         const std::string source = s_fieldState >= 0 ? Utils::Format("field state %d", s_fieldState) : "keys";
         return Utils::Format("auto: %s, scene %s, x menu %s (%s)%s%s",
                              s_enabled ? "on" : "off", s_scene.empty() ? "(none)" : s_scene.c_str(),

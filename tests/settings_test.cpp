@@ -86,6 +86,12 @@ static void TestMappedSceneDefaults(void)
     CHECK(ModeForScene(s, "Kawaigari", false) == SceneMode::Full);
     CHECK(ModeForScene(s, "BattleVideoPlayer", false) == SceneMode::Panel);
     CHECK(ModeForScene(s, "box", true) == SceneMode::Full);
+    CHECK(ModeForScene(s, "DllTitle", false) == SceneMode::Off);
+    CHECK(ModeForScene(s, "DllField", false) == SceneMode::Off);
+    CHECK(ModeForScene(s, "DllField", true) == SceneMode::Off);
+    CHECK(ModeForScene(s, "DllStrInput", false) == SceneMode::Full);
+    CHECK(ModeForScene(s, "DllTrainerCase", false) == SceneMode::Panel);
+    CHECK(s.scenes.back().first == "default");
 }
 
 static void TestDefaultFileRoundTrip(void)
@@ -96,6 +102,7 @@ static void TestDefaultFileRoundTrip(void)
     for (const std::string &w : warnings)
         std::printf("  warning: %s\n", w.c_str());
     CHECK(SameSettings(s, Settings{}));
+    CHECK(DefaultSettingsText().find("; Omega Ruby\n") != std::string::npos);
 }
 
 static void TestEmptyFile(void)

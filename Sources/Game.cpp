@@ -24,10 +24,11 @@ namespace OneScreen
     };
 
     static const ImageLayout s_usumLayout = { 0x5BC000, 0x669000, Usum::ImageEnd };
+    static const ScenePath s_usumScene = { 0x6A599C, 1, { 0 } };
     static const u32 s_usumFeatures = FeatureScenes | FeatureUsumEngine;
 
     // Omega Ruby base v0: SDK matches and exheader layout, docs/GEN6.md.
-    // No scene manager or USUM engine support; core panel/input/GPU only.
+    // Scene detection uses its own path; no USUM engine scene manager.
     static const Offsets s_orubyV0 =
     {
         { 0x148720, { 0xE92D5FF0, 0xE1A06000, 0xE28D0028, 0xE3A08000 } },
@@ -40,16 +41,17 @@ namespace OneScreen
         0x62AB70,
     };
     static const ImageLayout s_orubyLayout = { 0x57A000, 0x5EC000, 0x6AF000 };
+    static const ScenePath s_orubyScene = { 0x62F7C4, 3, { 0x14, 0x10, 0x0C } };
     static const GameInfo *s_currentGame = nullptr;
 
     const GameInfo *CurrentGame(void) { return s_currentGame; }
 
     static const GameInfo s_games[] =
     {
-        { "Pokemon Ultra Sun", 0x00040000001B5000ULL, 0x0820, true, s_usumV12, s_usumLayout, s_usumFeatures },
-        { "Pokemon Ultra Sun", 0x00040000001B5000ULL, 0x0800, true, s_usumV12, s_usumLayout, s_usumFeatures },
-        { "Pokemon Ultra Moon", 0x00040000001B5100ULL, 0x0820, true, s_usumV12, s_usumLayout, s_usumFeatures },
-        { "Pokemon Omega Ruby", 0x000400000011C400ULL, 0x0000, true, s_orubyV0, s_orubyLayout, 0 },
+        { "Pokemon Ultra Sun", 0x00040000001B5000ULL, 0x0820, true, s_usumV12, s_usumLayout, s_usumScene, s_usumFeatures },
+        { "Pokemon Ultra Sun", 0x00040000001B5000ULL, 0x0800, true, s_usumV12, s_usumLayout, s_usumScene, s_usumFeatures },
+        { "Pokemon Ultra Moon", 0x00040000001B5100ULL, 0x0820, true, s_usumV12, s_usumLayout, s_usumScene, s_usumFeatures },
+        { "Pokemon Omega Ruby", 0x000400000011C400ULL, 0x0000, true, s_orubyV0, s_orubyLayout, s_orubyScene, FeatureScenes },
     };
 
     const GameInfo *DetectGame(void)

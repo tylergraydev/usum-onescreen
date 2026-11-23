@@ -558,6 +558,12 @@ namespace OneScreen
             "; Pokemon Refresh\n"
             "Kawaigari = full\n"
             "BattleVideoPlayer = panel\n"
+            "; Omega Ruby\n"
+            "DllTitle = off\n"
+            "; Overworld; PokeNav Plus on the bottom screen.\n"
+            "DllField = off\n"
+            "; Name keyboard needs touch.\n"
+            "DllStrInput = full\n"
             "; Any scene not listed.\n"
             "default = panel\n";
     }

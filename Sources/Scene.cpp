@@ -46,12 +46,25 @@ namespace OneScreen
         return name;
     }
 
-    std::string SceneModule(u32 sceneManager)
+    u32 CurrentSceneObject(void)
     {
-        u32 manager = 0, scene = 0, vtable = 0;
-        if (!Process::Read32(sceneManager, manager) || manager == 0
-            || !Process::Read32(manager, scene) || scene == 0
-            || !Process::Read32(scene, vtable))
+        const GameInfo *game = CurrentGame();
+        if (!game || game->scene.global == 0 || game->scene.count > 4)
+            return 0;
+        const ScenePath &path = game->scene;
+        u32 scene = 0;
+        if (!Process::Read32(path.global, scene) || scene == 0)
+            return 0;
+        for (u32 i = 0; i < path.count; ++i)
+            if (!Process::Read32(scene + path.offsets[i], scene) || scene == 0)
+                return 0;
+        return scene;
+    }
+
+    static std::string SceneObjectName(u32 scene)
+    {
+        u32 vtable = 0;
+        if (scene == 0 || !Process::Read32(scene, vtable))
             return "";
 
         // Some scenes (Party, Bag) are classes in the main image, not a CRO;
@@ -60,6 +73,20 @@ namespace OneScreen
             return Utils::Format("main:%08lX", vtable);
 
         return CroModuleName(CroModuleOf(vtable));
+    }
+
+    std::string CurrentScene(void)
+    {
+        return SceneObjectName(CurrentSceneObject());
+    }
+
+    std::string SceneModule(u32 sceneManager)
+    {
+        u32 manager = 0, scene = 0;
+        if (!Process::Read32(sceneManager, manager) || manager == 0
+            || !Process::Read32(manager, scene))
+            return "";
+        return SceneObjectName(scene);
     }
 
     // The FieldRo scene object holds a state object (vtable FieldRo +0xD735C)

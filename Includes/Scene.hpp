@@ -6,6 +6,11 @@
 
 namespace OneScreen
 {
+    // Follow the current game's scene path; 0 if absent, null or unreadable.
+    u32 CurrentSceneObject(void);
+    // Name the current scene using the same rules as SceneModule().
+    std::string CurrentScene(void);
+
     // Name of the CRO module that owns the current scene object, e.g.
     // "FieldRo" (overworld), "Zukan" (Pokédex), "TitleMenu". Scenes whose class
     // is in the main image come back as "main:<vtable>". Empty if there is no

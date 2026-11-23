@@ -9,6 +9,7 @@ The plugin is tied to exact addresses in one build of the game. `tools/sigscan.p
 | Title ID, title version | `Sources/Game.cpp` (`s_games`) | `tools/extract_code.py` (`info.json`) and the boot log |
 | GSP/HID/GX hook targets + prologues, GX state, scene manager | `Sources/Game.cpp` (`Offsets`) | `sigscan.py`, static analysis |
 | Image layout (rodata, data, page-rounded bss end), feature bits | `Sources/Game.cpp` (`GameInfo`) | exheader and verified engine support |
+| Scene path (global pointer and dereference offsets) | `Sources/Game.cpp` (`ScenePath`, `GameInfo::scene`) | static analysis and runtime scene/vtable checks |
 | USUM engine internals: globals, vtables, patch addresses, CRO offsets | `Includes/Usum.hpp` | static analysis and runtime checks documented in RE notes |
 | Party and Bag scene IDs (`main:<vtable>`) | `Includes/Settings.hpp`, `Sources/Settings.cpp`, `README.md`, `tests/settings_test.cpp` | static analysis, confirmed by the `scene:` log |
 
