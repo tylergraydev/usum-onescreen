@@ -2,13 +2,15 @@
 
 Usage: py -3 -I tools/instance.py COMMAND NAME [options]
 
-  create NAME [--force] [--game sun|moon]
+  create NAME [--force] [--game sun|moon|oruby]
                             make analysis/private/instances/NAME/ (default sun)
-  game NAME [sun|moon]       print or set the instance's game
+  game NAME [sun|moon|oruby] print or set the instance's game
   install NAME [3GX]        copy a built plugin in (default: ./usum-onescreen.3gx)
   start NAME [--rom PATH] [--wait SECONDS] [--movie CTM] [--no-plugin] [--no-queue]
                             launch the instance's game; --rom defaults to
-                            $USUM_SUN_ROM (Sun) or installed Moon base content; with --wait, wait for the plugin's
+                            $USUM_SUN_ROM (Sun), $USUM_ORUBY_ROM (Omega Ruby),
+                            or installed Moon base content. Omega Ruby requires
+                            --rom or USUM_ORUBY_ROM; with --wait, wait for the plugin's
                             boot log and print it; --movie plays an input movie
                             (tools/movie.py); --no-plugin turns the 3GX plugin
                             loader off for this run (each start sets it).
@@ -27,7 +29,7 @@ instance is a copy of the Azahar install with its own `user` folder: config,
 nand, sysdata and sdmc copied from %APPDATA%\\Azahar, holding only the Ultra
 Sun v1.2 update, a copy of its save and extdata, and the plugin. Nothing here
 writes to %APPDATA%\\Azahar.
-Install copies the plugin into both games' plugin folders. Install Ultra Moon into the instance (e.g. run azahar.exe -i from its azahar folder),
+Install copies the plugin into all three games' plugin folders. Install Ultra Moon into the instance (e.g. run azahar.exe -i from its azahar folder),
 then select it with game NAME moon and launch it with start NAME.
 """
 import argparse
@@ -49,8 +51,10 @@ AZAHAR_DIR = Path(r"C:\Program Files\Azahar")
 APPDATA = Path(os.environ["APPDATA"]) / "Azahar"
 # Your own decrypted Ultra Sun ROM (.cci/.3ds), used when start has no --rom.
 ROM = Path(os.environ["USUM_SUN_ROM"]) if os.environ.get("USUM_SUN_ROM") else None
+ORUBY_ROM = Path(os.environ["USUM_ORUBY_ROM"]) if os.environ.get("USUM_ORUBY_ROM") else None
 TITLE = "00040000001B5000"
 MOON_TITLE = "00040000001B5100"
+ORUBY_TITLE = "000400000011C400"
 SD_ID = Path("Nintendo 3DS") / ("0" * 32) / ("0" * 32)
 # Paths under the SD ID folder that Ultra Sun needs: the v1.2 update, the save, the extdata.
 SD_COPIES = [Path("title/0004000e/001b5000"), Path("title/00040000/001b5000"),
@@ -73,8 +77,8 @@ def game_of(name):
     """The instance's game; older instances default to sun."""
     path = instance_dir(name) / "game.txt"
     game = path.read_text().strip() if path.is_file() else "sun"
-    if game not in ("sun", "moon"):
-        sys.exit(f"bad game in {path}: expected sun or moon")
+    if game not in ("sun", "moon", "oruby"):
+        sys.exit(f"bad game in {path}: expected sun, moon or oruby")
     return game
 
 
@@ -161,7 +165,7 @@ def cmd_create(args):
         if not src.is_dir():
             sys.exit(f"missing {src}")
         shutil.copytree(src, sdmc_dir(args.name) / SD_ID / rel)
-    for title in (TITLE, MOON_TITLE):
+    for title in (TITLE, MOON_TITLE, ORUBY_TITLE):
         (sdmc_dir(args.name) / "luma" / "plugins" / title).mkdir(parents=True)
     (root / "game.txt").write_text(args.game + "\n")
     print(root)
@@ -181,7 +185,7 @@ def cmd_install(args):
         sys.exit(f"no plugin at {plugin} (run make first)")
     if not user_dir(args.name).is_dir():
         sys.exit(f"no instance '{args.name}' (run create first)")
-    for title in (TITLE, MOON_TITLE):
+    for title in (TITLE, MOON_TITLE, ORUBY_TITLE):
         dst = sdmc_dir(args.name) / "luma" / "plugins" / title / "usum-onescreen.3gx"
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(plugin, dst)
@@ -355,10 +359,12 @@ def cmd_start(args):
         sys.exit(f"no instance '{args.name}' (run create first)")
     if running_pid(args.name):
         sys.exit(f"instance '{args.name}' is already running")
-    rom = Path(args.rom) if args.rom is not None else ROM
-    if rom is None and game_of(args.name) != "moon":
-        sys.exit("no Ultra Sun ROM: pass --rom PATH or set USUM_SUN_ROM to your own decrypted dump")
-    if args.rom is None and game_of(args.name) == "moon":
+    game = game_of(args.name)
+    rom = Path(args.rom) if args.rom is not None else (ORUBY_ROM if game == "oruby" else ROM)
+    if rom is None and game != "moon":
+        title, env = ("Omega Ruby", "USUM_ORUBY_ROM") if game == "oruby" else ("Ultra Sun", "USUM_SUN_ROM")
+        sys.exit(f"no {title} ROM: pass --rom PATH or set {env} to your own decrypted dump")
+    if args.rom is None and game == "moon":
         rom = sdmc_dir(args.name) / SD_ID / "title/00040000/001b5100/content/00000000.app"
         if not rom.is_file():
             sys.exit(f"missing Ultra Moon base content at {rom}; install the Ultra Moon base CIA "
@@ -447,11 +453,11 @@ def main():
     p = sub.add_parser("create")
     p.add_argument("name")
     p.add_argument("--force", action="store_true")
-    p.add_argument("--game", choices=("sun", "moon"), default="sun")
+    p.add_argument("--game", choices=("sun", "moon", "oruby"), default="sun")
     p.set_defaults(func=cmd_create)
     p = sub.add_parser("game")
     p.add_argument("name")
-    p.add_argument("game", nargs="?", choices=("sun", "moon"))
+    p.add_argument("game", nargs="?", choices=("sun", "moon", "oruby"))
     p.set_defaults(func=cmd_game)
     p = sub.add_parser("install")
     p.add_argument("name")

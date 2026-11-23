@@ -1,4 +1,5 @@
 #include "Panel.hpp"
+#include "Game.hpp"
 #include "PhotoMode.hpp"
 
 #include <cstdlib>
@@ -796,12 +797,15 @@ namespace OneScreen
 
     static bool PanelCallback(const Screen &screen)
     {
-        if (PhotoModeActive()) return false;
+        const GameInfo *game = CurrentGame();
+        const bool usum = game && (game->features & FeatureUsumEngine)
+                          && (game->features & FeatureScenes) && game->offsets.sceneManager != 0;
+        if (usum && PhotoModeActive()) return false;
         bool drew = DrawPanel(screen);
         // Drawn after the panel so test menus sit on top, and before the
         // screenshot hook so shots include them.
         drew |= UiDemoOnScreen(screen);
-        drew |= BattleScreenOnScreen(screen);
+        if (usum) drew |= BattleScreenOnScreen(screen);
         drew |= UI::GpuQuadOnScreen(screen);   // always false: GPU only
         drew |= ShotOnScreen(screen);
         return drew;

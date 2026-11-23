@@ -127,6 +127,12 @@ namespace CTRPluginFramework
         for (const std::string &w : warnings)
             WriteLog(Utils::Format("settings: %s %s", SettingsPath + 1, w.c_str()), false);
         OneScreen::SetSettings(settings);
+        // Never reserve engine-only combos on a core-only game.
+        if (!UsumEnabled())
+        {
+            OneScreen::ButtonsSetCombo(0);
+            OneScreen::ButtonsSetSaveCombo(0);
+        }
         OneScreen::ButtonsSetPhotoCombo(UsumEnabled() ? settings.photoKey : 0);
         OneScreen::AutoPanelSetEnabled(ScenesEnabled() && settings.autoPanel);
         WriteLog("settings: " + OneScreen::DescribeSettings(settings), false);
@@ -1251,7 +1257,7 @@ namespace CTRPluginFramework
         }
 
         PluginMenu *menu = new PluginMenu("USUM One Screen", 0, 1, 1,
-                                          "Top-screen-only play for Ultra Sun / Ultra Moon.");
+                                          std::string("Top-screen-only play for ") + s_game->name + ".");
 
         menu->SynchronizeWithFrame(true);
         menu->OnOpening = OnMenuOpening;

@@ -1,6 +1,8 @@
 # Gen 6 (X/Y, Omega Ruby/Alpha Sapphire) support
 
-Status: static probe only (2026-11-22). Nothing in the plugin supports Gen 6 yet; `Sources/Game.cpp` still refuses these titles.
+Status: Omega Ruby base v0 is in the game table as panel-only support (bottom-screen panel, touch cursor, button injection and GPU quad). No scene manager or USUM engine features. Title version reported in Azahar: **0**. Other Gen 6 titles remain unsupported.
+
+Boot test (2026-11-23, Azahar, instance created with `instance.py create NAME --game oruby`, ROM passed with `--rom`): the log reads `Pokemon Omega Ruby 000400000011C400 v0 (0x0000)`, every hook `ok` (gspSetFramebuffer `already hooked`, as on USUM), `hooks: all ok`, and the gpuquad, cursor and buttons hooks install. On the language-select screen: `mode panel` draws the bottom screen in the top screen's corner with the cursor (readback ok, GPU scratch allocated); an injected Down moves the game's selection from English to Spanish; an injected touch is read by the game (`last seen 160,60 touching 1`; that screen has no touch target). Not checked yet: the overworld, battles, and the L+R / ZL keys with a real pad.
 
 ## Dumps on hand
 
@@ -23,7 +25,7 @@ Exheader name `sango-1`, code compressed.
 | data | `0x5EC000` | `0x439F4` |
 | bss | | `0x7EC2C` |
 
-`code.bin` size `0x530000`, SHA-256 `d587c98a…bc1a37`. Image end = `0x5EC000 + 0x439F4 + 0x7EC2C` = `0x6AE620` → `CroArea` would be `0x6AF000` (USUM: `0x6D6000`). These differ from USUM, so `CroArea`, `SnapStart`/`SnapEnd` and the vtscan rodata range have to move into the per-game table.
+`code.bin` size `0x530000`, SHA-256 `d587c98a…bc1a37`. Image end = `0x5EC000 + 0x439F4 + 0x7EC2C` = `0x6AE620` → `CroArea` would be `0x6AF000` (USUM: `0x6D6000`). These differ from USUM; CRO lookup, snapshot ranges and the vtscan rodata range now use the per-game image layout.
 
 ## sigscan with `signatures/usum.json`
 
@@ -43,8 +45,10 @@ GX calls (not in the signature file; found by USUM's prologue words):
 |---|---|---|
 | gxDisplayTransfer | `0x164D2C` | Unique match for `E92D43F0 E24DD024 E28D4040 E1811802`; one caller, thunk `bl` at `0x158438`. |
 | gxTextureCopy | `0x164A54` | First 15 words identical to USUM's `0x279E28` (GX command 4). The other prologue match, `0x164914`, is GX command 2, not TextureCopy. |
+| gxProcessList | `0x164988` | Unique match of USUM's prologue (`E92D43F0 E1A05000 E3A00000 E3520000`). Function body identical to USUM `0x279D5C` except BL offsets and one literal. |
+| gxState | `0x62AB70` | Five getters agree, matching USUM's getters for `0x69EA68`: `0x148820` ldr +`0x1C` / ldrsb +`0x75`; `0x164F64` ldr +`0x1C` (the gspGetManager called by gspSetFramebuffer); `0x125EB0` ldrsb +1; `0x1744A0` ldrsb +2; `0x148884` ldr +`0x0C`. |
 
-So every SDK-level address the panel and touch cursor need exists in Omega Ruby with the same code. **Not checked yet:** prologue words at runtime, and whether the hooks behave the same in game (no Omega Ruby boot has been tried).
+So every SDK-level address the panel and touch cursor need exists in Omega Ruby with the same code. The boot test above confirmed the prologues at runtime.
 
 ## Scene detection
 
@@ -53,6 +57,6 @@ Omega Ruby loads CRO modules: `code.bin` names 94 `rom:/Dll*.cro` files (`DllFie
 ## Next steps
 
 1. Pick the target builds (latest update per game) and get dumps of X, Y and Alpha Sapphire plus updates.
-2. Move every game-specific constant (the ~25 files with hardcoded addresses, `CroArea`, snap ranges) into the per-game table, with per-feature flags, so a Gen 6 entry can enable panel + cursor only.
-3. Add an Omega Ruby entry with the five addresses above and boot it in a test instance; check the hook log.
+2. Port additional game-specific constants only as their features gain Gen 6 support. Image layout and feature flags are already per-game; Omega Ruby enables only the core features.
+3. Play-check Omega Ruby in the overworld and a battle with the panel, and with a real pad (L+R, ZL).
 4. Find the Gen 6 scene manager for the auto panel.
