@@ -46,6 +46,9 @@ $(OUT)/image_test: image_test.cpp ../Sources/UI/Raster.cpp $(wildcard ../Include
 
 all: run
 
+# Shared engine constants are also consumed through host-only patch/data headers.
+$(TESTS): ../Includes/Usum.hpp
+
 $(OUT)/band_column_test: band_column_test.cpp ../Sources/UI/Layer.cpp ../Sources/UI/Raster.cpp $(wildcard ../Includes/UI/*.hpp) ../Includes/Settings.hpp
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) band_column_test.cpp ../Sources/UI/Layer.cpp ../Sources/UI/Raster.cpp $(SETTINGS_SRCS) -o $@

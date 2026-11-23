@@ -1,3 +1,4 @@
+#include "Usum.hpp"
 #include "Battle.hpp"
 
 #include <3ds.h>
@@ -16,11 +17,11 @@ namespace OneScreen
     // Battle CRO, USUM v1.2. Vtables are offsets from the module header so
     // they hold wherever the module loads. Found and checked as described in
     // docs/RE1-battle.md.
-    static const u32 VtView        = 0x10A528;  // view object at scene +0x94
-    static const u32 VtMenuCommand = 0x10B598;  // Fight / Pokémon / Bag / Run
-    static const u32 VtMenuTarget  = 0x10B848;  // SOS/Royal, research live verified
-    static const u32 VtMenuMoves   = 0x10B724;  // move list
-    static const u32 VtBusy        = 0x10B43C;  // under the menus: animations, messages
+    static const u32 VtView        = Usum::BattleView;  // view object at scene +0x94
+    static const u32 VtMenuCommand = Usum::BattleMenuCommand;  // Fight / Pokémon / Bag / Run
+    static const u32 VtMenuTarget  = Usum::BattleMenuTarget;  // SOS/Royal, research live verified
+    static const u32 VtMenuMoves   = Usum::BattleMenuMoves;  // move list
+    static const u32 VtBusy        = Usum::BattleBusy;  // under the menus: animations, messages
 
     static const u32 SceneView     = 0x94;      // scene -> view object
     static const u32 ViewPokeCon   = 0xD0;      // view -> poke container
@@ -40,14 +41,14 @@ namespace OneScreen
     static const u32 ListCount = 0xA8, ListFirst = 0xB0, ListStride = 0x18, ListCursor = 0x114;
 
     // Pokémon list: a main-image class; its parameter object holds the cursor.
-    static const u32 VtPokeList = 0x648394, VtPokeListParam = 0x647F9C;
+    static const u32 VtPokeList = Usum::VtBattlePokeList, VtPokeListParam = Usum::VtStaticWork;
     static const u32 PokeListParam = 0xA8, ParamCount = 0x28, ParamCursor = 0x52;
 
     // Bag: Bag CRO frame -> child frame (linked at frame +0x40, node at child
     // +4) -> main-image Bag view (vtable 0x6488C8) -> item list.
-    static const u32 VtBagFrame = 0x16E24, VtBagChild = 0x16EB0;
+    static const u32 VtBagFrame = Usum::BagFrame, VtBagChild = Usum::BagChild;
     static const u32 BagChildLink = 0x40, BagPocket = 0xD8, BagView = 0xCC, BagViewList = 0x88;
-    static const u32 VtBagView = 0x6488C8;
+    static const u32 VtBagView = Usum::VtBagScene;
     static const u32 ItemListCount = 0x10, ItemListCursor = 0x18;
     // Bag frame: u8 1 while the item list shows, 0 on an item's page (Use).
     static const u32 BagFrameListShown = 0x6E;
@@ -61,16 +62,16 @@ namespace OneScreen
     // Work object (vtable Bag+0x16FF0): +0x64 the party column (vtable
     // Bag+0x16D98, u8 cursor +0x1C6, as in the field Bag), +0x240 u8 the
     // item an item's page shows (index in the pocket).
-    static const u32 VtBagWork = 0x16FF0, VtBagParty = 0x16D98;
+    static const u32 VtBagWork = Usum::BagWork, VtBagParty = Usum::BagPartyList;
     static const u32 WorkParty = 0x64, PartyCursor = 0x1C6, WorkPageIndex = 0x240;
 
     // One Pokémon's page (Switch / Restore / Summary), after a tap on a slot
     // of the Pokémon list.
-    static const u32 VtPokemonPage = 0x10BCD0;
+    static const u32 VtPokemonPage = Usum::BattlePokemonPage;
     // The battle's two-choice question ("Use next Pokémon?", learning a
     // move): u32 cursor +0xA8, u32 entry count +0xB0. Its message: view
     // +0x230 -> +0x104 u16 message ID.
-    static const u32 VtQuestion = 0x10B3B0, QuestionCursor = 0xA8, QuestionCount = 0xB0;
+    static const u32 VtQuestion = Usum::BattleQuestion, QuestionCursor = 0xA8, QuestionCount = 0xB0;
     static const u32 ViewMessage = 0x230, MessageId = 0x104;
 
     // The busy object (always on the stack in battle) holds the battle's

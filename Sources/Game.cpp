@@ -1,6 +1,7 @@
 #include <string>
 
 #include "Game.hpp"
+#include "Usum.hpp"
 
 #include <CTRPluginFramework.hpp>
 
@@ -18,13 +19,21 @@ namespace OneScreen
         0x006A599C,
         { 0x0027A5BC, { 0xE92D43F0, 0xE24DD024, 0xE28D4040, 0xE1811802 } },
         { 0x00279E28, { 0xE92D43F0, 0xE24DD024, 0xE28D4040, 0xE89401E0 } },
+        { 0x279D5C, { 0xE92D43F0, 0xE1A05000, 0xE3A00000, 0xE3520000 } },
+        0x69EA68,
     };
+
+    static const ImageLayout s_usumLayout = { 0x5BC000, 0x669000, Usum::ImageEnd };
+    static const u32 s_usumFeatures = FeatureScenes | FeatureUsumEngine;
+    static const GameInfo *s_currentGame = nullptr;
+
+    const GameInfo *CurrentGame(void) { return s_currentGame; }
 
     static const GameInfo s_games[] =
     {
-        { "Pokemon Ultra Sun", 0x00040000001B5000ULL, 0x0820, true, s_usumV12 },
-        { "Pokemon Ultra Sun", 0x00040000001B5000ULL, 0x0800, true, s_usumV12 },
-        { "Pokemon Ultra Moon", 0x00040000001B5100ULL, 0x0820, true, s_usumV12 },
+        { "Pokemon Ultra Sun", 0x00040000001B5000ULL, 0x0820, true, s_usumV12, s_usumLayout, s_usumFeatures },
+        { "Pokemon Ultra Sun", 0x00040000001B5000ULL, 0x0800, true, s_usumV12, s_usumLayout, s_usumFeatures },
+        { "Pokemon Ultra Moon", 0x00040000001B5100ULL, 0x0820, true, s_usumV12, s_usumLayout, s_usumFeatures },
     };
 
     const GameInfo *DetectGame(void)
@@ -35,10 +44,10 @@ namespace OneScreen
         for (const GameInfo &game : s_games)
         {
             if (game.titleId == titleId && game.version == version)
-                return &game;
+                return s_currentGame = &game;
         }
 
-        return nullptr;
+        return s_currentGame = nullptr;
     }
 
     static bool VerifyTarget(const char *name, const HookTarget &target, std::string &report)
@@ -101,6 +110,7 @@ namespace OneScreen
         ok = VerifyTarget("hidPadRead", game.offsets.hidPadRead, report) && ok;
         ok = VerifyTarget("gxDisplayTransfer", game.offsets.gxDisplayTransfer, report) && ok;
         ok = VerifyTarget("gxTextureCopy", game.offsets.gxTextureCopy, report) && ok;
+        ok = VerifyTarget("gxProcessList", game.offsets.gxProcessList, report) && ok;
         return ok;
     }
 }

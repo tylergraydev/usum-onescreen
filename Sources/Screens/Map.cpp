@@ -1,3 +1,4 @@
+#include "Usum.hpp"
 #include "Screens/Map.hpp"
 
 #include <cstring>
@@ -28,13 +29,13 @@ namespace OneScreen
 
     // Current text language (0-9, 2 = English): picks the message GARC
     // a/0/3/<lang>. docs/RE2-text.md, docs/OFFSETS.md.
-    static const u32 LanguageByte = 0x671A10;
+    static const u32 LanguageByte = Usum::LanguageByte;
     // Place names: message file 72 of that GARC (docs/RE2-text.md, RE4-map.md).
     static const u32 PlaceNamesFile = 72;
 
     // Rotom map layout, USUM v1.2 (same pane vtables on Ultra Sun/Moon).
     // map view -> object -> layout -> nw::lyt layout -> RootPane -> first child All.
-    static const u32 VtMapView = 0x64786C, VtMapPane = 0x646B28;
+    static const u32 VtMapView = Usum::VtMapView, VtMapPane = Usum::VtMapPane;
     static const u32 MapViewObject = 0x20, ObjectLayout = 4;
     static const u32 LayoutNwLayout = 0x10, NwLayoutRoot = 0x10;
     static const u32 PaneFirstChild = 0x14, ChildNodeOffset = 4, PaneName = 0x80;

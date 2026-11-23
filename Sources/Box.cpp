@@ -1,3 +1,4 @@
+#include "Usum.hpp"
 #include "Box.hpp"
 
 #include <3ds.h>
@@ -12,13 +13,13 @@ namespace OneScreen
     using namespace CTRPluginFramework;
 
     // USUM v1.2. Found and checked as described in docs/RE6-boxes.md.
-    static const u32 GameManagerGlobal = 0x6A59C4;  // GameSys::GameManager*
+    static const u32 GameManagerGlobal = Usum::GameManagerGlobal;  // GameSys::GameManager*
     static const u32 ManagerGameData   = 0x24;      // -> GameSys::GameData
     static const u32 GameDataSaveData  = 0x04;      // -> Savedata::SaveData
-    static const u32 VtSaveData        = 0x64F4A0;
-    static const u32 VtBoxLayout       = 0x64F364;  // Savedata::BOX
-    static const u32 VtBoxPokemon      = 0x64F044;  // Savedata::BoxPokemon
-    static const u32 VtPokemonParam    = 0x649374;
+    static const u32 VtSaveData        = Usum::VtSaveData;
+    static const u32 VtBoxLayout       = Usum::VtBoxLayout;  // Savedata::BOX
+    static const u32 VtBoxPokemon      = Usum::VtBoxPokemon;  // Savedata::BoxPokemon
+    static const u32 VtPokemonParam    = Usum::VtPokemonParam;
     static const u32 ParamCore = 0x04, ParamCalc = 0x08;
 
     // App::Box::BoxLowBgDraw, one of the objects in the scene manager's

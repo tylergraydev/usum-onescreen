@@ -1,3 +1,4 @@
+#include "Usum.hpp"
 #include "Screens/SubScreens.hpp"
 
 #include <new>
@@ -90,13 +91,13 @@ namespace OneScreen
         return v;
     }
 
-    static const u32 GameManagerGlobal = 0x6A59C4;  // GameManager*; +0x24 GameData, +0x04 SaveData
-    static const u32 VtSaveData   = 0x64F4A0;
-    static const u32 VtConfigSave = 0x64F064;       // Savedata::ConfigSave (RTTI)
-    static const u32 VtMyStatus   = 0x64F460;       // Savedata::MyStatus (RTTI)
-    static const u32 VtMisc       = 0x64F384;       // Savedata::Misc (RTTI)
-    static const u32 VtPlayTime   = 0x64F480;       // play time (hours u16 +4, minutes u8 +6)
-    static const u32 VtMsgData    = 0x64B104;       // gfl2::str::MsgData
+    static const u32 GameManagerGlobal = Usum::GameManagerGlobal;  // GameManager*; +0x24 GameData, +0x04 SaveData
+    static const u32 VtSaveData   = Usum::VtSaveData;
+    static const u32 VtConfigSave = Usum::VtConfigSave;       // Savedata::ConfigSave (RTTI)
+    static const u32 VtMyStatus   = Usum::VtMyStatus;       // Savedata::MyStatus (RTTI)
+    static const u32 VtMisc       = Usum::VtMisc;       // Savedata::Misc (RTTI)
+    static const u32 VtPlayTime   = Usum::VtPlayTime;       // play time (hours u16 +4, minutes u8 +6)
+    static const u32 VtMsgData    = Usum::VtMsgData;       // gfl2::str::MsgData
     static const u32 SaveDataConfig = 0x3B30;
     static const u32 PassportLines = 52;            // the passport's message file
 

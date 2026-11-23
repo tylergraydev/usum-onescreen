@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Usum.hpp"
+
 #include "Settings.hpp"
 #include <array>
 #include <cstddef>
@@ -9,7 +11,7 @@ namespace OneScreen
 {
     namespace FastTextPatches
     {
-        constexpr uint32_t TextAddress = 0x5D605C;
+        constexpr uint32_t TextAddress = Usum::TextAddress;
         constexpr std::array<uint32_t, 24> TextStock = {
             1,0,0,0, 1,1,2,255, 2,1,0,0, 1,1,1,255, 2,2,4,255, 2,2,2,255
         };
@@ -18,7 +20,7 @@ namespace OneScreen
             255,255,255,255, 255,255,255,255, 255,255,255,255
         };
         constexpr std::array<uint32_t, 5> BattleOffsets = {
-            0x6358C, 0x63508, 0x9BF28, 0x2A27C, 0x2A2D0
+            Usum::BattleMessageWait, Usum::BattleMessageWaitAlt, Usum::BattleMessageCompare, Usum::BattleHpStep, Usum::BattleExpStep
         };
         constexpr std::array<uint32_t, 5> BattleStock = {
             0xE3A02018, 0xE3A02018, 0xE3500018, 0xB2800001, 0xE2800002

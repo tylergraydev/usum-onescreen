@@ -1,3 +1,4 @@
+#include "Usum.hpp"
 #include "Screens/XMenu.hpp"
 
 #include <CTRPluginFramework.hpp>
@@ -207,15 +208,15 @@ namespace OneScreen
     static XMenuGameLayout ReadLayout(void)
     {
         XMenuGameLayout layout;
-        if (!Readable(0x6A59C4, 4))
+        if (!Readable(Usum::GameManagerGlobal, 4))
             return layout;
-        const u32 manager = Read32(0x6A59C4);
+        const u32 manager = Read32(Usum::GameManagerGlobal);
         const u32 data = Readable(manager + 0x24, 4) ? Read32(manager + 0x24) : 0;
         const u32 save = Readable(data + 4, 4) ? Read32(data + 4) : 0;
-        if (!Readable(save, 0x3AE0 + 0x34) || Read32(save) != 0x64F4A0)
+        if (!Readable(save, 0x3AE0 + 0x34) || Read32(save) != Usum::VtSaveData)
             return layout;
         const u32 menu = save + 0x3AE0;
-        if (Read32(menu) != 0x64F510)
+        if (Read32(menu) != Usum::VtMenuSave)
             return layout;
         for (int i = 0; i < 12; i++)
             if (!Process::Read8(menu + 0x0C + i, layout.ids[i]))

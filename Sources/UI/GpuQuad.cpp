@@ -1,6 +1,8 @@
 // The command list walker runs on every game list (~70k words a frame): -O2.
 #pragma GCC optimize("O2")
 
+#include "Game.hpp"
+
 #include "UI/GpuQuad.hpp"
 
 #include <3ds.h>
@@ -31,11 +33,9 @@ namespace UI
     // push a FlushCacheRegions first, flags). Only caller: nngx's request
     // runner at 0x5614F4. Same address and prologue on Ultra Moon.
     using ProcessListFn = void (*)(u32 list, u32 size, u32 flush, u32 flags);
-    static constexpr u32 ProcessListAddress = 0x279D5C;
-    static constexpr u32 ProcessListPrologue[3] = { 0xE92D43F0, 0xE1A05000, 0xE3A00000 };
 
     static DisplayTransferFn s_displayTransfer = nullptr;
-    static ProcessListFn s_processList = (ProcessListFn)ProcessListAddress;
+    static ProcessListFn s_processList = nullptr;
     static Hook s_hook;
     static bool s_hooked = false;
 
@@ -888,7 +888,8 @@ namespace UI
 
     static bool QueueRoom(void)
     {
-        const u32 gx = *(volatile u32 *)(0x69EA68 + 0x1C);
+        if (!CurrentGame() || !CurrentGame()->offsets.gxState) return false;
+        const u32 gx = *(volatile u32 *)(CurrentGame()->offsets.gxState + 0x1C);
         if (gx == 0)
             return false;
         const u32 queue = *(volatile u32 *)(gx + 0x58);
@@ -1099,6 +1100,9 @@ namespace UI
 
     std::string StartGpuQuad(u32 displayTransfer)
     {
+        if (!CurrentGame() || !CurrentGame()->offsets.gxProcessList.address || !displayTransfer)
+            return "gpuquad: missing hook target, skipped";
+        s_processList = (ProcessListFn)CurrentGame()->offsets.gxProcessList.address;
         s_displayTransfer = (DisplayTransferFn)displayTransfer;
         RecursiveLock_Init(&s_lock);
         std::memcpy(s_shbin, GpuQuadShbin, sizeof(GpuQuadShbin));
@@ -1131,12 +1135,12 @@ namespace UI
         s_track[GPUREG_VSH_CODETRANSFER_CONFIG] = s_track[GPUREG_VSH_OPDESCS_CONFIG] = 1;
         for (u32 k = 0; k < 8; k++)
             s_track[GPUREG_VSH_CODETRANSFER_DATA + k] = s_track[GPUREG_VSH_OPDESCS_DATA + k] = 2;
-        const u32 *code = (const u32 *)ProcessListAddress;
+        const u32 *code = (const u32 *)CurrentGame()->offsets.gxProcessList.address;
         for (int i = 0; i < 3; i++)
-            if (code[i] != ProcessListPrologue[i])
+            if (code[i] != CurrentGame()->offsets.gxProcessList.prologue[i])
                 return Utils::Format("gpuquad: ProcessCommandList prologue mismatch at %08lX (%08lX), not hooked",
-                                     ProcessListAddress + i * 4, code[i]);
-        s_hook.InitializeForMitm(ProcessListAddress, (u32)ProcessListHook);
+                                     CurrentGame()->offsets.gxProcessList.address + i * 4, code[i]);
+        s_hook.InitializeForMitm(CurrentGame()->offsets.gxProcessList.address, (u32)ProcessListHook);
         const HookResult result = s_hook.Enable();
         s_hooked = result == HookResult::Success;
         s_dtHook.InitializeForMitm(displayTransfer, (u32)DisplayTransferHook);
@@ -1147,7 +1151,7 @@ namespace UI
         if (s_on.load()) s_why = "backend ready; awaiting published quads";
         Layer::s_hiRes = HiResBackend{ HiResReady, SetupLayer, PresentLayer, HideGpuQuad, Generation, LayerBands, LayerValid };
         return Utils::Format("gpuquad: ProcessCommandList hook at %08lX -> %d, following %lu registers; DisplayTransfer hook at %08lX -> %d",
-                             ProcessListAddress, (int)result, tracked, displayTransfer, (int)dtResult);
+                             CurrentGame()->offsets.gxProcessList.address, (int)result, tracked, displayTransfer, (int)dtResult);
     }
 
     static std::string Status(void)

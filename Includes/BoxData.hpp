@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Usum.hpp"
+
 // PC boxes (docs/RE6-boxes.md): where the box data sits in the save data,
 // what the open Box screen's cursor indices and states mean, and decoding of
 // box names. Pure functions and constants with no CTRPF dependency, so tests/
@@ -21,8 +23,8 @@ namespace OneScreen
     // Savedata::BOX (box names, team names, wallpapers, unlocked count) and
     // Savedata::BoxPokemon (32 x 30 PK7 cores of 0xE8 bytes, stored format)
     // live inside Savedata::SaveData; offsets from the SaveData object.
-    static const u32 SaveDataBoxLayout = 0x3B98;   // vtable 0x64F364 (N8Savedata3BOXE)
-    static const u32 SaveDataBoxPokemon = 0x4184;  // vtable 0x64F044 (N8Savedata10BoxPokemonE)
+    static const u32 SaveDataBoxLayout = Usum::SaveDataBoxLayout;   // vtable 0x64F364 (N8Savedata3BOXE)
+    static const u32 SaveDataBoxPokemon = Usum::SaveDataBoxPokemon;  // vtable 0x64F044 (N8Savedata10BoxPokemonE)
     // Inside Savedata::BOX (offsets from its object, data starts at +4).
     static const u32 BoxLayoutNames = 0x004;       // 32 x 0x22 bytes
     static const u32 BoxLayoutUnlocked = 0x5E5;    // u8: boxes the player can use
@@ -55,10 +57,10 @@ namespace OneScreen
         Modal,      // BoxLowBgFrame::DInnerNoneListener: the slot menu or a message is up
         Carrying,   // BoxNormalState::DInnerPokeMoveListener: a Pokémon is held
     };
-    static const u32 BoxCroLowBgDraw   = 0x2F4D8;  // App::Box::BoxLowBgDraw vtable
-    static const u32 BoxCroIdle        = 0x2F6F0;
-    static const u32 BoxCroModal       = 0x2F6B0;
-    static const u32 BoxCroCarrying    = 0x2FA80;
+    static const u32 BoxCroLowBgDraw   = Usum::BoxCroLowBgDraw;  // App::Box::BoxLowBgDraw vtable
+    static const u32 BoxCroIdle        = Usum::BoxCroIdle;
+    static const u32 BoxCroModal       = Usum::BoxCroModal;
+    static const u32 BoxCroCarrying    = Usum::BoxCroCarrying;
     BoxMode BoxModeFromListener(u32 listenerVtableOffset);
     const char *BoxModeName(BoxMode mode);
 

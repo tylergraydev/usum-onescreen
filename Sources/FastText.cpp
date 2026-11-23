@@ -1,6 +1,7 @@
 #include "FastText.hpp"
 #include "FastTextPatches.hpp"
 #include "Scene.hpp"
+#include "Game.hpp"
 
 #include <3ds.h>
 #include <CTRPluginFramework.hpp>
@@ -83,7 +84,7 @@ namespace OneScreen
         Process::Read32(sceneManager, manager);
         if (manager) Process::Read32(manager, scene);
         if (scene) Process::Read32(scene, vtable);
-        if (scene != s_scene || vtable != s_vtable || (vtable >= 0x6D6000 && (!s_module || !s_moduleNamed)))
+        if (scene != s_scene || vtable != s_vtable || (vtable >= CurrentGame()->layout.imageEnd && (!s_module || !s_moduleNamed)))
         {
             const u32 module = vtable ? CroModuleOf(vtable) : 0;
             // Remember non-Battle modules too, so discovery isn't repeated each frame.

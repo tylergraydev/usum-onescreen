@@ -1,3 +1,4 @@
+#include "Usum.hpp"
 #include "Screens/RidePager.hpp"
 
 #ifdef __3DS__
@@ -58,10 +59,10 @@ namespace OneScreen
             if (!readable(object, 0x18))
                 continue;
             const u32 vt = read(object), module = CroModuleOf(vt);
-            if (!module || vt != module + 0x18420 || CroModuleName(module) != "FieldMenu")
+            if (!module || vt != module + Usum::RidePagerFrame || CroModuleName(module) != "FieldMenu")
                 continue;
             const u32 list = read(object + 0x14);
-            if (!readable(list, 0x65) || read(list) != module + 0x1848C)
+            if (!readable(list, 0x65) || read(list) != module + Usum::RidePagerList)
                 continue;
             s.object = list;
             s.count = read(list + 0x54);

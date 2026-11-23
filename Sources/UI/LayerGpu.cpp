@@ -1,3 +1,4 @@
+#include "Game.hpp"
 #include "UI/LayerGpu.hpp"
 
 #include <3ds.h>
@@ -51,13 +52,13 @@ namespace UI
     // refused command of the game's own could break it. In Azahar the queue
     // was always empty before our pushes (it runs each one at once), so this
     // is a safety net, not a fix for anything seen. Same address on Ultra Moon.
-    static constexpr u32 GxState = 0x69EA68;
     static constexpr u32 QueueRoom = 12;        // wait while this many are queued
     static u32 s_maxDepth = 0, s_waits = 0, s_gaveUp = 0;
 
     static volatile u8 *QueueCount(void)
     {
-        const u32 gx = *(volatile u32 *)(GxState + 0x1C);
+        if (!CurrentGame() || !CurrentGame()->offsets.gxState) return nullptr;
+        const u32 gx = *(volatile u32 *)(CurrentGame()->offsets.gxState + 0x1C);
         if (gx == 0)
             return nullptr;
         const u32 queue = *(volatile u32 *)(gx + 0x58);

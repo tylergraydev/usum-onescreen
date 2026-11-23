@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Usum.hpp"
+
 #include <cstdint>
 #include <string>
 
@@ -7,14 +9,14 @@ namespace OneScreen
 {
     namespace BattleWidescreen
     {
-        constexpr uint32_t PerspectiveOffset = 0x736D0;
-        constexpr uint32_t DivideOffset = 0x73774;
-        constexpr uint32_t UnloadAddress = 0x17376C;
+        constexpr uint32_t PerspectiveOffset = Usum::BattlePerspective;
+        constexpr uint32_t DivideOffset = Usum::BattleDivide;
+        constexpr uint32_t UnloadAddress = Usum::UnloadAddress;
         constexpr uint32_t UnloadWords[] = {
             0xE92D4070, 0xEE1D4F70, 0xE59F502C, 0xE3A0C000,
             0xE5A45080, 0xE2846004, 0xE5840014, 0xE59F001C,
             0xE886100E, 0xE5900000, 0xEF000032, 0xE2001102,
-            0xE3510000, 0xA5940004, 0xE8BD8070, 0x000500C2, 0x0069EB28
+            0xE3510000, 0xA5940004, 0xE8BD8070, 0x000500C2, Usum::UnloadState
         };
 
         template<class Read>
@@ -30,7 +32,7 @@ namespace OneScreen
 
         inline bool Address(uint32_t base, uint32_t &address)
         {
-            if (base < 0x6D6000 || (base & 0xFFF) || base > UINT32_MAX - DivideOffset - 4)
+            if (base < Usum::ImageEnd || (base & 0xFFF) || base > UINT32_MAX - DivideOffset - 4)
                 return false;
             address = base + PerspectiveOffset;
             return true;

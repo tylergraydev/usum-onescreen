@@ -1,4 +1,6 @@
+#include "Usum.hpp"
 #include "Scene.hpp"
+#include "Game.hpp"
 
 #include <CTRPluginFramework.hpp>
 
@@ -9,15 +11,14 @@ namespace OneScreen
     // A loaded CRO has "FIXD" at +0x80 (the loader replaces "CRO0") and an
     // absolute pointer to its name at +0x84.
     static const u32 CroMagicFixed = 0x44584946;   // "FIXD"
-    static const u32 CroArea       = 0x006D6000;   // modules load above the main image's bss
 
     u32 CroModuleOf(u32 address)
     {
-        if (address < CroArea)
+        if (address < CurrentGame()->layout.imageEnd)
             return 0;
         // Modules are page aligned; walk back to the header of the one that
         // contains the address (no module seen so far is larger than 2 MB).
-        for (u32 page = address & ~0xFFFu; page >= CroArea && address - page < 0x200000; page -= 0x1000)
+        for (u32 page = address & ~0xFFFu; page >= CurrentGame()->layout.imageEnd && address - page < 0x200000; page -= 0x1000)
         {
             u32 magic = 0;
             if (Process::Read32(page + 0x80, magic) && magic == CroMagicFixed)
@@ -55,7 +56,7 @@ namespace OneScreen
 
         // Some scenes (Party, Bag) are classes in the main image, not a CRO;
         // name those by their vtable address.
-        if (vtable < CroArea)
+        if (vtable < CurrentGame()->layout.imageEnd)
             return Utils::Format("main:%08lX", vtable);
 
         return CroModuleName(CroModuleOf(vtable));
@@ -65,7 +66,7 @@ namespace OneScreen
     // whose word at +4 is the field state. Where it sits depends on the map
     // (+0x618 in the Route 2 Pokemon Center, +0x3DC on Route 2), so it is
     // found by its vtable in the scene object's first FieldStateSearch bytes.
-    static const u32 FieldStateVtable = 0xD735C;
+    static const u32 FieldStateVtable = Usum::FieldStateVtable;
     static const u32 FieldStateSearch = 0x800;
     static const u32 FieldStateRetry = 15;
 
@@ -81,7 +82,7 @@ namespace OneScreen
         u32 manager = 0, scene = 0, vtable = 0;
         if (!Process::Read32(sceneManager, manager) || manager == 0
             || !Process::Read32(manager, scene) || scene == 0
-            || !Process::Read32(scene, vtable) || vtable < CroArea)
+            || !Process::Read32(scene, vtable) || vtable < CurrentGame()->layout.imageEnd)
             return -1;
         if (vtable != s_vtable)
         {

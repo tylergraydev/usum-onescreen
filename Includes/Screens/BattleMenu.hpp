@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Usum.hpp"
+
 // Native battle menu (P2-1, W7-1): the top-screen version of the game's
 // battle command menu, move list, Pokémon list, Bag and questions. This
 // header is the pure part, with no CTRPF dependency, so tests/ can build it
@@ -193,7 +195,7 @@ namespace Screens
     const u32 BattleBagKeys = BattleMenuKeys | BattleKeys::L | BattleKeys::R;
 
     // SOS/Royal target screen and taps verified in trainer-double.md.
-    static const u32 TargetVtable = 0x10B848;
+    static const u32 TargetVtable = Usum::BattleMenuTarget;
     static const u8 TargetCount = 4;
     const char *TargetButton(u8 slot);
     const char *TargetLabel(u8 slot);

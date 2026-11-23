@@ -1,3 +1,4 @@
+#include "Usum.hpp"
 #include "Party.hpp"
 
 #include <cstring>
@@ -13,32 +14,32 @@ namespace OneScreen
 
     // USUM v1.2, main image. Found and checked as described in
     // docs/RE3-party-bag.md.
-    static const u32 GameManagerGlobal = 0x6A59C4;  // GameSys::GameManager*
+    static const u32 GameManagerGlobal = Usum::GameManagerGlobal;  // GameSys::GameManager*
     static const u32 ManagerGameData   = 0x24;      // -> GameSys::GameData
     static const u32 GameDataSaveData  = 0x04;      // -> Savedata::SaveData
     static const u32 GameDataParty     = 0x0C;      // -> pml::PokeParty (player)
-    static const u32 VtSaveData        = 0x64F4A0;
-    static const u32 VtMyItem          = 0x64F3C4;
-    static const u32 VtPokemonParam    = 0x649374;
+    static const u32 VtSaveData        = Usum::VtSaveData;
+    static const u32 VtMyItem          = Usum::VtMyItem;
+    static const u32 VtPokemonParam    = Usum::VtPokemonParam;
 
     // Party screen (scene vtable 0x647FCC): App::PokeList::StaticWork at
     // scene +0xA8 (vtable 0x647F9C; also the battle Pokémon list's param,
     // docs/RE1-battle.md). +8 -> {pml::PokeParty*, ...}; display order u8[6]
     // at +0x53.
-    static const u32 VtPartyScene = 0x647FCC, VtStaticWork = 0x647F9C;
+    static const u32 VtPartyScene = Usum::VtPartyScene, VtStaticWork = Usum::VtStaticWork;
     static const u32 SceneStaticWork = 0xA8, StaticWorkPartyRef = 0x08, StaticWorkOrder = 0x53;
     static const u32 StaticWorkCursor = 0x52;   // u8 screen position (docs/OFFSETS.md)
 
     // Bag scene (vtable 0x6488C8, field Bag and the Party screen's Restore):
     // +0x88 -> its item list. Found by diffing heap dumps at three cursor
     // positions (docs/OFFSETS.md).
-    static const u32 VtBagScene = 0x6488C8, BagSceneList = 0x88;
+    static const u32 VtBagScene = Usum::VtBagScene, BagSceneList = 0x88;
     static const u32 ListCount = 0x0C, ListRows = 0x14, ListRow = 0x18, ListScroll = 0x1C;
 
     // Move teaching (WazaOshie CRO object on the scene stack, as in battle,
     // docs/MOVE-LEARN.md): +0xB0 -> param {u8 +1, u16 new move +8}, +0xB5
     // u8 1 while one move's page is up.
-    static const u32 VtWaza = 0x76D0, WazaParam = 0xB0, WazaPage = 0xB5;
+    static const u32 VtWaza = Usum::WazaView, WazaParam = 0xB0, WazaPage = 0xB5;
     static const u32 WazaPokeId = 0x01, WazaMove = 0x08, ManagerSlots = 8;
     static const u16 MoveCount = 729;
 
@@ -57,9 +58,9 @@ namespace OneScreen
     static const u16 PocketCapacity[(int)Pocket::Count] = {60, 427, 108, 67, 198, 35, 11};
 
     // Resident message files (docs/RE2-text.md).
-    static const u32 SpeciesMsgGlobal = 0x671088;   // MsgData* (file 60)
-    static const u32 MsgCacheTable = 0x6A7368;      // 8 x {.., +8 u16 dat, +0xC MsgData*}
-    static const u32 VtMsgData = 0x64B104;
+    static const u32 SpeciesMsgGlobal = Usum::SpeciesMsgGlobal;   // MsgData* (file 60)
+    static const u32 MsgCacheTable = Usum::MsgCacheTable;      // 8 x {.., +8 u16 dat, +0xC MsgData*}
+    static const u32 VtMsgData = Usum::VtMsgData;
     static const u32 SpeciesDat = 60, ItemDat = 42;
 
     static u8 Read8(u32 address)

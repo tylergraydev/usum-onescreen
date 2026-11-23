@@ -1,3 +1,4 @@
+#include "Usum.hpp"
 #include "Screens/RotomPrompt.hpp"
 
 #include <cstring>
@@ -25,9 +26,9 @@ namespace OneScreen
     // USUM v1.2. Found and checked as described in docs/ROTOM-FIELD.md.
     // Rotom's applet: a FieldMenu CRO object on the scene manager's stack.
     static const u32 ManagerSlots = 8;
-    static const u32 VtRotomApplet = 0x18284;       // FieldMenu-relative
-    static const u32 RotomTable = 0x164DC;          // FieldMenu-relative: chat table, 0x9A x 16 bytes
-    static const u32 PowerTable = 0x1645C;          // FieldMenu-relative: Roto Loto powers, 11 x 8 bytes
+    static const u32 VtRotomApplet = Usum::RotomApplet;       // FieldMenu-relative
+    static const u32 RotomTable = Usum::RotomTable;          // FieldMenu-relative: chat table, 0x9A x 16 bytes
+    static const u32 PowerTable = Usum::PowerTable;          // FieldMenu-relative: Roto Loto powers, 11 x 8 bytes
     static const u32 PowerEntries = 11, PowerEntryBytes = 8, PowerDescription = 4;
     static const u16 FirstQuestion = 961;           // entry 0's question, checked once per module
     static const u32 AppletMyStatus = 0xA0;         // Savedata::MyStatus
@@ -38,9 +39,9 @@ namespace OneScreen
     static const u32 AppletLoto = 0x100;            // u8 Roto Loto state
     static const u32 AppletPower = 0x104;           // Roto Loto power table entry
     static const u32 ReadyAnimation = 0x5C;
-    static const u32 VtMyStatus = 0x64F460;
+    static const u32 VtMyStatus = Usum::VtMyStatus;
     static const u32 MyStatusName = 0x40;           // 13 UTF-16 units
-    static const u32 VtMsgData = 0x64B104;
+    static const u32 VtMsgData = Usum::VtMsgData;
     static const u32 RotomLines = 1488;
     // Roto Loto's lines in file 89 (docs/ROTOM-FIELD.md).
     static const u16 LotoIntroLine = 1470, LotoResultLine = 1469;

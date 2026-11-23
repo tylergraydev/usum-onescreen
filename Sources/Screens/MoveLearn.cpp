@@ -1,3 +1,4 @@
+#include "Usum.hpp"
 #include "Screens/MoveLearn.hpp"
 
 #include <3ds.h>
@@ -24,12 +25,12 @@ namespace OneScreen
     // The question: a two-entry list object of the Battle CRO on top of the
     // scene stack; the message it answers sits in the battle view's message
     // work (view +0x230 -> +0x100: u32 ?, u16 message, u16 ?, u32 args...).
-    static const u32 VtAsk = 0x10B3B0;          // Battle CRO
+    static const u32 VtAsk = Usum::BattleQuestion;          // Battle CRO
     static const u32 AskCount = 0xB0;           // u32, 2
     static const u32 ViewMessage = 0x230, MessageParam = 0x100;
     static const u16 MessageForget = 0x2F;      // "Should an old move be forgotten and replaced with X?"
     // The forget screen: WazaOshie CRO object, somewhere on the stack.
-    static const u32 VtWaza = 0x76D0;           // WazaOshie CRO
+    static const u32 VtWaza = Usum::WazaView;           // WazaOshie CRO
     static const u32 WazaParam = 0xB0;          // -> u8 party index +1, u16 new move +8
     static const u32 WazaPage = 0xB5;           // u8 1 while a move's page (Forget / Give up) is up
     static const u32 ParamPokeId = 0x01, ParamMove = 0x08;
