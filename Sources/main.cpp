@@ -1230,6 +1230,7 @@ namespace CTRPluginFramework
             OneScreen::StartThemeScreen();
             OneScreen::StartSidePanels();
         }
+        OneScreen::PanelSetUsumEngine(UsumEnabled());
         OneScreen::StartPanel(OneScreen::PanelMode::Off, s_game->offsets.gxDisplayTransfer.address,
                               s_game->offsets.gxTextureCopy.address);
         if (UsumEnabled()) OneScreen::StartActions();
