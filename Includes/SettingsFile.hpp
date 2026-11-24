@@ -28,6 +28,11 @@ namespace OneScreen
     std::string SetIniValue(const std::string &text, const std::string &section,
                             const std::string &key, const std::string &value);
 
+    // Comma-separated debug names, case-insensitive; unknown tokens warn and are ignored.
+    uint64_t ParseDebugDisabled(const std::string &value, std::vector<std::string> &warnings,
+                                const std::string &where);
+    std::string DescribeDebugDisabled(uint64_t mask);
+
     // [battle] layout values: classic, bar, rail (case-insensitive, '-', '_'
     // and spaces ignored). Invalid input leaves `out` unchanged.
     bool ParseBattleLayout(const std::string &value, BattleLayout &out);

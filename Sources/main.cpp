@@ -81,7 +81,7 @@ namespace CTRPluginFramework
     // Reads /usum-onescreen.ini (writing the commented default if it is
     // missing) and makes it the settings in use. Problems go to the log; a
     // file that can't be read leaves the defaults.
-    static void LoadSettings(void)
+    static void LoadSettings(bool boot = false)
     {
         std::string text;
         if (File::Exists(SettingsPath) != 1)
@@ -116,12 +116,19 @@ namespace CTRPluginFramework
         for (const std::string &w : warnings)
             WriteLog(Utils::Format("settings: %s %s", SettingsPath + 1, w.c_str()), false);
         OneScreen::SetSettings(settings);
+        if (boot)
+        {
+            OneScreen::SetDebugDisabled(settings.debugDisabled);
+            if (settings.debugDisabled)
+                WriteLog("debug: disabled " + OneScreen::DescribeDebugDisabled(settings.debugDisabled), false);
+        }
         OneScreen::ButtonsSetPhotoCombo(settings.photoKey);
         OneScreen::AutoPanelSetEnabled(settings.autoPanel);
         WriteLog("settings: " + OneScreen::DescribeSettings(settings), false);
         WriteLog(OneScreen::SetWidescreenAspect(settings.aspect), false);
         OneScreen::BattleScreenSetLayout(settings.battleLayout);
-        WriteLog(OneScreen::ApplyFastTextSettings(s_game->offsets.sceneManager), false);
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Fasttext))
+            WriteLog(OneScreen::ApplyFastTextSettings(s_game->offsets.sceneManager), false);
     }
 
     // Sets `key = value` in [section] of /usum-onescreen.ini (SetIniValue:
@@ -215,7 +222,8 @@ namespace CTRPluginFramework
         auto settings = OneScreen::GetSettings();
         settings.instantText = enabled;
         OneScreen::SetSettings(settings);
-        WriteLog(OneScreen::ApplyFastTextSettings(s_game->offsets.sceneManager), false);
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Fasttext))
+            WriteLog(OneScreen::ApplyFastTextSettings(s_game->offsets.sceneManager), false);
         SaveSpeedSetting("instant_text", enabled ? "on" : "off");
     }
 
@@ -224,7 +232,8 @@ namespace CTRPluginFramework
         auto settings = OneScreen::GetSettings();
         settings.battleMessages = settings.battleBars = speed;
         OneScreen::SetSettings(settings);
-        WriteLog(OneScreen::ApplyFastTextSettings(s_game->offsets.sceneManager), false);
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Fasttext))
+            WriteLog(OneScreen::ApplyFastTextSettings(s_game->offsets.sceneManager), false);
         WriteLog(std::string("battle speed: ") + OneScreen::BattleSpeedName(speed), false);
         SaveSpeedSetting("battle_messages", OneScreen::BattleSpeedName(speed));
         SaveSpeedSetting("battle_bars", OneScreen::BattleSpeedName(speed));
@@ -841,52 +850,71 @@ namespace CTRPluginFramework
         static u32 frames = 0;
         static std::string scene;
 
-        if (!OnPluginStack())
+        if (!OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Framecallback) || !OnPluginStack())
             return;
 
-        if (OneScreen::PhotoModeUpdate(s_game->offsets.sceneManager, PollCommands))
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Photomode)
+            && OneScreen::PhotoModeUpdate(s_game->offsets.sceneManager, PollCommands))
             return; // Do not replay the exit chord into other plugin controls.
 
         const u32 panelKey = OneScreen::GetSettings().panelKey;
-        if (!OneScreen::QuickSaveRunning() && panelKey != 0 && Controller::IsKeysPressed(panelKey))
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Panel) && !OneScreen::QuickSaveRunning() && panelKey != 0 && Controller::IsKeysPressed(panelKey))
         {
             OneScreen::CyclePanelMode();
             OneScreen::AutoPanelManualOverride();
             WriteLog(OneScreen::PanelStatus(), false);
         }
 
-        OneScreen::CursorUpdate();
-        OneScreen::ButtonsUpdate();
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Cursor))
+            OneScreen::CursorUpdate();
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Buttons))
+            OneScreen::ButtonsUpdate();
 
-        const std::string speedLog = OneScreen::FastTextFrame(s_game->offsets.sceneManager);
-        if (!speedLog.empty())
-            WriteLog(speedLog, false);
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Fasttext))
+        {
+            const std::string speedLog = OneScreen::FastTextFrame(s_game->offsets.sceneManager);
+            if (!speedLog.empty())
+                WriteLog(speedLog, false);
+        }
 
-        const std::string battleWideLog = OneScreen::BattleWidescreenFrame(s_game->offsets.sceneManager);
-        if (!battleWideLog.empty())
-            WriteLog(battleWideLog, false);
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Battlewidescreen))
+        {
+            const std::string battleWideLog = OneScreen::BattleWidescreenFrame(s_game->offsets.sceneManager);
+            if (!battleWideLog.empty())
+                WriteLog(battleWideLog, false);
+        }
 
-        const std::string cullLog = OneScreen::WidescreenFrame();
-        if (!cullLog.empty())
-            WriteLog(cullLog, false);
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Widescreen))
+        {
+            const std::string cullLog = OneScreen::WidescreenFrame();
+            if (!cullLog.empty())
+                WriteLog(cullLog, false);
+        }
 
-        std::vector<std::string> actionLog;
-        OneScreen::ActionsUpdate(s_game->offsets.sceneManager, actionLog);
-        for (const std::string &line : actionLog)
-            WriteLog(line, false);
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Actions))
+        {
+            std::vector<std::string> actionLog;
+            OneScreen::ActionsUpdate(s_game->offsets.sceneManager, actionLog);
+            for (const std::string &line : actionLog)
+                WriteLog(line, false);
+        }
 
-        std::vector<std::string> saveLog;
-        OneScreen::QuickSaveUpdate(s_game->offsets.sceneManager, saveLog);
-        for (const std::string &line : saveLog) WriteLog(line, false);
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Quicksave))
+        {
+            std::vector<std::string> saveLog;
+            OneScreen::QuickSaveUpdate(s_game->offsets.sceneManager, saveLog);
+            for (const std::string &line : saveLog) WriteLog(line, false);
+        }
 
-        if (++frames == 300)
+        ++frames;
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Status) && frames == 300)
         {
             WriteLog(OneScreen::PanelStatus(), false);
             WriteLog(OneScreen::CursorStatus(), false);
         }
 
         // Scene changes are checked four times a second.
-        if (frames % 15 == 0)
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Scene) && frames % 15 == 0)
         {
             const std::string now = OneScreen::SceneModule(s_game->offsets.sceneManager);
             if (now != scene)
@@ -906,78 +934,125 @@ namespace CTRPluginFramework
             }
         }
 
-        std::vector<std::string> battleLog;
-        OneScreen::BattleScreenUpdate(s_game->offsets.sceneManager, scene, battleLog);
-        for (const std::string &line : battleLog)
-            WriteLog(line, false);
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Battlescreen))
+        {
+            std::vector<std::string> battleLog;
+            OneScreen::BattleScreenUpdate(s_game->offsets.sceneManager, scene, battleLog);
+            for (const std::string &line : battleLog)
+                WriteLog(line, false);
+        }
 
-        const int fieldState = scene == "FieldRo" ? OneScreen::FieldState(s_game->offsets.sceneManager) : -1;
-        if (OneScreen::AutoPanelUpdate(scene, OneScreen::ButtonsGameHeld(), fieldState))
+        const int fieldState = OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Fieldstate) && scene == "FieldRo" ? OneScreen::FieldState(s_game->offsets.sceneManager) : -1;
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Panel)
+            && OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Autopanel)
+            && OneScreen::AutoPanelUpdate(scene, OneScreen::ButtonsGameHeld(), fieldState))
             WriteLog(OneScreen::AutoPanelStatus() + " -> " + OneScreen::PanelStatus(), false);
 
-        std::vector<std::string> xmenuLog;
-        OneScreen::XMenuUpdate(s_game->offsets.sceneManager, scene, fieldState, xmenuLog);
-        for (const std::string &line : xmenuLog)
-            WriteLog(line, false);
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Xmenu))
+        {
+            std::vector<std::string> xmenuLog;
+            OneScreen::XMenuUpdate(s_game->offsets.sceneManager, scene, fieldState, xmenuLog);
+            for (const std::string &line : xmenuLog)
+                WriteLog(line, false);
+        }
 
-        std::vector<std::string> keyboardLog;
-        OneScreen::KeyboardUpdate(s_game->offsets.sceneManager, keyboardLog);
-        for (const std::string &line : keyboardLog)
-            WriteLog(line, false);
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Keyboard))
+        {
+            std::vector<std::string> keyboardLog;
+            OneScreen::KeyboardUpdate(s_game->offsets.sceneManager, keyboardLog);
+            for (const std::string &line : keyboardLog)
+                WriteLog(line, false);
+        }
 
-        std::vector<std::string> dexLog;
-        OneScreen::PokedexUpdate(s_game->offsets.sceneManager, scene, dexLog);
-        for (const std::string &line : dexLog)
-            WriteLog(line, false);
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Pokedex))
+        {
+            std::vector<std::string> dexLog;
+            OneScreen::PokedexUpdate(s_game->offsets.sceneManager, scene, dexLog);
+            for (const std::string &line : dexLog)
+                WriteLog(line, false);
+        }
 
-        std::vector<std::string> screensLog;
-        OneScreen::SubScreensUpdate(s_game->offsets.sceneManager, scene, screensLog);
-        for (const std::string &line : screensLog)
-            WriteLog(line, false);
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Subscreens))
+        {
+            std::vector<std::string> screensLog;
+            OneScreen::SubScreensUpdate(s_game->offsets.sceneManager, scene, screensLog);
+            for (const std::string &line : screensLog)
+                WriteLog(line, false);
+        }
 
-        std::vector<std::string> bagLog;
-        OneScreen::BagUpdate(s_game->offsets.sceneManager, scene, bagLog);
-        for (const std::string &line : bagLog)
-            WriteLog(line, false);
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Bag))
+        {
+            std::vector<std::string> bagLog;
+            OneScreen::BagUpdate(s_game->offsets.sceneManager, scene, bagLog);
+            for (const std::string &line : bagLog)
+                WriteLog(line, false);
+        }
 
-        std::vector<std::string> mapLog;
-        OneScreen::MapUpdate(s_game->offsets.sceneManager, scene, fieldState, mapLog);
-        for (const std::string &line : mapLog)
-            WriteLog(line, false);
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Map))
+        {
+            std::vector<std::string> mapLog;
+            OneScreen::MapUpdate(s_game->offsets.sceneManager, scene, fieldState, mapLog);
+            for (const std::string &line : mapLog)
+                WriteLog(line, false);
+        }
 
-        std::vector<std::string> rotomLog;
-        OneScreen::RotomPromptUpdate(s_game->offsets.sceneManager, scene, fieldState, rotomLog);
-        for (const std::string &line : rotomLog)
-            WriteLog(line, false);
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Rotom))
+        {
+            std::vector<std::string> rotomLog;
+            OneScreen::RotomPromptUpdate(s_game->offsets.sceneManager, scene, fieldState, rotomLog);
+            for (const std::string &line : rotomLog)
+                WriteLog(line, false);
+        }
 
-        std::vector<std::string> partyLog;
-        OneScreen::PartyScreenUpdate(s_game->offsets.sceneManager, scene, partyLog);
-        for (const std::string &line : partyLog)
-            WriteLog(line, false);
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Party))
+        {
+            std::vector<std::string> partyLog;
+            OneScreen::PartyScreenUpdate(s_game->offsets.sceneManager, scene, partyLog);
+            for (const std::string &line : partyLog)
+                WriteLog(line, false);
+        }
 
-        std::vector<std::string> boxesLog;
-        OneScreen::BoxesUpdate(s_game->offsets.sceneManager, scene, boxesLog);
-        for (const std::string &line : boxesLog)
-            WriteLog(line, false);
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Boxes))
+        {
+            std::vector<std::string> boxesLog;
+            OneScreen::BoxesUpdate(s_game->offsets.sceneManager, scene, boxesLog);
+            for (const std::string &line : boxesLog)
+                WriteLog(line, false);
+        }
 
-        std::vector<std::string> pcLog;
-        OneScreen::PcAnywhereUpdate(s_game->offsets.sceneManager, scene, pcLog);
-        for (const std::string &line : pcLog)
-            WriteLog(line, false);
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Pcanywhere))
+        {
+            std::vector<std::string> pcLog;
+            OneScreen::PcAnywhereUpdate(s_game->offsets.sceneManager, scene, pcLog);
+            for (const std::string &line : pcLog)
+                WriteLog(line, false);
+        }
 
-        std::vector<std::string> assetsLog;
-        OneScreen::UI::AssetsUpdate(scene, assetsLog);
-        for (const std::string &line : assetsLog)
-            WriteLog(line, false);
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Assets))
+        {
+            std::vector<std::string> assetsLog;
+            OneScreen::UI::AssetsUpdate(scene, assetsLog);
+            for (const std::string &line : assetsLog)
+                WriteLog(line, false);
+        }
 
-        std::vector<std::string> themeLog;
-        OneScreen::ThemeScreenUpdate(s_game->offsets.sceneManager, themeLog);
-        for (const std::string &line : themeLog)
-            WriteLog(line, false);
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Theme))
+        {
+            std::vector<std::string> themeLog;
+            OneScreen::ThemeScreenUpdate(s_game->offsets.sceneManager, themeLog);
+            for (const std::string &line : themeLog)
+                WriteLog(line, false);
+        }
 
-        OneScreen::SidePanelsUpdate(s_game->offsets.sceneManager);
-        OneScreen::ShotPoll();
-        PollCommands();
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Sidepanels))
+        {
+            OneScreen::SidePanelsUpdate(s_game->offsets.sceneManager);
+        }
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Panel)
+            && OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Shot))
+            OneScreen::ShotPoll();
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Commands))
+            PollCommands();
     }
 
     // Menu entries below are actions: A in the plugin menu (opened with
@@ -1008,7 +1083,7 @@ namespace CTRPluginFramework
     {
         if (!OneScreen::PhotoModeCanOpenMenu()) return false;
         const u32 photoKey = OneScreen::GetSettings().photoKey;
-        if (photoKey != 0 && (Controller::GetKeysDown() & photoKey) == photoKey)
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Photomode) && photoKey != 0 && (Controller::GetKeysDown() & photoKey) == photoKey)
         {
             OneScreen::PhotoModeRequest(true);
             return false; // photo_key may include CTRPF's default Select hotkey
@@ -1101,7 +1176,8 @@ namespace CTRPluginFramework
                                          "Shows the bottom screen on the top screen. The panel combo cycles: off, small panel, full view. "
                                          "Cursor controls and keys are set in usum-onescreen.ini.");
         menu += panel;
-        panel->Enable();
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Framecallback))
+            panel->Enable();
 
         s_autoEntry = new MenuEntry("Auto panel", nullptr, ToggleAutoPanel,
                                     "Switch between following the scene and staying as set. "
@@ -1164,47 +1240,73 @@ namespace CTRPluginFramework
             return 0;
         }
 
-        LoadSettings();
+        LoadSettings(true);
 
-        OneScreen::BattleScreenSetEnabled(true);
+        OneScreen::BattleScreenSetEnabled(OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Battlescreen));
         // Before the panel: its callback takes the screenshots, so it must
         // run after the native menus have drawn.
-        OneScreen::StartXMenu();
-        OneScreen::StartKeyboard();
-        OneScreen::StartPokedex();
-        OneScreen::StartSubScreens();
-        OneScreen::StartBag();
-        OneScreen::StartMap();
-        OneScreen::StartRotomPrompt();
-        OneScreen::StartPartyScreen();
-        OneScreen::StartBoxes();
-        OneScreen::StartThemeScreen();
-        OneScreen::StartSidePanels();
-        OneScreen::StartPanel(OneScreen::PanelMode::Off, s_game->offsets.gxDisplayTransfer.address,
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Xmenu))
+            OneScreen::StartXMenu();
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Keyboard))
+            OneScreen::StartKeyboard();
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Pokedex))
+            OneScreen::StartPokedex();
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Subscreens))
+            OneScreen::StartSubScreens();
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Bag))
+            OneScreen::StartBag();
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Map))
+            OneScreen::StartMap();
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Rotom))
+            OneScreen::StartRotomPrompt();
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Party))
+            OneScreen::StartPartyScreen();
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Boxes))
+            OneScreen::StartBoxes();
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Theme))
+            OneScreen::StartThemeScreen();
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Sidepanels))
+            OneScreen::StartSidePanels();
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Panel))
+            OneScreen::StartPanel(OneScreen::PanelMode::Off, s_game->offsets.gxDisplayTransfer.address,
                               s_game->offsets.gxTextureCopy.address);
-        OneScreen::StartActions();
-        WriteLog(OneScreen::UI::StartGpuQuad(s_game->offsets.gxDisplayTransfer.address), false);
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Actions))
+            OneScreen::StartActions();
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Gpuquad))
+            WriteLog(OneScreen::UI::StartGpuQuad(s_game->offsets.gxDisplayTransfer.address), false);
 
-        std::string cursorReport;
-        OneScreen::StartCursor(s_game->offsets.hidTouchRead.address, cursorReport);
-        WriteLog(cursorReport, false);
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Cursor))
+        {
+            std::string cursorReport;
+            OneScreen::StartCursor(s_game->offsets.hidTouchRead.address, cursorReport);
+            WriteLog(cursorReport, false);
+        }
 
-        std::string buttonsReport;
-        OneScreen::StartButtons(s_game->offsets.hidPadRead.address, buttonsReport);
-        WriteLog(buttonsReport, false);
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Buttons))
+        {
+            std::string buttonsReport;
+            OneScreen::StartButtons(s_game->offsets.hidPadRead.address, buttonsReport);
+            WriteLog(buttonsReport, false);
+        }
 
-        std::string pcReport;
-        OneScreen::StartPcAnywhere(pcReport);
-        WriteLog(pcReport, false);
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Pcanywhere))
+        {
+            std::string pcReport;
+            OneScreen::StartPcAnywhere(pcReport);
+            WriteLog(pcReport, false);
+        }
 
-        std::string widescreenReport;
-        OneScreen::StartWidescreen(widescreenReport);
-        WriteLog(widescreenReport, false);
+        if (OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Widescreen))
+        {
+            std::string widescreenReport;
+            OneScreen::StartWidescreen(widescreenReport);
+            WriteLog(widescreenReport, false);
+        }
 
         PluginMenu *menu = new PluginMenu("USUM One Screen", 0, 1, 1,
                                           "Top-screen-only play for Ultra Sun / Ultra Moon.");
 
-        menu->SynchronizeWithFrame(true);
+        menu->SynchronizeWithFrame(OneScreen::DebugEnabled(OneScreen::DebugSubsystem::Framesync));
         menu->OnOpening = OnMenuOpening;
 
         InitMenu(*menu);

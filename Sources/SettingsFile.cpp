@@ -203,6 +203,60 @@ namespace OneScreen
         return out;
     }
 
+    static const char *DebugNames[] = {
+        "xmenu", "keyboard", "pokedex", "subscreens", "bag", "map", "rotom",
+        "party", "boxes", "theme", "battlescreen", "panel", "actions", "cursor",
+        "buttons", "pcanywhere", "widescreen", "autopanel", "scene", "commands", "framesync",
+        "fasttext", "assets", "shot", "uidemo", "fieldstate", "status", "framecallback",
+        "battlewidescreen", "quicksave", "photomode", "sidepanels", "gpuquad"
+    };
+    static_assert(sizeof(DebugNames) / sizeof(DebugNames[0]) == (unsigned)DebugSubsystem::Count,
+                  "debug names must match DebugSubsystem");
+    static_assert((unsigned)DebugSubsystem::Count < 64, "debug mask must fit uint64_t");
+
+    uint64_t ParseDebugDisabled(const std::string &value, std::vector<std::string> &warnings,
+                                const std::string &where)
+    {
+        uint64_t mask = 0;
+        size_t start = 0;
+        while (start <= value.size())
+        {
+            size_t end = value.find(',', start);
+            if (end == std::string::npos) end = value.size();
+            const std::string name = Lower(Trim(value.substr(start, end - start)));
+            if (name == "all")
+                mask |= (1ull << (unsigned)DebugSubsystem::Count) - 1;
+            else if (!name.empty())
+            {
+                bool known = false;
+                for (unsigned i = 0; i < (unsigned)DebugSubsystem::Count; ++i)
+                    if (name == DebugNames[i])
+                    {
+                        mask |= 1ull << i;
+                        known = true;
+                        break;
+                    }
+                if (!known)
+                    warnings.push_back(where + "unknown debug subsystem '" + name + "', ignored");
+            }
+            if (end == value.size()) break;
+            start = end + 1;
+        }
+        return mask;
+    }
+
+    std::string DescribeDebugDisabled(uint64_t mask)
+    {
+        std::string out;
+        for (unsigned i = 0; i < (unsigned)DebugSubsystem::Count; ++i)
+            if (mask & (1ull << i))
+            {
+                if (!out.empty()) out += ',';
+                out += DebugNames[i];
+            }
+        return out;
+    }
+
     static std::string Squash(const std::string &s)
     {
         std::string out;

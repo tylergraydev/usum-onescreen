@@ -9,6 +9,15 @@
 namespace OneScreen
 {
     static Settings s_current;
+    static uint64_t s_debugDisabled = 0;
+
+    void SetDebugDisabled(uint64_t mask) { s_debugDisabled = mask; }
+
+    bool DebugEnabled(DebugSubsystem subsystem)
+    {
+        return (s_debugDisabled & (1ull << (unsigned)subsystem)) == 0;
+    }
+
     static std::atomic<ScreenFilter> s_filter{ScreenFilter::Off};
 
     struct KeyName
@@ -425,7 +434,7 @@ namespace OneScreen
                 }
                 section = Lower(Trim(line.substr(1, line.size() - 2)));
                 sectionKnown = section == "controls" || section == "panel" || section == "scenes" || section == "display"
-                           || section == "battle" || section == "speed";
+                           || section == "battle" || section == "speed" || section == "debug";
                 if (!sectionKnown)
                     warnings.push_back(where + "unknown section [" + section + "], its keys are ignored");
                 continue;
@@ -439,6 +448,11 @@ namespace OneScreen
             }
             const std::string key = Trim(line.substr(0, eq));
             const std::string value = Trim(line.substr(eq + 1));
+            if (section == "debug" && Lower(key) == "disable")
+            {
+                s.debugDisabled = ParseDebugDisabled(value, warnings, where);
+                continue;
+            }
             if (key.empty() || (value.empty() && Lower(key) != "glyphs"))
             {
                 warnings.push_back(where + "empty key or value");
@@ -446,6 +460,12 @@ namespace OneScreen
             }
             if (!sectionKnown)
                 continue;
+
+            if (section == "debug")
+            {
+                warnings.push_back(where + "unknown key '" + key + "'");
+                continue;
+            }
 
             if (section == "scenes")
             {
@@ -472,6 +492,17 @@ namespace OneScreen
             "; USUM One Screen settings. Read once at boot; the plugin menu can reload it.\n"
             "; Delete this file to get the defaults back. Lines starting with ; or # are comments.\n"
             "; Problems with this file are listed in usum-onescreen.log.\n"
+            "\n"
+            "[debug]\n"
+            "; Perf bisect only: comma-separated subsystems not to start. Default empty.\n"
+            "; Boot only (reload does not change switches); all disables every name below.\n"
+            "; xmenu, keyboard, pokedex, subscreens, bag, map, rotom.\n"
+            "; party, boxes, theme, battlescreen, panel, actions, cursor.\n"
+            "; buttons, pcanywhere, widescreen, autopanel, scene, commands, framesync.\n"
+            "; fasttext, assets, shot, uidemo, fieldstate, status, framecallback.\n"
+            "; battlewidescreen, quicksave, photomode, sidepanels, gpuquad.\n"
+            "; framesync/all freeze the game at boot; not useful for bisecting.\n"
+            "disable =\n"
             "\n"
             "[display]\n"
             "; Experimental 3D camera aspect: 0/off (original), 16:9, 21:9 or a positive float.\n"
