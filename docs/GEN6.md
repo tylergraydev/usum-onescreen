@@ -4,7 +4,9 @@ Status: Omega Ruby base v0 is in the game table as panel-only support (bottom-sc
 
 Boot test (2026-11-23, Azahar, instance created with `instance.py create NAME --game oruby`, ROM passed with `--rom`): the log reads `Pokemon Omega Ruby 000400000011C400 v0 (0x0000)`, every hook `ok` (gspSetFramebuffer `already hooked`, as on USUM), `hooks: all ok`, and the gpuquad, cursor and buttons hooks install. On the language-select screen: `mode panel` draws the bottom screen in the top screen's corner with the cursor (readback ok, GPU scratch allocated); an injected Down moves the game's selection from English to Spanish; an injected touch is read by the game (`last seen 160,60 touching 1`; that screen has no touch target).
 
-Play-check (2026-11-23, new game, nothing saved): the intro runs with injected A presses; the name keyboard on the bottom screen takes injected taps (Delete, letters and Enter all register on the key under the cursor). In the overworld (moving-truck room, PokéNav Plus AreaNav on the bottom screen): `mode panel` and `mode full` both draw the bottom screen correctly; a tap on the PokéNav's second app opens the Trainer Card; B closes it; `stick 150 0` walks the player out of the truck into Littleroot Town. The panel log showed `readback ok 0/1` right after switching mode and `8/9` later, so the first readback after a mode switch failed but later ones succeeded; not looked into. Not checked yet: battles, and the L+R / ZL keys with a real pad.
+Play-check (2026-11-23, new game, nothing saved): the intro runs with injected A presses; the name keyboard on the bottom screen takes injected taps (Delete, letters and Enter all register on the key under the cursor). In the overworld (moving-truck room, PokéNav Plus AreaNav on the bottom screen): `mode panel` and `mode full` both draw the bottom screen correctly; a tap on the PokéNav's second app opens the Trainer Card; B closes it; `stick 150 0` walks the player out of the truck into Littleroot Town. The panel log showed `readback ok 0/1` right after switching mode and `8/9` later, so the first readback after a mode switch failed but later ones succeeded; not looked into. Not checked yet: the L+R / ZL keys with a real pad.
+
+First battle (2026-11-24, from the save, auto on): the story from Littleroot (Mom, the clock, the neighbour's house, May) to Route 101 played with injected A presses and circle-pad walking. Scenes: `DllPoke3Select` (starter choice, panel) → `DllBattle` (panel) → `DllField` (off) → `DllStrInput` (nickname, full) → `DllField`. In the battle (Torchic Lv. 5 vs Poochyena Lv. 3) the panel showed the bottom-screen battle menu; FIGHT and Ember were tapped through the touch cursor and the battle was won in three turns by touch alone. The nickname keyboard took 13 Delete taps and Enter.
 
 ## Dumps on hand
 
@@ -111,11 +113,13 @@ Not checked: dialogue and shops, the PokéNav's other apps, and whether it is al
 
 Now wired: `fieldMenuFlag` in the game table supplies the address, AutoPanel reads it on non-USUM games, and `DllField.xmenu = panel` is the default; the reviewer will boot-test it.
 
-The `oruby1` test instance now has an in-game save (made 2026-11-23 in the moving truck, at 0:54 play time), so later tests can Continue instead of replaying the intro. `tools/startpoint.py` waits for `FieldRo` after loading, so it doesn't support Omega Ruby start points yet.
+With the flag wired in (2026-11-24, from the save, auto on): X turns the panel on (`auto: …, menu open`), B and the menu's ✕ turn it off, and a Bag round trip (`DllBag` panel → back to the open menu, panel) works. **Flicker:** once, while the field was loading after Continue, the flag read 1 for about two frames (log: panel on at top frame 1995, off at 1996). USUM needed `FieldSettle` for the same kind of blip; Omega Ruby may need a short hold too.
+
+The `oruby1` test instance has an in-game save, last made 2026-11-24 in Birch's lab (1:34 play time) with Torchic in the party, so later tests can Continue instead of replaying the intro. `tools/startpoint.py` waits for `FieldRo` after loading, so it doesn't support Omega Ruby start points yet.
 
 ## Next steps
 
 1. Pick the target builds (latest update per game) and get dumps of X, Y and Alpha Sapphire plus updates.
 2. Port additional game-specific constants only as their features gain Gen 6 support. Image layout and feature flags are already per-game; Omega Ruby enables only the core features.
-3. Play-check Omega Ruby in the overworld and a battle with the panel, and with a real pad (L+R, ZL).
-4. Reviewer: boot-test the wired X menu flag `0x66F9CC` with the auto panel (`DllField.xmenu = panel`); see "Gap: the X menu". Consider `DllSangoIntro = off` (its bottom screen is black). Add defaults for more `Dll…` scenes as they are met (battle, Bag, boxes).
+3. Check L+R and ZL with a real pad on Omega Ruby.
+4. Hold the X menu flag for a few frames before the auto panel acts on it (the load-time flicker above). Consider `DllSangoIntro = off` (its bottom screen is black). Add defaults for more `Dll…` scenes as they are met (boxes, summary).
