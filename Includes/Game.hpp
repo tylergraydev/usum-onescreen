@@ -82,6 +82,9 @@ namespace OneScreen
         ImageLayout layout;
         ScenePath   scene;
         u32         features;
+        // Address of a u32 nonzero while the field menu is open; 0 = none.
+        // Found by global-data diff; see docs/GEN6.md.
+        u32         fieldMenuFlag;
     };
 
     // Returns the entry for the running game, or nullptr if it isn't a supported

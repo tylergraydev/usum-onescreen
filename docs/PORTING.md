@@ -7,6 +7,7 @@ The plugin is tied to exact addresses in one build of the game. `tools/sigscan.p
 | What | Where | Found by |
 |---|---|---|
 | Title ID, title version | `Sources/Game.cpp` (`s_games`) | `tools/extract_code.py` (`info.json`) and the boot log |
+| `fieldMenuFlag` (field menu open u32 address; 0 = none) | `Sources/Game.cpp` (`GameInfo` table) | Global-data diff and runtime open/closed checks; see `docs/GEN6.md` |
 | GSP/HID/GX hook targets + prologues, GX state, scene manager | `Sources/Game.cpp` (`Offsets`) | `sigscan.py`, static analysis |
 | Image layout (rodata, data, page-rounded bss end), feature bits | `Sources/Game.cpp` (`GameInfo`) | exheader and verified engine support |
 | Scene path (global pointer and dereference offsets) | `Sources/Game.cpp` (`ScenePath`, `GameInfo::scene`) | static analysis and runtime scene/vtable checks |

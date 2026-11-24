@@ -22,7 +22,7 @@ namespace OneScreen
     static bool s_nativeBattle = false;
     static bool s_afterBattle = false;  // in the Pokédex straight after a battle (a catch)
     static bool s_override = false;
-    static bool s_menuOpen = false;     // X menu, an overlay inside FieldRo
+    static bool s_menuOpen = false;     // X menu overlay in the current game
     static int s_fieldState = -1;       // last FieldState() that worked, -1 if none yet
     static FieldSettle s_settle;        // the field state must hold before it counts
     static int s_unread = 0;            // frames in a row the field state couldn't be read
@@ -91,11 +91,19 @@ namespace OneScreen
                 s_menuOpen = false;
         }
 
+        if (!usum)
+        {
+            const GameInfo *game = CurrentGame();
+            u32 flag = 0;
+            s_menuOpen = game && game->fieldMenuFlag != 0
+                         && Process::Read32(game->fieldMenuFlag, flag) && flag != 0;
+        }
+
         if (!s_enabled || s_override || s_scene.empty() || waiting)
             return false;
 
         const PanelMode want = usum && s_nativeBattle && (s_scene == SceneBattle || s_afterBattle)
-                               ? PanelMode::Off : (PanelMode)ModeForScene(GetSettings(), s_scene, usum && s_menuOpen);
+                               ? PanelMode::Off : (PanelMode)ModeForScene(GetSettings(), s_scene, s_menuOpen);
         if (want == GetPanelMode())
             return false;
         SetPanelMode(want);
@@ -126,9 +134,13 @@ namespace OneScreen
     std::string AutoPanelStatus(void)
     {
         if (!HasUsumEngine())
-            return Utils::Format("auto: %s, scene %s%s",
+        {
+            const GameInfo *game = CurrentGame();
+            return Utils::Format("auto: %s, scene %s%s%s",
                                  s_enabled ? "on" : "off", s_scene.empty() ? "(none)" : s_scene.c_str(),
+                                 game && game->fieldMenuFlag != 0 && s_menuOpen ? ", menu open" : "",
                                  s_override ? ", manual override" : "");
+        }
         const std::string source = s_fieldState >= 0 ? Utils::Format("field state %d", s_fieldState) : "keys";
         return Utils::Format("auto: %s, scene %s, x menu %s (%s)%s%s",
                              s_enabled ? "on" : "off", s_scene.empty() ? "(none)" : s_scene.c_str(),

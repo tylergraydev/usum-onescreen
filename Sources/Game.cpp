@@ -48,10 +48,10 @@ namespace OneScreen
 
     static const GameInfo s_games[] =
     {
-        { "Pokemon Ultra Sun", 0x00040000001B5000ULL, 0x0820, true, s_usumV12, s_usumLayout, s_usumScene, s_usumFeatures },
-        { "Pokemon Ultra Sun", 0x00040000001B5000ULL, 0x0800, true, s_usumV12, s_usumLayout, s_usumScene, s_usumFeatures },
-        { "Pokemon Ultra Moon", 0x00040000001B5100ULL, 0x0820, true, s_usumV12, s_usumLayout, s_usumScene, s_usumFeatures },
-        { "Pokemon Omega Ruby", 0x000400000011C400ULL, 0x0000, true, s_orubyV0, s_orubyLayout, s_orubyScene, FeatureScenes },
+        { "Pokemon Ultra Sun", 0x00040000001B5000ULL, 0x0820, true, s_usumV12, s_usumLayout, s_usumScene, s_usumFeatures, 0 },
+        { "Pokemon Ultra Sun", 0x00040000001B5000ULL, 0x0800, true, s_usumV12, s_usumLayout, s_usumScene, s_usumFeatures, 0 },
+        { "Pokemon Ultra Moon", 0x00040000001B5100ULL, 0x0820, true, s_usumV12, s_usumLayout, s_usumScene, s_usumFeatures, 0 },
+        { "Pokemon Omega Ruby", 0x000400000011C400ULL, 0x0000, true, s_orubyV0, s_orubyLayout, s_orubyScene, FeatureScenes, 0x66F9CC },
     };
 
     const GameInfo *DetectGame(void)

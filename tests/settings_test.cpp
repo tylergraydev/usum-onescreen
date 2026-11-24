@@ -88,7 +88,7 @@ static void TestMappedSceneDefaults(void)
     CHECK(ModeForScene(s, "box", true) == SceneMode::Full);
     CHECK(ModeForScene(s, "DllTitle", false) == SceneMode::Off);
     CHECK(ModeForScene(s, "DllField", false) == SceneMode::Off);
-    CHECK(ModeForScene(s, "DllField", true) == SceneMode::Off);
+    CHECK(ModeForScene(s, "DllField", true) == SceneMode::Panel);
     CHECK(ModeForScene(s, "DllStrInput", false) == SceneMode::Full);
     CHECK(ModeForScene(s, "DllTrainerCase", false) == SceneMode::Panel);
     CHECK(s.scenes.back().first == "default");
@@ -209,10 +209,15 @@ static void TestSceneOverrides(void)
 
 static void TestXMenuOnlyInField(void)
 {
-    // xmenuOpen only matters in FieldRo: the flag survives other scenes
-    // (AutoPanel keeps it while Bag/Party are open).
+    // Only scenes with an .xmenu entry use the overlay mode. The USUM flag
+    // survives Bag/Party, and the Omega Ruby flag can also be set in DllBag.
     std::vector<std::string> warnings;
-    const Settings s = Parse("[scenes]\nFieldRo.xmenu = full\n", warnings);
+    const Settings s = Parse("[scenes]\nFieldRo.xmenu = full\nDLLFIELD.XMENU = panel\n", warnings);
+    CHECK(warnings.empty());
+    CHECK(ModeForScene(s, "DllField", true) == SceneMode::Panel);
+    CHECK(ModeForScene(s, "DllField", false) == SceneMode::Off);
+    CHECK(ModeForScene(s, "dllfield", true) == SceneMode::Panel);
+    CHECK(ModeForScene(s, "DllBag", true) == SceneMode::Panel);
     CHECK(ModeForScene(s, "main:006488C8", true) == SceneMode::Panel);
     CHECK(ModeForScene(s, "FieldRo", true) == SceneMode::Full);
 }

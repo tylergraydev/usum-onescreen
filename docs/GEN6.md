@@ -84,11 +84,38 @@ Boot test (2026-11-23, new game, `auto on`, nothing saved). Scene log and the mo
 
 The USUM X-menu handling did not run (the `auto:` status line has no X-menu or field-state text on this game). On Ultra Sun with the same build, `native-map` passes, and `xmenu-touch-close` passes (2 of 4 runs; the 2 failures were a random Rotom chat on the bottom screen catching the tap meant for the map). The previous build passed 3 of 3. The `scene:` sequence in the plugin log (TitleMenu, FieldRo, TownMap, FieldRo, Party `main:00647FCC`, FieldRo) is identical on both builds.
 
-**Gap: the X menu.** X in the overworld opens the menu on the **bottom screen** (Bag, the trainer's name, Save, Options), but the scene stays `DllField`, so the auto panel keeps the panel off and the menu can't be seen on the top screen until the player presses L+R. USUM solved the same case (`FieldRo.xmenu`) with a field-state word read from the field scene. Omega Ruby needs its own signal: a field state in `DllField`'s scene object, or a "menu open" flag found by diffing the scene object with the menu open and closed.
+**Gap: the X menu.** X in the overworld opens the menu on the **bottom screen** (Bag, the trainer's name, Save, Options), but the scene stays `DllField`, so the auto panel keeps the panel off and the menu can't be seen on the top screen until the player presses L+R. USUM solved the same case (`FieldRo.xmenu`) with a field-state word read from the field scene. Omega Ruby needs its own signal.
+
+**X menu signal (found 2026-11-23, not wired yet): u32 `0x66F9CC` is 1 while the X menu is open, 0 otherwise.** It's in the main image's bss, so no pointer chain is needed. Its neighbour `0x66F9D0` moves with it (`0x00010101` open, `0x00060101` closed).
+
+How it was found:
+- **Not in the scene structures:** 16 KB of the `DllField` scene object, the GameManager (`0x100`), the GameProcManager (`0x40`) and the current entry were byte-identical with the menu open and closed (3 dumps each).
+- **No module of its own:** the menu loads no CRO; the module list is just `DllField` either way, although a `DllStartMenu.cro` exists.
+- **Global data diff:** `snap` of the global data (`0x5EC000`–`0x6AF000`) ×3 open vs ×3 closed gave 45 consistent words, mostly bottom-screen layout floats and double-buffer swaps. Four looked like flags: `0x61741C`, `0x66E154`, `0x66E158` and `0x66F9CC`. Only `0x66F9CC` kept its meaning when re-read; the other three flip for other reasons (e.g. `0x61741C` read 0 and later 1 with the menu closed both times).
+
+`0x66F9CC`, each reading paired with a screenshot of the bottom screen:
+
+| State | `0x66F9CC` |
+|---|---|
+| Overworld | 0 |
+| X menu open (pressed X) | 1 |
+| Closed with B | 0 |
+| Closed by tapping the menu's ✕ | 0 |
+| After walking | 0 |
+| In the Bag (scene `DllBag`) | 1 |
+| Back from the Bag, menu open again | 1 |
+| Save prompt (on the bottom screen) | 1 |
+| After saving, back in the overworld | 0 |
+
+Not checked: dialogue and shops, the PokéNav's other apps, and whether it is also 1 for other bottom-screen overlays in the field.
+
+Now wired: `fieldMenuFlag` in the game table supplies the address, AutoPanel reads it on non-USUM games, and `DllField.xmenu = panel` is the default; the reviewer will boot-test it.
+
+The `oruby1` test instance now has an in-game save (made 2026-11-23 in the moving truck, at 0:54 play time), so later tests can Continue instead of replaying the intro. `tools/startpoint.py` waits for `FieldRo` after loading, so it doesn't support Omega Ruby start points yet.
 
 ## Next steps
 
 1. Pick the target builds (latest update per game) and get dumps of X, Y and Alpha Sapphire plus updates.
 2. Port additional game-specific constants only as their features gain Gen 6 support. Image layout and feature flags are already per-game; Omega Ruby enables only the core features.
 3. Play-check Omega Ruby in the overworld and a battle with the panel, and with a real pad (L+R, ZL).
-4. Find an Omega Ruby "X menu open" signal so the auto panel shows the menu (see "Gap: the X menu"). Consider `DllSangoIntro = off` (its bottom screen is black). Add defaults for more `Dll…` scenes as they are met (battle, Bag, boxes).
+4. Reviewer: boot-test the wired X menu flag `0x66F9CC` with the auto panel (`DllField.xmenu = panel`); see "Gap: the X menu". Consider `DllSangoIntro = off` (its bottom screen is black). Add defaults for more `Dll…` scenes as they are met (battle, Bag, boxes).
