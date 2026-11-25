@@ -1,5 +1,5 @@
 // Generate build/panel_host.hpp with panel_command_test.py before compiling.
-#include "build/panel_host.hpp"
+#include "panel_host.hpp"
 
 using namespace OneScreen;
 using namespace CTRPluginFramework;

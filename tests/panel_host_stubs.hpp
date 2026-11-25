@@ -74,6 +74,8 @@ namespace OneScreen
     enum class PanelMode : u8 { Off, Panel, Full };
     static Settings settings;
     const Settings &GetSettings() { return settings; }
+    bool DebugEnabled(DebugSubsystem subsystem)
+    { return (settings.debugDisabled & (1ull << (unsigned)subsystem)) == 0; }
     static float WidescreenSqueeze() { return testSqueeze; }
     static bool CursorGet(u32 &x, u32 &y) { x = cursorX; y = cursorY; return cursorTouching; }
     static bool UiDemoOnScreen(const CTRPluginFramework::Screen &) { return false; }

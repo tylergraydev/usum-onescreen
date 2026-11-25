@@ -32,7 +32,8 @@ namespace OneScreen
     // and capture as `action NAME`; false (reason logged) if refused.
     bool ActionStart(const ActionDef &def, u32 sceneManager, std::vector<std::string> &log);
 
-    // The bottom-screen probes' latest result (WorldXMenu, WorldXMenuPage2, WorldPartyList),
-    // sampled every frame whether or not an action runs.
+    // The bottom-screen probes' latest result (WorldXMenu, WorldXMenuPage2, WorldPartyList and battle power/Z flags),
+    // sampled while an action runs, in Party/Battle, or in the field's menu state.
+    // Zero while probing is disabled, until the first sample after it resumes.
     u32 ActionProbeFlags(void);
 }

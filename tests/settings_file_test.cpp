@@ -175,8 +175,43 @@ static void TestLayoutNames(void)
     CHECK(NextBattleLayout(BattleLayout::Rail) == BattleLayout::Classic);
 }
 
+static void TestDebugDisabled(void)
+{
+    std::vector<std::string> warnings;
+    const auto bit = [](DebugSubsystem s) { return 1ull << (unsigned)s; };
+    CHECK(ParseDebugDisabled("", warnings, "test: ") == 0);
+    CHECK(ParseDebugDisabled("  AcTiOnS, panel,actions,, ", warnings, "test: ")
+          == (bit(DebugSubsystem::Actions) | bit(DebugSubsystem::Panel)));
+    CHECK(warnings.empty());
+    const uint64_t all = (1ull << (unsigned)DebugSubsystem::Count) - 1;
+    CHECK(ParseDebugDisabled("all", warnings, "test: ") == all);
+    CHECK(ParseDebugDisabled(DescribeDebugDisabled(all), warnings, "test: ") == all);
+    CHECK(ParseDebugDisabled("gpuquad", warnings, "test: ") == bit(DebugSubsystem::Gpuquad));
+    CHECK(ParseDebugDisabled("no-such-name,actions", warnings, "line 2: ") == bit(DebugSubsystem::Actions));
+    CHECK(warnings.size() == 1 && warnings[0].find("line 2: unknown debug subsystem") == 0);
+    warnings.clear();
+    CHECK(ParseSettings("[DEBUG]\nDISABLE =\n", warnings).debugDisabled == 0);
+    CHECK(warnings.empty());
+    const Settings disabled = ParseSettings("[debug]\ndisable=ALL\n", warnings);
+    CHECK(disabled.debugDisabled == all && warnings.empty());
+    SetDebugDisabled(disabled.debugDisabled);
+    for (unsigned i = 0; i < (unsigned)DebugSubsystem::Count; ++i)
+        CHECK(!DebugEnabled((DebugSubsystem)i));
+    SetSettings(ParseSettings("[debug]\ndisable=\n", warnings));
+    CHECK(!DebugEnabled(DebugSubsystem::Actions)); // reload cannot change boot switches
+    SetDebugDisabled(bit(DebugSubsystem::Gpuquad));
+    CHECK(!DebugEnabled(DebugSubsystem::Gpuquad) && DebugEnabled(DebugSubsystem::Actions));
+    SetDebugDisabled(0);
+    for (unsigned i = 0; i < (unsigned)DebugSubsystem::Count; ++i)
+        CHECK(DebugEnabled((DebugSubsystem)i));
+    warnings.clear();
+    ParseSettings("[debug]\nunknown=on\n", warnings);
+    CHECK(warnings.size() == 1 && warnings[0].find("unknown key") != std::string::npos);
+}
+
 int main(void)
 {
+    TestDebugDisabled();
     TestReplaceExisting();
     TestLineEndings();
     TestMissingKey();

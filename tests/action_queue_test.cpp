@@ -515,6 +515,30 @@ static void TestClose(void)
     CHECK(LogHas(log, "refused"));
 }
 
+static void TestProbeWarmup(void)
+{
+    // Re-enabling the framebuffer probe leaves flags false for the first frame.
+    for (u32 flag : { WorldXMenu, WorldXMenuPage2, WorldPartyList, WorldBattleMega, WorldBattleZ, WorldBattleZList, WorldBattleZSlot(0) })
+    {
+        ActionRunner runner;
+        ActionWorld world;
+        world.scene = (flag == WorldXMenu || flag == WorldXMenuPage2) ? SceneField
+                      : flag == WorldPartyList ? SceneParty : SceneBattle;
+        std::vector<std::string> log;
+        ActionDef wait = { "probe-warmup", "", AnyScene(),
+                           { StepWaitFor(InScene(world.scene.c_str()).With(flag), 30) } };
+        CHECK(runner.Start(wait, world, log));
+        CHECK(runner.Running());
+        const ActionOutput cold = runner.Update(world, log);
+        CHECK(runner.Running());
+        CHECK(cold.keys == 0 && !cold.touching);
+        world.flags = flag;
+        runner.Update(world, log);
+        CHECK(!runner.Running());
+        CHECK(LogHas(log, "ok in 2 frames"));
+    }
+}
+
 static void TestRunnerState(void)
 {
     // Busy while running; Cancel stops at once and reports.
@@ -577,6 +601,7 @@ int main(void)
     TestBattleRun();
     TestBattleMenuActions();
     TestClose();
+    TestProbeWarmup();
     TestRunnerState();
     if (s_failures != 0)
     {

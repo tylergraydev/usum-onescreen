@@ -52,8 +52,22 @@ namespace OneScreen
     const char *BattleSpeedName(BattleSpeed speed);
     const char *BattleSpeedTitle(BattleSpeed speed);
 
+    // Boot-only perf bisect switches; bit positions match DebugNames in SettingsFile.cpp.
+    enum class DebugSubsystem : uint8_t
+    {
+        Xmenu, Keyboard, Pokedex, Subscreens, Bag, Map, Rotom,
+        Party, Boxes, Theme, Battlescreen, Panel, Actions, Cursor,
+        Buttons, Pcanywhere, Widescreen, Autopanel, Scene, Commands, Framesync,
+        Fasttext, Assets, Shot, Uidemo, Fieldstate, Status, Framecallback,
+        Battlewidescreen, Quicksave, Photomode, Sidepanels, Gpuquad,
+        Count
+    };
+    void SetDebugDisabled(uint64_t mask); // called only at boot, never on settings reload
+    bool DebugEnabled(DebugSubsystem subsystem);
+
     struct Settings
     {
+        uint64_t     debugDisabled = 0;
         uint32_t     panelKey = KeyBits::L | KeyBits::R;   // cycles off / panel / full
         uint32_t     touchKey = KeyBits::ZL;            // cursor touches while held
         uint32_t     mapKey = KeyBits::ZR;              // opens / closes the native map (Screens/Map.hpp)

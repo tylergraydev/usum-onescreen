@@ -1,5 +1,98 @@
 # Panel performance
 
+## Field baseline: the action probe (2026-11-23)
+
+With the panel off, the plugin still cost Azahar ~20% speed in the overworld.
+Measured from Azahar's own status bar (Speed, read through UI Automation),
+Route 2 Pokémon Center standing still, Ultra Sun v1.2, 5x, Vulkan, frame
+limit 250%, same input movie each run, runs interleaved, 60 one-second samples.
+
+A `[debug] disable = ...` setting (boot only, see the default ini) switches
+subsystems off one at a time. Bisecting found `ActionsOnScreen`
+(`Sources/Actions.cpp`): an OSD callback that read bottom-framebuffer pixels
+every frame to detect the X menu and the Party list. Each CPU read of that
+GPU-drawn memory makes Azahar download the surface (see P1-6 below). Disabling
+`actions` alone gave no-plugin speed; disabling `panel` changed nothing.
+
+The probe now runs only while an action runs, in Party, or in the field with
+the X menu open (field state 4); `action status` reports `probe on|off, N taken`.
+Standing in the field: 0 probes taken. X menu open: probe on, native X menu
+shown/hidden as before.
+
+These measurements used the old build; current main also probes during Battle
+for power/Z controls, and keeps scene-gated Pelago/Festival observers.
+
+Old build vs fixed vs no plugin, interleaved (PC load drifted between rounds,
+so compare within a round):
+
+| round | old | fixed | no plugin |
+|---|--:|--:|--:|
+| 1 | 184% | 203% | 208% |
+| 2 | 170% | 174% | 176% |
+| 3 | 144% | 159% | 165% |
+
+Ported onto main (dad0939, which also gates the battle Mega/Z probe to
+battles), same setup, 2026-11-24:
+
+| round | main | probe gate | no plugin |
+|---|--:|--:|--:|
+| 1 | 181% | 189% | 191% |
+| 2 | 179% | 203% | 221% |
+| 3 | 185% | 203% | 225% |
+
+The gate gains 4-13% over main. A 1-10% gap to no plugin remains on main,
+which does more per frame than the build bisected above; not bisected yet.
+
+`disable = framesync` (or `all`) freezes the game at boot: CTRPF's menu loop
+without frame sync starves it. Not useful for bisecting.
+
+### Current probe audit
+
+The shared action probe is wanted while an action runs, in Party or Battle,
+or in FieldRo with `FieldStateMenu`. Otherwise its flags are zero. Resuming
+starts with no results, and battle power still needs three matching samples.
+Idle scene refreshes run every five frames; the existing independent Pelago
+and Festival watchers retain their fifteen-frame idle refresh cadence.
+`N taken` counts shared bottom-screen samples, excluding those independent observers.
+
+| Probe/read | Before this port | Consumers | Current gate / decision |
+|---|---|---|---|
+| XMenuProbe, XMenuBackground, XMenuPage2Probe | Every bottom frame | ActionQueue, XMenu/Grid | Shared action gate above |
+| PartyListProbe | Every bottom frame | ActionQueue, PartyScreen/Menu | Shared action gate above |
+| Battle power / Z slots | Every bottom frame | ActionQueue, BattleScreen (Mega/Z and Z row controls) | Shared gate includes Battle even without an action |
+| Actions SamplePelago (top and bottom) | PelagoDetected only | Action close/leave guards, WorldPelago flags | Existing watcher retained, independent of native overlay visibility |
+| Actions SampleFestival | FestivalPlazaDetected only | Action close/exit guards, WorldFestival flags | Existing watcher retained, independent of native overlay visibility |
+| XMenu ScanGameCursor | s_scanWanted and s_shown | Native X-menu cursor/page sync | Already limited to shown X menu |
+| Party ScanRing | s_ringWanted in status/summary | Native party summary selection | Already limited to summary |
+| SubScreens SampleBottom | s_sampling >= 0 for detected screen | Native screen state, including Pelago/Festival | Already limited to matching scene/state |
+| Panel copies/readback | Panel/full active; readback at diagnostic interval | Bottom-on-top display and verification | Required while displayed; bottom callback stores metadata only |
+| Shot / PhotoMode copies | Screenshot requested / entering or leaving photo mode | Capture and frozen clean picture | Already request-limited |
+
+All other registered screen OSD callbacks draw overlays; their framebuffer
+layout helpers do not sample bottom pixels. UI layer backing copies operate
+only while the corresponding overlay is presented. SidePanels draws top-screen
+strips while visible; GpuQuad uses GPU transfers.
+
+### Debug switches on current main
+
+`[debug] disable = name,...` is case-insensitive, ignores empty tokens, and
+warns about unknown names. Empty preserves normal behavior. Switches are
+latched at boot; reloading settings does not change them. `all` covers every
+name, using a 64-bit mask (33 subsystems).
+
+Original names: `xmenu, keyboard, pokedex, subscreens, bag, map, rotom,
+party, boxes, theme, battlescreen, panel, actions, cursor, buttons, pcanywhere,
+widescreen, autopanel, scene, commands, framesync, fasttext, assets, shot,
+uidemo, fieldstate, status, framecallback`.
+
+Added for current main: `battlewidescreen, quicksave, photomode, sidepanels,
+gpuquad`. Native Pelago/Festival screens belong to `subscreens`; their
+independent action observers belong to `actions`. Shared ScreenBuffer allocation
+and layer GPU setup remain infrastructure owned by the display paths. `panel`
+also skips automatic panel driving and screenshot polling, whose capture
+callback would otherwise be absent. As before, disabling dependencies can
+make dependent features unavailable; these are diagnostic switches.
+
 ## Widescreen panel safety fallback (2026-11-10)
 
 Panel/full views use CPU composition only when `WidescreenSqueeze() > 1`.

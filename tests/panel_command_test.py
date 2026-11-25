@@ -103,5 +103,5 @@ if __name__ == '__main__':
         args.generate.parent.mkdir(parents=True, exist_ok=True)
         framebuffer = (ROOT / 'Includes/Framebuffer.hpp').read_text(encoding='utf-8')
         args.generate.write_text(
-            '#include "../panel_host_stubs.hpp"\n' + strip_includes(framebuffer)
+            '#include "panel_host_stubs.hpp"\n' + strip_includes(framebuffer)
             + '\n' + strip_includes(source), encoding='utf-8')

@@ -83,6 +83,9 @@ namespace OneScreen
         { 310, 226, 90, 182, 255 },
     };
 
+    static volatile bool s_probeWanted = false;
+    static volatile u32 s_probeRuns = 0;
+    static volatile u32 s_probeEpoch = 0;
     static volatile bool s_xmenuSeen = false;   // written by the OSD callback
     static volatile BattlePower s_powerSeen = BattlePower::None;
     static volatile u32 s_powerFrame = 0;
@@ -96,6 +99,31 @@ namespace OneScreen
     static u32 s_startFrame = 0;
     static bool s_capturing = false;
     static u32 s_savedCapture = 0;              // capture request before the action
+
+    static void UpdateProbeWanted(u32 sceneManager)
+    {
+        // The native X menu also consumes the probes while no action runs.
+        const bool wanted = s_runner.Running() || s_world.scene == SceneParty || s_world.scene == SceneBattle
+                            || (s_world.scene == SceneField && FieldState(sceneManager) == FieldStateMenu);
+        if (!wanted)
+        {
+            s_probeWanted = false;
+            s_xmenuSeen = s_page2Seen = s_partyListSeen = false;
+            s_powerSeen = BattlePower::None;
+            s_zSlotsSeen = 0;
+        }
+        else
+        {
+            if (!s_probeWanted)
+            {
+                s_xmenuSeen = s_page2Seen = s_partyListSeen = false;
+                s_powerSeen = BattlePower::None;
+                s_zSlotsSeen = 0;
+                s_probeEpoch = s_probeEpoch + 1;
+            }
+            s_probeWanted = true;
+        }
+    }
 
     static bool Near(u8 a, u8 b)
     {
@@ -202,8 +230,29 @@ namespace OneScreen
     {
         SamplePelago(screen);
         SampleFestival(screen);
+        // CPU framebuffer reads force costly Azahar GPU downloads (docs/PERF.md).
+        // Pelago/Festival above have independent scene gates and action consumers.
+        static BattlePower candidate = BattlePower::None;
+        static unsigned count = 0;
+        static u32 epoch = 0;
+        if (!s_probeWanted)
+        {
+            s_xmenuSeen = s_page2Seen = s_partyListSeen = false;
+            s_powerSeen = candidate = BattlePower::None;
+            s_zSlotsSeen = 0;
+            count = 0;
+            return false;
+        }
         if (screen.IsTop)
             return false;
+        // Restart battle debounce even if no OSD callback occurred while off.
+        if (epoch != s_probeEpoch)
+        {
+            epoch = s_probeEpoch;
+            candidate = BattlePower::None;
+            count = 0;
+        }
+        s_probeRuns = s_probeRuns + 1;
         const FbLayout fb = GetLayout(screen);
         bool all = true;
         for (const PixelProbe &p : XMenuProbe)
@@ -225,8 +274,6 @@ namespace OneScreen
                         pixels[i].r, pixels[i].g, pixels[i].b);
         }
         const BattlePower power = ProbeBattlePower(pixels);
-        static BattlePower candidate = BattlePower::None;
-        static unsigned count = 0;
         count = power == candidate ? (count < 3 ? count + 1 : 3) : 1;
         candidate = power;
         s_powerSeen = count >= 3 ? power : BattlePower::None;
@@ -248,7 +295,7 @@ namespace OneScreen
     }
 
     // Scene names cost a walk over the CRO headers, so read them every few
-    // frames (the probe is per frame).
+    // frames (the probe is per frame while needed).
     static void ReadWorld(u32 sceneManager, bool now)
     {
         if (now || QuickSaveRunning() || s_frames % 5 == 0)
@@ -287,6 +334,7 @@ namespace OneScreen
 
     u32 ActionProbeFlags(void)
     {
+        if (!s_probeWanted) return 0;
         const bool fresh = s_frames - s_powerFrame <= 2;
         const BattlePower power = fresh ? s_powerSeen : BattlePower::None;
         const u8 slots = fresh ? s_zSlotsSeen : 0;
@@ -338,12 +386,14 @@ namespace OneScreen
         s_frames++;
         if (!s_runner.Running())
         {
+            if (s_frames % 5 == 0)
+                s_world.scene = SceneModule(sceneManager);
             if (s_frames % 15 == 0)
             {
-                const auto scene = SceneModule(sceneManager);
-                WatchPelago(sceneManager, scene);
-                WatchFestival(sceneManager, scene);
+                WatchPelago(sceneManager, s_world.scene);
+                WatchFestival(sceneManager, s_world.scene);
             }
+            UpdateProbeWanted(sceneManager);
             if (s_capturing)
                 EndCapture();
             return;
@@ -355,6 +405,7 @@ namespace OneScreen
             log.push_back("action: sees " + DescribeWorld(s_world)
                           + Utils::Format(" (frame %lu)", s_frames - s_startFrame));
         const ActionOutput out = s_runner.Update(s_world, log);
+        UpdateProbeWanted(sceneManager);
         if (!s_runner.Running())
         {
             EndCapture();
@@ -369,11 +420,13 @@ namespace OneScreen
         if (args == "status")
         {
             ReadWorld(sceneManager, true);
-            log.push_back(s_runner.Status() + "; sees " + DescribeWorld(s_world));
+            log.push_back(s_runner.Status() + "; sees " + DescribeWorld(s_world)
+                          + Utils::Format("; probe %s, %lu taken", s_probeWanted ? "on" : "off", s_probeRuns));
         }
         else if (args == "cancel")
         {
             s_runner.Cancel(log);
+            UpdateProbeWanted(sceneManager);
             if (s_capturing)
                 EndCapture();
         }
@@ -403,6 +456,7 @@ namespace OneScreen
                                     ? PelagoLeaveAction(true) : def;
         if (!s_runner.Start(selected, s_world, log))
             return false;
+        UpdateProbeWanted(sceneManager);
         s_startFrame = s_frames;
         if (!s_capturing)
             BeginCapture();

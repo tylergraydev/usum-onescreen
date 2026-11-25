@@ -34,7 +34,7 @@ $(OUT)/panel_host.hpp: panel_command_test.py panel_host_stubs.hpp ../Sources/Pan
 	$(PYTHON) -I panel_command_test.py --generate $@
 
 $(OUT)/panel_command_test: panel_command_test.cpp $(OUT)/panel_host.hpp $(wildcard ../Includes/UI/*.hpp) ../Includes/Settings.hpp
-	$(CXX) $(CXXFLAGS) -Wno-unused-function panel_command_test.cpp -o $@
+	$(CXX) $(CXXFLAGS) -I . -I $(OUT) -Wno-unused-function panel_command_test.cpp -o $@
 
 $(OUT)/hires_test: hires_test.cpp ../Sources/UI/Raster.cpp ../Sources/UI/Text.cpp ../Sources/UI/Font.cpp ../Sources/UI/Layer.cpp $(wildcard ../Includes/UI/*.hpp)
 	@mkdir -p $(OUT)
