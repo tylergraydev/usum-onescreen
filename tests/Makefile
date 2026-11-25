@@ -17,6 +17,13 @@ TESTS    := $(OUT)/photo_mode_test $(OUT)/quick_save_test $(OUT)/image_test $(OU
 
 .DEFAULT_GOAL := all
 
+TESTS += $(OUT)/sharp_text_test
+# Font.cpp embeds this generated asset; edits must rebuild its host consumers.
+$(TESTS): ../Sources/UI/SharpFont.inc
+
+$(OUT)/sharp_text_test: sharp_text_test.cpp ../Sources/UI/Font.cpp ../Sources/UI/Raster.cpp ../Sources/UI/Text.cpp $(wildcard ../Includes/UI/*.hpp)
+	@mkdir -p $(OUT)
+	$(CXX) $(CXXFLAGS) sharp_text_test.cpp ../Sources/UI/Font.cpp ../Sources/UI/Raster.cpp ../Sources/UI/Text.cpp -o $@
 TESTS += $(OUT)/ride_pager_test
 RIDE_PAGER_PREVIEW := $(OUT)/ride-pager-preview.ppm
 TESTS += $(OUT)/blur_test $(OUT)/filter_test
@@ -238,6 +245,7 @@ $(OUT)/side_panels_test: side_panels_test.cpp $(SIDE_PANEL_SRCS) ../Includes/Sid
 	$(CXX) $(CXXFLAGS) side_panels_test.cpp $(SIDE_PANEL_SRCS) -o $@
 
 run: $(TESTS)
+	./$(OUT)/sharp_text_test
 	./$(OUT)/ride_pager_test $(RIDE_PAGER_PREVIEW)
 	./$(OUT)/photo_mode_test
 	./$(OUT)/festival_plaza_test $(OUT)

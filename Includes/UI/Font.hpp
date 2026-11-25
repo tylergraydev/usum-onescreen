@@ -89,6 +89,19 @@ namespace UI
             Glyph glyph;
         };
 
+        // Four decoded outline masks live in slices of m_masks' existing
+        // tail. Normal slots and sharp slices invalidate overlapping owners.
+        // No vector growth and no separate static coverage scratch.
+        static constexpr size_t SharpSlots = 4;
+        struct SharpSlot
+        {
+            u32 codePoint;
+            u8 w, h, top, inkW, inkH;
+            bool used;
+        };
+        static_assert(sizeof(SharpSlot) == 12, "SharpText cache metadata budget");
+        SharpSlot m_sharp[SharpSlots] = {};
+
         s32 Scaled(s32 v) const;
 
         const FontSource *m_font = nullptr;
