@@ -19,6 +19,7 @@
 #include "UI/ScreenBuffer.hpp"
 #include "UI/Layer.hpp"
 #include "UI/Theme.hpp"
+#include "UI/Motion.hpp"
 
 namespace OneScreen
 {
@@ -124,6 +125,7 @@ namespace OneScreen
         }
         if (!s_shown)
         {
+            UI::Motion::Reset(UI::Motion::Screen::XMenu);
             s_layer.Hide();
             UI::ScreenBuffer::GiveBack(Owner);
             return false;
@@ -132,6 +134,7 @@ namespace OneScreen
         u8 *const pixels = UI::ScreenBuffer::Borrow(Owner, fresh);
         if (pixels == nullptr)
         {
+            UI::Motion::Reset(UI::Motion::Screen::XMenu);
             s_layer.Hide();
             return false;   // another screen holds it: next frame
         }
@@ -150,6 +153,8 @@ namespace OneScreen
                 return false;
             redraw = true;
         }
+        UI::Motion::Begin(UI::Motion::Screen::XMenu, fresh);
+        redraw = redraw || UI::Motion::Active(UI::Motion::Screen::XMenu);
         if (redraw)
         {
             XMenuView view;
@@ -159,10 +164,12 @@ namespace OneScreen
             view.enabled = s_enabledMask;
             UI::Canvas canvas = s_layer.Begin();
             DrawXMenu(canvas, view);
+            UI::Motion::End();
             s_layoutLock.Unlock();
             s_drawnVersion = version;
             s_drawnGameFont = gameFont;
         }
+        UI::Motion::End(false);
         return s_layer.Present(fb);
     }
 

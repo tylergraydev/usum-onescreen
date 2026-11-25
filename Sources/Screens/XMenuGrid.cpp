@@ -5,6 +5,7 @@
 
 #include "UI/Layout.hpp"
 #include "UI/Theme.hpp"
+#include "UI/Motion.hpp"
 
 namespace OneScreen
 {
@@ -473,7 +474,11 @@ namespace OneScreen
         // The game marks the selected entry only with its cursor, its tip
         // just inside the pill's left end.
         if (selected)
-            Theme::DrawCursor(canvas, r.x + 8, r.y + r.h / 2);
+        {
+            const UI::Rect cursor = UI::Motion::Cursor(UI::Motion::Screen::XMenu,
+                                                     UI::Rect{ r.x + 8, r.y + r.h / 2, 0, 0 });
+            Theme::DrawCursor(canvas, cursor.x, cursor.y);
+        }
     }
 
     // Entry `index` opens a screen that only shows on the bottom screen (the

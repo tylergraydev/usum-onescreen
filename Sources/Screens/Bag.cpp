@@ -20,6 +20,7 @@
 #include "UI/Assets.hpp"
 #include "UI/Device.hpp"
 #include "UI/Layer.hpp"
+#include "UI/Motion.hpp"
 #include "UI/ScreenBuffer.hpp"
 
 namespace OneScreen
@@ -162,9 +163,10 @@ namespace OneScreen
     }
 
     // --- Shared with the OSD callback (game thread) ---
-    // Handover without a lock: the plugin thread writes s_view only while
-    // the callback has drawn the latest version, then bumps s_viewVersion;
-    // the callback reads s_view only while the versions differ.
+    // Animation also redraws an unchanged view. Protect it while the
+    // producer publishes and while the OSD callback draws; the callback
+    // skips a busy lock and retries on the next frame.
+    static Mutex         s_viewLock;
     static BagView       s_view;
     static volatile u32  s_viewVersion = 0; // bumped whenever s_view changes
     static volatile u32  s_drawnVersion = 0;
@@ -506,6 +508,7 @@ namespace OneScreen
             return false;
         if (!s_shown)
         {
+            UI::Motion::Reset(UI::Motion::Screen::Bag);
             s_layer.Hide();
             UI::ScreenBuffer::GiveBack(Owner);
             return false;
@@ -514,6 +517,7 @@ namespace OneScreen
         u8 *const pixels = UI::ScreenBuffer::Borrow(Owner, fresh);
         if (pixels == nullptr)
         {
+            UI::Motion::Reset(UI::Motion::Screen::Bag);
             s_layer.Hide();
             return false;   // another screen still has it: next frame
         }
@@ -527,14 +531,19 @@ namespace OneScreen
                 return false;
             redraw = true;
         }
-        if (redraw)
+        UI::Motion::Begin(UI::Motion::Screen::Bag, fresh);
+        redraw = redraw || UI::Motion::Active(UI::Motion::Screen::Bag);
+        if (redraw && s_viewLock.TryLock() == 0)
         {
             __sync_synchronize();
             UI::Canvas canvas = s_layer.Begin();
             DrawBag(canvas, s_view);
+            UI::Motion::End();
             __sync_synchronize();
-            s_drawnVersion = version;
+            s_drawnVersion = s_viewVersion;
+            s_viewLock.Unlock();
         }
+        UI::Motion::End(false);
         return s_layer.Present(fb);
     }
 
@@ -598,6 +607,7 @@ namespace OneScreen
         else if (s_driver.Busy())
             v.status = "...";
 
+        s_viewLock.Lock();
         const BagView &o = s_view;
         const bool same = o.mode == v.mode && o.tab == v.tab && o.wantTab == v.wantTab && SameItems(o.items, v.items)
                           && o.names == v.names && o.cursor == v.cursor && o.top == v.top && o.commands == v.commands
@@ -607,11 +617,15 @@ namespace OneScreen
         // Not while the callback may still be drawing the last one: try
         // again next frame.
         if (same || s_drawnVersion != s_viewVersion)
+        {
+            s_viewLock.Unlock();
             return;
+        }
         __sync_synchronize();
         s_view = v;
         __sync_synchronize();
         s_viewVersion = s_viewVersion + 1;
+        s_viewLock.Unlock();
     }
 
     static u32 RepeatDir(u32 held, u32 pressed)

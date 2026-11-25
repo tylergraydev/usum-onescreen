@@ -163,6 +163,34 @@ The host test (`tests/theme_test.cpp`) draws the same demo with a
 synthetic font and icons and without any, as
 `analysis/private/theme-preview-*.ppm`.
 
+## Menu motion
+
+`[display] ui_motion = on` (default) eases the X-menu arrow, Party selection
+frame and Bag-list arrow over eight top-screen callbacks using integer
+quadratic ease-out. Party-list and Bag party-panel HP bars ease in either
+direction over 24 callbacks. Numbers and input selection update immediately;
+only the drawn frame/bar moves. A new target starts at the displayed value.
+Opening or borrowing a fresh layer snaps to the first target. Replaced members
+and maximum-HP changes snap; view identity hashes cannot distinguish identical
+members because these views do not expose persistent Pokemon IDs.
+
+Motion state uses fixed storage and no clock or allocation. The existing layer
+is redrawn only for a changed view or active motion, including the final target
+frame; a busy view lock keeps that redraw pending. Once settled, the original
+cached-layer presentation resumes. There are no extra GPU passes or drawing
+commands per rendered frame. Existing full-screen renderers still create their
+usual temporary strings/vectors on redraw, so animation repeats those costs.
+Opening slide/fade is omitted: this layer path would require extra full redraws
+or a presentation change. Battle and summary rendering remain instantaneous.
+
+`ui_motion = off` restores the original pixels and drawing order. Host checks
+in `tests/check_motion.py` expand the Makefile source lists into direct MSVC
+commands, run easing/settling/setting tests, render existing previews with
+motion explicitly off, and compare eight SHA-256 hashes captured from `HEAD`.
+The preview tests also exercise the guarded 2.5x layer path. Commands are saved
+under `tests/build/motion-commands.json`. Run from the repository root:
+`python tests/check_motion.py`; make and WSL are unnecessary.
+
 ## Restyle plan (next step, one session per screen)
 
 Each screen only changes its own `Sources/Screens/*` drawing code and uses

@@ -2,6 +2,9 @@
 #   make -C tests            (MSYS2 / WSL / Linux g++)
 #   make -C tests CXX=clang++
 # MSVC: cl /std:c++17 /EHsc /I ..\Includes settings_test.cpp ..\Sources\Settings.cpp ..\Sources\SettingsFile.cpp
+# Motion checks without make: python tests/check_motion.py (from repo root).
+# It expands the source lists below and compiles with MSVC /std:c++17 /EHsc
+# /D_CRT_SECURE_NO_WARNINGS /FI msvc_host.hpp /I ../Includes /Fo build/ /Fe build/<test>.exe.
 # sigscan_test.py needs Python 3.9+ (Windows: PYTHON="py -3"); pass
 # CODE_BIN=<Ultra Sun v1.2 code.bin> to also run the real and shifted-copy checks.
 CXX      ?= g++
@@ -17,6 +20,7 @@ TESTS    := $(OUT)/photo_mode_test $(OUT)/quick_save_test $(OUT)/image_test $(OU
 
 .DEFAULT_GOAL := all
 
+TESTS += $(OUT)/motion_test
 TESTS += $(OUT)/ride_pager_test
 RIDE_PAGER_PREVIEW := $(OUT)/ride-pager-preview.ppm
 TESTS += $(OUT)/blur_test $(OUT)/filter_test
@@ -101,8 +105,14 @@ $(OUT)/party_data_test: party_data_test.cpp ../Sources/PartyData.cpp ../Includes
 	@mkdir -p $(OUT)
 	$(CXX) $(CXXFLAGS) party_data_test.cpp ../Sources/PartyData.cpp -o $@
 
-UI_SRCS  := $(SETTINGS_SRCS) $(addprefix ../Sources/UI/,Raster.cpp Text.cpp Font.cpp Layer.cpp Icons.cpp Glyphs.cpp Demo.cpp)
+UI_SRCS  := $(SETTINGS_SRCS) $(addprefix ../Sources/UI/,Raster.cpp Text.cpp Font.cpp Layer.cpp Icons.cpp Glyphs.cpp Demo.cpp Motion.cpp)
 UI_HDRS  := $(wildcard ../Includes/UI/*.hpp) ../Includes/Settings.hpp
+
+$(OUT)/motion_test: motion_test.cpp ../Sources/UI/Motion.cpp $(SETTINGS_SRCS) $(UI_HDRS)
+	@mkdir -p $(OUT)
+	$(CXX) $(CXXFLAGS) motion_test.cpp ../Sources/UI/Motion.cpp $(SETTINGS_SRCS) -o $@
+
+$(OUT)/xmenu_test $(OUT)/party_menu_test $(OUT)/bag_test: motion_render_smoke.hpp
 PREVIEW  := ../analysis/private/ui-demo.png
 XMENU_PREVIEW := ../analysis/private/xmenu-preview.ppm
 KEYBOARD_PREVIEW := ../analysis/private/keyboard-preview.ppm
@@ -238,6 +248,7 @@ $(OUT)/side_panels_test: side_panels_test.cpp $(SIDE_PANEL_SRCS) ../Includes/Sid
 	$(CXX) $(CXXFLAGS) side_panels_test.cpp $(SIDE_PANEL_SRCS) -o $@
 
 run: $(TESTS)
+	./$(OUT)/motion_test
 	./$(OUT)/ride_pager_test $(RIDE_PAGER_PREVIEW)
 	./$(OUT)/photo_mode_test
 	./$(OUT)/festival_plaza_test $(OUT)

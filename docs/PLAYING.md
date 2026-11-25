@@ -4,6 +4,11 @@ USUM One Screen is a 3GX plugin for the Azahar 3DS emulator. It lets you play Po
 
 This is a beta. It has only been tested on Windows.
 
+Native X-menu, Party and Bag selections now ease over eight frames, and Party
+and Bag HP bars over 24 frames. To restore instant updates, put
+`ui_motion = off` under `[display]` in `usum-onescreen.ini` and reload settings
+from the plugin menu. The default is `on`; this does not change battle speed.
+
 ## Requirements
 
 - **Azahar** with the 3GX plugin loader. Tested on Azahar **2126.2** (build `HEAD-219d743`, Windows MSVC build). Older or newer versions may work but have not been tried.

@@ -1,3 +1,5 @@
+#include "UI/Motion.hpp"
+#include "motion_render_smoke.hpp"
 // Host tests for the native Party screen (Sources/Screens/PartyMenu.cpp):
 // cursor moves, pages, the follow-up decisions, the actions against a fake
 // Party screen / its Bags / the teaching screen / summary, and drawing.
@@ -922,6 +924,12 @@ static void TestDraw(const char *listPreview, const char *summaryPreview)
     view.mons[2].status = 5;
     view.mons[0].shiny = true;
     view.cursor = 3;
+    PartyView moved = view;
+    moved.cursor = 0;
+    moved.mons[0].hp = 1;
+    CHECK(MotionRenderSmoke(UI::Motion::Screen::Party, [&](UI::Canvas &c, bool target) {
+        DrawParty(c, target ? moved : view);
+    }));
     canvas.FillRect(UI::Rect{ 0, 0, UI::ScreenW, UI::ScreenH }, UI::Rgb(0, 200, 0));
     DrawParty(canvas, view);
     CHECK(HiResScreenSmoke::Run(PartyArea, PartyRadius, [&](UI::Canvas &hi) { DrawParty(hi, view); }));
@@ -1102,6 +1110,10 @@ static void TestDraw(const char *listPreview, const char *summaryPreview)
 
 int main(int argc, char **argv)
 {
+    Settings motionOff;
+    motionOff.uiMotion = false;
+    SetSettings(motionOff);
+    UI::Motion::Begin(UI::Motion::Screen::Party, true);
     TestMove();
     TestState();
     TestStatus();
