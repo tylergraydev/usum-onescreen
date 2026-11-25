@@ -979,6 +979,70 @@ try {
             before = op_qt.read_bytes()
             run(['set', '--home', options, 'graphics=' + bad], 1, 'bad graphics')
             assert op_qt.read_bytes() == before
+        # Post-processing is in Layout (not Renderer), and user names are bare stems.
+        state = options / 'usum-onescreen-app.ini'
+        shader_dir = options / 'azahar/user/shaders'
+        op_qt.write_text(op_qt.read_text() + '\n[Layout]\npp_shader_name\\default=true\n'
+                         'pp_shader_name=external\nanaglyph_shader_name=Dubois (builtin)\n')
+        original = op_qt.read_bytes()
+        run(['set', '--home', options, 'visual_quality=keep'], 0)
+        assert op_qt.read_bytes() == original and not shader_dir.exists()
+        source = (PLAYER / 'shaders/post-process.glsl').read_text()
+        for choice, name, aa, sharpen in [('sharpen', 'usum-sharpen', 0, 1),
+                                          ('aa', 'usum-aa', 1, 0),
+                                          ('sharpen-aa', 'usum-sharpen-aa', 1, 1),
+                                          ('off', 'None (builtin)', None, None)]:
+            custom.write_text('[Layout]\npp_shader_name\\default=false\npp_shader_name=external\n'
+                              'pp_shader_name\\use_global=false\nanaglyph_shader_name=leave me\n')
+            run(['set', '--home', options, 'visual_quality=' + choice], 0)
+            config.read(op_qt)
+            assert config['Layout']['pp_shader_name'] == name
+            assert config['Layout'][r'pp_shader_name\default'] == 'false'
+            assert config['Layout']['anaglyph_shader_name'] == 'Dubois (builtin)'
+            assert 'pp_shader_name' not in custom.read_text()
+            assert 'anaglyph_shader_name=leave me' in custom.read_text()
+            assert 'visual_quality=' + choice in state.read_text()
+            if aa is not None:
+                installed = shader_dir / (name + '.glsl')
+                assert installed.read_text() == f'#define USUM_AA {aa}\n#define USUM_SHARPEN {sharpen}\n' + source
+        # Refuse unsupported APIs before writing anything, including mixed CLI requests.
+        gl_config = op_qt.read_text()
+        for api in ('2', '0', 'unknown'):
+            op_qt.write_text(gl_config.replace('[Renderer]', '[Renderer]\ngraphics_api\\default=false\ngraphics_api=' + api))
+            before = (op_qt.read_bytes(), state.read_bytes(), op_plugin.read_bytes())
+            run(['set', '--home', options, 'layout=rail', 'visual_quality=aa'], 1, 'requires OpenGL')
+            assert before == (op_qt.read_bytes(), state.read_bytes(), op_plugin.read_bytes())
+            run(['set', '--home', options, 'visual_quality=off'], 0)
+            config.read(op_qt)
+            assert config['Renderer']['graphics_api'] == api
+            assert config['Layout']['pp_shader_name'] == 'None (builtin)'
+            assert config['Layout'][r'pp_shader_name\default'] == 'false'
+        op_qt.write_text(gl_config)
+        # A per-title API override matters; default=true still means Windows OpenGL.
+        title_config = options / f'azahar/user/config/custom/{SUN:016X}.ini'
+        title_config.write_text('[Renderer]\ngraphics_api\\use_global=false\ngraphics_api=2\n')
+        run(['set', '--home', options, 'visual_quality=aa'], 1, 'requires OpenGL')
+        title_config.write_text('[Renderer]\ngraphics_api\\use_global=false\ngraphics_api\\default=true\ngraphics_api=2\n')
+        run(['set', '--home', options, 'visual_quality=aa'], 0)
+        title_config.unlink()
+        # External API changes suspend sync without changing the saved selection or API.
+        gl_config = op_qt.read_text()
+        op_qt.write_text(gl_config.replace('[Renderer]', '[Renderer]\ngraphics_api\\default=false\ngraphics_api=2'))
+        before = op_qt.read_bytes()
+        run(['set', '--home', options, 'glyphs=auto', 'graphics=keep'], 0)
+        assert op_qt.read_bytes() == before and 'visual_quality=aa' in state.read_text()
+        op_qt.write_text(gl_config)
+        # Stereo modes use a different shader path and must not be silently changed.
+        op_qt.write_text(gl_config.replace('[Layout]', '[Layout]\nrender_3d=3\nrender_3d\\default=false'))
+        before = (op_qt.read_bytes(), state.read_bytes())
+        run(['set', '--home', options, 'visual_quality=sharpen'], 1, 'stereoscopic 3D')
+        assert before == (op_qt.read_bytes(), state.read_bytes())
+        op_qt.write_text(gl_config)
+        for bad in ('invalid', '../escape'):
+            before = (op_qt.read_bytes(), state.read_bytes())
+            run(['set', '--home', options, 'visual_quality=' + bad], 1, 'bad visual_quality')
+            assert before == (op_qt.read_bytes(), state.read_bytes())
+        run(['set', '--home', options, 'graphics=ultra', 'visual_quality=sharpen-aa'], 0)
         # Plugin comments and sections are retained; CLI values load in the window.
         op_plugin.write_text('[battle]\nlayout = rail ; keep battle comment\n[speed]\ninstant_text = on # keep speed comment\nbattle_messages = fast\nbattle_bars = fast\n[controls]\nglyphs = nintendo\n')
         run(['set', '--home', options, 'layout=bar', 'glyphs=playstation'], 0)
@@ -1005,8 +1069,26 @@ $form = [Activator]::CreateInstance($assembly.GetType('UsumOneScreen.MainForm'),
 $flags = [Reflection.BindingFlags]'Instance, NonPublic'
 function Field($name) { $form.GetType().GetField($name, $flags).GetValue($form) }
 try {
-    foreach ($case in @(@('graphics', 3), @('battle', 1), @('speed', 1), @('glyphs', 2))) {
+    foreach ($case in @(@('graphics', 3), @('visualQuality', 4), @('battle', 1), @('speed', 1), @('glyphs', 2))) {
         if ((Field $case[0]).SelectedIndex -ne $case[1]) { throw "Wrong ini readback: $($case[0])" }
+    }
+    $qtType = $assembly.GetType('UsumOneScreen.QtIni')
+    function SetApi($api) {
+        $qt = $qtType.GetMethod('Load').Invoke($null, @($launcherHome.ConfigPath))
+        $qt.Set('Renderer', 'graphics_api', $api)
+        $qt.Save($launcherHome.ConfigPath)
+        $form.GetType().GetMethod('UpdateVisualQuality', $flags).Invoke($form, @())
+    }
+    SetApi '2'
+    if ((Field 'visualQuality').Enabled -or (Field 'visualQualityHint').Text -notlike '*requires OpenGL*') { throw 'Vulkan not explained/disabled' }
+    SetApi '1'
+    if (!(Field 'visualQuality').Enabled) { throw 'OpenGL visual quality unavailable' }
+    # Exercise every UI choice, including Off and its QSettings default flag.
+    foreach ($case in @(@(1, 'None (builtin)'), @(2, 'usum-sharpen'), @(3, 'usum-aa'), @(4, 'usum-sharpen-aa'))) {
+        (Field 'visualQuality').SelectedIndex = $case[0]
+        if (!$form.GetType().GetMethod('SavePluginSettings', $flags).Invoke($form, @())) { throw 'Visual quality save failed' }
+        $qt = $qtType.GetMethod('Load').Invoke($null, @($launcherHome.ConfigPath))
+        if ($qt.Get('Layout', 'pp_shader_name') -ne $case[1] -or $qt.Get('Layout', 'pp_shader_name\default') -ne 'false') { throw 'Visual quality UI wrote wrong shader/default' }
     }
     foreach ($index in @(0, 1, 2)) {
         (Field 'speed').SelectedIndex = $index
@@ -1027,7 +1109,12 @@ try {
     $previous = [IO.File]::ReadAllText([IO.Path]::Combine(($before | Sort-Object | Select-Object -Last 1), 'source.txt'))
     $source = [IO.Path]::Combine($launcherHome.Sdmc, $previous, 'main')
     [IO.File]::WriteAllText($source, 'before Play synthetic save')
+    # Delete immediately before Play preparation; no earlier sync may restore it.
+    [IO.File]::Delete([IO.Path]::Combine($launcherHome.User, 'shaders', 'usum-sharpen-aa.glsl'))
     $assembly.GetType('UsumOneScreen.Home').GetMethod('PrepareLaunch').Invoke($launcherHome, @())
+    if (![IO.File]::Exists([IO.Path]::Combine($launcherHome.User, 'shaders', 'usum-sharpen-aa.glsl'))) { throw 'Play did not restore shader' }
+    $qt = $qtType.GetMethod('Load').Invoke($null, @($launcherHome.ConfigPath))
+    if ($qt.Get('Layout', 'pp_shader_name') -ne 'usum-sharpen-aa' -or $qt.Get('Layout', 'pp_shader_name\default') -ne 'false') { throw 'Play did not sync shader' }
     $after = [IO.Directory]::GetDirectories([IO.Path]::Combine($target, 'backups', '00040000001B5000')) | Sort-Object
     if ([IO.File]::ReadAllText([IO.Path]::Combine($after[-1], 'data', 'main')) -ne 'before Play synthetic save') { throw 'Play did not back up' }
     $ini = $assembly.GetType('UsumOneScreen.PluginIni').GetMethod('Load').Invoke($null, @($launcherHome.PluginIniPath))
@@ -1044,7 +1131,7 @@ try {
     foreach ($scale in @(1.0, 1.5)) {
         if ($scale -gt 1) { $form.Scale([Drawing.SizeF]::new(1.5, 1.5)) }
         $form.PerformLayout()
-        foreach ($name in @('graphics','battle','speed','glyphs','widescreen')) {
+        foreach ($name in @('graphics','visualQuality','battle','speed','glyphs','widescreen')) {
             $c = Field $name
             if (!$c.Visible -or $c.Width -lt 140 * $scale -or $c.Right -gt $c.Parent.ClientSize.Width) { throw "Clipped control at scale ${scale}: $name" }
         }
@@ -1091,7 +1178,7 @@ try {
         assert not (options / f'backups/{MOON:016X}').exists()
         save_manager(run, root)
         texture_packs(run, root)
-    print('PASS: named slots, validation, safety backup failure/retention/isolation, ZIP round trips and title/path/link refusal; save discovery/retention/restore/isolation; graphics keep/presets; cheat resources, code preservation and mutual exclusion; controller vendor/fallback mapping; options ini readback and DPI layout; battle/speed writes; validation, cross-game rejection, title state/paths, bundled source priority and immutability, installed-update checks, fallback source; offline pinned download and hash refusal; zip classification, traversal safety, reuse and state; embedded/adjacent/explicit plugin priority; widescreen choices, Auto thresholds, custom UI preservation, comment retention, invalid-value immutability, stretch sync, stale-state preservation, numeric-zero/bad-value handling and per-game cleanup.')
+    print('PASS: named slots, validation, safety backup failure/retention/isolation, ZIP round trips and title/path/link refusal; save discovery/retention/restore/isolation; graphics keep/presets; visual quality config/default flags, Off/Keep, original shader installation/restoration, API/stereo refusal, per-game overrides and UI availability/readback; cheat resources, code preservation and mutual exclusion; controller vendor/fallback mapping; options ini readback and DPI layout; battle/speed writes; validation, cross-game rejection, title state/paths, bundled source priority and immutability, installed-update checks, fallback source; offline pinned download and hash refusal; zip classification, traversal safety, reuse and state; embedded/adjacent/explicit plugin priority; widescreen choices, Auto thresholds, custom UI preservation, comment retention, invalid-value immutability, stretch sync, stale-state preservation, numeric-zero/bad-value handling and per-game cleanup.')
 
 
 if __name__ == '__main__':

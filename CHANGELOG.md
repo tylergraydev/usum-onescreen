@@ -6,6 +6,7 @@ All notable changes for players are listed here. Versions follow [Semantic Versi
 
 ### Added
 
+- Windows launcher: Visual quality alongside graphics presets, with Keep, Off, Sharpen, FXAA-style anti-aliasing and Sharpen + AA; persisted selection and original GPL-3.0 shaders installed into the portable instance. Effects require OpenGL/2D, with an unavailable reason on Vulkan or stereo and no automatic API changes. Real GPU rendering remains unverified.
 - Native battle power controls: R arms a screenshot-confirmed Mega Evolution or Z-Power button before a move; L keeps descriptions. Power taps are guarded and host-tested. Static button-text probes tolerate the observed animations; Z submission permits only confirmed gold rows, and B returns once to normal moves. Repaired native flows still need emulator validation.
 
 - Native top-screen Ride Pager: follows the game's Y menu, shows usable/current/registered rides, selects with Up/Down and A/Y, and closes with B. Field D-pad shortcuts stay with the game; fixed English labels and no registration controls yet. Emulator verification pending.

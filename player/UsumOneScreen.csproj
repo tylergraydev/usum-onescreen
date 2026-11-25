@@ -16,6 +16,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="shaders\post-process.glsl" LogicalName="UsumOneScreen.PostProcess" />
     <EmbeddedResource Include="cheats\*.txt" LogicalName="UsumOneScreen.Cheats.%(Filename).txt" />
     <Reference Include="System.IO.Compression" />
     <Reference Include="System.IO.Compression.FileSystem" />
