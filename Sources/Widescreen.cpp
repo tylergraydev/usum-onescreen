@@ -1,3 +1,4 @@
+#include "Usum.hpp"
 #include "Widescreen.hpp"
 #include "BattleWidescreen.hpp"
 #include "SidePanels.hpp"
@@ -15,8 +16,8 @@ namespace OneScreen
 {
     using namespace CTRPluginFramework;
 
-    static constexpr u32 PerspectiveAddress = 0x3631CC;
-    static constexpr u32 CalculateMtxAddress = 0x2A22EC;
+    static constexpr u32 PerspectiveAddress = Usum::PerspectiveAddress;
+    static constexpr u32 CalculateMtxAddress = Usum::CalculateMtxAddress;
     static Hook s_perspectiveHook;
     static Hook s_calculateMtxHook;
     static volatile bool s_battlePanelsHud = false;
@@ -66,7 +67,7 @@ namespace OneScreen
     // bounds may differ from stock, and only by an exact pair we last wrote.
     static std::string PatchLayoutTemplates(float halfWidth)
     {
-        static const u32 addresses[] = { 0x5C3180, 0x5E8468 };
+        static const u32 addresses[] = { Usum::OrthoTemplate, Usum::OrthoTemplateAlt };
         static const u32 stock[][7] = {
             { 2, 0xC3480000, 0x43480000, 0xC2F00000, 0x42F00000, 0x3F800000, 0x447A0000 },
             { 2, 0xC3480000, 0x43480000, 0xC2F00000, 0x42F00000, 0x3DCCCCCD, 0x44480000 }
@@ -238,7 +239,7 @@ namespace OneScreen
             s_scaleLock.Unlock();
         }
         const bool fitBattle = s_battlePanelsHud && WidescreenSqueeze() > 1.f
-            && *reinterpret_cast<const u32 *>(pane) == 0x646B28
+            && *reinterpret_cast<const u32 *>(pane) == Usum::VtMapPane
             && SidePanelsTopRoot(reinterpret_cast<const char *>(pane+0x80),
                 *reinterpret_cast<const u32 *>(pane+0xC),
                 *reinterpret_cast<const float *>(pane+0x3C),

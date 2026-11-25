@@ -76,8 +76,8 @@ namespace OneScreen
         BattleSpeed  battleMessages = BattleSpeed::Normal;
         BattleSpeed  battleBars = BattleSpeed::Normal;
 
-        // Mode per scene ID (SceneModule() names). Later entries win.
-        // "FieldRo.xmenu" is the X menu overlay inside FieldRo; "default" is
+        // Mode per scene ID (CurrentScene() names). Later entries win.
+        // "<scene>.xmenu" is the X menu overlay inside that scene; "default" is
         // any scene not listed.
         std::vector<std::pair<std::string, SceneMode>> scenes = {
             { "TitleMenu",     SceneMode::Off },
@@ -94,6 +94,11 @@ namespace OneScreen
             { "Config",        SceneMode::Full },     // Options
             { "Kawaigari",     SceneMode::Full },     // Pokémon Refresh
             { "BattleVideoPlayer", SceneMode::Panel },
+            // Omega Ruby
+            { "DllTitle",      SceneMode::Off },
+            { "DllField",      SceneMode::Off },      // Overworld; PokeNav Plus on bottom
+            { "DllField.xmenu", SceneMode::Panel },   // X menu open over the overworld
+            { "DllStrInput",   SceneMode::Full },     // Name keyboard needs touch
             { "default",       SceneMode::Panel },
         };
     };
@@ -115,7 +120,7 @@ namespace OneScreen
     // back to Settings{} with no warnings.
     std::string DefaultSettingsText(void);
 
-    // Mode for `scene`; `xmenuOpen` selects FieldRo.xmenu inside FieldRo.
+    // Mode for `scene`; `xmenuOpen` selects <scene>.xmenu when defined.
     SceneMode ModeForScene(const Settings &settings, const std::string &scene, bool xmenuOpen);
 
     // Up, down, left, right key bits for the cursor source.

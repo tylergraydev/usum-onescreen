@@ -46,6 +46,7 @@ namespace OneScreen
     using TextureCopyFn = void (*)(u32 in, u32 out, u32 size, u32 inWidth, u32 inGap, u32 outWidth,
                                    u32 outGap, u32 flags);
 
+    static bool s_usumEngine = false;
     static DisplayTransferFn s_displayTransfer = nullptr;
     static TextureCopyFn s_textureCopy = nullptr;
 
@@ -796,15 +797,20 @@ namespace OneScreen
 
     static bool PanelCallback(const Screen &screen)
     {
-        if (PhotoModeActive()) return false;
+        if (s_usumEngine && PhotoModeActive()) return false;
         bool drew = DrawPanel(screen);
         // Drawn after the panel so test menus sit on top, and before the
         // screenshot hook so shots include them.
         drew |= UiDemoOnScreen(screen);
-        drew |= BattleScreenOnScreen(screen);
+        if (s_usumEngine) drew |= BattleScreenOnScreen(screen);
         drew |= UI::GpuQuadOnScreen(screen);   // always false: GPU only
         drew |= ShotOnScreen(screen);
         return drew;
+    }
+
+    void PanelSetUsumEngine(bool on)
+    {
+        s_usumEngine = on;
     }
 
     void StartPanel(PanelMode initial, u32 displayTransfer, u32 textureCopy)

@@ -13,9 +13,10 @@ namespace OneScreen
     //   Transitions ("" scene): unchanged.
     // A manual change (panel_key, L+R) overrides this until the scene changes.
 
-    // Call every frame. `scene` is the latest SceneModule() result,
+    // Call every frame. `scene` is the latest CurrentScene() result,
     // `gameHeld` the keys the game last read and `fieldState` FieldState()
-    // (-1 if unknown; the X menu is then tracked from X/B presses). Returns
+    // (-1 if unknown; on USUM the X menu is then tracked from X/B presses).
+    // Games without FeatureUsumEngine use scene settings only. Returns
     // true if it changed the panel mode.
     bool AutoPanelUpdate(const std::string &scene, u32 gameHeld, int fieldState);
 

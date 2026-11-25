@@ -1,3 +1,4 @@
+#include "Usum.hpp"
 #include "Screens/Pokedex.hpp"
 
 #include <cstring>
@@ -26,7 +27,7 @@ namespace OneScreen
     static const u32 FrameContents    = 0xA4;       // frame -> the app's shared data
     static const u32 FrameTopCursor   = 0x134;      // top level: u32 row (0-4 dexes, 5 Evaluation)
     static const u32 FrameTopState    = 0x19D;      // top level: u8, 7 = menu up
-    static const u32 VtContents       = 0x34C14;    // Zukan module offset of the data's vtable
+    static const u32 VtContents       = Usum::ZukanContents;    // Zukan module offset of the data's vtable
     static const u32 ContentsDex      = 0x11;       // u8: dex being shown (DexKind)
     static const u32 ContentsCount    = 0xA0;       // u16: records (403)
     static const u32 ContentsRecords  = 0xA4;       // -> records, RecordSize each
@@ -36,16 +37,16 @@ namespace OneScreen
     static const u32 MaxRecords = 807;
 
     // Save data (docs/RE3-party-bag.md for the roots).
-    static const u32 GameManagerGlobal = 0x6A59C4;
+    static const u32 GameManagerGlobal = Usum::GameManagerGlobal;
     static const u32 ManagerGameData = 0x24, GameDataSaveData = 0x04;
-    static const u32 VtSaveData = 0x64F4A0;
+    static const u32 VtSaveData = Usum::VtSaveData;
     static const u32 SaveZukan = 0x23DC;            // Savedata::ZukanData
-    static const u32 VtZukanData = 0x64F550, ZukanMagic = 0x2F120F17;
+    static const u32 VtZukanData = Usum::VtZukanData, ZukanMagic = Usum::ZukanMagic;
     static const u32 SaveEventFlags = 0x15D8 + 0x7D4;   // EventWork +0x7D4: flag bits (flags < 0x1340)
     static const u32 FlagIslandDex = 0x101F;        // + island - 1: that island's Pokédex is open
     static const u32 FlagEvaluation = 0xFE7;        // the Evaluation row is there
     // The game's form table (read by 0x4C7664 / 0x4C7FD0 through 0x4C8068).
-    static const u32 FormTable = 0x5D63DC;
+    static const u32 FormTable = Usum::FormTable;
     static const int FormTableCount = 0x7B;
 
     // Frames the native screen must have nothing to show before the panel

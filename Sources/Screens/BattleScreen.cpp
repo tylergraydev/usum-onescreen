@@ -1,3 +1,4 @@
+#include "Usum.hpp"
 #include "Screens/BattleScreen.hpp"
 
 
@@ -205,11 +206,11 @@ namespace OneScreen
             const u16 species = foe.species;
             if (s_caughtSpecies != species && species >= 1 && species <= 807) {
                 const auto read32 = [](u32 at) { u32 v = 0; Process::Read32(at, v); return v; };
-                const u32 manager = read32(0x6A59C4);
+                const u32 manager = read32(Usum::GameManagerGlobal);
                 const u32 game = manager ? read32(manager + 0x24) : 0;
                 const u32 save = game ? read32(game + 4) : 0;
-                if (save && read32(save) == 0x64F4A0 && read32(save + 0x23DC) == 0x64F550
-                    && read32(save + 0x23E0) == 0x2F120F17) {
+                if (save && read32(save) == Usum::VtSaveData && read32(save + 0x23DC) == Usum::VtZukanData
+                    && read32(save + 0x23E0) == Usum::ZukanMagic) {
                     u8 byte = 0;
                     if (Process::Read8(save + 0x23DC + 0x8C + CaughtByte(species), byte)) {
                         s_caught = CaughtBit(species, byte);

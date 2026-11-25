@@ -1,3 +1,4 @@
+#include "Usum.hpp"
 #include "UI/Assets.hpp"
 
 #include <atomic>
@@ -14,7 +15,7 @@ namespace UI
     using namespace CTRPluginFramework;
 
     // Current text language (0-9, 2 = English), as in Screens/Map.cpp.
-    static const u32 LanguageByte = 0x671A10;
+    static const u32 LanguageByte = Usum::LanguageByte;
 
     static std::atomic<int> s_state{ (int)AssetsState::NotStarted };
     static Task *s_task = nullptr;

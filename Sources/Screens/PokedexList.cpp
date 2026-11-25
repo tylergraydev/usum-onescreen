@@ -1,3 +1,4 @@
+#include "Usum.hpp"
 #include "Screens/PokedexList.hpp"
 
 #include <algorithm>
@@ -29,10 +30,10 @@ namespace OneScreen
         // Zukan module offsets of the frame classes (docs/RE7-pokedex.md).
         switch (offsetInModule)
         {
-        case 0x34CD4: return DexScreen::Top;
-        case 0x34DD8: return DexScreen::List;
-        case 0x34F68: return DexScreen::Grid;
-        case 0x34C24: return DexScreen::Entry;
+        case Usum::ZukanTop: return DexScreen::Top;
+        case Usum::ZukanList: return DexScreen::List;
+        case Usum::ZukanGrid: return DexScreen::Grid;
+        case Usum::ZukanEntry: return DexScreen::Entry;
         default:      return DexScreen::Other;
         }
     }

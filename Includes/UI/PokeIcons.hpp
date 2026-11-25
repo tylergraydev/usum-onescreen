@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Usum.hpp"
+
 // The game's own Pokémon box icons (the 40x30 "menu sprites"), read from
 // the running game's RomFS on demand (docs/GAME-ASSETS.md, "Pokémon icons").
 // Nothing of the game is in the repo: this file knows the formats and where
@@ -35,7 +37,7 @@ namespace UI
     using MemRead = std::function<bool(u32 address, void *dst, u32 size)>;
 
     // The game's icon lookup (USUM v1.2, both games, docs/OFFSETS.md).
-    static constexpr u32 PokeIconLookupFunc = 0x30CC1C;
+    static constexpr u32 PokeIconLookupFunc = Usum::PokeIconLookupFunc;
 
     struct PokeIconTable
     {

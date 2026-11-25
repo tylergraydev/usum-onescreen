@@ -1,3 +1,4 @@
+#include "Usum.hpp"
 #include "Screens/Keyboard.hpp"
 
 #include <deque>
@@ -30,8 +31,8 @@ namespace OneScreen
     // of pointers from the stack entries, and the path is then re-checked
     // every frame.
     static const char *const StrInputModule = "StrInput";
-    static const u32 VtFrame = 0xBFE4;          // the keyboard
-    static const u32 VtText  = 0xBFC0;          // its text object, at frame +0x1C
+    static const u32 VtFrame = Usum::KeyboardFrame;          // the keyboard
+    static const u32 VtText  = Usum::KeyboardText;          // its text object, at frame +0x1C
     static const u32 FrameText = 0x1C;
     static const u32 TextChars  = 0x30;         // u16[16], 0-terminated
     static const u32 TextQwerty = 0x54;         // 1 QWERTY page, 0 the grid page

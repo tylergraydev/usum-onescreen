@@ -7,11 +7,12 @@ The plugin is tied to exact addresses in one build of the game. `tools/sigscan.p
 | What | Where | Found by |
 |---|---|---|
 | Title ID, title version | `Sources/Game.cpp` (`s_games`) | `tools/extract_code.py` (`info.json`) and the boot log |
-| `gspSetFramebuffer`, `hidTouchRead`, `hidPadRead` + 4 prologue words each | `Sources/Game.cpp` | `sigscan.py --emit-cpp` |
-| `sceneManager` | `Sources/Game.cpp` | `sigscan.py --emit-cpp` |
-| Party and Bag scene IDs (`main:<vtable>`) | `Includes/Settings.hpp`, `Sources/Settings.cpp` (defaults text), `README.md`, `tests/settings_test.cpp` | `sigscan.py` (static), confirmed by the `scene:` log line (runtime) |
-| End of the main image (`CroArea`, CRO modules load above it) | `Sources/Scene.cpp` | exheader: data address + data size + bss size, rounded up to 0x1000 |
-| Global data range for `snap` (`SnapStart`/`SnapEnd`) and the rodata range for `vtscan` | `Sources/main.cpp` | exheader: data address, rodata address, the same end as above |
+| `fieldMenuFlag` (field menu open u32 address; 0 = none) | `Sources/Game.cpp` (`GameInfo` table) | Global-data diff and runtime open/closed checks; see `docs/GEN6.md` |
+| GSP/HID/GX hook targets + prologues, GX state, scene manager | `Sources/Game.cpp` (`Offsets`) | `sigscan.py`, static analysis |
+| Image layout (rodata, data, page-rounded bss end), feature bits | `Sources/Game.cpp` (`GameInfo`) | exheader and verified engine support |
+| Scene path (global pointer and dereference offsets) | `Sources/Game.cpp` (`ScenePath`, `GameInfo::scene`) | static analysis and runtime scene/vtable checks |
+| USUM engine internals: globals, vtables, patch addresses, CRO offsets | `Includes/Usum.hpp` | static analysis and runtime checks documented in RE notes |
+| Party and Bag scene IDs (`main:<vtable>`) | `Includes/Settings.hpp`, `Sources/Settings.cpp`, `README.md`, `tests/settings_test.cpp` | static analysis, confirmed by the `scene:` log |
 
 CRO scene names (`FieldRo`, `Zukan`, `Battle`, `TitleMenu`) come from the module headers at runtime, so they need no porting, though they should be confirmed in the log. Everything else in `docs/OFFSETS.md` (GSP/HID internals, RE2 text addresses) is reference material that the plugin does not use.
 

@@ -43,6 +43,33 @@ namespace OneScreen
         // Called, not hooked; the panel copies the bottom screen with them.
         HookTarget gxDisplayTransfer;
         HookTarget gxTextureCopy;
+        // GX command-list wrapper and command-queue state global.
+        HookTarget gxProcessList;
+        u32 gxState;
+    };
+
+    struct ImageLayout
+    {
+        u32 rodataStart;
+        u32 dataStart;
+        u32 imageEnd; // page-rounded end of bss; CRO modules load above it
+    };
+
+    // Read global, then dereference each pointer + offset to reach the scene.
+    // Any failed read or null pointer means no current scene.
+    struct ScenePath
+    {
+        u32 global;
+        u32 count;
+        u32 offsets[4];
+    };
+
+    enum GameFeature : u32
+    {
+        // Scene names, polling and automatic panel selection.
+        FeatureScenes = 1u << 0,
+        // Readers, native screens and patches for USUM engine structures.
+        FeatureUsumEngine = 1u << 1,
     };
 
     struct GameInfo
@@ -52,11 +79,19 @@ namespace OneScreen
         u16         version;    // title version reported by Process::GetVersion()
         bool        confirmed;  // titleId/version checked against a real dump
         Offsets     offsets;
+        ImageLayout layout;
+        ScenePath   scene;
+        u32         features;
+        // Address of a u32 nonzero while the field menu is open; 0 = none.
+        // Found by global-data diff; see docs/GEN6.md.
+        u32         fieldMenuFlag;
     };
 
     // Returns the entry for the running game, or nullptr if it isn't a supported
     // title and version. The plugin does nothing when this returns nullptr.
     const GameInfo *DetectGame(void);
+    // Last DetectGame result; nullptr before detection or for unsupported games.
+    const GameInfo *CurrentGame(void);
 
     // True if every non-zero hook target in the table has the expected prologue
     // in memory. `report` gets one line per target.

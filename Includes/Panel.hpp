@@ -16,6 +16,8 @@ namespace OneScreen
         Full,   // bottom screen at full size, centered over the top screen
     };
 
+    void PanelSetUsumEngine(bool on);
+
     // Registers the OSD callback that copies the bottom screen onto the top.
     // `displayTransfer` and `textureCopy` are the game's gx library calls
     // (Offsets::gxDisplayTransfer / gxTextureCopy) forwarded to LayerGpu.

@@ -1,3 +1,4 @@
+#include "Usum.hpp"
 #include "Where.hpp"
 
 #include <3ds.h>
@@ -6,21 +7,21 @@
 #include <cmath>
 
 #include "Scene.hpp"
+#include "Game.hpp"
 
 namespace OneScreen
 {
     using namespace CTRPluginFramework;
 
     // USUM v1.2, main image. Found and checked as described in docs/RE4-map.md.
-    static const u32 GameManagerPtr = 0x6A59C4;     // global -> game manager
-    static const u32 SceneManagerPtr = 0x6A599C;    // global -> scene manager (docs/OFFSETS.md)
+    static const u32 GameManagerPtr = Usum::GameManagerGlobal;     // global -> game manager
     static const u32 GmSceneManager = 0x1C;         // game manager -> scene manager (sanity check)
     static const u32 GmField = 0x24;                // game manager -> field object
     static const u32 GmLocation = 0x2C;             // game manager -> location object
     static const u32 FieldMoveModels = 0xCC;        // field object -> move model manager
-    static const u32 VtMoveModelManager = 0x64C628;
+    static const u32 VtMoveModelManager = Usum::VtMoveModelManager;
     static const u32 ManagerModels = 0x0C;          // 35 model pointers; [0] is the player
-    static const u32 VtPlayerModel = 0x64C538;
+    static const u32 VtPlayerModel = Usum::VtPlayerModel;
     static const u32 ModelPos = 0x3B0;              // float x, y, z
     static const u32 ModelRot = 0x424;              // quaternion x, y, z, w
     static const u32 LocEntryZone = 0x0A;           // u16, followed by the entry position
@@ -30,7 +31,7 @@ namespace OneScreen
     // Zone data: field object -> loader (vtable 0x64BDD0) -> table of 0x54-byte
     // entries indexed by zone, size in bytes after the pointer.
     static const u32 FieldZoneLoader = 0x54;
-    static const u32 VtZoneLoader = 0x64BDD0;
+    static const u32 VtZoneLoader = Usum::VtZoneLoader;
     static const u32 LoaderTable = 0x14, LoaderSize = 0x18;
     static const u32 ZoneEntrySize = 0x54;
     static const u32 ZoneParent = 0x0A, ZoneName = 0x1C, ZoneMapPoint = 0x44;   // s32 x, z
@@ -39,9 +40,9 @@ namespace OneScreen
     // Rotom Dex map: a FieldMenu CRO frame on the scene manager's stack holds
     // the map view (a main-image class).
     static const u32 ManagerSlots = 8;
-    static const u32 VtFieldMenuFrame = 0x183A0;    // FieldMenu-relative
+    static const u32 VtFieldMenuFrame = Usum::FieldMenuMapFrame;    // FieldMenu-relative
     static const u32 FrameMapView = 0xD0;
-    static const u32 VtMapView = 0x64786C;
+    static const u32 VtMapView = Usum::VtMapView;
     static const u32 MapIndex = 0x170, MapCentre = 0x174, MapBounds = 0x17C;  // bounds: min x, min z, max x, max z
     static const u32 MapFlag = 0x19C, MapFlagShown = 0x1A4;
 
@@ -77,10 +78,10 @@ namespace OneScreen
     {
         WhereState state;
         // Outside the field (battle, apps) the work's zone reads 0, a real zone.
-        if (SceneModule(SceneManagerPtr) != "FieldRo")
+        if (SceneModule(CurrentGame()->offsets.sceneManager) != "FieldRo")
             return state;
         const u32 gm = Read32(GameManagerPtr);
-        if (gm == 0 || Read32(gm + GmSceneManager) != Read32(SceneManagerPtr))
+        if (gm == 0 || Read32(gm + GmSceneManager) != Read32(CurrentGame()->offsets.sceneManager))
             return state;
         const u32 field = Read32(gm + GmField);
         const u32 manager = field ? Read32(field + FieldMoveModels) : 0;
@@ -128,7 +129,7 @@ namespace OneScreen
             state.yaw += 360;
         state.valid = true;
 
-        const u32 sceneManager = Read32(SceneManagerPtr);
+        const u32 sceneManager = Read32(CurrentGame()->offsets.sceneManager);
         for (u32 i = 0; sceneManager != 0 && i < ManagerSlots; i++)
         {
             const u32 object = Read32(sceneManager + i * 4);

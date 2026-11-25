@@ -50,6 +50,18 @@ namespace CTRPluginFramework
 {
     static const OneScreen::GameInfo *s_game = nullptr;
 
+    static bool ScenesEnabled(void)
+    {
+        return s_game && (s_game->features & OneScreen::FeatureScenes) && s_game->scene.global != 0;
+    }
+
+    // Engine readers also need a known scene manager; never pass an unknown global.
+    static bool UsumEnabled(void)
+    {
+        return s_game && (s_game->features & OneScreen::FeatureUsumEngine) && ScenesEnabled()
+            && s_game->offsets.sceneManager != 0;
+    }
+
     static const char *LogPath = "/usum-onescreen.log";
     static const char *SettingsPath = "/usum-onescreen.ini";
 
@@ -62,7 +74,7 @@ namespace CTRPluginFramework
     // Runs when the game is closing.
     void OnProcessExit(void)
     {
-        OneScreen::PhotoModeRequest(false);
+        if (UsumEnabled()) OneScreen::PhotoModeRequest(false);
     }
 
     // usum-onescreen.log at the SD card root is rewritten each boot, so a test
@@ -116,12 +128,21 @@ namespace CTRPluginFramework
         for (const std::string &w : warnings)
             WriteLog(Utils::Format("settings: %s %s", SettingsPath + 1, w.c_str()), false);
         OneScreen::SetSettings(settings);
-        OneScreen::ButtonsSetPhotoCombo(settings.photoKey);
-        OneScreen::AutoPanelSetEnabled(settings.autoPanel);
+        // Never reserve engine-only combos on a core-only game.
+        if (!UsumEnabled())
+        {
+            OneScreen::ButtonsSetCombo(0);
+            OneScreen::ButtonsSetSaveCombo(0);
+        }
+        OneScreen::ButtonsSetPhotoCombo(UsumEnabled() ? settings.photoKey : 0);
+        OneScreen::AutoPanelSetEnabled(ScenesEnabled() && settings.autoPanel);
         WriteLog("settings: " + OneScreen::DescribeSettings(settings), false);
-        WriteLog(OneScreen::SetWidescreenAspect(settings.aspect), false);
-        OneScreen::BattleScreenSetLayout(settings.battleLayout);
-        WriteLog(OneScreen::ApplyFastTextSettings(s_game->offsets.sceneManager), false);
+        if (UsumEnabled())
+        {
+            WriteLog(OneScreen::SetWidescreenAspect(settings.aspect), false);
+            OneScreen::BattleScreenSetLayout(settings.battleLayout);
+            WriteLog(OneScreen::ApplyFastTextSettings(s_game->offsets.sceneManager), false);
+        }
     }
 
     // Sets `key = value` in [section] of /usum-onescreen.ini (SetIniValue:
@@ -284,8 +305,6 @@ namespace CTRPluginFramework
     static const char *CommandPath = "/usum-cmd.txt";
 
     // Global data + bss of USUM v1.2 (from the exheader): 0x669000 .. 0x6D5F44.
-    static const u32 SnapStart = 0x00669000;
-    static const u32 SnapEnd   = 0x006D6000;
 
     // Writes the game's global data to /usum-snap-NAME.bin for offline diffing.
     static void WriteSnapshot(const std::string &name)
@@ -294,7 +313,7 @@ namespace CTRPluginFramework
         const std::string path = "/usum-snap-" + name + ".bin";
         if (File::Open(file, path, File::WRITE | File::CREATE | File::TRUNCATE) != File::SUCCESS)
             return;
-        file.Write((const void *)SnapStart, SnapEnd - SnapStart);
+        file.Write((const void *)s_game->layout.dataStart, s_game->layout.imageEnd - s_game->layout.dataStart);
         file.Close();
     }
 
@@ -305,7 +324,7 @@ namespace CTRPluginFramework
 
     static bool IsVtable(u32 v)
     {
-        return v >= 0x005BC000 && v < 0x00669000 && (v & 3) == 0;
+        return v >= s_game->layout.rodataStart && v < s_game->layout.dataStart && (v & 3) == 0;
     }
 
     // For every global word that points into the heap, looks at the first 64
@@ -315,7 +334,7 @@ namespace CTRPluginFramework
     static void WriteVtableScan(const std::string &name)
     {
         std::vector<u32> records;
-        for (u32 g = SnapStart; g < SnapEnd; g += 4)
+        for (u32 g = s_game->layout.dataStart; g < s_game->layout.imageEnd; g += 4)
         {
             const u32 p = *(const u32 *)g;
             if (!IsHeapPointer(p) || (p & 3) != 0)
@@ -379,13 +398,28 @@ namespace CTRPluginFramework
 
     static void RunCommand(const std::string &line)
     {
+        const std::string cmd = line.substr(0, line.find_first_of(" \t"));
+        const bool sceneCommand = cmd == "scene" || cmd == "auto";
+        static const char *engineCommands[] = {
+            "photo", "battle", "where", "party", "bag", "box", "panels", "fov", "aspect", "cullnames",
+            "battleui", "fasttext", "battlespeed", "battlelayout", "action", "xmenu", "keyboard", "pokedex",
+            "screens", "bagui", "map", "rotom", "partyui", "save", "pc", "boxes", "uitheme"
+        };
+        bool unsupported = sceneCommand && !ScenesEnabled();
+        for (const char *name : engineCommands)
+            if (cmd == name && !UsumEnabled()) unsupported = true;
+        if (unsupported)
+        {
+            WriteLog(cmd + ": not supported on this game", false);
+            return;
+        }
         if (line == "photo on" || line == "photo off" || line == "photo status")
         {
             if (line != "photo status") OneScreen::PhotoModeRequest(line == "photo on");
             WriteLog(OneScreen::PhotoModeStatus(), false);
             return;
         }
-        if (OneScreen::PhotoModeActive())
+        if (UsumEnabled() && OneScreen::PhotoModeActive())
         {
             WriteLog("cmd: refused while photo mode is active: " + line, false);
             return;
@@ -466,7 +500,7 @@ namespace CTRPluginFramework
                 : "widescreen: invalid aspect (use 0, off, a positive float, 16:9 or 21:9)", false);
         }
         else if (line == "scene")
-            WriteLog("scene: " + OneScreen::SceneModule(s_game->offsets.sceneManager), false);
+            WriteLog("scene: " + OneScreen::CurrentScene(), false);
         else if (line.compare(0, 7, "uidemo ") == 0)
         {
             static const char *modes[] = { "off", "on", "shade", "direct" };
@@ -844,40 +878,43 @@ namespace CTRPluginFramework
         if (!OnPluginStack())
             return;
 
-        if (OneScreen::PhotoModeUpdate(s_game->offsets.sceneManager, PollCommands))
+        if (UsumEnabled() && OneScreen::PhotoModeUpdate(s_game->offsets.sceneManager, PollCommands))
             return; // Do not replay the exit chord into other plugin controls.
 
         const u32 panelKey = OneScreen::GetSettings().panelKey;
-        if (!OneScreen::QuickSaveRunning() && panelKey != 0 && Controller::IsKeysPressed(panelKey))
+        if ((!UsumEnabled() || !OneScreen::QuickSaveRunning()) && panelKey != 0 && Controller::IsKeysPressed(panelKey))
         {
             OneScreen::CyclePanelMode();
-            OneScreen::AutoPanelManualOverride();
+            if (ScenesEnabled()) OneScreen::AutoPanelManualOverride();
             WriteLog(OneScreen::PanelStatus(), false);
         }
 
         OneScreen::CursorUpdate();
         OneScreen::ButtonsUpdate();
 
-        const std::string speedLog = OneScreen::FastTextFrame(s_game->offsets.sceneManager);
-        if (!speedLog.empty())
-            WriteLog(speedLog, false);
+        if (UsumEnabled())
+        {
+            const std::string speedLog = OneScreen::FastTextFrame(s_game->offsets.sceneManager);
+            if (!speedLog.empty())
+                WriteLog(speedLog, false);
 
-        const std::string battleWideLog = OneScreen::BattleWidescreenFrame(s_game->offsets.sceneManager);
-        if (!battleWideLog.empty())
-            WriteLog(battleWideLog, false);
+            const std::string battleWideLog = OneScreen::BattleWidescreenFrame(s_game->offsets.sceneManager);
+            if (!battleWideLog.empty())
+                WriteLog(battleWideLog, false);
 
-        const std::string cullLog = OneScreen::WidescreenFrame();
-        if (!cullLog.empty())
-            WriteLog(cullLog, false);
+            const std::string cullLog = OneScreen::WidescreenFrame();
+            if (!cullLog.empty())
+                WriteLog(cullLog, false);
 
-        std::vector<std::string> actionLog;
-        OneScreen::ActionsUpdate(s_game->offsets.sceneManager, actionLog);
-        for (const std::string &line : actionLog)
-            WriteLog(line, false);
+            std::vector<std::string> actionLog;
+            OneScreen::ActionsUpdate(s_game->offsets.sceneManager, actionLog);
+            for (const std::string &line : actionLog)
+                WriteLog(line, false);
 
-        std::vector<std::string> saveLog;
-        OneScreen::QuickSaveUpdate(s_game->offsets.sceneManager, saveLog);
-        for (const std::string &line : saveLog) WriteLog(line, false);
+            std::vector<std::string> saveLog;
+            OneScreen::QuickSaveUpdate(s_game->offsets.sceneManager, saveLog);
+            for (const std::string &line : saveLog) WriteLog(line, false);
+        }
 
         if (++frames == 300)
         {
@@ -886,9 +923,9 @@ namespace CTRPluginFramework
         }
 
         // Scene changes are checked four times a second.
-        if (frames % 15 == 0)
+        if (ScenesEnabled() && frames % 15 == 0)
         {
-            const std::string now = OneScreen::SceneModule(s_game->offsets.sceneManager);
+            const std::string now = OneScreen::CurrentScene();
             if (now != scene)
             {
                 scene = now;
@@ -896,7 +933,7 @@ namespace CTRPluginFramework
             }
 
             static std::string battle;
-            const std::string state = scene == "Battle"
+            const std::string state = UsumEnabled() && scene == "Battle"
                 ? OneScreen::DescribeBattle(OneScreen::ReadBattle(s_game->offsets.sceneManager)) : "";
             if (state != battle)
             {
@@ -906,76 +943,80 @@ namespace CTRPluginFramework
             }
         }
 
-        std::vector<std::string> battleLog;
-        OneScreen::BattleScreenUpdate(s_game->offsets.sceneManager, scene, battleLog);
-        for (const std::string &line : battleLog)
-            WriteLog(line, false);
-
-        const int fieldState = scene == "FieldRo" ? OneScreen::FieldState(s_game->offsets.sceneManager) : -1;
-        if (OneScreen::AutoPanelUpdate(scene, OneScreen::ButtonsGameHeld(), fieldState))
+        if (UsumEnabled())
+        {
+            std::vector<std::string> battleLog;
+            OneScreen::BattleScreenUpdate(s_game->offsets.sceneManager, scene, battleLog);
+            for (const std::string &line : battleLog) WriteLog(line, false);
+        }
+        const int fieldState = UsumEnabled() && scene == "FieldRo" ? OneScreen::FieldState(s_game->offsets.sceneManager) : -1;
+        if (ScenesEnabled() && OneScreen::AutoPanelUpdate(scene, OneScreen::ButtonsGameHeld(), fieldState))
             WriteLog(OneScreen::AutoPanelStatus() + " -> " + OneScreen::PanelStatus(), false);
 
-        std::vector<std::string> xmenuLog;
-        OneScreen::XMenuUpdate(s_game->offsets.sceneManager, scene, fieldState, xmenuLog);
-        for (const std::string &line : xmenuLog)
-            WriteLog(line, false);
+        if (UsumEnabled())
+        {
+            std::vector<std::string> xmenuLog;
+            OneScreen::XMenuUpdate(s_game->offsets.sceneManager, scene, fieldState, xmenuLog);
+            for (const std::string &line : xmenuLog)
+                WriteLog(line, false);
 
-        std::vector<std::string> keyboardLog;
-        OneScreen::KeyboardUpdate(s_game->offsets.sceneManager, keyboardLog);
-        for (const std::string &line : keyboardLog)
-            WriteLog(line, false);
+            std::vector<std::string> keyboardLog;
+            OneScreen::KeyboardUpdate(s_game->offsets.sceneManager, keyboardLog);
+            for (const std::string &line : keyboardLog)
+                WriteLog(line, false);
 
-        std::vector<std::string> dexLog;
-        OneScreen::PokedexUpdate(s_game->offsets.sceneManager, scene, dexLog);
-        for (const std::string &line : dexLog)
-            WriteLog(line, false);
+            std::vector<std::string> dexLog;
+            OneScreen::PokedexUpdate(s_game->offsets.sceneManager, scene, dexLog);
+            for (const std::string &line : dexLog)
+                WriteLog(line, false);
 
-        std::vector<std::string> screensLog;
-        OneScreen::SubScreensUpdate(s_game->offsets.sceneManager, scene, screensLog);
-        for (const std::string &line : screensLog)
-            WriteLog(line, false);
+            std::vector<std::string> screensLog;
+            OneScreen::SubScreensUpdate(s_game->offsets.sceneManager, scene, screensLog);
+            for (const std::string &line : screensLog)
+                WriteLog(line, false);
 
-        std::vector<std::string> bagLog;
-        OneScreen::BagUpdate(s_game->offsets.sceneManager, scene, bagLog);
-        for (const std::string &line : bagLog)
-            WriteLog(line, false);
+            std::vector<std::string> bagLog;
+            OneScreen::BagUpdate(s_game->offsets.sceneManager, scene, bagLog);
+            for (const std::string &line : bagLog)
+                WriteLog(line, false);
 
-        std::vector<std::string> mapLog;
-        OneScreen::MapUpdate(s_game->offsets.sceneManager, scene, fieldState, mapLog);
-        for (const std::string &line : mapLog)
-            WriteLog(line, false);
+            std::vector<std::string> mapLog;
+            OneScreen::MapUpdate(s_game->offsets.sceneManager, scene, fieldState, mapLog);
+            for (const std::string &line : mapLog)
+                WriteLog(line, false);
 
-        std::vector<std::string> rotomLog;
-        OneScreen::RotomPromptUpdate(s_game->offsets.sceneManager, scene, fieldState, rotomLog);
-        for (const std::string &line : rotomLog)
-            WriteLog(line, false);
+            std::vector<std::string> rotomLog;
+            OneScreen::RotomPromptUpdate(s_game->offsets.sceneManager, scene, fieldState, rotomLog);
+            for (const std::string &line : rotomLog)
+                WriteLog(line, false);
 
-        std::vector<std::string> partyLog;
-        OneScreen::PartyScreenUpdate(s_game->offsets.sceneManager, scene, partyLog);
-        for (const std::string &line : partyLog)
-            WriteLog(line, false);
+            std::vector<std::string> partyLog;
+            OneScreen::PartyScreenUpdate(s_game->offsets.sceneManager, scene, partyLog);
+            for (const std::string &line : partyLog)
+                WriteLog(line, false);
 
-        std::vector<std::string> boxesLog;
-        OneScreen::BoxesUpdate(s_game->offsets.sceneManager, scene, boxesLog);
-        for (const std::string &line : boxesLog)
-            WriteLog(line, false);
+            std::vector<std::string> boxesLog;
+            OneScreen::BoxesUpdate(s_game->offsets.sceneManager, scene, boxesLog);
+            for (const std::string &line : boxesLog)
+                WriteLog(line, false);
 
-        std::vector<std::string> pcLog;
-        OneScreen::PcAnywhereUpdate(s_game->offsets.sceneManager, scene, pcLog);
-        for (const std::string &line : pcLog)
-            WriteLog(line, false);
+            std::vector<std::string> pcLog;
+            OneScreen::PcAnywhereUpdate(s_game->offsets.sceneManager, scene, pcLog);
+            for (const std::string &line : pcLog)
+                WriteLog(line, false);
 
-        std::vector<std::string> assetsLog;
-        OneScreen::UI::AssetsUpdate(scene, assetsLog);
-        for (const std::string &line : assetsLog)
-            WriteLog(line, false);
+            std::vector<std::string> assetsLog;
+            OneScreen::UI::AssetsUpdate(scene, assetsLog);
+            for (const std::string &line : assetsLog)
+                WriteLog(line, false);
 
-        std::vector<std::string> themeLog;
-        OneScreen::ThemeScreenUpdate(s_game->offsets.sceneManager, themeLog);
-        for (const std::string &line : themeLog)
-            WriteLog(line, false);
+            std::vector<std::string> themeLog;
+            OneScreen::ThemeScreenUpdate(s_game->offsets.sceneManager, themeLog);
+            for (const std::string &line : themeLog)
+                WriteLog(line, false);
 
-        OneScreen::SidePanelsUpdate(s_game->offsets.sceneManager);
+            OneScreen::SidePanelsUpdate(s_game->offsets.sceneManager);
+        }
         OneScreen::ShotPoll();
         PollCommands();
     }
@@ -1006,9 +1047,9 @@ namespace CTRPluginFramework
 
     static bool OnMenuOpening(void)
     {
-        if (!OneScreen::PhotoModeCanOpenMenu()) return false;
+        if (UsumEnabled() && !OneScreen::PhotoModeCanOpenMenu()) return false;
         const u32 photoKey = OneScreen::GetSettings().photoKey;
-        if (photoKey != 0 && (Controller::GetKeysDown() & photoKey) == photoKey)
+        if (UsumEnabled() && photoKey != 0 && (Controller::GetKeysDown() & photoKey) == photoKey)
         {
             OneScreen::PhotoModeRequest(true);
             return false; // photo_key may include CTRPF's default Select hotkey
@@ -1103,29 +1144,35 @@ namespace CTRPluginFramework
         menu += panel;
         panel->Enable();
 
-        s_autoEntry = new MenuEntry("Auto panel", nullptr, ToggleAutoPanel,
-                                    "Switch between following the scene and staying as set. "
-                                    "Lasts until the next boot; set auto in usum-onescreen.ini to keep it.");
-        menu += s_autoEntry;
-        s_layoutEntry = new MenuEntry("Battle layout", nullptr, CycleBattleLayout,
-                                      "Change how the battle menu looks. Saved to usum-onescreen.ini.");
-        menu += s_layoutEntry;
-        s_textEntry = new MenuEntry("Instant text", nullptr, ToggleInstantText,
-            "Toggle instant typing. Page ends still need a press. Saved to usum-onescreen.ini.");
-        menu += s_textEntry;
-        s_speedEntry = new MenuEntry("Battle speed", nullptr, CycleBattleSpeed,
-            "Cycle Normal, Fast, Instant for message waits and HP/EXP bars. Saved to usum-onescreen.ini.");
-        menu += s_speedEntry;
-        menu += new MenuEntry("Open PC (Boxes)", nullptr, OpenPc,
-                              "Open the PC boxes here, as at a Pokemon Center PC. Works in the overworld "
-                              "when nothing else is going on; they open when this menu closes. "
-                              "pc_key in usum-onescreen.ini sets a button combo for it.");
-        menu += new MenuEntry("Photo mode (close menu to enter)", nullptr, RequestPhoto,
-            "Freeze the game and hide plugin overlays after closing this menu. "
-            "Exit with photo_key, or B when no combo is configured. photo on|off|status also works.");
-        menu += new MenuEntry("Quick save", nullptr, QuickSave,
-                              "Save your adventure through the game's save flow after closing this menu. "
-                              "Only available in the idle overworld. save_key sets an optional combo.");
+        if (ScenesEnabled())
+        {
+            s_autoEntry = new MenuEntry("Auto panel", nullptr, ToggleAutoPanel,
+                                        "Switch between following the scene and staying as set. "
+                                        "Lasts until the next boot; set auto in usum-onescreen.ini to keep it.");
+            menu += s_autoEntry;
+        }
+        if (UsumEnabled())
+        {
+            s_layoutEntry = new MenuEntry("Battle layout", nullptr, CycleBattleLayout,
+                                          "Change how the battle menu looks. Saved to usum-onescreen.ini.");
+            menu += s_layoutEntry;
+            s_textEntry = new MenuEntry("Instant text", nullptr, ToggleInstantText,
+                "Toggle instant typing. Page ends still need a press. Saved to usum-onescreen.ini.");
+            menu += s_textEntry;
+            s_speedEntry = new MenuEntry("Battle speed", nullptr, CycleBattleSpeed,
+                "Cycle Normal, Fast, Instant for message waits and HP/EXP bars. Saved to usum-onescreen.ini.");
+            menu += s_speedEntry;
+            menu += new MenuEntry("Open PC (Boxes)", nullptr, OpenPc,
+                                  "Open the PC boxes here, as at a Pokemon Center PC. Works in the overworld "
+                                  "when nothing else is going on; they open when this menu closes. "
+                                  "pc_key in usum-onescreen.ini sets a button combo for it.");
+            menu += new MenuEntry("Photo mode (close menu to enter)", nullptr, RequestPhoto,
+                "Freeze the game and hide plugin overlays after closing this menu. "
+                "Exit with photo_key, or B when no combo is configured. photo on|off|status also works.");
+            menu += new MenuEntry("Quick save", nullptr, QuickSave,
+                                  "Save your adventure through the game's save flow after closing this menu. "
+                                  "Only available in the idle overworld. save_key sets an optional combo.");
+        }
         menu += new MenuEntry("View settings", nullptr, ShowSettings,
                               "Show the settings in use, read from /usum-onescreen.ini at boot.");
         menu += new MenuEntry("Reload settings file", nullptr, ReloadSettings,
@@ -1166,24 +1213,31 @@ namespace CTRPluginFramework
 
         LoadSettings();
 
-        OneScreen::BattleScreenSetEnabled(true);
-        // Before the panel: its callback takes the screenshots, so it must
-        // run after the native menus have drawn.
-        OneScreen::StartXMenu();
-        OneScreen::StartKeyboard();
-        OneScreen::StartPokedex();
-        OneScreen::StartSubScreens();
-        OneScreen::StartBag();
-        OneScreen::StartMap();
-        OneScreen::StartRotomPrompt();
-        OneScreen::StartPartyScreen();
-        OneScreen::StartBoxes();
-        OneScreen::StartThemeScreen();
-        OneScreen::StartSidePanels();
+        if (UsumEnabled())
+        {
+            OneScreen::BattleScreenSetEnabled(true);
+            // Before the panel: its callback takes the screenshots, so it must
+            // run after the native menus have drawn.
+            OneScreen::StartXMenu();
+            OneScreen::StartKeyboard();
+            OneScreen::StartPokedex();
+            OneScreen::StartSubScreens();
+            OneScreen::StartBag();
+            OneScreen::StartMap();
+            OneScreen::StartRotomPrompt();
+            OneScreen::StartPartyScreen();
+            OneScreen::StartBoxes();
+            OneScreen::StartThemeScreen();
+            OneScreen::StartSidePanels();
+        }
+        OneScreen::PanelSetUsumEngine(UsumEnabled());
         OneScreen::StartPanel(OneScreen::PanelMode::Off, s_game->offsets.gxDisplayTransfer.address,
                               s_game->offsets.gxTextureCopy.address);
-        OneScreen::StartActions();
-        WriteLog(OneScreen::UI::StartGpuQuad(s_game->offsets.gxDisplayTransfer.address), false);
+        if (UsumEnabled()) OneScreen::StartActions();
+        if (s_game->offsets.gxProcessList.address != 0)
+            WriteLog(OneScreen::UI::StartGpuQuad(s_game->offsets.gxDisplayTransfer.address), false);
+        else
+            WriteLog("gpuquad: gxProcessList not found yet, skipped", false);
 
         std::string cursorReport;
         OneScreen::StartCursor(s_game->offsets.hidTouchRead.address, cursorReport);
@@ -1193,16 +1247,19 @@ namespace CTRPluginFramework
         OneScreen::StartButtons(s_game->offsets.hidPadRead.address, buttonsReport);
         WriteLog(buttonsReport, false);
 
-        std::string pcReport;
-        OneScreen::StartPcAnywhere(pcReport);
-        WriteLog(pcReport, false);
+        if (UsumEnabled())
+        {
+            std::string pcReport;
+            OneScreen::StartPcAnywhere(pcReport);
+            WriteLog(pcReport, false);
 
-        std::string widescreenReport;
-        OneScreen::StartWidescreen(widescreenReport);
-        WriteLog(widescreenReport, false);
+            std::string widescreenReport;
+            OneScreen::StartWidescreen(widescreenReport);
+            WriteLog(widescreenReport, false);
+        }
 
         PluginMenu *menu = new PluginMenu("USUM One Screen", 0, 1, 1,
-                                          "Top-screen-only play for Ultra Sun / Ultra Moon.");
+                                          std::string("Top-screen-only play for ") + s_game->name + ".");
 
         menu->SynchronizeWithFrame(true);
         menu->OnOpening = OnMenuOpening;

@@ -1,3 +1,4 @@
+#include "Usum.hpp"
 #include "QuickSave.hpp"
 #include <CTRPluginFramework.hpp>
 #include "Actions.hpp"
@@ -42,19 +43,19 @@ namespace OneScreen
             const u32 frame = Word(manager + i * 4);
             if (frame == 0) break;
             const u32 vt = Word(frame), module = CroModuleOf(vt);
-            if (module == 0 || CroModuleName(module) != "FieldMenu" || (vt != module + 0x1814C && vt != module + 0x180B4))
+            if (module == 0 || CroModuleName(module) != "FieldMenu" || (vt != module + Usum::FieldMenuSaveFrame && vt != module + Usum::FieldMenuReportDraw))
                 continue;
-            if (Word(module + 0x1CB0) != 0xE5D400E9   // ldrb state, [r4,#E9]
-                || Word(module + 0x1F28) != 0xE3500001 // SaveMain: 1 still writing
-                || Word(module + 0x1F44) != 0xE3550000 // 0 success, otherwise error
-                || Word(module + 0x222C) != 0xE5803000 // ReportDraw constructor's vtable
-                || Word(module + 0x180E8) != module + 0x1C5C)
+            if (Word(module + Usum::FieldMenuSaveStateRead) != 0xE5D400E9   // ldrb state, [r4,#E9]
+                || Word(module + Usum::FieldMenuSaveMainCompare) != 0xE3500001 // SaveMain: 1 still writing
+                || Word(module + Usum::FieldMenuSaveResultCompare) != 0xE3550000 // 0 success, otherwise error
+                || Word(module + Usum::FieldMenuReportDrawCtor) != 0xE5803000 // ReportDraw constructor's vtable
+                || Word(module + Usum::FieldMenuReportDrawVtableEntry) != module + Usum::FieldMenuReportDrawMain)
             {
                 s_problem = "save observer signature mismatch";
                 return -1;
             }
-            const u32 report = vt == module + 0x180B4 ? frame : Word(frame + 0x78);
-            if (Word(report) != module + 0x180B4) return -1;
+            const u32 report = vt == module + Usum::FieldMenuReportDraw ? frame : Word(frame + 0x78);
+            if (Word(report) != module + Usum::FieldMenuReportDraw) return -1;
             choice = Byte(report + 0xE8);
             return Byte(report + 0xE9);
         }

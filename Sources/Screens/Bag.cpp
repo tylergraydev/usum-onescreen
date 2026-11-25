@@ -1,3 +1,4 @@
+#include "Usum.hpp"
 #include "Screens/Bag.hpp"
 
 #include <atomic>
@@ -30,20 +31,20 @@ namespace OneScreen
     // docs/BAG.md) ---
 
     // Scene object (main image), top of the scene manager's stack.
-    static const u32 VtBagScene = 0x6488C8;
+    static const u32 VtBagScene = Usum::VtBagScene;
     static const u32 SceneList = 0x88, SceneFrame = 0x90;
     // Item list window: rows shown, cursor row, first row (float, animates).
     static const u32 ListVisible = 0x14, ListCursor = 0x18, ListScroll = 0x1C;
     // Bag frame (Bag CRO): the open pocket as pointers to MyItem slots, mode bytes, param.
-    static const u32 VtBagFrame = 0x16F9C;
+    static const u32 VtBagFrame = Usum::BagFieldFrame;
     static const u32 FrameItems = 0x24, FrameItemCount = 0x28, FrameParam = 0x2C, FrameFlags = 0x4C, FrameMode = 0x54;
     // Bag param: MyItem, the item the menu is about, tab, party column, menu.
     static const u32 ParamMyItem = 0x24, ParamItem = 0x4C, ParamTab = 0x54, ParamPartyList = 0x64;
     static const u32 ParamMenu = 0x80, ParamCommands = 0x84, ParamState = 0xEC;
-    static const u32 VtMyItem = 0x64F3C4, MyItemEnd = 0xE2C;
+    static const u32 VtMyItem = Usum::VtMyItem, MyItemEnd = 0xE2C;
     // Party column (Bag CRO): cursor; menu (main image): entry count.
-    static const u32 VtPartyList = 0x16D98, PartyListCursor = 0x1C6;
-    static const u32 VtMenu = 0x6487C0, MenuCount = 0x158;
+    static const u32 VtPartyList = Usum::BagPartyList, PartyListCursor = 0x1C6;
+    static const u32 VtMenu = Usum::BagMenu, MenuCount = 0x158;
     static const u32 MaxItems = 430, MaxCommands = 8;
 
     static u32 Read32(u32 address)
@@ -232,7 +233,7 @@ namespace OneScreen
     // --- Pocket icons and descriptions (loaded once, in a Task) ---
 
     // Current text language (0-9, 2 = English), as in Screens/Map.cpp.
-    static const u32 LanguageByte = 0x671A10;
+    static const u32 LanguageByte = Usum::LanguageByte;
     static BagAssets *s_assets = nullptr;       // set once loaded, never freed or changed
     static std::atomic<int> s_assetsState(0);   // 0 not started, 1 loading, 2 done, 3 logged
     static std::vector<std::string> s_assetsLog;

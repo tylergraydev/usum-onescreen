@@ -558,6 +558,14 @@ namespace OneScreen
             "; Pokemon Refresh\n"
             "Kawaigari = full\n"
             "BattleVideoPlayer = panel\n"
+            "; Omega Ruby\n"
+            "DllTitle = off\n"
+            "; Overworld; PokeNav Plus on the bottom screen.\n"
+            "DllField = off\n"
+            "; X menu open over the overworld.\n"
+            "DllField.xmenu = panel\n"
+            "; Name keyboard needs touch.\n"
+            "DllStrInput = full\n"
             "; Any scene not listed.\n"
             "default = panel\n";
     }
@@ -574,8 +582,8 @@ namespace OneScreen
     SceneMode ModeForScene(const Settings &settings, const std::string &scene, bool xmenuOpen)
     {
         const SceneMode *mode = nullptr;
-        if (xmenuOpen && Lower(scene) == "fieldro")
-            mode = FindScene(settings, "FieldRo.xmenu");
+        if (xmenuOpen)
+            mode = FindScene(settings, scene + ".xmenu");
         if (mode == nullptr)
             mode = FindScene(settings, scene);
         if (mode == nullptr)

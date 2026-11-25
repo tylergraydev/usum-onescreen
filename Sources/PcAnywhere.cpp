@@ -1,3 +1,4 @@
+#include "Usum.hpp"
 #include "PcAnywhere.hpp"
 
 #include <CTRPluginFramework.hpp>
@@ -14,7 +15,7 @@ namespace OneScreen
     using namespace CTRPluginFramework;
 
     // USUM v1.2 (Ultra Sun and Ultra Moon; docs/PC-ANYWHERE.md).
-    static const u32 GameManagerGlobal = 0x6A59C4;   // -> GameSys::GameManager
+    static const u32 GameManagerGlobal = Usum::GameManagerGlobal;   // -> GameSys::GameManager
     static const u32 GmEventManager    = 0x20;       // gm + 0x20 -> GameEventManager
     static const u32 GmField           = 0x24;       // gm + 0x24 -> field object (0 when closed)
 
@@ -30,21 +31,21 @@ namespace OneScreen
     };
 
     // GameEventManager::Main(manager): runs the top event, once per frame.
-    static const GameFunction EventMain = { "GameEventManager::Main", 0x404350,
+    static const GameFunction EventMain = { "GameEventManager::Main", Usum::EventMain,
         { 0xE92D4070, 0xE1A04000, 0xE5900000, 0xE3500000 }, 4 };
     // EventAppCall's start (gm, app type, flag) -> event, already pushed: the
     // X menu's way of running an app with the field closed and reopened.
-    static const GameFunction AppCallStart = { "EventAppCall start", 0x37F54C,
+    static const GameFunction AppCallStart = { "EventAppCall start", Usum::AppCallStart,
         { 0xE92D40F8, 0xE1A04001, 0xE1A07002, 0xE5906020 }, 4 };
     // BoxEvent's start (gm) -> event, already pushed: the PC script's Box.
-    static const GameFunction BoxEventStart = { "BoxEvent start", 0x2DE91C,
+    static const GameFunction BoxEventStart = { "BoxEvent start", Usum::BoxEventStart,
         { 0xE92D41F0, 0xE5905020, 0xE1A00005, 0 }, 3 };
 
     // EventAppCall (vtable 0x64BCD0) fields set after the start.
-    static const u32 AppCallVtable = 0x64BCD0;
+    static const u32 AppCallVtable = Usum::AppCallVtable;
     static const u32 AppCallBetween = 0x30;   // void (*)(void *) called between field close and reopen
     // BoxEvent (vtable 0x647F58).
-    static const u32 BoxEventVtable = 0x647F58;
+    static const u32 BoxEventVtable = Usum::BoxEventVtable;
     static const u32 BoxMode = 0x54;          // u8: 0 = the PC (as the script's Box command sets)
     static const u32 BoxListener = 0xB4;      // listener for the result: none
 
@@ -166,7 +167,7 @@ namespace OneScreen
         s_eventMain = FindFunction(EventMain);
         s_appCallStart = FindFunction(AppCallStart);
         s_boxEventStart = FindFunction(BoxEventStart);
-        const bool vtables = Word(AppCallVtable + 0x10) == 0x39268C && Word(BoxEventVtable + 0x10) == 0x2DEC0C;
+        const bool vtables = Word(AppCallVtable + 0x10) == Usum::AppCallMain && Word(BoxEventVtable + 0x10) == Usum::BoxEventMain;
         report = Utils::Format("pc: event main %08lX, app call %08lX, box event %08lX, vtables %s",
                                s_eventMain, s_appCallStart, s_boxEventStart, vtables ? "ok" : "MISMATCH");
         if (s_eventMain == 0 || s_appCallStart == 0 || s_boxEventStart == 0 || !vtables)
